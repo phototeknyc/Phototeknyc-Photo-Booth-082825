@@ -1,0 +1,30 @@
+﻿<Page x:Class="PhotoboothWPF.Pages.CameraSetting"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:PhotoboothWPF.Pages"
+      mc:Ignorable="d" 
+       d:MinWidth="1200" d:MinHeight="700" d:Background="#333333"
+      Title="CameraSetting">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0"  Grid.Row="0" BorderBrush="#CCCCCC" BorderThickness="0,0,0.5,0" >
+            <ScrollViewer Grid.Row="0" Grid.Column="0"  VerticalScrollBarVisibility="Auto" >
+                <StackPanel x:Name="cameraSettingPanel" VerticalAlignment="Top"  Orientation="Vertical"  >
+                    
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+        
+        <StackPanel  Grid.Column="1" Grid.Row="0" >
+            
+         
+        </StackPanel>
+    </Grid>
+</Page>

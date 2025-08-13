@@ -1,0 +1,372 @@
+﻿<Page x:Class="Photobooth.Pages.CameraSettings"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:Photobooth.Pages"
+      mc:Ignorable="d" 
+      Background="#333333"
+      Title="Camera Settings">
+
+    <Page.Resources>
+        <!-- Modern Card Style -->
+        <Style x:Key="SettingsCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Margin" Value="10"/>
+            <Setter Property="BorderBrush" Value="#666666"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <!-- Setting Button Style -->
+        <Style x:Key="SettingButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#555555"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#777777"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="5"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                BorderBrush="{TemplateBinding BorderBrush}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#666666"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#333333"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ComboBox Style -->
+        <Style x:Key="SettingComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Background" Value="#555555"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#777777"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <!-- Prominent Test Capture Button Style -->
+        <Style x:Key="TestCaptureButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#FF4CAF50"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="BorderBrush" Value="#FF45A049"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="8"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#FF66BB6A"/>
+                                <Setter Property="BorderBrush" Value="#FF4CAF50"/>
+                                <Setter Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="1.02" ScaleY="1.02"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#FF45A049"/>
+                                <Setter Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.98" ScaleY="0.98"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#FF757575"/>
+                                <Setter Property="BorderBrush" Value="#FF616161"/>
+                                <Setter Property="Foreground" Value="#FFCCCCCC"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="400"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Column - Settings -->
+        <ScrollViewer Grid.Column="0" Margin="0,0,10,0">
+            <StackPanel>
+                <!-- Header -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Camera Settings" 
+                                   FontSize="24" 
+                                   FontWeight="Bold" 
+                                   Foreground="White" 
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="cameraStatusText" 
+                                   Text="Connecting to camera..." 
+                                   FontSize="14" 
+                                   Foreground="#CCCCCC" 
+                                   HorizontalAlignment="Center" 
+                                   TextWrapping="Wrap"
+                                   Margin="0,10,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Prominent Test Capture -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <StackPanel>
+                        <Button x:Name="testCaptureButton"
+                                Content="📸 TEST CAPTURE" 
+                                Style="{StaticResource TestCaptureButtonStyle}" 
+                                Padding="25,20"
+                                FontSize="20"
+                                FontWeight="Bold"
+                                Click="TestCapture_Click"
+                                HorizontalAlignment="Stretch"/>
+                        
+                        <TextBlock x:Name="testStatusText" 
+                                   Text="Click to test current settings" 
+                                   FontSize="14" 
+                                   Foreground="#CCCCCC" 
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   Margin="0,10,0,0"/>
+                        
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
+                            <CheckBox x:Name="autoPreviewCheckBox" 
+                                      IsChecked="False" 
+                                      Foreground="White"
+                                      Margin="0,0,8,0"/>
+                            <TextBlock Text="Auto Preview (capture when settings change)" 
+                                       Foreground="White" 
+                                       VerticalAlignment="Center" 
+                                       FontSize="12"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Basic Settings -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Basic Settings" 
+                                   FontSize="18" 
+                                   FontWeight="Bold" 
+                                   Foreground="White" 
+                                   Margin="0,0,0,10"/>
+                        
+                        <!-- ISO -->
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="ISO" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button x:Name="isoPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="IsoPrev_Click"/>
+                                <TextBlock x:Name="isoValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <Button x:Name="isoNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="IsoNext_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Aperture -->
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="Aperture (f/)" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button x:Name="aperturePrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="AperturePrev_Click"/>
+                                <TextBlock x:Name="apertureValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <Button x:Name="apertureNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="ApertureNext_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Shutter Speed -->
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="Shutter Speed" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button x:Name="shutterPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="ShutterPrev_Click"/>
+                                <TextBlock x:Name="shutterValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <Button x:Name="shutterNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="ShutterNext_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- White Balance -->
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="White Balance" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button x:Name="wbPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="WhiteBalancePrev_Click"/>
+                                <TextBlock x:Name="wbValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <Button x:Name="wbNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="WhiteBalanceNext_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Focus Mode -->
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="Focus Mode" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button x:Name="focusPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="FocusPrev_Click"/>
+                                <TextBlock x:Name="focusValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <Button x:Name="focusNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="FocusNext_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Exposure Compensation -->
+                        <StackPanel Margin="0,0,0,0">
+                            <TextBlock Text="Exposure Compensation" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button x:Name="exposurePrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="ExposurePrev_Click"/>
+                                <TextBlock x:Name="exposureValueText" Text="0" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <Button x:Name="exposureNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="ExposureNext_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Advanced Settings -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Advanced Settings" 
+                                   FontSize="18" 
+                                   FontWeight="Bold" 
+                                   Foreground="White" 
+                                   Margin="0,0,0,10"/>
+                        
+                        <!-- Camera Mode -->
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="Camera Mode" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button x:Name="modePrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="ModePrev_Click"/>
+                                <TextBlock x:Name="modeValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <Button x:Name="modeNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="ModeNext_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Image Quality -->
+                        <StackPanel Margin="0,0,0,0">
+                            <TextBlock Text="Image Quality" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button x:Name="qualityPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="QualityPrev_Click"/>
+                                <TextBlock x:Name="qualityValueText" Text="RAW+JPEG" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <Button x:Name="qualityNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="QualityNext_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+
+                <!-- Action Buttons -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <StackPanel>
+                        <Button Content="Refresh Settings" 
+                                Style="{StaticResource SettingButtonStyle}" 
+                                Padding="15,10"
+                                FontSize="14"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,0,0,10"
+                                Click="RefreshSettings_Click"/>
+                        <Button Content="Reset to Auto" 
+                                Style="{StaticResource SettingButtonStyle}" 
+                                Padding="15,10"
+                                FontSize="14"
+                                HorizontalAlignment="Stretch"
+                                Click="ResetToAuto_Click"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Right Column - Large Preview -->
+        <Border Grid.Column="1" Style="{StaticResource SettingsCardStyle}" Margin="10,0,0,0">
+            <Grid>
+                <!-- Header -->
+                <TextBlock Text="Live Preview" 
+                           FontSize="24" 
+                           FontWeight="Bold" 
+                           Foreground="White" 
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Top"
+                           Margin="0,0,0,20"/>
+
+                <!-- Preview Area -->
+                <Border Background="#222222" 
+                        CornerRadius="10" 
+                        Margin="0,50,0,0">
+                    <Grid>
+                        <!-- Placeholder -->
+                        <StackPanel x:Name="imagePlaceholder" 
+                                    VerticalAlignment="Center" 
+                                    HorizontalAlignment="Center">
+                            <TextBlock Text="📷" 
+                                       FontSize="120" 
+                                       Foreground="#666666" 
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Test image will appear here" 
+                                       FontSize="20" 
+                                       Foreground="#666666" 
+                                       HorizontalAlignment="Center"
+                                       Margin="0,20,0,0"/>
+                            <TextBlock Text="Click 'Test Capture' to see results with current settings" 
+                                       FontSize="14" 
+                                       Foreground="#888888" 
+                                       HorizontalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       Margin="20,10,20,0"/>
+                        </StackPanel>
+                        
+                        <!-- Test Image -->
+                        <Image x:Name="testImage" 
+                               Stretch="Uniform" 
+                               Visibility="Collapsed"
+                               Margin="20"/>
+                        
+                        <!-- Image Info Overlay -->
+                        <Border Background="#CC000000" 
+                                CornerRadius="8"
+                                Padding="15"
+                                VerticalAlignment="Bottom" 
+                                HorizontalAlignment="Right" 
+                                Margin="30"
+                                x:Name="imageInfoPanel"
+                                Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="captureTimeText" 
+                                           Text="" 
+                                           Foreground="White" 
+                                           FontSize="14"
+                                           FontWeight="Bold"/>
+                                <TextBlock x:Name="imageSettingsText" 
+                                           Text="" 
+                                           Foreground="White" 
+                                           FontSize="13"
+                                           Margin="0,5,0,0"/>
+                                <TextBlock x:Name="imageSizeText" 
+                                           Text="" 
+                                           Foreground="White" 
+                                           FontSize="12"
+                                           Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

@@ -1,0 +1,307 @@
+﻿<Window x:Class="Photobooth.ModernSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Photobooth"
+        xmlns:pages="clr-namespace:Photobooth.Pages"
+        mc:Ignorable="d"
+        Title="Photobooth Settings" 
+        WindowState="Maximized"
+        WindowStyle="None"
+        Background="#0A0E27"
+        AllowsTransparency="True"
+        WindowStartupLocation="CenterScreen">
+    
+    <Window.Resources>
+        <!-- Animation Storyboards -->
+        <Storyboard x:Key="FadeIn">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity" 
+                           From="0" To="1" Duration="0:0:0.5"/>
+        </Storyboard>
+        
+        <Storyboard x:Key="SlideIn">
+            <ThicknessAnimation Storyboard.TargetProperty="Margin" 
+                              From="50,0,0,0" To="0,0,0,0" 
+                              Duration="0:0:0.3">
+                <ThicknessAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut"/>
+                </ThicknessAnimation.EasingFunction>
+            </ThicknessAnimation>
+        </Storyboard>
+    </Window.Resources>
+    
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="Window.Loaded">
+            <BeginStoryboard Storyboard="{StaticResource FadeIn}"/>
+        </EventTrigger>
+    </Window.Triggers>
+    
+    <Grid>
+        <!-- Gradient Background -->
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#0A0E27" Offset="0"/>
+                <GradientStop Color="#1A1E37" Offset="0.5"/>
+                <GradientStop Color="#0F1329" Offset="1"/>
+            </LinearGradientBrush>
+        </Grid.Background>
+        
+        <!-- Animated Background Particles -->
+        <Canvas x:Name="ParticleCanvas" Opacity="0.1" IsHitTestVisible="False"/>
+        
+        <!-- Main Content -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Modern Header Bar -->
+            <Border Grid.Row="0" Height="80" Background="#0A0E27" 
+                    BorderBrush="#2A2E47" BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- App Title with Icon -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="30,0,0,0" VerticalAlignment="Center">
+                        <Border Width="50" Height="50" CornerRadius="25">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#667EEA" Offset="0"/>
+                                    <GradientStop Color="#764BA2" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <TextBlock Text="📸" FontSize="24" 
+                                     HorizontalAlignment="Center" 
+                                     VerticalAlignment="Center"/>
+                        </Border>
+                        
+                        <StackPanel Margin="15,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="PHOTOBOOTH PRO" 
+                                     FontSize="22" 
+                                     FontWeight="Bold" 
+                                     Foreground="White"
+                                     FontFamily="Segoe UI Light"/>
+                            <TextBlock Text="Advanced Settings Console" 
+                                     FontSize="12" 
+                                     Foreground="#8A8BA3"
+                                     FontFamily="Segoe UI"/>
+                        </StackPanel>
+                    </StackPanel>
+                    
+                    <!-- Action Buttons -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" 
+                              Margin="0,0,30,0" VerticalAlignment="Center">
+                        
+                        <!-- Designer Button -->
+                        <Button x:Name="LaunchDesignerBtn" 
+                                Width="140" Height="45" 
+                                Margin="5,0"
+                                Cursor="Hand"
+                                Click="LaunchDesigner_Click"
+                                ToolTip="Open Template Designer">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" CornerRadius="22" 
+                                          Background="#764BA2">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#764BA2" 
+                                                            BlurRadius="20" 
+                                                            ShadowDepth="0" 
+                                                            Opacity="0.3"/>
+                                        </Border.Effect>
+                                        <StackPanel Orientation="Horizontal" 
+                                                  HorizontalAlignment="Center" 
+                                                  VerticalAlignment="Center">
+                                            <TextBlock Text="🎨" FontSize="18" Margin="0,0,8,0"/>
+                                            <TextBlock Text="DESIGNER" 
+                                                     FontSize="13" 
+                                                     FontWeight="SemiBold" 
+                                                     Foreground="White"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background">
+                                                <Setter.Value>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#8F5BBA" Offset="0"/>
+                                                        <GradientStop Color="#A56BD2" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="border" Property="RenderTransform">
+                                                <Setter.Value>
+                                                    <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        
+                        <!-- Launch Photobooth Button -->
+                        <Button x:Name="LaunchPhotoboothBtn" 
+                                Width="140" Height="45" 
+                                Margin="5,0"
+                                Cursor="Hand"
+                                Click="LaunchPhotobooth_Click"
+                                ToolTip="Open Touch Interface">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" CornerRadius="22" 
+                                          Background="#667EEA">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#667EEA" 
+                                                            BlurRadius="20" 
+                                                            ShadowDepth="0" 
+                                                            Opacity="0.3"/>
+                                        </Border.Effect>
+                                        <StackPanel Orientation="Horizontal" 
+                                                  HorizontalAlignment="Center" 
+                                                  VerticalAlignment="Center">
+                                            <TextBlock Text="📸" FontSize="18" Margin="0,0,8,0"/>
+                                            <TextBlock Text="KIOSK" 
+                                                     FontSize="13" 
+                                                     FontWeight="SemiBold" 
+                                                     Foreground="White"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background">
+                                                <Setter.Value>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#7F8EEA" Offset="0"/>
+                                                        <GradientStop Color="#965BBA" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="border" Property="RenderTransform">
+                                                <Setter.Value>
+                                                    <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        
+                        <!-- Minimize Button -->
+                        <Button Width="45" Height="45" 
+                                Click="MinimizeWindow_Click"
+                                Cursor="Hand">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" 
+                                          CornerRadius="22" 
+                                          Background="#1A1E37">
+                                        <TextBlock Text="─" 
+                                                 FontSize="16" 
+                                                 Foreground="#8A8BA3"
+                                                 HorizontalAlignment="Center" 
+                                                 VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#2A2E47"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        
+                        <!-- Close Button -->
+                        <Button Width="45" Height="45" 
+                                Margin="10,0,0,0"
+                                Click="CloseWindow_Click"
+                                Cursor="Hand">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" 
+                                          CornerRadius="22" 
+                                          Background="#1A1E37">
+                                        <TextBlock x:Name="closeText" 
+                                                 Text="✕" 
+                                                 FontSize="16" 
+                                                 Foreground="#8A8BA3"
+                                                 HorizontalAlignment="Center" 
+                                                 VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#E74C3C"/>
+                                            <Setter TargetName="closeText" Property="Foreground" Value="White"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            
+            <!-- Settings Content Container -->
+            <ScrollViewer Grid.Row="1" 
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Disabled">
+                <ScrollViewer.Resources>
+                    <Style TargetType="ScrollBar">
+                        <Setter Property="Width" Value="12"/>
+                        <Setter Property="Background" Value="#1A1E37"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ScrollBar">
+                                    <Grid Width="12">
+                                        <Border Background="#1A1E37" CornerRadius="6"/>
+                                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                            <Track.Thumb>
+                                                <Thumb>
+                                                    <Thumb.Template>
+                                                        <ControlTemplate TargetType="Thumb">
+                                                            <Border Background="#667EEA" 
+                                                                  CornerRadius="6" 
+                                                                  Margin="2"/>
+                                                        </ControlTemplate>
+                                                    </Thumb.Template>
+                                                </Thumb>
+                                            </Track.Thumb>
+                                        </Track>
+                                    </Grid>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ScrollViewer.Resources>
+                
+                <!-- Embedded Settings Control -->
+                <pages:PhotoboothSettingsControl x:Name="settingsControl" Margin="20"/>
+            </ScrollViewer>
+        </Grid>
+        
+        <!-- Touch Gesture Overlay -->
+        <Grid x:Name="TouchOverlay" 
+              Background="Transparent" 
+              IsHitTestVisible="False"
+              Visibility="Collapsed">
+            <TextBlock Text="Swipe down to minimize" 
+                     HorizontalAlignment="Center" 
+                     VerticalAlignment="Top"
+                     Margin="0,20,0,0"
+                     FontSize="14"
+                     Foreground="#8A8BA3"
+                     Opacity="0.5"/>
+        </Grid>
+    </Grid>
+</Window>

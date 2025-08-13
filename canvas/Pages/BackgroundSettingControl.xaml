@@ -1,0 +1,43 @@
+﻿<UserControl x:Class="Photobooth.Pages.BackgroundSettingControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Photobooth.Pages"
+             xmlns:s="clr-namespace:Photobooth"
+            
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800" Background="#333333">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Vertical" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center"  Width="512" >
+
+            <Border  BorderBrush="#ccc" BorderThickness="1" CornerRadius="20"  HorizontalAlignment="Center"  Width="490"  >
+                <StackPanel Orientation="Vertical" HorizontalAlignment="Center" Margin="0,33,0,29" VerticalAlignment="Top" >
+                    <Grid Width="431">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Background" Foreground="#FFFFFF" FontSize="15" Margin="0,2,0,2" />
+                        <TextBox x:Name="themeColor" Grid.Row="0" Grid.Column="1" Text="#cccc" Margin="0,2,0,2" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Image" Foreground="#FFFFFF" FontSize="15" Margin="0,2,0,2" />
+                        <Button x:Name="btnImage" Grid.Row="1" Grid.Column="1" Content="Select" Margin="0,2,0,2" Click="btnImage_Click" />
+                        <Button Grid.Row="2" Grid.Column="0"  Grid.ColumnSpan="2" Content="Save" Margin="0,2,0,2" Click="Button_Click" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </Grid>
+</UserControl>

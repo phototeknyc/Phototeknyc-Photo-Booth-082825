@@ -1,0 +1,20 @@
+﻿<UserControl x:Class="Photobooth.Design.Canvas.CanvasContainer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:controls="clr-namespace:DesignerCanvas.Controls;assembly=DesignerCanvas"
+             mc:Ignorable="d" 
+             Background="#FF27293A"
+             d:DesignHeight="650" d:DesignWidth="1000">
+    <Grid Loaded="Grid_Initialized">
+        <Border x:Name="canvasBorder" BorderBrush="{DynamicResource {x:Static SystemColors.ActiveCaptionBrushKey}}" BorderThickness="1" Background="#FF3C3C3C" Margin="25" ClipToBounds="True" SizeChanged="Border_SizeChanged">
+            <Grid x:Name="canvasGrid" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Grid.LayoutTransform>
+                    <ScaleTransform x:Name="canvasScale" ScaleX="1" ScaleY="1"/>
+                </Grid.LayoutTransform>
+                <controls:DesignerCanvas x:Name="dcvs" MouseDown="dcvs_MouseDown" MouseMove="dcvs_MouseMove" ShowBoundaries="false" Background="{Binding CanvasBackgroundColor, FallbackValue=White}" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

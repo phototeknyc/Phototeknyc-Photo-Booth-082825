@@ -1,0 +1,96 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net7.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="images\78c5e5793d33ebf1c9326314e895a23c1051568f.png" />
+    <None Remove="images\Account.png" />
+    <None Remove="images\alignBaseLine.png" />
+    <None Remove="images\alignBottom.png" />
+    <None Remove="images\alignCenter.png" />
+    <None Remove="images\alignLeft.png" />
+    <None Remove="images\alignRight.png" />
+    <None Remove="images\alignStretchHorizontal.png" />
+    <None Remove="images\alignStretchVertical.png" />
+    <None Remove="images\alignTop.png" />
+    <None Remove="images\background.png" />
+    <None Remove="images\bringToFront.png" />
+    <None Remove="images\camera.png" />
+    <None Remove="images\clear.png" />
+    <None Remove="images\duplicate.png" />
+    <None Remove="images\lock.png" />
+    <None Remove="images\logo.png" />
+    <None Remove="images\open.png" />
+    <None Remove="images\orientation.png" />
+    <None Remove="images\Padlock.png" />
+    <None Remove="images\photobooth.png" />
+    <None Remove="images\rotateLeft.png" />
+    <None Remove="images\rotateRight.png" />
+    <None Remove="images\save.png" />
+    <None Remove="images\saveAs.png" />
+    <None Remove="images\sendToBack.png" />
+    <None Remove="images\Settings.png" />
+    <None Remove="Properties\AppSetting.settings" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Page Remove="Styles\ButtonStyle.xaml" />
+    <Page Remove="Styles\ComboBoxStyle.xaml" />
+    <Page Remove="Styles\MenuStyle.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DesignerCanvas\DesignerCanvas.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="images\78c5e5793d33ebf1c9326314e895a23c1051568f.png" />
+    <Resource Include="images\Account.png" />
+    <Resource Include="images\alignBaseLine.png" />
+    <Resource Include="images\alignBottom.png" />
+    <Resource Include="images\alignCenter.png" />
+    <Resource Include="images\alignLeft.png" />
+    <Resource Include="images\alignRight.png" />
+    <Resource Include="images\alignStretchHorizontal.png" />
+    <Resource Include="images\alignStretchVertical.png" />
+    <Resource Include="images\alignTop.png" />
+    <Resource Include="images\background.png" />
+    <Resource Include="images\bringToFront.png" />
+    <Resource Include="images\camera.png" />
+    <Resource Include="images\clear.png" />
+    <Resource Include="images\duplicate.png" />
+    <Resource Include="images\lock.png" />
+    <Resource Include="images\logo.png" />
+    <Resource Include="images\open.png" />
+    <Resource Include="images\orientation.png" />
+    <Resource Include="images\Padlock.png" />
+    <Resource Include="images\photobooth.png" />
+    <Resource Include="images\rotateLeft.png" />
+    <Resource Include="images\rotateRight.png" />
+    <Resource Include="images\save.png" />
+    <Resource Include="images\saveAs.png" />
+    <Resource Include="images\sendToBack.png" />
+    <Resource Include="images\Settings.png" />
+    <Resource Include="Properties\AppSetting.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>AppSetting.Designer.cs</LastGenOutput>
+    </Resource>
+    <Resource Include="Styles\ButtonStyle.xaml" />
+    <Resource Include="Styles\ComboBoxStyle.xaml" />
+    <Resource Include="Styles\MenuStyle.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Properties\AppSetting.Designer.cs">
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>AppSetting.settings</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+</Project>

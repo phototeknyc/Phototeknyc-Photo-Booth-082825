@@ -1,0 +1,27 @@
+﻿<Window x:Class="Photobooth.Controls.AdvancedColorPickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:Photobooth.Controls"
+        Title="Select Color" Height="500" Width="700"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#FF808080">
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- HSV Color Picker -->
+        <controls:HSVColorPicker x:Name="ColorPicker" Grid.Row="0" Margin="10"/>
+        
+        <!-- Buttons -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="10">
+            <Button x:Name="OKButton" Content="OK" Width="75" Height="25" Margin="5" 
+                    Background="#FFE1E1E1" BorderBrush="#FFABADB3" Click="OKButton_Click"/>
+            <Button x:Name="CancelButton" Content="Cancel" Width="75" Height="25" Margin="5"
+                    Background="#FFE1E1E1" BorderBrush="#FFABADB3" Click="CancelButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

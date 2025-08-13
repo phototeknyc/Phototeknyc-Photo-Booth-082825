@@ -1,0 +1,427 @@
+﻿<Page x:Class="Photobooth.Pages.SideNavbar"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:Photobooth.Pages"
+      mc:Ignorable="d" 
+      d:DesignHeight="450" d:DesignWidth="240" Background="#2E2E2E"
+      Title="SideNavbar">
+
+    <Page.Resources>
+        <!-- Modern Button Style -->
+        <Style x:Key="ModernButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Margin" Value="0,1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" 
+                                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#404040"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
+        <!-- Modern Expander Style -->
+        <Style x:Key="ModernExpander" TargetType="Expander">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Margin" Value="0,2"/>
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,8">
+            
+            <!-- Add Section -->
+            <Expander Header="Add" Style="{StaticResource ModernExpander}" IsExpanded="True">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="0,4,0,8">
+                    <!-- Photo From Booth -->
+                    <Button Style="{StaticResource ModernButton}" PreviewMouseLeftButtonDown="ActionCaptureImage">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Camera}" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Photo From Booth" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Image -->
+                    <Button Style="{StaticResource ModernButton}" PreviewMouseLeftButtonDown="ActionImportImage">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Picture}" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Image" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Text -->
+                    <Button Style="{StaticResource ModernButton}" PreviewMouseLeftButtonDown="ActionAddText">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Font}" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Text" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Rectangle Shape -->
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding AddRectangleCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="☐" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Rectangle" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Circle Shape -->
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding AddCircleCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="○" FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Circle" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Line Shape -->
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding AddLineCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="╱" FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Line" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Background Color -->
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding ChangeCanvasBackgroundCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <Rectangle Width="16" Height="16" Fill="{Binding CanvasBackgroundColor}" 
+                                     Stroke="#666" StrokeThickness="1" Margin="4,0"/>
+                            <TextBlock Text="Background Color" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Expander>
+            
+            <!-- Layout Section -->
+            <Expander Header="Layout" Style="{StaticResource ModernExpander}" IsExpanded="True">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="0,4,0,8">
+                    <!-- Clear Canvas -->
+                    <Button Style="{StaticResource ModernButton}" PreviewMouseLeftButtonDown="ActionClearCanvas">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Delete}" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Clear Canvas" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                </StackPanel>
+            </Expander>
+            
+            <!-- Events Section -->
+            <Expander Header="Events" Style="{StaticResource ModernExpander}" IsExpanded="True">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="0,4,0,8">
+                    
+                    <!-- Current Event Selection -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Current Event:" FontSize="12" Foreground="#CCCCCC" Margin="8,4,8,2"/>
+                        <Button Grid.Column="1" Content="↻" FontSize="14" Width="24" Height="20" 
+                                Command="{Binding RefreshEventsCmd}" 
+                                ToolTip="Refresh Events List"
+                                Background="#505050" Foreground="White" BorderThickness="0" Margin="0,2,8,0">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}" 
+                                                        CornerRadius="2" 
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="#606060"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+                    <ComboBox x:Name="EventsComboBox" 
+                              FontSize="13" Height="32" Margin="8,0,8,8"
+                              ItemsSource="{Binding Events}" 
+                              SelectedItem="{Binding SelectedEvent, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding EventType}" FontSize="10" Foreground="#AAA"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    
+                    <!-- Create New Event -->
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding CreateEventCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Add}" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Create Event" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Browse Events -->
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding BrowseEventsCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_View}" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Browse Events" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Event Templates -->
+                    <TextBlock Text="Event Templates:" FontSize="12" Foreground="#CCCCCC" Margin="8,8,8,2"/>
+                    <ListBox x:Name="EventTemplatesListBox"
+                             Background="#383838" Foreground="White" BorderBrush="#606060"
+                             Height="120" Margin="8,0,8,8"
+                             ItemsSource="{Binding EventTemplates}"
+                             SelectedItem="{Binding SelectedEventTemplate, Mode=TwoWay}"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#404040" Margin="2" Padding="6" CornerRadius="3" 
+                                        Cursor="Hand" MouseLeftButtonDown="EventTemplate_Click" Tag="{Binding}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#505050"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12"/>
+                                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="#AAA" 
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding CreatedDate, StringFormat='Created: {0:MM/dd/yyyy}'}" 
+                                                   FontSize="9" Foreground="#888"/>
+                                        <TextBlock Text="Click to load template" FontSize="8" Foreground="#0078D4" 
+                                                   Margin="0,2,0,0" FontStyle="Italic"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    
+                    <!-- Event Template Actions -->
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding LoadEventTemplateCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Download}" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Load Template" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding AssignTemplateToEventCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Link}" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Assign Current Template" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding DuplicateTemplateCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Copy}" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Duplicate Template" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding SetAsDefaultTemplateCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Favorite}" 
+                                     FontSize="16" Foreground="#FFD700" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Set as Default" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Style="{StaticResource ModernButton}" Command="{Binding RemoveTemplateFromEventCmd}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Delete}" 
+                                     FontSize="16" Foreground="#FF6B6B" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Remove from Event" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Separator -->
+                    <Border Height="1" Background="#444" Margin="8,12,8,8"/>
+                    
+                    <!-- Launch Photobooth -->
+                    <Button Click="LaunchPhotoboothButton_Click" 
+                            x:Name="launchPhotoboothButton"
+                            IsEnabled="True"
+                            Padding="12,10">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource ModernButton}">
+                                <Setter Property="Background" Value="#4CAF50"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#66BB6A"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#45A049"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Background" Value="#757575"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE722;" 
+                                     FontSize="20" Foreground="White" Width="28" VerticalAlignment="Center"/>
+                            <TextBlock Text="Launch Photobooth" FontSize="15" FontWeight="Bold" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                </StackPanel>
+            </Expander>
+            
+            <!-- Settings Section -->
+            <Expander Header="Settings" Style="{StaticResource ModernExpander}" IsExpanded="False">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="8,4,8,8">
+                    <!-- Debug Mode Toggle -->
+                    <CheckBox x:Name="DebugModeCheckBox" 
+                              Content="Enable Debug Mode" 
+                              FontSize="13" 
+                              Foreground="White" 
+                              Margin="0,4"
+                              ToolTip="Toggle debug messages in the output window"
+                              Checked="DebugModeCheckBox_Checked"
+                              Unchecked="DebugModeCheckBox_Unchecked"/>
+                    
+                    <!-- View Dimension Selector -->
+                    <TextBlock Text="View Dimension In:" FontSize="12" Foreground="#CCCCCC" Margin="0,8,0,4"/>
+                    <ComboBox FontSize="13" Height="32" Margin="0,0,0,4">
+                        <ComboBoxItem Content="Pixels" IsSelected="True"/>
+                        <ComboBoxItem Content="Inches"/>
+                        <ComboBoxItem Content="Centimeters"/>
+                    </ComboBox>
+                </StackPanel>
+            </Expander>
+            
+            <!-- Paper Size Section -->
+            <Expander Header="Paper Size" Style="{StaticResource ModernExpander}" IsExpanded="True">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="8,4,8,8">
+                    <ComboBox x:Name="comboBox" FontSize="13" Height="32" Margin="0,4"
+                              ItemsSource="{Binding ListOfRatios}" 
+                              SelectedItem="{Binding SelectedRatio, Mode=TwoWay}"/>
+                    
+                    <!-- Canvas Information Display -->
+                    <StackPanel Margin="0,8,0,0">
+                        <TextBlock Name="CanvasSizeInfo" Text="Canvas: Auto-sized based on paper selection" 
+                                   FontSize="10" Foreground="#AAAAAA" Margin="0,0,0,2"/>
+                        <TextBlock Text="Display: 25% scale for comfortable editing" 
+                                   FontSize="9" Foreground="#999999" Margin="0,0,0,4"/>
+                        <TextBlock Text="Print: 300 DPI quality output" 
+                                   FontSize="9" Foreground="#999999" Margin="0,0,0,8"/>
+                    </StackPanel>
+                    
+                    <Grid Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                            <TextBlock Text="Print Width (px)" FontSize="12" Foreground="#CCCCCC" Margin="0,0,0,4"/>
+                            <TextBox Name="CanvasWidthDisplay" Text="{Binding CustomDesignerCanvas.ActualPixelWidth, Mode=OneWay}" 
+                                     Background="#404040" Foreground="White" BorderBrush="#606060" 
+                                     FontSize="13" Height="32" Padding="8" IsReadOnly="True"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                            <TextBlock Text="Print Height (px)" FontSize="12" Foreground="#CCCCCC" Margin="0,0,0,4"/>
+                            <TextBox Name="CanvasHeightDisplay" Text="{Binding CustomDesignerCanvas.ActualPixelHeight, Mode=OneWay}" 
+                                     Background="#404040" Foreground="White" BorderBrush="#606060" 
+                                     FontSize="13" Height="32" Padding="8" IsReadOnly="True"/>
+                        </StackPanel>
+                    </Grid>
+                    
+                    <!-- Change Orientation Button -->
+                    <Button Style="{StaticResource ModernButton}" PreviewMouseLeftButtonDown="ActionChangeOrientation" Margin="0,8,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Rotate}" 
+                                     FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="Change Orientation" FontSize="13" Foreground="White" 
+                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Expander>
+            
+        </StackPanel>
+    </ScrollViewer>
+</Page>

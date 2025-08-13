@@ -1,0 +1,96 @@
+﻿<UserControl x:Class="Photobooth.MVVM.Views.UserControls.Designer.DesignerLeftSideBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Photobooth.MVVM.Views.UserControls.Designer"
+             xmlns:utils="clr-namespace:Photobooth.MVVM.Utils"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="200" d:Background="#333333">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200"/>
+        </Grid.ColumnDefinitions>
+        <ScrollViewer Grid.Row="0" Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="5,0,5,0">
+            <StackPanel x:Name="stackPanel" VerticalAlignment="Top" Orientation="Vertical">
+                <TextBlock Text="Files" FontSize="14" Margin="10,5,0,5" Foreground="White"/>
+                <ComboBox x:Name="cmb_templates" DisplayMemberPath="Name" VerticalAlignment="Center" Width="150" Height="30" ItemsSource="{Binding Templates}" SelectedItem="{Binding CurrentTemplate}" Margin="10" />
+
+                <!-- Add Items Section -->
+                <Border Margin="0,0,0,5" BorderBrush="Gray" BorderThickness="0,0,0,1">
+                    <Expander Header="Add Items" Foreground="White" FontSize="14" UseLayoutRounding="True" IsExpanded="True" Margin="0,0,0,5">
+                        <ListView x:Name="ToolBoxList" BorderThickness="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Background="#333333" Padding="0,5"
+                              VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Standard">
+                            <ListViewItem VerticalAlignment="Center" Cursor="Hand" utils:EventToCommandBehavior.Command="{Binding AddPlaceholderCmd}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Image Source="https://img.icons8.com/ios/50/FFFFFF/camera--v4.png" Width="20" Stretch="UniformToFill" Margin="5" VerticalAlignment="Center" />
+                                    <TextBlock Text="Placeholder" FontSize="12" Foreground="White" Margin="5" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </ListViewItem>
+                            <ListViewItem VerticalAlignment="Center" Cursor="Hand" utils:EventToCommandBehavior.Command="{Binding ImportImageCmd}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Image Source="https://img.icons8.com/external-kmg-design-basic-outline-kmg-design/32/FFFFFF/external-photo-interface-essentials-kmg-design-basic-outline-kmg-design.png" Width="20" Stretch="UniformToFill" Margin="5" VerticalAlignment="Center" />
+                                    <TextBlock Text="Image" FontSize="12" Foreground="White" Margin="5" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </ListViewItem>
+                        </ListView>
+                    </Expander>
+                </Border>
+
+                <!-- Layout Section -->
+                <Border Margin="0,0,0,5" BorderBrush="Gray" BorderThickness="0,0,0,1">
+                    <Expander Header="Layout" FontSize="14" Foreground="White" UseLayoutRounding="True" IsExpanded="True" Margin="0,0,0,5">
+                        <StackPanel Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,5">
+                            <ListViewItem VerticalAlignment="Center" Cursor="Hand" utils:EventToCommandBehavior.Command="{Binding ClearCanvasCmd}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Image Source="/images/clear.png" Width="20" Stretch="UniformToFill" Margin="5" VerticalAlignment="Center" />
+                                    <TextBlock Text="Clear Canvas" FontSize="12" Foreground="White" Margin="5" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </ListViewItem>
+                            <ListViewItem VerticalAlignment="Center" Cursor="Hand" utils:EventToCommandBehavior.Command="{Binding ChangeCanvasOrientationCmd}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Image Source="/images/orientation.png" Width="20" Stretch="UniformToFill" Margin="5" VerticalAlignment="Center" />
+                                    <TextBlock Text="Change Orientation" FontSize="12" Foreground="White" Margin="5" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </ListViewItem>
+                            <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                                <TextBlock Text="Aspect Ratio" FontSize="12" Foreground="White" Margin="5" VerticalAlignment="Center" FontWeight="Normal" />
+                                <ComboBox FontSize="12" x:Name="comboBox" Width="180" Height="25" Margin="5" VerticalAlignment="Center" FontWeight="Normal" ItemsSource="{Binding ListOfRatios}" SelectedItem="{Binding SelectedRatio}">
+                                </ComboBox>
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+                <!-- Z-Order Section -->
+                <StackPanel Orientation="Vertical" Margin="0,2,0,2">
+                    <TextBlock Text="Files" FontSize="14" Margin="10,5,0,5" Foreground="White"/>
+                    <Border BorderThickness="0,0.5,0,0.5" BorderBrush="#CCCCCC" Padding="0,5,0,6">
+                        <Grid VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Image ToolTip="Save" Cursor="Hand" Source="\images\Save.png" Width="25" Height="40" utils:EventToCommandBehavior.Command="{Binding SaveCmd}"/>
+                            <Image ToolTip="Save As" Cursor="Hand" Grid.Column="1" Source="\images\SaveAs.png" Width="25" Height="40" utils:EventToCommandBehavior.Command="{Binding SaveAsCmd}"/>
+                            <Image ToolTip="Print" Cursor="Hand" Grid.Column="2" Source="\images\Print.png" Width="25" Height="40" utils:EventToCommandBehavior.Command="{Binding PrintCmd}"/>
+                            <Image ToolTip="View Image" Cursor="Hand" Grid.Column="3" Source="\images\ViewImage.png" Width="25" Height="40" utils:EventToCommandBehavior.Command="{Binding ViewImageCmd}"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"  utils:EventToCommandBehavior.Command="{Binding SaveTemplateCmd}" >
+                    <Image Source="/images/SaveAs.png" Width="20" Stretch="UniformToFill" Margin="5" VerticalAlignment="Center" />
+                    <TextBlock Text="Save Template" FontSize="12" Foreground="White" Margin="5" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"  utils:EventToCommandBehavior.Command="{Binding LoadTemplateCmd}" >
+                    <Image Source="/images/SaveAs.png" Width="20" Stretch="UniformToFill" Margin="5" VerticalAlignment="Center" />
+                    <TextBlock Text="Load Template" FontSize="12" Foreground="White" Margin="5" VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

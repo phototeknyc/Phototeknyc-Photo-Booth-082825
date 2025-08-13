@@ -1,0 +1,497 @@
+﻿<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:DesignerCanvas"
+    xmlns:controls="clr-namespace:DesignerCanvas.Controls"
+    xmlns:primitives="clr-namespace:DesignerCanvas.Controls.Primitives">
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    <primitives:ScaleToHandleSizeConverter x:Key="ScaleToHandleSizeConverter"/>
+    <Style TargetType="{x:Type controls:DesignerCanvas}">
+        <Setter Property="ClipToBounds" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type controls:DesignerCanvas}">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            ClipToBounds="False">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Background="Transparent" ClipToBounds="False">
+                                <!-- Enables mouse event handling -->
+                                <Grid ClipToBounds="False">
+                                    <Canvas x:Name="PART_Canvas" Panel.ZIndex="0" ClipToBounds="True">
+                                        <!--
+                                Panel elements do not receive mouse or stylus events if a Background
+                                is not defined. If you need to handle mouse or stylus events
+                                but do not want a background for your Panel, use Transparent.
+                                -->
+                                    </Canvas>
+                                    <Canvas x:Name="PART_AdornerCanvas" Panel.ZIndex="100" ClipToBounds="False">
+
+                                    </Canvas>
+                                </Grid>
+                            </Border>
+                            <!--<ScrollBar Grid.Column="1" Orientation="Vertical" x:Name="PART_VerticalScrollBar" />
+                            <ScrollBar Grid.Row="1" Orientation="Horizontal" x:Name="PART_HorizontalScrollBar" />-->
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <ControlTemplate x:Key="DragThumbTemplate" TargetType="primitives:DragThumb">
+        <Rectangle Fill="Transparent" />
+    </ControlTemplate>
+    <Style TargetType="primitives:DesignerCanvasItemContainer">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type primitives:DesignerCanvasItemContainer}">
+                    <Border BorderThickness="{TemplateBinding BorderThickness}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            Background="{TemplateBinding Background}">
+                        <Grid>
+                            <ContentPresenter x:Name="PART_ContentPresenter" />
+                            <primitives:DragThumb x:Name="PART_DragThumb" Template="{StaticResource DragThumbTemplate}" />
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="ClipToBounds" Value="False" />
+        <!-- Connect the data object to the Control -->
+        <Setter Property="Canvas.Left" Value="{Binding Left}" />
+        <Setter Property="Canvas.Top" Value="{Binding Top}" />
+        <Setter Property="Width" Value="{Binding Width, FallbackValue=NaN}" />
+        <Setter Property="Height" Value="{Binding Height, FallbackValue=NaN}" />
+        <Setter Property="Resizeable" Value="{Binding Resizeable, FallbackValue=True}" />
+        <Setter Property="Content" Value="{Binding}" />
+        <Setter Property="RenderTransform">
+            <Setter.Value>
+                <RotateTransform Angle="{Binding Angle}" />
+            </Setter.Value>
+        </Setter>
+        <Setter Property="RenderTransformOrigin" Value="0.5, 0.5" />
+    </Style>
+    <Style x:Key="ThumbHandle" TargetType="Shape">
+        <Setter Property="SnapsToDevicePixels" Value="true" />
+        <Setter Property="Stroke" Value="#FFC8C8C8" />
+        <Setter Property="StrokeThickness" Value=".5" />
+        <Setter Property="Width" Value="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=7, FallbackValue=7}" />
+        <Setter Property="Height" Value="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=7, FallbackValue=7}" />
+        <Setter Property="Margin" Value="-2" />
+        <Setter Property="Fill">
+            <Setter.Value>
+                <RadialGradientBrush Center="0.2, 0.2" GradientOrigin="0.2, 0.2" RadiusX="0.8" RadiusY="0.8">
+                    <GradientStop Color="White" Offset="0.0" />
+                    <GradientStop Color="Gray" Offset="0.8" />
+                </RadialGradientBrush>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="primitives:PolyLineVerticesAdorner">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="primitives:PolyLineVerticesAdorner">
+                    <Grid>
+                        <Canvas x:Name="PART_ThumbCanvas" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="primitives:ResizeRotateAdorner">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="primitives:ResizeRotateAdorner">
+                    <Grid>
+                        <!-- Thumbs for operation, but should be transparent. -->
+                        <Grid Opacity="0">
+                            <Grid Visibility="{TemplateBinding CanResize, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <!-- ResizeThumb -->
+                                <primitives:ResizeThumb Height="3" Cursor="SizeNS" Margin="0 -4 0 0" VerticalAlignment="Top" HorizontalAlignment="Stretch" />
+                                <primitives:ResizeThumb Width="3" Cursor="SizeWE" Margin="-4 0 0 0" VerticalAlignment="Stretch" HorizontalAlignment="Left"/>
+                                <primitives:ResizeThumb Width="3" Cursor="SizeWE" Margin="0 0 -4 0" VerticalAlignment="Stretch" HorizontalAlignment="Right"/>
+                                <primitives:ResizeThumb Height="3" Cursor="SizeNS" Margin="0 0 0 -4" VerticalAlignment="Bottom"  HorizontalAlignment="Stretch"/>
+                                <primitives:ResizeThumb Width="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=15, FallbackValue=15}" 
+                                                        Height="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=15, FallbackValue=15}" 
+                                                        Cursor="SizeNWSE" Margin="-6 -6 0 0" VerticalAlignment="Top" HorizontalAlignment="Left"/>
+                                <primitives:ResizeThumb Width="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=15, FallbackValue=15}" 
+                                                        Height="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=15, FallbackValue=15}" 
+                                                        Cursor="SizeNESW" Margin="0 -6 -6 0" VerticalAlignment="Top" HorizontalAlignment="Right"/>
+                                <primitives:ResizeThumb Width="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=15, FallbackValue=15}" 
+                                                        Height="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=15, FallbackValue=15}" 
+                                                        Cursor="SizeNESW" Margin="-6 0 0 -6" VerticalAlignment="Bottom" HorizontalAlignment="Left"/>
+                                <primitives:ResizeThumb Width="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=15, FallbackValue=15}" 
+                                                        Height="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=15, FallbackValue=15}" 
+                                                        Cursor="SizeNWSE" Margin="0 0 -6 -6" VerticalAlignment="Bottom" HorizontalAlignment="Right"/>
+                            </Grid>
+                            <!-- RotateThumb -->
+                            <Grid>
+                                <primitives:RotateThumb Cursor="Cross" Width="15" Height="15" Margin="0,-30,0,0"
+                                                           VerticalAlignment="Top" HorizontalAlignment="Center" />
+                            </Grid>
+                        </Grid>
+                        <!-- Rendering -->
+                        <Grid IsHitTestVisible="False" Margin="-3">
+                            <Rectangle 
+                                         StrokeThickness="1"
+                                         Margin="1"
+                                         Stroke="Blue"/>
+                            <Line StrokeThickness="2" X1="0" Y1="0" X2="0" Y2="20"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Top"
+                                            Margin="0,-20,0,0"
+                                            Stroke="DarkBlue"/>
+                            <Ellipse Width="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=14, FallbackValue=14}" 
+                                     Height="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:ResizeRotateAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=14, FallbackValue=14}" 
+                                     Fill="LightBlue" Stroke="DarkBlue" StrokeThickness="2" 
+                                     HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-28,0,0"/>
+                            <Grid Visibility="{TemplateBinding CanResize, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Rectangle Style="{StaticResource ThumbHandle}" HorizontalAlignment="Left"
+                                           VerticalAlignment="Top" />
+                                <Rectangle Style="{StaticResource ThumbHandle}" HorizontalAlignment="Right"
+                                           VerticalAlignment="Top" />
+                                <Rectangle Style="{StaticResource ThumbHandle}" HorizontalAlignment="Left"
+                                           VerticalAlignment="Bottom" />
+                                <Rectangle Style="{StaticResource ThumbHandle}" HorizontalAlignment="Right"
+                                           VerticalAlignment="Bottom" />
+                                <Rectangle Style="{StaticResource ThumbHandle}" HorizontalAlignment="Center"
+                                           VerticalAlignment="Top" />
+                                <Rectangle Style="{StaticResource ThumbHandle}" HorizontalAlignment="Center"
+                                           VerticalAlignment="Bottom" />
+                                <Rectangle Style="{StaticResource ThumbHandle}" HorizontalAlignment="Left"
+                                           VerticalAlignment="Center" />
+                                <Rectangle Style="{StaticResource ThumbHandle}" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="{x:Type primitives:SizeAdorner}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="primitives:SizeAdorner">
+                    <!--- 调整控件大小时显示大小值。 -->
+                    <Grid>
+                        <Path Stroke="Red"
+                                      StrokeThickness="1"
+                                      Height="10"
+                                      VerticalAlignment="Bottom"
+                                      Margin="-2,0,-2,-15"
+                                      Stretch="Fill"
+                                      Data="M0,0 0,10 M 0,5 100,5 M 100,0 100,10"/>
+                        <TextBlock Text="{Binding Width, StringFormat=0.0}"
+                                           Background="White"
+                                           Padding="3,0,3,0"
+                                           Foreground="Red"
+                                           FontSize="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:SizeAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12, FallbackValue=12}"
+                                           Margin="0,0,0,-18"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Bottom"/>
+                        <Path Stroke="Red"
+                                      StrokeThickness="1"
+                                      Width="10"
+                                      HorizontalAlignment="Right"
+                                      Margin="0,-2,-15,-2"
+                                      Stretch="Fill"
+                                      Data="M5,0 5,100 M 0,0 10,0 M 0,100 10,100"/>
+                        <TextBlock Text="{Binding Height, StringFormat=0.0}"
+                                           Background="White"
+                                           Foreground="Red"
+                                           FontSize="{Binding HandleScale, RelativeSource={RelativeSource AncestorType=primitives:SizeAdorner}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12, FallbackValue=12}"
+                                           Padding="3,0,3,0"
+                                           Margin="0,0,-18,0"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Center">
+                            <TextBlock.LayoutTransform>
+                                <RotateTransform Angle="90" CenterX="1" CenterY="0.5"/>
+                            </TextBlock.LayoutTransform>
+                        </TextBlock>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="primitives:RubberbandChrome">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="primitives:RubberbandChrome">
+                    <Rectangle Stroke="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" >
+                        <Rectangle.Fill>
+                            <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" Opacity="0.3"/>
+                        </Rectangle.Fill>
+                    </Rectangle>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <DataTemplate DataType="{x:Type local:ImageCanvasItem}">
+        <Image Source="{Binding Image}" 
+               Width="{Binding Width}" 
+               Height="{Binding Height}"
+               Stretch="Uniform" />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type local:PolyLineCanvasItem}">
+        <primitives:PolyLineCanvasItemPresenter />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type local:PlaceholderCanvasItem}">
+        <Border Background="{Binding Background}">
+            <!-- todo link font-size with placeholder size-->
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" 
+                           FontSize="{Binding CurrentScale, RelativeSource={RelativeSource AncestorType=controls:DesignerCanvas}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=16, FallbackValue=16}" 
+                           FontWeight="Bold">
+                    <TextBlock.Text>
+                        <MultiBinding StringFormat="Picture {0}">
+                            <Binding Path="PlaceholderNo"/>
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type local:TextCanvasItem}">
+        <Border Background="Transparent" ClipToBounds="False">
+            <Grid>
+                <!-- Outline layer (behind main text) -->
+                <TextBlock x:Name="OutlineText"
+                           Text="{Binding Text}" 
+                           FontFamily="{Binding FontFamily}"
+                           FontSize="{Binding FontSize}"
+                           FontWeight="{Binding FontWeight}"
+                           FontStyle="{Binding FontStyle}"
+                           TextAlignment="{Binding TextAlignment}"
+                           TextDecorations="{Binding TextDecorations}"
+                           LineHeight="{Binding LineHeight}"
+                           TextWrapping="NoWrap"
+                           VerticalAlignment="Top"
+                           HorizontalAlignment="Left"
+                           Foreground="{Binding OutlineColor}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Setter Property="Effect">
+                                <Setter.Value>
+                                    <DropShadowEffect Color="Black" 
+                                                      Direction="0" 
+                                                      ShadowDepth="0" 
+                                                      BlurRadius="{Binding OutlineThickness}"
+                                                      Opacity="1"/>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasOutline}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                
+                <!-- Main text layer (display mode) -->
+                <TextBlock Text="{Binding Text}" 
+                           FontFamily="{Binding FontFamily}"
+                           FontSize="{Binding FontSize}"
+                           FontWeight="{Binding FontWeight}"
+                           FontStyle="{Binding FontStyle}"
+                           Foreground="{Binding Foreground}"
+                           TextAlignment="{Binding TextAlignment}"
+                           TextDecorations="{Binding TextDecorations}"
+                           LineHeight="{Binding LineHeight}"
+                           TextWrapping="NoWrap"
+                           VerticalAlignment="Top"
+                           HorizontalAlignment="Left">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasShadow}" Value="True">
+                                    <Setter Property="Effect">
+                                        <Setter.Value>
+                                            <DropShadowEffect Color="{Binding ShadowColor}"
+                                                              Direction="315"
+                                                              ShadowDepth="{Binding ShadowOffsetX}"
+                                                              BlurRadius="{Binding ShadowBlurRadius}"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                    <Setter Property="Visibility" Value="Hidden"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                
+                <!-- Inline text editor (edit mode) -->
+                <TextBox x:Name="InlineTextEditor"
+                         Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         FontFamily="{Binding FontFamily}"
+                         FontSize="{Binding FontSize}"
+                         FontWeight="{Binding FontWeight}"
+                         FontStyle="{Binding FontStyle}"
+                         Foreground="{Binding Foreground}"
+                         TextAlignment="{Binding TextAlignment}"
+                         TextWrapping="NoWrap"
+                         Background="Transparent"
+                         BorderThickness="2"
+                         BorderBrush="#4A90E2"
+                         Padding="2"
+                         VerticalAlignment="Top"
+                         HorizontalAlignment="Left"
+                         AcceptsReturn="False"
+                         AcceptsTab="False">
+                    <TextBox.Style>
+                        <Style TargetType="TextBox">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBox.Style>
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Enter" Command="{Binding StopEditingCommand}"/>
+                        <KeyBinding Key="Escape" Command="{Binding CancelEditingCommand}"/>
+                    </TextBox.InputBindings>
+                </TextBox>
+            </Grid>
+        </Border>
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type local:ShapeCanvasItem}">
+        <Border Background="Transparent" ClipToBounds="False">
+            <Grid>
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Style.Triggers>
+                            <!-- Rectangle Shape -->
+                            <DataTrigger Binding="{Binding ShapeType}" Value="Rectangle">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                
+                <!-- Rectangle Shape -->
+                <Rectangle x:Name="RectangleShape" 
+                           Fill="{Binding Fill}"
+                           Stroke="{Binding Stroke}"
+                           StrokeThickness="{Binding StrokeThickness}"
+                           Width="{Binding Width}"
+                           Height="{Binding Height}">
+                    <Rectangle.Style>
+                        <Style TargetType="Rectangle">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ShapeType}" Value="Rectangle">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasShadow}" Value="True">
+                                    <Setter Property="Effect">
+                                        <Setter.Value>
+                                            <DropShadowEffect ShadowDepth="{Binding ShadowOffsetX}"
+                                                              Color="{Binding ShadowColor}" 
+                                                              BlurRadius="{Binding ShadowBlurRadius}"
+                                                              Direction="315"
+                                                              Opacity="0.7"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Rectangle.Style>
+                </Rectangle>
+                
+                <!-- Circle Shape -->
+                <Ellipse x:Name="EllipseShape"
+                         Fill="{Binding Fill}"
+                         Stroke="{Binding Stroke}"
+                         StrokeThickness="{Binding StrokeThickness}"
+                         Width="{Binding Width}"
+                         Height="{Binding Height}">
+                    <Ellipse.Style>
+                        <Style TargetType="Ellipse">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ShapeType}" Value="Circle">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasShadow}" Value="True">
+                                    <Setter Property="Effect">
+                                        <Setter.Value>
+                                            <DropShadowEffect ShadowDepth="{Binding ShadowOffsetX}"
+                                                              Color="{Binding ShadowColor}" 
+                                                              BlurRadius="{Binding ShadowBlurRadius}"
+                                                              Direction="315"
+                                                              Opacity="0.7"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Ellipse.Style>
+                </Ellipse>
+                
+                <!-- Line Shape -->
+                <Line x:Name="LineShape"
+                      Stroke="{Binding Stroke}"
+                      StrokeThickness="{Binding StrokeThickness}"
+                      X1="0" Y1="{Binding Height}"
+                      X2="{Binding Width}" Y2="0"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round">
+                    <Line.Style>
+                        <Style TargetType="Line">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ShapeType}" Value="Line">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasShadow}" Value="True">
+                                    <Setter Property="Effect">
+                                        <Setter.Value>
+                                            <DropShadowEffect ShadowDepth="{Binding ShadowOffsetX}"
+                                                              Color="{Binding ShadowColor}" 
+                                                              BlurRadius="{Binding ShadowBlurRadius}"
+                                                              Direction="315"
+                                                              Opacity="0.7"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Line.Style>
+                </Line>
+            </Grid>
+        </Border>
+    </DataTemplate>
+    <Style TargetType="primitives:PolyLineCanvasItemPresenter">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="primitives:PolyLineCanvasItemPresenter">
+                    <Grid DataContext="{Binding RelativeSource={RelativeSource TemplatedParent}}" >
+                        <Path Name="PART_ConnectionPath"
+                              StrokeThickness="2"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round"
+                              StrokeLineJoin="Round"
+                              SnapsToDevicePixels="True"
+                              Data="{Binding PathGeometry}" Stroke="Navy"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>
+

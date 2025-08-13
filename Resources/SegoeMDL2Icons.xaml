@@ -1,0 +1,92 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- Segoe MDL2 Assets font family - built into Windows 10+ -->
+    <FontFamily x:Key="SegoeMDL2">Segoe MDL2 Assets</FontFamily>
+    
+    <!-- Common Segoe MDL2 icon codes -->
+    <!-- UI Actions -->
+    <sys:String x:Key="MDL2_Save">&#xE74E;</sys:String>
+    <sys:String x:Key="MDL2_Open">&#xE8E5;</sys:String>
+    <sys:String x:Key="MDL2_Add">&#xE710;</sys:String>
+    <sys:String x:Key="MDL2_Edit">&#xE70F;</sys:String>
+    <sys:String x:Key="MDL2_Delete">&#xE74D;</sys:String>
+    <sys:String x:Key="MDL2_Copy">&#xE8C8;</sys:String>
+    <sys:String x:Key="MDL2_Paste">&#xE77F;</sys:String>
+    <sys:String x:Key="MDL2_Cut">&#xE8C6;</sys:String>
+    <sys:String x:Key="MDL2_Undo">&#xE7A7;</sys:String>
+    <sys:String x:Key="MDL2_Redo">&#xE7A6;</sys:String>
+    
+    <!-- Camera and Photo -->
+    <sys:String x:Key="MDL2_Camera">&#xE722;</sys:String>
+    <sys:String x:Key="MDL2_Photo">&#xE91B;</sys:String>
+    <sys:String x:Key="MDL2_Video">&#xE714;</sys:String>
+    <sys:String x:Key="MDL2_Print">&#xE749;</sys:String>
+    
+    <!-- Layout and Design -->
+    <sys:String x:Key="MDL2_Picture">&#xE91B;</sys:String>
+    <sys:String x:Key="MDL2_Rectangle">&#xE73F;</sys:String>
+    <sys:String x:Key="MDL2_Circle">&#xE739;</sys:String>
+    <sys:String x:Key="MDL2_Font">&#xE8D2;</sys:String>
+    <sys:String x:Key="MDL2_Bold">&#xE8DD;</sys:String>
+    <sys:String x:Key="MDL2_Italic">&#xE8DB;</sys:String>
+    <sys:String x:Key="MDL2_Underline">&#xE8DC;</sys:String>
+    
+    <!-- Alignment -->
+    <sys:String x:Key="MDL2_AlignLeft">&#xE8E4;</sys:String>
+    <sys:String x:Key="MDL2_AlignCenter">&#xE8E3;</sys:String>
+    <sys:String x:Key="MDL2_AlignRight">&#xE8E2;</sys:String>
+    <sys:String x:Key="MDL2_AlignJustify">&#xE8E4;</sys:String>
+    
+    <!-- Navigation -->
+    <sys:String x:Key="MDL2_Up">&#xE70E;</sys:String>
+    <sys:String x:Key="MDL2_Down">&#xE70D;</sys:String>
+    <sys:String x:Key="MDL2_Left">&#xE70C;</sys:String>
+    <sys:String x:Key="MDL2_Right">&#xE70B;</sys:String>
+    <sys:String x:Key="MDL2_Home">&#xE80F;</sys:String>
+    <sys:String x:Key="MDL2_Menu">&#xE700;</sys:String>
+    
+    <!-- Transform -->
+    <sys:String x:Key="MDL2_Rotate">&#xE7AD;</sys:String>
+    <sys:String x:Key="MDL2_Move">&#xE7C2;</sys:String>
+    <sys:String x:Key="MDL2_Resize">&#xE744;</sys:String>
+    
+    <!-- Layers -->
+    <sys:String x:Key="MDL2_Forward">&#xE72A;</sys:String>
+    <sys:String x:Key="MDL2_Back">&#xE72B;</sys:String>
+    
+    <!-- Status -->
+    <sys:String x:Key="MDL2_Accept">&#xE8FB;</sys:String>
+    <sys:String x:Key="MDL2_Cancel">&#xE8BB;</sys:String>
+    <sys:String x:Key="MDL2_Plus">&#xE710;</sys:String>
+    <sys:String x:Key="MDL2_Minus">&#xE738;</sys:String>
+    <sys:String x:Key="MDL2_Lock">&#xE72E;</sys:String>
+    <sys:String x:Key="MDL2_Unlock">&#xE785;</sys:String>
+    <sys:String x:Key="MDL2_View">&#xE890;</sys:String>
+    <sys:String x:Key="MDL2_Hide">&#xED1A;</sys:String>
+    <sys:String x:Key="MDL2_Download">&#xE896;</sys:String>
+    <sys:String x:Key="MDL2_Link">&#xE71B;</sys:String>
+    <sys:String x:Key="MDL2_Favorite">&#xE734;</sys:String>
+    
+    <!-- Settings -->
+    <sys:String x:Key="MDL2_Settings">&#xE713;</sys:String>
+    
+    <!-- Styles for Segoe MDL2 Text Blocks -->
+    <Style x:Key="MDL2Icon" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource SegoeMDL2}"/>
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+    </Style>
+    
+    <Style x:Key="MDL2IconSmall" TargetType="TextBlock" BasedOn="{StaticResource MDL2Icon}">
+        <Setter Property="FontSize" Value="12"/>
+    </Style>
+    
+    <Style x:Key="MDL2IconLarge" TargetType="TextBlock" BasedOn="{StaticResource MDL2Icon}">
+        <Setter Property="FontSize" Value="24"/>
+    </Style>
+    
+</ResourceDictionary>

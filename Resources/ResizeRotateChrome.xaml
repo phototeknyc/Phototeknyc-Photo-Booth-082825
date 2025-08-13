@@ -1,0 +1,103 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:t="clr-namespace:Photobooth.Adorners.Thumb"
+                    xmlns:a="clr-namespace:Photobooth.Adorners"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+  <a:ScaleToHandleSizeConverter x:Key="ScaleToHandleSizeConverter"/>
+
+  <Style TargetType="{x:Type Shape}" x:Key="ThumbCorner">
+    <Setter Property="SnapsToDevicePixels" Value="true" />
+    <Setter Property="Stroke" Value="#FF0080FF" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="Width" Value="{Binding RelativeSource={RelativeSource AncestorType={x:Type a:ResizeRotateAdorner}}, Path=HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=10}" />
+    <Setter Property="Height" Value="{Binding RelativeSource={RelativeSource AncestorType={x:Type a:ResizeRotateAdorner}}, Path=HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=10}" />
+    <Setter Property="Margin" Value="-3" />
+    <Setter Property="Fill">
+      <Setter.Value>
+        <RadialGradientBrush Center="0.2, 0.2" GradientOrigin="0.2, 0.2" RadiusX="0.8" RadiusY="0.8">
+          <GradientStop Color="White" Offset="0.0" />
+          <GradientStop Color="Gray" Offset="0.8" />
+        </RadialGradientBrush>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="{x:Type a:ResizeRotateChrome}">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type a:ResizeRotateChrome}">
+          <Grid DataContext="{Binding RelativeSource={RelativeSource TemplatedParent}}">
+            <Grid Opacity="0" Margin="-5">
+              <t:RotateThumb Width="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12, FallbackValue=15}"
+                             Height="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12, FallbackValue=15}"
+                             Margin="0,-25,0,0"
+                             Cursor="Hand"
+                             VerticalAlignment="Top"
+                             HorizontalAlignment="Center"/>
+              <t:ResizeThumb Height="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=6}"
+                             Cursor="SizeNS"
+                             VerticalAlignment="Top"
+                             HorizontalAlignment="Stretch"/>
+              <t:ResizeThumb Width="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=6}"
+                             Cursor="SizeWE"
+                             VerticalAlignment="Stretch"
+                             HorizontalAlignment="Left"/>
+              <t:ResizeThumb Width="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=6}"
+                             Cursor="SizeWE"
+                             VerticalAlignment="Stretch"
+                             HorizontalAlignment="Right"/>
+              <t:ResizeThumb Height="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=6}"
+                             Cursor="SizeNS"
+                             VerticalAlignment="Bottom"
+                             HorizontalAlignment="Stretch"/>
+              <t:ResizeThumb Width="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12}"
+                             Height="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12}"
+                             Margin="-3"
+                             Cursor="SizeNWSE"
+                             VerticalAlignment="Top"
+                             HorizontalAlignment="Left"/>
+              <t:ResizeThumb Width="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12}"
+                             Height="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12}"
+                             Margin="-3"
+                             Cursor="SizeNESW"
+                             VerticalAlignment="Top"
+                             HorizontalAlignment="Right"/>
+              <t:ResizeThumb Width="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12}"
+                             Height="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12}"
+                             Margin="-3"
+                             Cursor="SizeNESW"
+                             VerticalAlignment="Bottom"
+                             HorizontalAlignment="Left"/>
+              <t:ResizeThumb Width="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12}"
+                             Height="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=12}"
+                             Margin="-3"
+                             Cursor="SizeNWSE"
+                             VerticalAlignment="Bottom"
+                             HorizontalAlignment="Right"/>
+            </Grid>
+            <Grid IsHitTestVisible="False" Opacity="1" Margin="-5">
+              <Rectangle SnapsToDevicePixels="True"
+                         StrokeThickness="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=2}"
+                         Margin="1"
+                         Stroke="#FF0080FF"/>
+              <Line StrokeThickness="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=2}" 
+                    X1="0" Y1="0" X2="0" 
+                    Y2="{Binding HandleScale, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=25}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Top"
+                    Margin="0,-24,0,0"
+                    Stroke="#FF0080FF"/>
+              <Ellipse Style="{StaticResource ThumbCorner}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="-1,-25,0,0"/>
+              <Ellipse Style="{StaticResource ThumbCorner}" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+              <Ellipse Style="{StaticResource ThumbCorner}" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+              <Ellipse Style="{StaticResource ThumbCorner}" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+              <Ellipse Style="{StaticResource ThumbCorner}" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+            </Grid>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+</ResourceDictionary>

@@ -1,0 +1,440 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="packages\SQLite.3.13.0\build\net45\SQLite.props" Condition="Exists('packages\SQLite.3.13.0\build\net45\SQLite.props')" />
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{13AD8050-1966-4C84-A4EF-E935B41B0454}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Photobooth</RootNamespace>
+    <AssemblyName>Photobooth</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <WarningLevel>4</WarningLevel>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="ColorPicker, Version=3.4.2.0, Culture=neutral, PublicKeyToken=1c61eec504ce2276, processorArchitecture=MSIL">
+      <HintPath>packages\PixiEditor.ColorPicker.3.4.2\lib\net451\ColorPicker.dll</HintPath>
+    </Reference>
+    <Reference Include="ColorPicker.Models, Version=1.0.7.0, Culture=neutral, PublicKeyToken=bb95a4442a9c0731, processorArchitecture=MSIL">
+      <HintPath>packages\PixiEditor.ColorPicker.Models.1.0.7\lib\net451\ColorPicker.Models.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Xaml.Behaviors, Version=1.1.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>packages\Microsoft.Xaml.Behaviors.Wpf.1.1.31\lib\net45\Microsoft.Xaml.Behaviors.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.VisualBasic" />
+    <Reference Include="ReachFramework" />
+    <Reference Include="System" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Data.SQLite, Version=1.0.119.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=MSIL">
+      <HintPath>packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\lib\net46\System.Data.SQLite.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Drawing.Common, Version=9.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>packages\System.Drawing.Common.9.0.8\lib\net462\System.Drawing.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Management" />
+    <Reference Include="System.Printing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xaml">
+      <RequiredTargetFramework>4.0</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WriteableBitmapEx.Wpf, Version=1.6.8.0, Culture=neutral, PublicKeyToken=50375ca6144f1c69, processorArchitecture=MSIL">
+      <HintPath>packages\WriteableBitmapEx.1.6.8\lib\net40\WriteableBitmapEx.Wpf.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="Controls\EnhancedColorPickerDialog.cs" />
+    <Compile Include="Controls\PixiEditorColorPickerDialog.xaml.cs">
+      <DependentUpon>PixiEditorColorPickerDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\FilterSelectionControl.xaml.cs">
+      <DependentUpon>FilterSelectionControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\GalleryOverlayControl.xaml.cs">
+      <DependentUpon>GalleryOverlayControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\PrintDialog.xaml.cs">
+      <DependentUpon>PrintDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Database\TemplateDatabase.cs" />
+    <Compile Include="Services\EventService.cs" />
+    <Compile Include="Services\TemplateService.cs" />
+    <Compile Include="Services\DebugService.cs" />
+    <Compile Include="Services\PhotoboothService.cs" />
+    <Compile Include="Services\ImageProcessingService.cs" />
+    <Compile Include="Services\CameraSessionManager.cs" />
+    <Compile Include="Services\PhotoFilterService.cs" />
+    <Compile Include="Services\PrintService.cs" />
+    <Compile Include="Services\PrinterPoolService.cs" />
+    <Compile Include="Services\PrinterMonitorService.cs" />
+    <Compile Include="NavButton.cs" />
+    <Compile Include="PhotoBoothWindow.xaml.cs">
+      <DependentUpon>PhotoBoothWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ModernSettingsWindow.xaml.cs">
+      <DependentUpon>ModernSettingsWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Resources\Designer\DesignerCanvas.cs" />
+    <Compile Include="Resources\Designer\DesignerItemDecorator.cs" />
+    <Compile Include="Resources\Designer\Primitives\ContainerDesigningAdorners.cs" />
+    <Compile Include="Resources\Designer\Primitives\DesignerCanvasItemContainer.cs" />
+    <Compile Include="Resources\Designer\Primitives\PolyLineCanvasItemPresenter.cs" />
+    <Compile Include="Resources\Designer\Primitives\PolyLineVerticesAdorner.cs" />
+    <Compile Include="Resources\Designer\Primitives\RelativePositionPanel.cs" />
+    <Compile Include="Resources\Designer\Primitives\ResizeThumb.cs" />
+    <Compile Include="Resources\Designer\Primitives\RotateThumb.cs" />
+    <Compile Include="Resources\Designer\Primitives\RubberbandAdorner.cs" />
+    <Compile Include="WelcomeWindow.xaml.cs">
+      <DependentUpon>WelcomeWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\TemplateBrowserWindow.xaml.cs">
+      <DependentUpon>TemplateBrowserWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\EventBrowserWindow.xaml.cs">
+      <DependentUpon>EventBrowserWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\EventCreateEditDialog.xaml.cs">
+      <DependentUpon>EventCreateEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\PhotoboothSessionWindow.xaml.cs">
+      <DependentUpon>PhotoboothSessionWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\PhotoboothTemplateSelectorWindow.xaml.cs">
+      <DependentUpon>PhotoboothTemplateSelectorWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\GalleryWindow.xaml.cs">
+      <DependentUpon>GalleryWindow.xaml</DependentUpon>
+    </Compile>
+    <Page Include="Design\Canvas\CanvasContainer.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="MainWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="Adorners\ResizeRotateAdorner.cs" />
+    <Compile Include="Adorners\ResizeRotateChrome.cs" />
+    <Compile Include="Adorners\SizeAdorner.cs" />
+    <Compile Include="Adorners\SizeChrome.cs" />
+    <Compile Include="Adorners\Thumb\DragThumb.cs" />
+    <Compile Include="Adorners\Thumb\MoveThumb.cs" />
+    <Compile Include="Adorners\Thumb\ResizeThumb.cs" />
+    <Compile Include="Adorners\Thumb\RotateThumb.cs" />
+    <Compile Include="App.xaml.cs">
+      <DependentUpon>App.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Design\Canvas\CanvasContainer.xaml.cs">
+      <DependentUpon>CanvasContainer.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="MainWindow.xaml.cs">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Page Include="Pages\BackgroundSettingControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\Camera.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\CameraSettings.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\MainPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\ItemPropertiesPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\Setting.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\Sidebar.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\PhotoboothTouch.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\PhotoboothSettingsControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\FilterSelectionControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\GalleryOverlayControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\PrintDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="PhotoBoothWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ModernSettingsWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Resources\DesignerItem.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Resources\ResizeRotateChrome.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Resources\SizeChrome.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Styles\ButtonStyle.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Styles\ComboBoxStyle.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Styles\SliderStyle.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Styles\TouchFriendlyStyle.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Styles\MenuStyle.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Themes\Generic.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Resources\SegoeMDL2Icons.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\PixiEditorColorPickerDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="WelcomeWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Windows\TemplateBrowserWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Windows\EventBrowserWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Windows\EventCreateEditDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Windows\PhotoboothSessionWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Windows\PhotoboothTemplateSelectorWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Windows\GalleryWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="MVVM\Models\CanvasLayer.cs" />
+    <Compile Include="MVVM\Models\RelayCommand.cs" />
+    <Compile Include="MVVM\ViewModels\BaseViewModel.cs" />
+    <Compile Include="MVVM\ViewModels\Designer\DesignerVM.cs" />
+    <Compile Include="Models\Template.cs" />
+    <Compile Include="Pages\BackgroundSettingControl.xaml.cs">
+      <DependentUpon>BackgroundSettingControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\Camera.xaml.cs">
+      <DependentUpon>Camera.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\CameraSettings.xaml.cs">
+      <DependentUpon>CameraSettings.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\MainPage.xaml.cs">
+      <DependentUpon>MainPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\ItemPropertiesPage.xaml.cs">
+      <DependentUpon>ItemPropertiesPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\Setting.xaml.cs">
+      <DependentUpon>Setting.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\Sidebar.xaml.cs">
+      <DependentUpon>Sidebar.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\PhotoboothTouch.xaml.cs">
+      <DependentUpon>PhotoboothTouch.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\PhotoboothSettingsControl.xaml.cs">
+      <DependentUpon>PhotoboothSettingsControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <Content Include="fonts\FontAwesome.otf" />
+    <Content Include="fonts\fontawesome-webfont.ttf" />
+    <Content Include="fonts\fontawesome-webfont.eot" />
+    <Content Include="fonts\fontawesome-webfont.woff" />
+    <Content Include="fonts\fontawesome-webfont.woff2" />
+    <None Include="packages.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="images\78c5e5793d33ebf1c9326314e895a23c1051568f.png" />
+    <Resource Include="images\Account.png" />
+    <Resource Include="images\alignBaseLine.png" />
+    <Resource Include="images\alignBottom.png" />
+    <Resource Include="images\alignCenter.png" />
+    <Resource Include="images\alignLeft.png" />
+    <Resource Include="images\alignRight.png" />
+    <Resource Include="images\alignStretchHorizontal.png" />
+    <Resource Include="images\alignStretchVertical.png" />
+    <Resource Include="images\alignTop.png" />
+    <Resource Include="images\background.png" />
+    <Resource Include="images\bringToFront.png" />
+    <Resource Include="images\camera.png" />
+    <Resource Include="images\clear.png" />
+    <Resource Include="images\duplicate.png" />
+    <Resource Include="images\lock.png" />
+    <Resource Include="images\logo.png" />
+    <Resource Include="images\open.png" />
+    <Resource Include="images\orientation.png" />
+    <Resource Include="images\Padlock.png" />
+    <Resource Include="images\photobooth.png" />
+    <Resource Include="images\rotateLeft.png" />
+    <Resource Include="images\rotateRight.png" />
+    <Resource Include="images\save.png" />
+    <Resource Include="images\saveAs.png" />
+    <Resource Include="images\sendToBack.png" />
+    <Resource Include="images\Settings.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="CameraControl.Devices\CameraControl.Devices.csproj">
+      <Project>{e8572d8b-c987-4d20-bd88-1f8925a64a82}</Project>
+      <Name>CameraControl.Devices</Name>
+    </ProjectReference>
+    <ProjectReference Include="DesignerCanvas\DesignerCanvas.csproj">
+      <Project>{95510603-051a-4a86-b8af-b8683501d6ad}</Project>
+      <Name>DesignerCanvas</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Content\font-awesome.css" />
+    <Content Include="Content\font-awesome.min.css" />
+    <Content Include="fonts\fontawesome-webfont.svg" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- Copy SQLite native libraries if available -->
+  <Target Name="CopySQLiteNativeLibraries" AfterTargets="Build">
+    <ItemGroup>
+      <SQLiteFiles Include="packages\SQLite.3.13.0\build\net45\**\*.dll" />
+      <SQLiteX64Files Include="packages\System.Data.SQLite.Core.*\build\net46\x64\SQLite.Interop.dll" />
+      <SQLiteX86Files Include="packages\System.Data.SQLite.Core.*\build\net46\x86\SQLite.Interop.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SQLiteFiles)" DestinationFolder="$(OutputPath)\" ContinueOnError="true" />
+    <Copy SourceFiles="@(SQLiteX64Files)" DestinationFolder="$(OutputPath)\x64\" ContinueOnError="true" />
+    <Copy SourceFiles="@(SQLiteX86Files)" DestinationFolder="$(OutputPath)\x86\" ContinueOnError="true" />
+    <Message Text="Attempted to copy SQLite native libraries to output directory" Importance="normal" />
+  </Target>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('packages\SQLite.3.13.0\build\net45\SQLite.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\SQLite.3.13.0\build\net45\SQLite.props'))" />
+    <Error Condition="!Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets'))" />
+  </Target>
+  <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
+</Project>

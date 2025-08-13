@@ -1,0 +1,199 @@
+﻿<Page x:Class="Photobooth.Pages.MainPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:Photobooth.Pages" 
+      xmlns:controls="clr-namespace:DesignerCanvas.Controls;assembly=DesignerCanvas"
+      xmlns:vm="clr-namespace:Photobooth.MVVM.ViewModels.Designer"
+      mc:Ignorable="d" 
+      MinWidth="1200" MinHeight="700" Background="#333333"
+      Title="MainPage" Focusable="True">
+
+    <Page.InputBindings>
+        <!-- Delete selected items -->
+        <KeyBinding Key="Delete" Command="{Binding DeleteSelectedItemsCmd}" />
+        <!-- Undo -->
+        <KeyBinding Key="Z" Modifiers="Ctrl" Command="{Binding UndoCmd}" />
+        <!-- Redo -->
+        <KeyBinding Key="R" Modifiers="Ctrl" Command="{Binding RedoCmd}" />
+        <!-- Alternative Redo with Ctrl+Y (common shortcut) -->
+        <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCmd}" />
+    </Page.InputBindings>
+
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Styles/ButtonStyle.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*" MinWidth="500"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <Border Grid.Column="0"  Grid.Row="0" BorderBrush="#CCCCCC" BorderThickness="0,0,0.5,0" >
+            <Frame Source="Sidebar.xaml"/>
+        </Border>
+        <Grid Grid.Column="1" Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/> 
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Modern Toolbar - Compact for more canvas space -->
+            <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3C3C3C" BorderThickness="0,0,0,1">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="15,6">
+                    
+                    <!-- New Template -->
+                    <Button Name="NewTemplateBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="New Template" Command="{Binding NewTemplateCmd}" Margin="0,0,2,0">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <Path Data="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,5V19H5V5H19Z" 
+                                  Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
+                            <TextBlock Text="New Template" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Save Template -->
+                    <Button Name="SaveBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Save Template (Updates current or saves as new)" Command="{Binding SaveTemplateCmd}" Margin="0,0,2,0">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <Path Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" 
+                                  Fill="#90EE90" Width="20" Height="20" Stretch="Uniform"/>
+                            <TextBlock Text="Save" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Save as New -->
+                    <Button Name="SaveAsNewBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Save as New Template" Command="{Binding SaveToDbCmd}" Margin="0,0,2,0">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <Path Data="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13.5,16V19H10.5V16H8L12,12L16,16H13.5M13,9V3.5L18.5,9H13Z" 
+                                  Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
+                            <TextBlock Text="Save as New" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Separator -->
+                    <Rectangle Fill="#3C3C3C" Width="1" Height="35" Margin="8,0"/>
+                    
+                    <!-- Import -->
+                    <Button Name="ImportBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Import" Command="{Binding ImportTemplateCmd}" Margin="0,0,2,0">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <Path Data="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z M12,12L16,16H13.5V19H10.5V16H8L12,12Z" 
+                                  Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
+                            <TextBlock Text="Import" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Export -->
+                    <Button Name="ExportBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Export" Command="{Binding ExportTemplateCmd}" Margin="0,0,2,0">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <Path Data="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z M12,19L8,15H10.5V12H13.5V15H16L12,19Z" 
+                                  Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
+                            <TextBlock Text="Export" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Browse Templates -->
+                    <Button Name="BrowseTemplatesBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Browse Templates" Command="{Binding BrowseTemplatesCmd}" Margin="0,0,2,0">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <Path Data="M19,5V7H15V5H19M9,5V11H5V5H9M19,13V19H15V13H19M9,17V19H5V17H9M21,3H13V9H21V3M11,3H3V13H11V3M21,11H13V21H21V11M11,15H3V21H11V15Z" 
+                                  Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
+                            <TextBlock Text="Browse Templates" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Separator -->
+                    <Rectangle Fill="#3C3C3C" Width="1" Height="35" Margin="8,0"/>
+                    
+                    <!-- Undo -->
+                    <Button Name="UndoBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Undo" Command="{Binding UndoCmd}" Margin="0,0,2,0">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <Path Data="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z" 
+                                  Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
+                            <TextBlock Text="Undo" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Redo -->
+                    <Button Name="RedoBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Redo" Command="{Binding RedoCmd}" Margin="0,0,2,0">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <Path Data="M18.4,10.6C16.55,9 14.15,8 11.5,8C6.85,8 2.92,11.03 1.53,15.22L3.9,16C4.95,12.81 7.96,10.5 11.5,10.5C13.46,10.5 15.23,11.22 16.62,12.38L13,16H22V7L18.4,10.6Z" 
+                                  Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
+                            <TextBlock Text="Redo" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Separator -->
+                    <Rectangle Fill="#3C3C3C" Width="1" Height="35" Margin="8,0"/>
+                    
+                    <!-- Print Test Copy -->
+                    <Button Name="PrintTestBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Print Test Copy" Command="{Binding PrintCmd}" Margin="0,0,2,0">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <Path Data="M18,3H6V7H18M19,12A1,1 0 0,1 18,11A1,1 0 0,1 19,10A1,1 0 0,1 20,11A1,1 0 0,1 19,12M16,19H8V14H16M19,8H5A3,3 0 0,0 2,11V17H6V21H18V17H22V11A3,3 0 0,0 19,8Z" 
+                                  Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
+                            <TextBlock Text="Print Test Copy" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Delete Template -->
+                    <Button Name="DeleteTemplateBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Delete Template" Command="{Binding DeleteTemplateCmd}" Margin="0,0,2,0">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <Path Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" 
+                                  Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
+                            <TextBlock Text="Delete Template" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    
+                </StackPanel>
+            </Border>
+                <!--<Border Grid.Column="0" Grid.Row="0" BorderThickness="0,0.5,0,0.5" BorderBrush="#CCCCCC" Padding="0,5,0,6" >
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"  VerticalAlignment="Center">
+                        
+                            <Grid >
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                                <Image ToolTip="Clear Canvas" Grid.Row="0" Cursor="Hand" Grid.Column="0" Source="\images\clear.png" Width="25" Height="40" Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown" />
+
+                            <Image ToolTip="Change Orientation" Grid.Row="0" Cursor="Hand" Grid.Column="1" Source="\images\orientation.png" Width="25" Height="40"  Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_1"   />
+                              
+                            </Grid>
+                     
+                    </StackPanel>
+                </Border>-->
+
+                <!-- todo Create userControl for designer canvas (like previous project) -->
+                <!-- todo create scroll behavior (so, large page size can be seen) -->
+            <!-- Canvas container - no border, maximum space utilization -->
+            <Grid Grid.Column="0" Grid.Row="1" Background="#FF4A4A4A">
+                <Border x:Name="canvasContainer" BorderBrush="{DynamicResource {x:Static SystemColors.ActiveCaptionBrushKey}}" 
+                        BorderThickness="1" Background="#FF3C3C3C" Margin="10" ClipToBounds="True">
+                    <Grid x:Name="canvasGrid" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Grid.LayoutTransform>
+                            <ScaleTransform x:Name="canvasScale" ScaleX="1" ScaleY="1"/>
+                        </Grid.LayoutTransform>
+                        <ContentPresenter Content="{Binding CustomDesignerCanvas}" 
+                                          ClipToBounds="False"/>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+        <!--<Frame  Grid.Column="1" Grid.Row="0" Background="WhiteSmoke" Margin="0,10" x:Name="frame"  MinWidth="500" MinHeight="300" NavigationUIVisibility="Hidden" />-->
+        <Border Grid.Column="2" Grid.Row="0"  Grid.ColumnSpan="3"  BorderBrush="#CCCCCC" Width="280" BorderThickness="0.5,0,0,0">
+            <Frame x:Name="PropertiesPanel" Source="ItemPropertiesPage.xaml"/>
+        </Border>
+    </Grid>
+</Page>
