@@ -496,14 +496,45 @@ namespace Photobooth.Pages
                 // First save current settings
                 SaveSettings_Click(sender, e);
                 
-                // Navigate to the photobooth touch interface
-                var mainWindow = Window.GetWindow(this) as MainWindow;
-                if (mainWindow != null)
+                // Check if we're in the new Surface window or ModernSettingsWindow
+                var parentWindow = Window.GetWindow(this);
+                
+                if (parentWindow is SurfacePhotoBoothWindow surfaceWindow)
                 {
-                    // Assuming we have a way to navigate to the PhotoboothTouch page
-                    // This would depend on the navigation structure of the application
-                    MessageBox.Show("Photobooth interface would open here.\nImplement navigation to PhotoboothTouch.xaml", 
-                        "Photobooth", MessageBoxButton.OK, MessageBoxImage.Information);
+                    // Navigate to Event Selection within the same window
+                    surfaceWindow.NavigateToPage(new EventSelectionPage(), "Select Event");
+                }
+                else if (parentWindow is ModernSettingsWindow)
+                {
+                    // Open the main Surface window
+                    var mainWindow = new SurfacePhotoBoothWindow();
+                    mainWindow.Show();
+                    
+                    // Navigate to Event Selection after window loads
+                    mainWindow.Loaded += (s, args) =>
+                    {
+                        mainWindow.NavigateToPage(new EventSelectionPage(), "Select Event");
+                    };
+                    
+                    // Minimize settings window
+                    parentWindow.WindowState = WindowState.Minimized;
+                }
+                else
+                {
+                    // Fallback - open PhotoBooth in new Surface window
+                    var photoboothWindow = new SurfacePhotoBoothWindow();
+                    photoboothWindow.Show();
+                    
+                    photoboothWindow.Loaded += (s, args) =>
+                    {
+                        photoboothWindow.NavigateToPage(new PhotoboothTouchModern(), "Photo Booth");
+                    };
+                    
+                    // Close or minimize parent window if it exists
+                    if (parentWindow != null)
+                    {
+                        parentWindow.WindowState = WindowState.Minimized;
+                    }
                 }
             }
             catch (Exception ex)

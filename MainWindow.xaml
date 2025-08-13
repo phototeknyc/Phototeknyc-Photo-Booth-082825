@@ -9,7 +9,14 @@
         WindowStartupLocation="CenterScreen"
         Title="WPF Diagram Designer"
         Background="#303030"
-        Height="700" Width="1080" Initialized="Window_Initialized">
+        Height="700" Width="1080" Initialized="Window_Initialized"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        RenderOptions.BitmapScalingMode="HighQuality"
+        RenderOptions.EdgeMode="Unspecified"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed">
     
     <Window.Resources>
         <ResourceDictionary>

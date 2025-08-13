@@ -38,6 +38,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="ColorPicker, Version=3.4.2.0, Culture=neutral, PublicKeyToken=1c61eec504ce2276, processorArchitecture=MSIL">
@@ -120,6 +121,9 @@
     </Compile>
     <Compile Include="ModernSettingsWindow.xaml.cs">
       <DependentUpon>ModernSettingsWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="SurfacePhotoBoothWindow.xaml.cs">
+      <DependentUpon>SurfacePhotoBoothWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Resources\Designer\DesignerCanvas.cs" />
     <Compile Include="Resources\Designer\DesignerItemDecorator.cs" />
@@ -211,6 +215,14 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Pages\PhotoboothTouchModern.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\EventSelectionPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Pages\PhotoboothSettingsControl.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -232,6 +244,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="ModernSettingsWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="SurfacePhotoBoothWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -338,6 +354,12 @@
     <Compile Include="Pages\PhotoboothTouch.xaml.cs">
       <DependentUpon>PhotoboothTouch.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Pages\PhotoboothTouchModern.xaml.cs">
+      <DependentUpon>PhotoboothTouchModern.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\EventSelectionPage.xaml.cs">
+      <DependentUpon>EventSelectionPage.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Pages\PhotoboothSettingsControl.xaml.cs">
       <DependentUpon>PhotoboothSettingsControl.xaml</DependentUpon>
     </Compile>
@@ -371,6 +393,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="app.manifest" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="images\78c5e5793d33ebf1c9326314e895a23c1051568f.png" />

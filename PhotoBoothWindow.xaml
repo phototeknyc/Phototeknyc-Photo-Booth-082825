@@ -3,80 +3,607 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:Photobooth" xmlns:controls="clr-namespace:DesignerCanvas.Controls;assembly=DesignerCanvas"
+        xmlns:local="clr-namespace:Photobooth" 
+        xmlns:controls="clr-namespace:DesignerCanvas.Controls;assembly=DesignerCanvas"
         mc:Ignorable="d"
-        Title="PhotoBoothWindow" Background="#333333" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True" MinWidth="1200" MinHeight="720" Icon="images/photobooth.png" WindowStartupLocation="CenterScreen">
+        Title="PhotoBooth Pro" 
+        WindowState="Maximized"
+        Icon="images/photobooth.png" 
+        WindowStartupLocation="CenterScreen"
+        AllowsTransparency="False"
+        WindowStyle="None"
+        Topmost="False"
+        Background="#0D1117"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        RenderOptions.BitmapScalingMode="HighQuality"
+        RenderOptions.EdgeMode="Unspecified"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed"
+        FontFamily="Segoe UI">
 
+    <Window.Resources>
+        <!-- Modern Color Palette -->
+        <SolidColorBrush x:Key="BackgroundPrimary" Color="#0D1117"/>
+        <SolidColorBrush x:Key="BackgroundSecondary" Color="#161B22"/>
+        <SolidColorBrush x:Key="SurfacePrimary" Color="#21262D"/>
+        <SolidColorBrush x:Key="SurfaceSecondary" Color="#30363D"/>
+        <SolidColorBrush x:Key="AccentCyan" Color="#00D9FF"/>
+        <SolidColorBrush x:Key="AccentPurple" Color="#7928CA"/>
+        <SolidColorBrush x:Key="AccentPink" Color="#FF0080"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#F0F6FC"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#8B949E"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#656D76"/>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*" MinWidth="500"/>
-        </Grid.ColumnDefinitions>
+        <!-- Gradient Backgrounds -->
+        <LinearGradientBrush x:Key="BackgroundGradient" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#0D1117" Offset="0"/>
+            <GradientStop Color="#161B22" Offset="1"/>
+        </LinearGradientBrush>
 
+        <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#00D9FF" Offset="0"/>
+            <GradientStop Color="#7928CA" Offset="0.5"/>
+            <GradientStop Color="#FF0080" Offset="1"/>
+        </LinearGradientBrush>
 
-        <!--Top Navigation Bar-->
+        <LinearGradientBrush x:Key="TitleGradient" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#00D9FF" Offset="0"/>
+            <GradientStop Color="#7928CA" Offset="1"/>
+        </LinearGradientBrush>
 
-        <Border Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="4"  BorderBrush="#CCCCCC" BorderThickness="0,0.5,0,0.5" Padding="5,1,1,1" >
-            <StackPanel  Orientation="Horizontal">
-                <Menu ItemContainerStyle="{DynamicResource MenuItemContainerStyle1}" x:Name="menu" Margin="3,5,3,5"  Background="{x:Null}">
-                    <MenuItem Header="File" Click="MenuItem_Click">
-                        <MenuItem Header="Open" Click="MenuItem_Click_1" />
-                        <MenuItem Header="Save"  />
-                        <MenuItem Header="Save As"  />
-                        <MenuItem Header="Print" Click="MenuItem_Click_3"  />
-                        <MenuItem Header="Export" Click="MenuItem_Click_2"  />
-                    </MenuItem>
-                    <MenuItem Header="Help">
-                        <MenuItem Header="Check for updates" />
-                        <MenuItem Header="About"  />
-                    </MenuItem>
+        <!-- Glassmorphism Effect -->
+        <Style x:Key="GlassPanelStyle" TargetType="Border">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <SolidColorBrush Color="#30363D" Opacity="0.8"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderBrush" Value="#30363D"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <BlurEffect Radius="2"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
+        <!-- Modern Button Style -->
+        <Style x:Key="ModernButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" 
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter x:Name="contentPresenter"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background">
+                                    <Setter.Value>
+                                        <SolidColorBrush Color="#30363D" Opacity="0.6"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background">
+                                    <Setter.Value>
+                                        <SolidColorBrush Color="#21262D" Opacity="0.8"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-                </Menu>
-            </StackPanel>
-        </Border>
+        <!-- Sidebar Navigation Button Style -->
+        <Style x:Key="SidebarNavButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="Height" Value="56"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" 
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Margin="8,2">
+                            <Grid>
+                                <!-- Active indicator -->
+                                <Rectangle x:Name="activeIndicator" 
+                                           Width="3" 
+                                           Height="24"
+                                           Fill="{StaticResource AccentCyan}"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Center"
+                                           Margin="4,0,0,0"
+                                           Opacity="0"
+                                           RadiusX="2" RadiusY="2"/>
+                                
+                                <StackPanel Orientation="Horizontal" 
+                                            Margin="{TemplateBinding Padding}">
+                                    <!-- Icon placeholder -->
+                                    <Border Width="24" Height="24" 
+                                            Background="{TemplateBinding Foreground}"
+                                            CornerRadius="4"
+                                            Margin="0,0,12,0"
+                                            Opacity="0.8"/>
+                                    
+                                    <!-- Label -->
+                                    <TextBlock x:Name="labelText"
+                                               Text="{TemplateBinding Tag}"
+                                               FontSize="{TemplateBinding FontSize}"
+                                               FontWeight="{TemplateBinding FontWeight}"
+                                               Foreground="{TemplateBinding Foreground}"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background">
+                                    <Setter.Value>
+                                        <SolidColorBrush Color="#30363D" Opacity="0.6"/>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource SurfaceSecondary}"/>
+                                <Setter TargetName="activeIndicator" Property="Opacity" Value="1"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentCyan}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-        <!--Left Navigation Bar-->
+        <!-- Menu Style -->
+        <Style x:Key="ModernMenuStyle" TargetType="Menu">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+        </Style>
 
-        <Border Grid.Column="0"  Grid.Row="1" BorderBrush="#CCCCCC" BorderThickness="0,0,0.5,0" Background="#222222">
+        <Style x:Key="ModernMenuItemStyle" TargetType="MenuItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="border" 
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="border" Property="Background">
+                                    <Setter.Value>
+                                        <SolidColorBrush Color="#30363D" Opacity="0.8"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-                <Grid  >
+        <!-- Storyboards for Animations -->
+        <Storyboard x:Key="SidebarExpandAnimation">
+            <DoubleAnimation Storyboard.TargetProperty="Width"
+                             To="280" Duration="0:0:0.3">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Key="SidebarCollapseAnimation">
+            <DoubleAnimation Storyboard.TargetProperty="Width"
+                             To="72" Duration="0:0:0.3">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Key="FadeInAnimation">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                             From="0" To="1" Duration="0:0:0.3"/>
+        </Storyboard>
+
+    </Window.Resources>
+
+    <!-- Window Chrome for Custom Window -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="32" 
+                      CornerRadius="12" 
+                      GlassFrameThickness="0" 
+                      ResizeBorderThickness="5"
+                      UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <!-- Main Container -->
+    <Border Background="{StaticResource BackgroundGradient}" 
+            CornerRadius="12" 
+            BorderBrush="{StaticResource SurfacePrimary}" 
+            BorderThickness="1">
+        
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="80"/>  <!-- Top Bar -->
+                <RowDefinition Height="*"/>   <!-- Content Area -->
+                <RowDefinition Height="40"/>  <!-- Status Bar -->
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="SidebarColumn" Width="280"/> <!-- Sidebar -->
+                <ColumnDefinition Width="*"/> <!-- Main Content -->
+            </Grid.ColumnDefinitions>
+
+            <!-- Top Bar -->
+            <Border Grid.Row="0" Grid.ColumnSpan="2" 
+                    Style="{StaticResource GlassPanelStyle}"
+                    Background="{x:Null}"
+                    BorderThickness="0,0,0,1"
+                    BorderBrush="{StaticResource SurfacePrimary}"
+                    CornerRadius="12,12,0,0">
+                
+                <Grid Margin="20,0">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
+
+                    <!-- Left Section: Hamburger Menu -->
+                    <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
+                        <Button x:Name="HamburgerButton" 
+                                Style="{StaticResource ModernButtonStyle}"
+                                Width="48" Height="48"
+                                Click="HamburgerButton_Click"
+                                ToolTip="Toggle Sidebar">
+                            <Grid>
+                                <Rectangle Width="18" Height="2" Fill="{StaticResource TextPrimary}" VerticalAlignment="Top" Margin="0,0,0,0"/>
+                                <Rectangle Width="18" Height="2" Fill="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                                <Rectangle Width="18" Height="2" Fill="{StaticResource TextPrimary}" VerticalAlignment="Bottom" Margin="0,0,0,0"/>
+                            </Grid>
+                        </Button>
+                        
+                        <!-- Breadcrumb -->
+                        <TextBlock x:Name="BreadcrumbText" 
+                                   Text="📸 Templates"
+                                   FontSize="14"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   VerticalAlignment="Center"
+                                   Margin="16,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Center Section: Title -->
+                    <TextBlock Grid.Column="1" 
+                               Text="PhotoBooth Pro"
+                               FontFamily="Segoe UI Light"
+                               FontSize="24"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource TitleGradient}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+
+                    <!-- Right Section: Quick Actions -->
+                    <StackPanel Orientation="Horizontal" Grid.Column="2" VerticalAlignment="Center">
+                        <!-- Search -->
+                        <Button Style="{StaticResource ModernButtonStyle}"
+                                Width="48" Height="48"
+                                ToolTip="Search"
+                                Click="Search_Click">
+                            <TextBlock Text="🔍" FontSize="18"/>
+                        </Button>
+                        
+                        <!-- Notifications -->
+                        <Button Style="{StaticResource ModernButtonStyle}"
+                                Width="48" Height="48"
+                                ToolTip="Notifications"
+                                Margin="8,0,0,0"
+                                Click="Notifications_Click">
+                            <Grid>
+                                <TextBlock Text="🔔" FontSize="18"/>
+                                <!-- Notification Badge -->
+                                <Ellipse Width="8" Height="8" 
+                                         Fill="{StaticResource AccentPink}"
+                                         HorizontalAlignment="Right"
+                                         VerticalAlignment="Top"
+                                         Margin="0,-2,-2,0"/>
+                            </Grid>
+                        </Button>
+                        
+                        <!-- User Avatar -->
+                        <Border Width="40" Height="40"
+                                Background="{StaticResource AccentGradient}"
+                                CornerRadius="20"
+                                Margin="16,0,0,0"
+                                Cursor="Hand"
+                                MouseLeftButtonDown="UserProfile_Click">
+                            <TextBlock Text="👤" 
+                                       FontSize="20"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Foreground="White"/>
+                        </Border>
+
+                        <!-- Window Controls -->
+                        <StackPanel Orientation="Horizontal" Margin="16,0,0,0"
+                                    WindowChrome.IsHitTestVisibleInChrome="True">
+                            <Button Style="{StaticResource ModernButtonStyle}"
+                                    Width="32" Height="32"
+                                    Click="MinimizeWindow_Click"
+                                    WindowChrome.IsHitTestVisibleInChrome="True">
+                                <TextBlock Text="─" FontSize="14" Foreground="{StaticResource TextSecondary}"/>
+                            </Button>
+                            <Button Style="{StaticResource ModernButtonStyle}"
+                                    Width="32" Height="32"
+                                    Click="MaximizeWindow_Click"
+                                    WindowChrome.IsHitTestVisibleInChrome="True">
+                                <TextBlock Text="□" FontSize="14" Foreground="{StaticResource TextSecondary}"/>
+                            </Button>
+                            <Button Style="{StaticResource ModernButtonStyle}"
+                                    Width="32" Height="32"
+                                    Click="CloseWindow_Click"
+                                    WindowChrome.IsHitTestVisibleInChrome="True">
+                                <TextBlock Text="✕" FontSize="14" Foreground="{StaticResource AccentPink}"/>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Collapsible Sidebar -->
+            <Border x:Name="SidebarBorder" 
+                    Grid.Row="1" Grid.Column="0"
+                    Style="{StaticResource GlassPanelStyle}"
+                    Background="{x:Null}"
+                    BorderThickness="0,0,1,0"
+                    BorderBrush="{StaticResource SurfacePrimary}"
+                    CornerRadius="0">
+                
+                <Grid Margin="0,20,0,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <StackPanel  Grid.Column="0" Grid.Row="0">
-                        <ListBox x:Name="sidebar"  BorderThickness="0" Background="#222222" SelectionMode="Single" SelectionChanged="sidebar_SelectionChanged" BorderBrush="{x:Null}"
-                >
-                            <local:NavButton  Label="Templates" Icon="images/78c5e5793d33ebf1c9326314e895a23c1051568f.png" NavLink="Pages/MainPage.xaml" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                        <local:NavButton Label="Events" Icon="images/duplicate.png" NavLink="EVENTS_BROWSER" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                        <!--<local:NavButton Label="Backgrounds" Icon="images/background.png" NavLink="Pages/Setting.xaml" VerticalAlignment="Center" HorizontalAlignment="Center" />-->
-                        <local:NavButton Label="Camera" Icon="images/camera.png" NavLink="Pages/Camera.xaml" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                        <local:NavButton Label="Camera Settings" Icon="images/Settings.png" NavLink="Pages/CameraSettings.xaml" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                        <local:NavButton Label="Photo Booth" Icon="images/camera.png" NavLink="PHOTOBOOTH_TOUCH" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                    </ListBox>
-                    </StackPanel>
-                    <StackPanel Grid.Column="0" Grid.Row="1" VerticalAlignment="Bottom">
-                        <ListBox x:Name="sidebar1"  BorderThickness="0" Background="#222222" SelectionMode="Single" SelectionChanged="sidebar1_SelectionChanged" BorderBrush="{x:Null}"
-                >
-                        <local:NavButton  Grid.Column="0" Grid.Row="1"  Label="Setting" Icon="images/Settings.png" NavLink="Pages/Setting.xaml"  />
-                    <local:NavButton  Grid.Column="0" Grid.Row="1"  Label="Account" Icon="images/Account.png" NavLink="Pages/Camera.xaml"  />
-                        </ListBox>
+
+                    <!-- Top Menu Items -->
+                    <ScrollViewer Grid.Row="0" 
+                                  VerticalScrollBarVisibility="Auto" 
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Style="{x:Null}">
+                        <StackPanel x:Name="MainNavigationPanel">
+                            
+                            <!-- Templates -->
+                            <Button Style="{StaticResource SidebarNavButtonStyle}"
+                                    Tag="📋 Templates"
+                                    Click="NavigateToTemplates_Click">
+                            </Button>
+                            
+                            <!-- Events -->
+                            <Button Style="{StaticResource SidebarNavButtonStyle}"
+                                    Tag="🎉 Events"
+                                    Click="NavigateToEvents_Click">
+                            </Button>
+                            
+                            <!-- Camera -->
+                            <Button Style="{StaticResource SidebarNavButtonStyle}"
+                                    Tag="📷 Camera"
+                                    Click="NavigateToCamera_Click">
+                            </Button>
+                            
+                            <!-- Camera Settings -->
+                            <Button Style="{StaticResource SidebarNavButtonStyle}"
+                                    Tag="⚙️ Camera Settings"
+                                    Click="NavigateToCameraSettings_Click">
+                            </Button>
+                            
+                            <!-- Photo Booth -->
+                            <Button Style="{StaticResource SidebarNavButtonStyle}"
+                                    Tag="🎪 Photo Booth"
+                                    Click="NavigateToPhotoBooth_Click">
+                            </Button>
+
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Bottom Menu Items -->
+                    <StackPanel Grid.Row="1" Margin="0,0,0,20">
+                        <Separator Background="{StaticResource SurfacePrimary}" 
+                                   Height="1" 
+                                   Margin="16,16"/>
+                        
+                        <!-- Settings -->
+                        <Button Style="{StaticResource SidebarNavButtonStyle}"
+                                Tag="⚙️ Settings"
+                                Click="NavigateToSettings_Click">
+                        </Button>
+                        
+                        <!-- Account -->
+                        <Button Style="{StaticResource SidebarNavButtonStyle}"
+                                Tag="👤 Account"
+                                Click="NavigateToAccount_Click">
+                        </Button>
                     </StackPanel>
                 </Grid>
+            </Border>
 
+            <!-- Main Content Area -->
+            <Grid Grid.Row="1" Grid.Column="1" Margin="20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
 
-        </Border>
-        <Frame x:Name="frame" Grid.Row="1" Grid.Column="1" NavigationUIVisibility="Hidden" />
+                <!-- Quick Menu Bar -->
+                <Border Grid.Row="0" 
+                        Style="{StaticResource GlassPanelStyle}"
+                        Height="60"
+                        Margin="0,0,0,20">
+                    <StackPanel Orientation="Horizontal" 
+                                VerticalAlignment="Center"
+                                Margin="20,0">
+                        
+                        <!-- Quick Menu Items -->
+                        <Menu x:Name="menu" Style="{StaticResource ModernMenuStyle}">
+                            <MenuItem Header="📁 File" Style="{StaticResource ModernMenuItemStyle}" Click="MenuItem_Click">
+                                <MenuItem Header="Open" Click="MenuItem_Click_1" />
+                                <MenuItem Header="Save" />
+                                <MenuItem Header="Save As" />
+                                <MenuItem Header="Print" Click="MenuItem_Click_3" />
+                                <MenuItem Header="Export" Click="MenuItem_Click_2" />
+                            </MenuItem>
+                            <MenuItem Header="❓ Help" Style="{StaticResource ModernMenuItemStyle}">
+                                <MenuItem Header="Check for updates" />
+                                <MenuItem Header="About" />
+                            </MenuItem>
+                        </Menu>
+                        
+                        <!-- Spacer -->
+                        <Rectangle Width="1" Height="30" 
+                                   Fill="{StaticResource SurfacePrimary}" 
+                                   Margin="20,0"/>
+                        
+                        <!-- Additional Quick Actions -->
+                        <Button Style="{StaticResource ModernButtonStyle}" 
+                                ToolTip="New Project">
+                            <TextBlock Text="➕ New" />
+                        </Button>
+                        
+                        <Button Style="{StaticResource ModernButtonStyle}" 
+                                ToolTip="Recent Files"
+                                Margin="12,0,0,0">
+                            <TextBlock Text="📂 Recent" />
+                        </Button>
 
-    </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Page Content Frame -->
+                <Border Grid.Row="1" 
+                        Style="{StaticResource GlassPanelStyle}"
+                        Background="{x:Null}"
+                        BorderBrush="{StaticResource SurfacePrimary}">
+                    
+                    <Frame x:Name="frame" 
+                           NavigationUIVisibility="Hidden"
+                           Background="Transparent"
+                           Margin="1">
+                        <Frame.Effect>
+                            <DropShadowEffect Color="#000000" 
+                                              Opacity="0.2" 
+                                              BlurRadius="20" 
+                                              ShadowDepth="0"/>
+                        </Frame.Effect>
+                    </Frame>
+                </Border>
+            </Grid>
+
+            <!-- Floating Action Button -->
+            <Border Grid.Row="1" Grid.Column="1"
+                    Width="64" Height="64"
+                    Background="{StaticResource AccentGradient}"
+                    CornerRadius="32"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,40,40"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="QuickCapture_Click">
+                <Border.Effect>
+                    <DropShadowEffect Color="#000000" 
+                                      Opacity="0.3" 
+                                      BlurRadius="20" 
+                                      ShadowDepth="4"/>
+                </Border.Effect>
+                
+                <TextBlock Text="📸" 
+                           FontSize="24"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="White"/>
+            </Border>
+
+            <!-- Status Bar -->
+            <Border Grid.Row="2" Grid.ColumnSpan="2"
+                    Background="{StaticResource SurfacePrimary}"
+                    BorderBrush="{StaticResource SurfaceSecondary}"
+                    BorderThickness="0,1,0,0"
+                    CornerRadius="0,0,12,12">
+                
+                <Grid Margin="20,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Status Info -->
+                    <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
+                        <Ellipse Width="8" Height="8" 
+                                 Fill="#00FF88" 
+                                 Margin="0,0,8,0"/>
+                        <TextBlock Text="Camera Connected • Ready to Capture" 
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextSecondary}"/>
+                    </StackPanel>
+
+                    <!-- Right Status Info -->
+                    <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="📷 Canon EOS R5" 
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   Margin="0,0,16,0"/>
+                        <TextBlock Text="🔋 85%" 
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   Margin="0,0,16,0"/>
+                        <TextBlock x:Name="TimeDisplay"
+                                   Text="12:34 PM" 
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextSecondary}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Hidden ListBox elements for compatibility -->
+            <ListBox x:Name="sidebar" Visibility="Collapsed" SelectionChanged="sidebar_SelectionChanged"/>
+            <ListBox x:Name="sidebar1" Visibility="Collapsed" SelectionChanged="sidebar1_SelectionChanged"/>
+
+        </Grid>
+    </Border>
 </Window>

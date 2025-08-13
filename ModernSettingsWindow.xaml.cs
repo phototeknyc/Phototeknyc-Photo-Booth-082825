@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using Microsoft.Win32;
 using System.Windows.Interop;
 using System.Runtime.InteropServices;
+using Photobooth.Pages;
 
 namespace Photobooth
 {
@@ -326,9 +327,16 @@ namespace Photobooth
             {
                 SaveSettings();
                 
-                // Open main designer window
-                var designerWindow = new PhotoBoothWindow();
-                designerWindow.Show();
+                // Open main Surface window with designer
+                var mainWindow = new SurfacePhotoBoothWindow();
+                mainWindow.Show();
+                
+                // Navigate to Templates/Designer after window loads
+                mainWindow.Loaded += (s, args) =>
+                {
+                    mainWindow.NavigateToPage(MainPage.Instance, "Templates");
+                };
+                
                 this.WindowState = WindowState.Minimized;
             }
             catch (Exception ex)
@@ -344,17 +352,16 @@ namespace Photobooth
             {
                 SaveSettings();
                 
-                // Open photobooth touch interface
-                var photoboothWindow = new Window
+                // Open main Surface window with PhotoBooth
+                var mainWindow = new SurfacePhotoBoothWindow();
+                mainWindow.Show();
+                
+                // Navigate to Event Selection after window loads
+                mainWindow.Loaded += (s, args) =>
                 {
-                    Title = "Photobooth Touch Interface",
-                    WindowState = WindowState.Maximized,
-                    WindowStyle = WindowStyle.None,
-                    Content = new Pages.PhotoboothTouch(),
-                    Background = new SolidColorBrush(Colors.Black)
+                    mainWindow.NavigateToPage(new Pages.EventSelectionPage(), "Select Event");
                 };
                 
-                photoboothWindow.Show();
                 this.WindowState = WindowState.Minimized;
             }
             catch (Exception ex)

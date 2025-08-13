@@ -13,9 +13,13 @@ using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
+using System.Windows.Interop;
+using System.Runtime.InteropServices;
 
 namespace Photobooth
 {
@@ -24,12 +28,111 @@ namespace Photobooth
     /// </summary>
     public partial class PhotoBoothWindow : Window
     {
+        private bool _isSidebarExpanded = true;
+        private DispatcherTimer _timeUpdateTimer;
+        
+        static PhotoBoothWindow()
+        {
+            // Force WPF to use the best rendering settings at the type level
+            TextOptions.TextFormattingModeProperty.OverrideMetadata(
+                typeof(PhotoBoothWindow),
+                new FrameworkPropertyMetadata(TextFormattingMode.Display));
+            
+            RenderOptions.BitmapScalingModeProperty.OverrideMetadata(
+                typeof(PhotoBoothWindow),
+                new FrameworkPropertyMetadata(BitmapScalingMode.HighQuality));
+        }
+        
         public PhotoBoothWindow()
         {
+            // Set DPI awareness and rendering options BEFORE InitializeComponent
+            SetupHighQualityRendering();
+            
             InitializeComponent();
             //dcvs.CanvasRatio = 4.0 / 6.0;
 
             //dcvs.SelectedItems.CollectionChanged += SelectedItems_CollectionChanged;
+            
+            // Initialize components
+            InitializeModernInterface();
+            
+            // Apply DPI scaling after window is loaded
+            this.Loaded += OnWindowLoaded;
+        }
+        
+        private void SetupHighQualityRendering()
+        {
+            // These must be set before InitializeComponent
+            this.UseLayoutRounding = true;
+            this.SnapsToDevicePixels = true;
+            
+            // Force ClearType rendering
+            TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
+            TextOptions.SetTextHintingMode(this, TextHintingMode.Fixed);
+            
+            // High quality image rendering
+            RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.HighQuality);
+            RenderOptions.SetEdgeMode(this, EdgeMode.Unspecified);
+            RenderOptions.SetClearTypeHint(this, ClearTypeHint.Enabled);
+        }
+        
+        private void OnWindowLoaded(object sender, RoutedEventArgs e)
+        {
+            // Apply DPI scaling adjustments after window is loaded
+            ApplyDpiScaling();
+        }
+        
+        private void ApplyDpiScaling()
+        {
+            var source = PresentationSource.FromVisual(this);
+            if (source?.CompositionTarget != null)
+            {
+                var dpiX = source.CompositionTarget.TransformToDevice.M11;
+                var dpiY = source.CompositionTarget.TransformToDevice.M22;
+                
+                // If high DPI, ensure proper scaling
+                if (dpiX > 1.0 || dpiY > 1.0)
+                {
+                    // Force redraw with proper DPI settings
+                    this.InvalidateVisual();
+                    
+                    // Ensure all child elements use proper rendering
+                    if (frame != null)
+                    {
+                        RenderOptions.SetBitmapScalingMode(frame, BitmapScalingMode.HighQuality);
+                        TextOptions.SetTextFormattingMode(frame, TextFormattingMode.Display);
+                    }
+                }
+            }
+        }
+        
+        private void InitializeModernInterface()
+        {
+            try
+            {
+                // Set up time display timer
+                _timeUpdateTimer = new DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMinutes(1)
+                };
+                _timeUpdateTimer.Tick += UpdateTimeDisplay;
+                _timeUpdateTimer.Start();
+                
+                // Update time immediately
+                UpdateTimeDisplay(null, null);
+                
+                // Enable window dragging from title bar
+                this.MouseLeftButtonDown += Window_MouseLeftButtonDown;
+                
+                // Set initial sidebar state
+                UpdateSidebarState();
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't crash the application
+                System.Diagnostics.Debug.WriteLine($"Error initializing modern interface: {ex.Message}");
+            }
         }
 
         private void SelectedItems_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -370,5 +473,399 @@ namespace Photobooth
 
             MainPage.Instance.dcvs.PrintImage();
         }
+        
+        #region Modern Interface Event Handlers
+        
+        // Hamburger Menu Toggle
+        private void HamburgerButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _isSidebarExpanded = !_isSidebarExpanded;
+                AnimateSidebar();
+                UpdateSidebarState();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error toggling sidebar: {ex.Message}");
+            }
+        }
+        
+        // Search functionality
+        private void Search_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // TODO: Implement search functionality
+                MessageBox.Show("Search functionality will be implemented here.", "Search", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in search: {ex.Message}");
+            }
+        }
+        
+        // Notifications
+        private void Notifications_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // TODO: Implement notifications panel
+                MessageBox.Show("Notifications panel will be implemented here.", "Notifications", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in notifications: {ex.Message}");
+            }
+        }
+        
+        // User Profile
+        private void UserProfile_Click(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                // TODO: Implement user profile menu
+                MessageBox.Show("User profile menu will be implemented here.", "User Profile", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in user profile: {ex.Message}");
+            }
+        }
+        
+        // Window Controls
+        private void MinimizeWindow_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                this.WindowState = WindowState.Minimized;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error minimizing window: {ex.Message}");
+            }
+        }
+        
+        private void MaximizeWindow_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                this.WindowState = this.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error maximizing window: {ex.Message}");
+            }
+        }
+        
+        private void CloseWindow_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                this.Close();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error closing window: {ex.Message}");
+            }
+        }
+        
+        // Quick Capture
+        private void QuickCapture_Click(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                // Navigate to camera page if not already there
+                if (frame?.Content?.GetType() != typeof(Camera))
+                {
+                    frame?.Navigate(new Camera());
+                }
+                
+                // TODO: Trigger camera capture
+                MessageBox.Show("Quick capture triggered!", "Camera", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in quick capture: {ex.Message}");
+            }
+        }
+        
+        // Modern Navigation Event Handlers
+        private void NavigateToTemplates_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (frame != null)
+                {
+                    frame.Navigate(MainPage.Instance);
+                    UpdateBreadcrumb("📋 Templates");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error navigating to templates: {ex.Message}");
+            }
+        }
+        
+        private void NavigateToEvents_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Navigate to events - use existing logic from Navigate method
+                var navButton = new NavButton { NavLink = new Uri("EVENTS_BROWSER", UriKind.RelativeOrAbsolute) };
+                Navigate(frame, navButton);
+                UpdateBreadcrumb("🎉 Events");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error navigating to events: {ex.Message}");
+            }
+        }
+        
+        private void NavigateToCamera_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (frame != null)
+                {
+                    frame.Navigate(new Camera());
+                    UpdateBreadcrumb("📷 Camera");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error navigating to camera: {ex.Message}");
+            }
+        }
+        
+        private void NavigateToCameraSettings_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (frame != null)
+                {
+                    frame.Navigate(new CameraSettings());
+                    UpdateBreadcrumb("⚙️ Camera Settings");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error navigating to camera settings: {ex.Message}");
+            }
+        }
+        
+        private void NavigateToPhotoBooth_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Navigate to photobooth - use existing logic from Navigate method
+                var navButton = new NavButton { NavLink = new Uri("PHOTOBOOTH_TOUCH", UriKind.RelativeOrAbsolute) };
+                Navigate(frame, navButton);
+                UpdateBreadcrumb("🎪 Photo Booth");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error navigating to photo booth: {ex.Message}");
+            }
+        }
+        
+        private void NavigateToSettings_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Open ModernSettingsWindow
+                var settingsWindow = new ModernSettingsWindow();
+                settingsWindow.Show();
+                UpdateBreadcrumb("⚙️ Settings");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error navigating to settings: {ex.Message}");
+            }
+        }
+        
+        private void NavigateToAccount_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // TODO: Implement account page
+                MessageBox.Show("Account page will be implemented here.", "Account", MessageBoxButton.OK, MessageBoxImage.Information);
+                UpdateBreadcrumb("👤 Account");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error navigating to account: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #region Sidebar Animation and Management
+        
+        private void AnimateSidebar()
+        {
+            try
+            {
+                var storyboard = _isSidebarExpanded 
+                    ? FindResource("SidebarExpandAnimation") as Storyboard
+                    : FindResource("SidebarCollapseAnimation") as Storyboard;
+                
+                if (storyboard != null && SidebarColumn != null)
+                {
+                    Storyboard.SetTarget(storyboard, SidebarColumn);
+                    storyboard.Begin();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error animating sidebar: {ex.Message}");
+                // Fallback to direct width change
+                if (SidebarColumn != null)
+                {
+                    SidebarColumn.Width = new GridLength(_isSidebarExpanded ? 280 : 72);
+                }
+            }
+        }
+        
+        private void UpdateSidebarState()
+        {
+            try
+            {
+                // Update button labels visibility based on sidebar state
+                if (MainNavigationPanel != null)
+                {
+                    foreach (Button button in MainNavigationPanel.Children.OfType<Button>())
+                    {
+                        // For collapsed state, could hide text labels if needed
+                        // This would require template modifications
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating sidebar state: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #region Window Dragging and Status Updates
+        
+        private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                // Allow dragging the window from the title bar area
+                if (e.ButtonState == MouseButtonState.Pressed)
+                {
+                    this.DragMove();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error handling window drag: {ex.Message}");
+            }
+        }
+        
+        private void UpdateTimeDisplay(object sender, EventArgs e)
+        {
+            try
+            {
+                if (TimeDisplay != null)
+                {
+                    TimeDisplay.Text = DateTime.Now.ToString("h:mm tt");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating time display: {ex.Message}");
+            }
+        }
+        
+        private void UpdateBreadcrumb(string breadcrumb)
+        {
+            try
+            {
+                if (BreadcrumbText != null)
+                {
+                    BreadcrumbText.Text = breadcrumb;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating breadcrumb: {ex.Message}");
+            }
+        }
+        
+        // Method to update camera status (can be called from other parts of the application)
+        public void UpdateCameraStatus(string cameraName, string batteryLevel, bool isConnected)
+        {
+            try
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    // Update status text
+                    var statusPanel = this.FindName("StatusInfo") as StackPanel;
+                    if (statusPanel?.Children.Count > 1 && statusPanel.Children[1] is TextBlock statusText)
+                    {
+                        statusText.Text = isConnected 
+                            ? $"Camera Connected • Ready to Capture" 
+                            : "Camera Disconnected";
+                    }
+                    
+                    // Update camera info
+                    var rightStatusPanel = this.FindName("RightStatusInfo") as StackPanel;
+                    if (rightStatusPanel != null)
+                    {
+                        foreach (TextBlock textBlock in rightStatusPanel.Children.OfType<TextBlock>())
+                        {
+                            if (textBlock.Text.StartsWith("📷"))
+                            {
+                                textBlock.Text = $"📷 {cameraName}";
+                            }
+                            else if (textBlock.Text.StartsWith("🔋"))
+                            {
+                                textBlock.Text = $"🔋 {batteryLevel}";
+                            }
+                        }
+                    }
+                    
+                    // Update status indicator color
+                    if (statusPanel?.Children.Count > 0 && statusPanel.Children[0] is Ellipse statusIndicator)
+                    {
+                        statusIndicator.Fill = new SolidColorBrush(isConnected ? Colors.LimeGreen : Colors.Red);
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating camera status: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #region Cleanup
+        
+        protected override void OnClosed(EventArgs e)
+        {
+            try
+            {
+                // Clean up timer
+                if (_timeUpdateTimer != null)
+                {
+                    _timeUpdateTimer.Stop();
+                    _timeUpdateTimer = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error during cleanup: {ex.Message}");
+            }
+            
+            base.OnClosed(e);
+        }
+        
+        #endregion
     }
 }
