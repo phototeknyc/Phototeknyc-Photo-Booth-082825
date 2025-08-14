@@ -792,6 +792,12 @@
                                    FontWeight="Bold"
                                    FontSize="18"/>
                     </StackPanel>
+                    
+                    <CheckBox x:Name="photographerModeCheckBox" 
+                              Content="📷 Enable Photographer Mode (manual trigger for each photo)" 
+                              IsChecked="False"
+                              Style="{StaticResource SettingsCheckBoxStyle}"
+                              ToolTip="When enabled, each photo requires manual camera trigger instead of automatic progression"/>
                 </StackPanel>
             </Border>
             

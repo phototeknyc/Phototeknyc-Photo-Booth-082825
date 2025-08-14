@@ -109,6 +109,7 @@ namespace Photobooth.Pages
                 // Load auto capture settings
                 autoCaptureCheckBox.IsChecked = Properties.Settings.Default.AutoCaptureMode;
                 autoCaptureDelaySlider.Value = Properties.Settings.Default.AutoCaptureDelay;
+                photographerModeCheckBox.IsChecked = Properties.Settings.Default.PhotographerMode;
                 
                 // Load photo storage settings
                 string photoLocation = Properties.Settings.Default.PhotoLocation;
@@ -266,6 +267,7 @@ namespace Photobooth.Pages
                 // Save auto capture settings
                 Properties.Settings.Default.AutoCaptureMode = autoCaptureCheckBox.IsChecked ?? false;
                 Properties.Settings.Default.AutoCaptureDelay = (int)autoCaptureDelaySlider.Value;
+                Properties.Settings.Default.PhotographerMode = photographerModeCheckBox.IsChecked ?? false;
                 
                 // Save photo storage settings
                 Properties.Settings.Default.PhotoLocation = photoLocationTextBox.Text;

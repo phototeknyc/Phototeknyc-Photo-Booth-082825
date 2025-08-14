@@ -943,61 +943,82 @@ namespace Photobooth.Pages
                 {
                     Log.Debug($"HandlePhotoSequenceProgress: More photos needed ({currentPhotoIndex} of {totalPhotosNeeded})");
                     
-                    // More photos needed - stop current sequence and prepare for next
-                    statusText.Text = $"Photo {currentPhotoIndex} saved! Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} starting soon...";
+                    // Check if Photographer Mode is enabled
+                    bool photographerMode = Properties.Settings.Default.PhotographerMode;
+                    Log.Debug($"HandlePhotoSequenceProgress: PhotographerMode = {photographerMode}");
                     
-                    // Stop current photo sequence to reset camera state
-                    Log.Debug("HandlePhotoSequenceProgress: Calling StopPhotoSequence()");
-                    StopPhotoSequence();
-                    
-                    // Preview delay before next photo
-                    Log.Debug("HandlePhotoSequenceProgress: Starting 4-second delay before next photo");
-                    Task.Delay(4000).ContinueWith(_ =>
+                    if (photographerMode)
                     {
-                        Log.Debug("HandlePhotoSequenceProgress: 4-second delay complete, checking camera state");
-                        Dispatcher.Invoke(async () =>
+                        // Photographer Mode - wait for manual trigger
+                        Log.Debug("HandlePhotoSequenceProgress: Photographer Mode enabled - waiting for manual trigger");
+                        statusText.Text = $"Photo {currentPhotoIndex} saved! Ready for photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Press camera trigger when ready";
+                        
+                        // Stop current photo sequence to reset camera state
+                        Log.Debug("HandlePhotoSequenceProgress: Calling StopPhotoSequence() for Photographer Mode");
+                        StopPhotoSequence();
+                        
+                        // The next photo will be triggered when the photographer presses the camera button
+                        // The camera's photo capture event will still fire and be handled normally
+                    }
+                    else
+                    {
+                        // Normal auto-progression mode
+                        // More photos needed - stop current sequence and prepare for next
+                        statusText.Text = $"Photo {currentPhotoIndex} saved! Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} starting soon...";
+                        
+                        // Stop current photo sequence to reset camera state
+                        Log.Debug("HandlePhotoSequenceProgress: Calling StopPhotoSequence()");
+                        StopPhotoSequence();
+                        
+                        // Preview delay before next photo
+                        Log.Debug("HandlePhotoSequenceProgress: Starting 4-second delay before next photo");
+                        Task.Delay(4000).ContinueWith(_ =>
                         {
-                            Log.Debug($"HandlePhotoSequenceProgress: Camera state - Device!=null: {DeviceManager.SelectedCameraDevice != null}, IsBusy: {DeviceManager.SelectedCameraDevice?.IsBusy}");
-                            
-                            // Check if camera is available and not busy
-                            if (DeviceManager.SelectedCameraDevice != null && !DeviceManager.SelectedCameraDevice.IsBusy)
+                            Log.Debug("HandlePhotoSequenceProgress: 4-second delay complete, checking camera state");
+                            Dispatcher.Invoke(async () =>
                             {
-                                Log.Debug($"HandlePhotoSequenceProgress: Camera ready - starting photo {currentPhotoIndex + 1} of {totalPhotosNeeded}");
-                                statusText.Text = $"Starting photo {currentPhotoIndex + 1} of {totalPhotosNeeded}...";
+                                Log.Debug($"HandlePhotoSequenceProgress: Camera state - Device!=null: {DeviceManager.SelectedCameraDevice != null}, IsBusy: {DeviceManager.SelectedCameraDevice?.IsBusy}");
                                 
-                                // Start the next photo sequence normally
-                                StartPhotoSequence();
-                            }
-                            else if (DeviceManager.SelectedCameraDevice != null && DeviceManager.SelectedCameraDevice.IsBusy)
-                            {
-                                Log.Debug("HandlePhotoSequenceProgress: Camera busy - attempting reset");
-                                // Camera busy - try simple reset without full reconnection
-                                statusText.Text = "Camera busy - resetting...";
-                                
-                                try
+                                // Check if camera is available and not busy
+                                if (DeviceManager.SelectedCameraDevice != null && !DeviceManager.SelectedCameraDevice.IsBusy)
                                 {
-                                    DeviceManager.SelectedCameraDevice.IsBusy = false;
-                                    Log.Debug("HandlePhotoSequenceProgress: Set IsBusy=false, waiting 1 second");
-                                    await Task.Delay(1000);
-                                    Log.Debug("HandlePhotoSequenceProgress: Starting photo sequence after busy reset");
+                                    Log.Debug($"HandlePhotoSequenceProgress: Camera ready - starting photo {currentPhotoIndex + 1} of {totalPhotosNeeded}");
+                                    statusText.Text = $"Starting photo {currentPhotoIndex + 1} of {totalPhotosNeeded}...";
+                                    
+                                    // Start the next photo sequence normally
                                     StartPhotoSequence();
                                 }
-                                catch (Exception ex)
+                                else if (DeviceManager.SelectedCameraDevice != null && DeviceManager.SelectedCameraDevice.IsBusy)
                                 {
-                                    Log.Error("HandlePhotoSequenceProgress: Camera reset failed during multi-photo", ex);
-                                    statusText.Text = $"Camera reset failed - Touch START for photo {currentPhotoIndex + 1} of {totalPhotosNeeded}";
+                                    Log.Debug("HandlePhotoSequenceProgress: Camera busy - attempting reset");
+                                    // Camera busy - try simple reset without full reconnection
+                                    statusText.Text = "Camera busy - resetting...";
+                                    
+                                    try
+                                    {
+                                        DeviceManager.SelectedCameraDevice.IsBusy = false;
+                                        Log.Debug("HandlePhotoSequenceProgress: Set IsBusy=false, waiting 1 second");
+                                        await Task.Delay(1000);
+                                        Log.Debug("HandlePhotoSequenceProgress: Starting photo sequence after busy reset");
+                                        StartPhotoSequence();
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Log.Error("HandlePhotoSequenceProgress: Camera reset failed during multi-photo", ex);
+                                        statusText.Text = $"Camera reset failed - Touch START for photo {currentPhotoIndex + 1} of {totalPhotosNeeded}";
+                                        startButton.IsEnabled = true;
+                                    }
+                                }
+                                else
+                                {
+                                    Log.Debug("HandlePhotoSequenceProgress: No camera - showing manual prompt");
+                                    // No camera - show manual prompt
+                                    statusText.Text = $"Camera not connected - Touch START for photo {currentPhotoIndex + 1} of {totalPhotosNeeded}";
                                     startButton.IsEnabled = true;
                                 }
-                            }
-                            else
-                            {
-                                Log.Debug("HandlePhotoSequenceProgress: No camera - showing manual prompt");
-                                // No camera - show manual prompt
-                                statusText.Text = $"Camera not connected - Touch START for photo {currentPhotoIndex + 1} of {totalPhotosNeeded}";
-                                startButton.IsEnabled = true;
-                            }
+                            });
                         });
-                    });
+                    }
                 }
                 else
                 {
