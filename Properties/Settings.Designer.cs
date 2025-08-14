@@ -1114,5 +1114,17 @@ namespace Photobooth.Properties {
                 this["GifOverlayPath"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool ShowSessionPrompts {
+            get {
+                return ((bool)(this["ShowSessionPrompts"]));
+            }
+            set {
+                this["ShowSessionPrompts"] = value;
+            }
+        }
     }
 }

@@ -418,8 +418,21 @@ namespace Photobooth.Pages
             catch (Exception ex)
             {
                 cameraStatusText.Text = "Camera error";
-                statusText.Text = "Camera connection failed";
+                UpdateStatusText("Camera connection failed");
                 Log.Error("PhotoboothTouch: Camera connection failed", ex);
+            }
+        }
+        
+        private void UpdateStatusText(string message)
+        {
+            // Only show status messages if the setting is enabled
+            if (Properties.Settings.Default.ShowSessionPrompts)
+            {
+                statusText.Text = message;
+            }
+            else
+            {
+                statusText.Text = "";
             }
         }
         
@@ -439,7 +452,7 @@ namespace Photobooth.Pages
                 // CreateDatabaseSession(); // Moved to first photo capture
                 
                 // Update UI with event information
-                statusText.Text = $"Event: {currentEvent.Name} - Template: {currentTemplate.Name}";
+                UpdateStatusText($"Event: {currentEvent.Name} - Template: {currentTemplate.Name}");
                 
                 // Get photo count from template
                 totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
@@ -470,7 +483,7 @@ namespace Photobooth.Pages
                     totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
                     currentPhotoIndex = 0;
                     UpdatePhotoStripPlaceholders();
-                    statusText.Text = $"Event: {currentEvent.Name} - Template: {currentTemplate.Name}";
+                    UpdateStatusText($"Event: {currentEvent.Name} - Template: {currentTemplate.Name}");
                     
                     // Update folder path
                     string eventFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), 
@@ -486,7 +499,7 @@ namespace Photobooth.Pages
                 else if (availableTemplates != null && availableTemplates.Count > 1)
                 {
                     // Multiple templates - user will select when pressing START
-                    statusText.Text = $"Event: {currentEvent.Name} - Touch START to select template";
+                    UpdateStatusText($"Event: {currentEvent.Name} - Touch START to select template");
                     
                     // Update folder path for event
                     string eventFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), 
@@ -502,7 +515,7 @@ namespace Photobooth.Pages
                 else
                 {
                     // No templates
-                    statusText.Text = $"Event: {currentEvent.Name} - No templates available";
+                    UpdateStatusText($"Event: {currentEvent.Name} - No templates available");
                     Log.Debug($"No templates found for event");
                 }
             }
@@ -529,11 +542,11 @@ namespace Photobooth.Pages
                 // Update status based on event workflow
                 if (currentEvent != null && currentTemplate != null)
                 {
-                    statusText.Text = $"Event: {currentEvent.Name} - Ready for photo {currentPhotoIndex + 1} of {totalPhotosNeeded}";
+                    UpdateStatusText($"Event: {currentEvent.Name} - Ready for photo {currentPhotoIndex + 1} of {totalPhotosNeeded}");
                 }
                 else
                 {
-                    statusText.Text = "Camera ready - Touch START to begin";
+                    UpdateStatusText("Camera ready - Touch START to begin");
                 }
                 
                 // Debug: Check if events are properly connected
@@ -545,11 +558,11 @@ namespace Photobooth.Pages
                 cameraStatusText.Text = "No camera found";
                 if (currentEvent != null)
                 {
-                    statusText.Text = $"Event: {currentEvent.Name} - Please connect a camera";
+                    UpdateStatusText($"Event: {currentEvent.Name} - Please connect a camera");
                 }
                 else
                 {
-                    statusText.Text = "Please connect a camera";
+                    UpdateStatusText("Please connect a camera");
                 }
                 Log.Debug("PhotoboothTouch: No camera device found");
             }
@@ -565,7 +578,7 @@ namespace Photobooth.Pages
             
             if (DeviceManager.SelectedCameraDevice == null)
             {
-                statusText.Text = "No camera connected";
+                UpdateStatusText("No camera connected");
                 return;
             }
 
@@ -589,7 +602,7 @@ namespace Photobooth.Pages
             if (timeSinceLastCapture.TotalMilliseconds < 6000) // 6 seconds minimum for multi-photo sequences
             {
                 var remainingTime = 6000 - (int)timeSinceLastCapture.TotalMilliseconds;
-                statusText.Text = $"Please wait {remainingTime / 1000 + 1} seconds between photos";
+                UpdateStatusText($"Please wait {remainingTime / 1000 + 1} seconds between photos");
                 
                 // Start a timer to update the message
                 Task.Delay(remainingTime).ContinueWith(_ =>
@@ -598,7 +611,7 @@ namespace Photobooth.Pages
                     {
                         if (!isCapturing)
                         {
-                            statusText.Text = "Touch START to take another photo";
+                            UpdateStatusText("Touch START to take another photo");
                         }
                     });
                 });
@@ -640,7 +653,7 @@ namespace Photobooth.Pages
                 Log.Debug("StopButton_Click: No photos captured yet, stopping entire session");
                 StopPhotoSequence();
                 
-                statusText.Text = "Session cancelled";
+                UpdateStatusText("Session cancelled");
                 return;
             }
             
@@ -657,11 +670,11 @@ namespace Photobooth.Pages
             // Update status
             if (currentEvent != null && totalPhotosNeeded > 1)
             {
-                statusText.Text = $"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Restarting countdown...";
+                UpdateStatusText($"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Restarting countdown...");
             }
             else
             {
-                statusText.Text = "Restarting countdown...";
+                UpdateStatusText("Restarting countdown...");
             }
             
             // Restart the countdown for the same photo after a brief delay
@@ -726,7 +739,7 @@ namespace Photobooth.Pages
                 loadedComposedImages = null;
                 currentComposedImageIndex = 0;
                 
-                statusText.Text = "Preparing camera...";
+                UpdateStatusText("Preparing camera...");
                 Log.Debug("StartPhotoSequence: Set isCapturing=true, disabled start button");
                 
                 // Critical: Ensure camera is ready and not busy from previous capture
@@ -779,7 +792,7 @@ namespace Photobooth.Pages
                 });
                 
                 liveViewTimer.Start();
-                statusText.Text = "Live view active - Starting countdown...";
+                UpdateStatusText("Live view active - Starting countdown...");
                 
                 // Wait a moment for live view to stabilize
                 await Task.Delay(1000);
@@ -800,7 +813,7 @@ namespace Photobooth.Pages
                 Log.Error("Failed to start photo sequence", ex);
                 Dispatcher.Invoke(() =>
                 {
-                    statusText.Text = "Camera not ready - Please try again";
+                    UpdateStatusText("Camera not ready - Please try again");
                     StopPhotoSequence();
                 });
             }
@@ -826,7 +839,7 @@ namespace Photobooth.Pages
             {
                 // Skip countdown and capture immediately
                 Log.Debug("StartCountdown: Countdown disabled, capturing immediately");
-                statusText.Text = "Taking photo...";
+                UpdateStatusText("Taking photo...");
                 Task.Delay(500).ContinueWith(_ =>
                 {
                     Dispatcher.Invoke(() =>
@@ -893,7 +906,7 @@ namespace Photobooth.Pages
                 }
                 else
                 {
-                    statusText.Text = "Taking photo...";
+                    UpdateStatusText("Taking photo...");
                 }
                 
                 // Capture after a brief moment
@@ -975,7 +988,7 @@ namespace Photobooth.Pages
                                 Log.Error("Failed to recover camera after timeout", ex);
                             }
                             
-                            statusText.Text = "Photo capture timeout - Camera reset, please try again";
+                            UpdateStatusText("Photo capture timeout - Camera reset, please try again");
                             StopPhotoSequence();
                         }
                     });
@@ -1035,7 +1048,7 @@ namespace Photobooth.Pages
                             
                             Dispatcher.Invoke(() =>
                             {
-                                statusText.Text = "Camera too busy - Please try again";
+                                UpdateStatusText("Camera too busy - Please try again");
                                 StopPhotoSequence();
                             });
                             break;
@@ -1049,7 +1062,7 @@ namespace Photobooth.Pages
                         Log.Error("PhotoboothTouch: Capture device exception: " + exception.Message);
                         Dispatcher.Invoke(() =>
                         {
-                            statusText.Text = "Capture error: " + exception.Message;
+                            UpdateStatusText("Capture error: " + exception.Message);
                             StopPhotoSequence();
                         });
                     }
@@ -1059,7 +1072,7 @@ namespace Photobooth.Pages
                     Log.Error("PhotoboothTouch: Capture general exception: " + ex.Message);
                     Dispatcher.Invoke(() =>
                     {
-                        statusText.Text = "Capture error: " + ex.Message;
+                        UpdateStatusText("Capture error: " + ex.Message);
                         StopPhotoSequence();
                     });
                 }
@@ -1202,7 +1215,7 @@ namespace Photobooth.Pages
                                 {
                                     Log.Debug("HandlePhotoSequenceProgress: Camera busy - attempting reset");
                                     // Camera busy - try simple reset without full reconnection
-                                    statusText.Text = "Camera busy - resetting...";
+                                    UpdateStatusText("Camera busy - resetting...");
                                     
                                     try
                                     {
@@ -1259,7 +1272,7 @@ namespace Photobooth.Pages
                         if (!isCapturing)
                         {
                             StopPhotoSequence();
-                            statusText.Text = "Touch START to take another photo";
+                            UpdateStatusText("Touch START to take another photo");
                         }
                     });
                 });
@@ -1375,15 +1388,15 @@ namespace Photobooth.Pages
                 
                 if (currentEvent != null && currentTemplate != null)
                 {
-                    statusText.Text = $"Event: {currentEvent.Name} - Ready for photo {currentPhotoIndex + 1} of {totalPhotosNeeded}";
+                    UpdateStatusText($"Event: {currentEvent.Name} - Ready for photo {currentPhotoIndex + 1} of {totalPhotosNeeded}");
                 }
                 else if (currentEvent != null)
                 {
-                    statusText.Text = $"Event: {currentEvent.Name} - Touch START to select template";
+                    UpdateStatusText($"Event: {currentEvent.Name} - Touch START to select template");
                 }
                 else
                 {
-                    statusText.Text = "Camera ready - Touch START to begin";
+                    UpdateStatusText("Camera ready - Touch START to begin");
                 }
             });
         }
@@ -1398,11 +1411,11 @@ namespace Photobooth.Pages
                 
                 if (currentEvent != null)
                 {
-                    statusText.Text = $"Event: {currentEvent.Name} - Please connect a camera";
+                    UpdateStatusText($"Event: {currentEvent.Name} - Please connect a camera");
                 }
                 else
                 {
-                    statusText.Text = "Please connect a camera";
+                    UpdateStatusText("Please connect a camera");
                 }
             });
         }
@@ -1440,7 +1453,7 @@ namespace Photobooth.Pages
                 Log.Error("PhotoCaptured: eventArgs is null");
                 Dispatcher.Invoke(() =>
                 {
-                    statusText.Text = "Photo capture failed - no data";
+                    UpdateStatusText("Photo capture failed - no data");
                     StopPhotoSequence();
                 });
                 return;
@@ -2471,7 +2484,7 @@ namespace Photobooth.Pages
         {
             try
             {
-                statusText.Text = "Resetting camera connection...";
+                UpdateStatusText("Resetting camera connection...");
                 resetCameraButton.IsEnabled = false;
                 
                 await ReconnectCamera();
@@ -2479,21 +2492,21 @@ namespace Photobooth.Pages
                 if (DeviceManager.SelectedCameraDevice != null)
                 {
                     RefreshDisplay();
-                    statusText.Text = "Camera reset successfully!";
+                    UpdateStatusText("Camera reset successfully!");
                 }
                 else
                 {
-                    statusText.Text = "Camera reset failed - please check connection";
+                    UpdateStatusText("Camera reset failed - please check connection");
                 }
                 
                 // Re-enable button after a delay
                 await Task.Delay(2000);
-                statusText.Text = "Touch START to begin";
+                UpdateStatusText("Touch START to begin");
             }
             catch (Exception ex)
             {
                 Log.Error("Manual camera reset failed", ex);
-                statusText.Text = "Camera reset failed - see logs for details";
+                UpdateStatusText("Camera reset failed - see logs for details");
             }
             finally
             {
@@ -2630,7 +2643,7 @@ namespace Photobooth.Pages
             catch (Exception ex)
             {
                 Log.Error("Failed to load events", ex);
-                statusText.Text = "Error loading events";
+                UpdateStatusText("Error loading events");
             }
         }
         
@@ -2665,14 +2678,14 @@ namespace Photobooth.Pages
                 else
                 {
                     // Multiple templates - will show template selection on photobooth screen
-                    statusText.Text = $"Event: {currentEvent.Name} - Touch START to select template";
+                    UpdateStatusText($"Event: {currentEvent.Name} - Touch START to select template");
                     Log.Debug($"Event has {availableTemplates.Count} templates - will show selection on START");
                 }
             }
             else
             {
                 // No templates available
-                statusText.Text = "No templates available for this event";
+                UpdateStatusText("No templates available for this event");
             }
         }
         
@@ -2690,7 +2703,7 @@ namespace Photobooth.Pages
             catch (Exception ex)
             {
                 Log.Error("Failed to load templates", ex);
-                statusText.Text = "Error loading templates";
+                UpdateStatusText("Error loading templates");
             }
         }
         
@@ -3390,7 +3403,7 @@ namespace Photobooth.Pages
                 if (stopSessionButton != null)
                     stopSessionButton.Visibility = Visibility.Visible;
                 
-                statusText.Text = "Preparing camera for retake...";
+                UpdateStatusText("Preparing camera for retake...");
                 
                 // Ensure camera is ready
                 await Task.Run(() =>
@@ -3450,7 +3463,7 @@ namespace Photobooth.Pages
                 photoIndexToRetake = -1;
                 
                 // Show error and return to review
-                statusText.Text = "Camera error - Unable to retake photo";
+                UpdateStatusText("Camera error - Unable to retake photo");
                 await Task.Delay(2000);
                 
                 // Show review again
@@ -3557,7 +3570,7 @@ namespace Photobooth.Pages
                         if (selectedFilter != FilterType.None)
                         {
                             Log.Debug($"Applying {selectedFilter} filter to photos");
-                            statusText.Dispatcher.Invoke(() => statusText.Text = "Applying filters...");
+                            statusText.Dispatcher.Invoke(() => UpdateStatusText("Applying filters..."));
                             
                             // Apply filter to each photo
                             List<string> filteredPaths = new List<string>();
@@ -3590,7 +3603,7 @@ namespace Photobooth.Pages
                         {
                             // Show the processed image (always show the original, not the 4x6 duplicate)
                             liveViewImage.Source = new BitmapImage(new Uri(processedImagePath));
-                            statusText.Text = "Photos processed successfully!";
+                            UpdateStatusText("Photos processed successfully!");
                             
                             // Show print button
                             printButton.Visibility = Visibility.Visible;
@@ -3615,7 +3628,7 @@ namespace Photobooth.Pages
                                 Dispatcher.Invoke(() =>
                                 {
                                     StopPhotoSequence();
-                                    statusText.Text = "Session complete - Touch START for new session";
+                                    UpdateStatusText("Session complete - Touch START for new session");
                                     
                                     // Show Done button if enabled
                                     if (doneButton != null)
@@ -3634,7 +3647,7 @@ namespace Photobooth.Pages
                         Log.Error("ProcessTemplateWithPhotos: No processed image returned");
                         Dispatcher.Invoke(() =>
                         {
-                            statusText.Text = "Failed to process template";
+                            UpdateStatusText("Failed to process template");
                             StopPhotoSequence();
                         });
                     }
@@ -3659,7 +3672,7 @@ namespace Photobooth.Pages
                 try
                 {
                     Log.Debug($"ShowPostSessionFilterOverlay: Starting filter preview generation with {capturedPhotoPaths.Count} photos");
-                    statusText.Text = "Preparing filter options...";
+                    UpdateStatusText("Preparing filter options...");
                     
                     // Ensure live view is visible for preview
                     liveViewImage.Visibility = Visibility.Visible;
@@ -3673,7 +3686,7 @@ namespace Photobooth.Pages
                     {
                         Log.Debug($"ShowPostSessionFilterOverlay: Generating previews for photo: {capturedPhotoPaths[0]}");
                         await GenerateFilterPreviews(capturedPhotoPaths[0]);
-                        statusText.Text = "Select a filter to preview";
+                        UpdateStatusText("Select a filter to preview");
                         Log.Debug("ShowPostSessionFilterOverlay: Filter previews generated successfully");
                         
                         // Ensure overlay is visible after preview generation
@@ -3692,7 +3705,7 @@ namespace Photobooth.Pages
                     catch (Exception ex)
                     {
                         Log.Error($"ShowPostSessionFilterOverlay: Error generating previews: {ex.Message}", ex);
-                        statusText.Text = "Error loading filters - proceeding without filters";
+                        UpdateStatusText("Error loading filters - proceeding without filters");
                         postSessionFilterOverlay.Visibility = Visibility.Collapsed;
                         ProcessTemplateWithPhotosInternal();
                     }
@@ -3700,7 +3713,7 @@ namespace Photobooth.Pages
                 catch (Exception ex)
                 {
                     Log.Error($"ShowPostSessionFilterOverlay: Fatal error: {ex.Message}", ex);
-                    statusText.Text = "Error - proceeding without filters";
+                    UpdateStatusText("Error - proceeding without filters");
                     postSessionFilterOverlay.Visibility = Visibility.Collapsed;
                     ProcessTemplateWithPhotosInternal();
                 }
@@ -4117,7 +4130,7 @@ namespace Photobooth.Pages
                     if (selectedFilter != FilterType.None && Properties.Settings.Default.EnableFilters)
                     {
                         Log.Debug($"Applying {selectedFilter} filter to photos");
-                        await Dispatcher.InvokeAsync(() => statusText.Text = "Applying filters...");
+                        await Dispatcher.InvokeAsync(() => UpdateStatusText("Applying filters..."));
                         
                         // Apply filter to each photo
                         List<string> filteredPaths = new List<string>();
@@ -4146,7 +4159,7 @@ namespace Photobooth.Pages
                         {
                             // Show the processed image (always show the original, not the 4x6 duplicate)
                             liveViewImage.Source = new BitmapImage(new Uri(processedImagePath));
-                            statusText.Text = "Photos processed successfully!";
+                            UpdateStatusText("Photos processed successfully!");
                             
                             // Note: lastProcessedImagePath and lastProcessedImagePathForPrinting are already set in ComposeTemplateWithPhotos
                             
@@ -4180,7 +4193,7 @@ namespace Photobooth.Pages
                                 Dispatcher.Invoke(() =>
                                 {
                                     StopPhotoSequence();
-                                    statusText.Text = "Session complete - Click photos to view or touch PRINT to print";
+                                    UpdateStatusText("Session complete - Click photos to view or touch PRINT to print");
                                     
                                     // Show Done button if enabled
                                     if (doneButton != null)
@@ -4238,7 +4251,7 @@ namespace Photobooth.Pages
                                             else
                                             {
                                                 // No event or templates - show event selection
-                                                statusText.Text = "Touch Event Settings to select an event";
+                                                UpdateStatusText("Touch Event Settings to select an event");
                                             }
                                         });
                                     });
@@ -4251,7 +4264,7 @@ namespace Photobooth.Pages
                         Log.Error("ProcessTemplateWithPhotos: No processed image returned");
                         Dispatcher.Invoke(() =>
                         {
-                            statusText.Text = "Failed to process template";
+                            UpdateStatusText("Failed to process template");
                             StopPhotoSequence();
                         });
                     }
@@ -4530,7 +4543,7 @@ namespace Photobooth.Pages
                 }
                 
                 // Show locked status
-                statusText.Text = "Interface Locked - Click lock icon to unlock";
+                UpdateStatusText("Interface Locked - Click lock icon to unlock");
             }
             else
             {
@@ -4640,7 +4653,7 @@ namespace Photobooth.Pages
                 pinEntryOverlay.Visibility = Visibility.Collapsed;
                 
                 // Update status
-                statusText.Text = "Interface Unlocked";
+                UpdateStatusText("Interface Unlocked");
                 
                 // Execute pending action if any
                 if (_pendingActionAfterUnlock != null)
@@ -4791,7 +4804,7 @@ namespace Photobooth.Pages
                 
             if (string.IsNullOrEmpty(imageToPrint) || !File.Exists(imageToPrint))
             {
-                statusText.Text = "No image available to print";
+                UpdateStatusText("No image available to print");
                 return;
             }
             
@@ -4816,7 +4829,7 @@ namespace Photobooth.Pages
                     int copies = printDialog.SelectedCopies;
                     Log.Debug($"PrintButton_Click: User selected {copies} copies");
                     
-                    statusText.Text = "Sending to printer...";
+                    UpdateStatusText("Sending to printer...");
                     
                     // Disable print button to prevent multiple clicks
                     printButton.IsEnabled = false;
@@ -4975,7 +4988,7 @@ namespace Photobooth.Pages
             
             // Clear UI
             liveViewImage.Source = null;
-            statusText.Text = "Touch START to begin";
+            UpdateStatusText("Touch START to begin");
             photoCountText.Text = "0";
             
             // Hide buttons that should only show during/after session
@@ -6547,11 +6560,6 @@ namespace Photobooth.Pages
             
             // Show countdown and capture
             StartCountdown();
-        }
-        
-        private void UpdateStatusText(string text)
-        {
-            statusText.Text = text;
         }
         
         private void ShowCountdown()

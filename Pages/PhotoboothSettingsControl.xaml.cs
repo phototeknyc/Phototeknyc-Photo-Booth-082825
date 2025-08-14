@@ -110,6 +110,7 @@ namespace Photobooth.Pages
                 // Load capture timing settings
                 photoDisplayDurationSlider.Value = Properties.Settings.Default.PhotoDisplayDuration;
                 photographerModeCheckBox.IsChecked = Properties.Settings.Default.PhotographerMode;
+                showSessionPromptsCheckBox.IsChecked = Properties.Settings.Default.ShowSessionPrompts;
                 
                 // Load auto-clear settings
                 autoClearSessionCheckBox.IsChecked = Properties.Settings.Default.AutoClearSession;
@@ -284,6 +285,7 @@ namespace Photobooth.Pages
                 // Save capture timing settings
                 Properties.Settings.Default.PhotoDisplayDuration = (int)photoDisplayDurationSlider.Value;
                 Properties.Settings.Default.PhotographerMode = photographerModeCheckBox.IsChecked ?? false;
+                Properties.Settings.Default.ShowSessionPrompts = showSessionPromptsCheckBox.IsChecked ?? false;
                 
                 // Save auto-clear settings
                 Properties.Settings.Default.AutoClearSession = autoClearSessionCheckBox.IsChecked ?? false;

@@ -793,6 +793,12 @@
                               IsChecked="False"
                               Style="{StaticResource SettingsCheckBoxStyle}"
                               ToolTip="When enabled, each photo requires manual camera trigger instead of automatic progression"/>
+                    
+                    <CheckBox x:Name="showSessionPromptsCheckBox" 
+                              Content="📝 Show Session Status Messages" 
+                              IsChecked="False"
+                              Style="{StaticResource SettingsCheckBoxStyle}"
+                              ToolTip="When enabled, shows status messages like 'Touch START to begin', 'Taking photo...', etc."/>
                 </StackPanel>
             </Border>
             
