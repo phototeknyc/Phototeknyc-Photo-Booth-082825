@@ -39,8 +39,8 @@ namespace Photobooth.Pages
         
         private DispatcherTimer liveViewTimer;
         private DispatcherTimer countdownTimer;
-        private int countdownSeconds = 5;
-        private int currentCountdown = 5;
+        private int countdownSeconds;
+        private int currentCountdown;
         private int photoCount = 0;
         private bool isCapturing = false;
         private DateTime lastCaptureTime = DateTime.MinValue;
@@ -127,6 +127,10 @@ namespace Photobooth.Pages
             Log.LogDebug += Log_LogMessage;
             Log.LogInfo += Log_LogMessage;
 
+            // Load timing settings from configuration
+            countdownSeconds = Properties.Settings.Default.CountdownSeconds;
+            currentCountdown = countdownSeconds;
+            
             // Initialize UI
             countdownSecondsText.Text = countdownSeconds.ToString();
             photoCountText.Text = photoCount.ToString();
@@ -634,6 +638,25 @@ namespace Photobooth.Pages
             Log.Debug($"StartCountdown: Called at {DateTime.Now:HH:mm:ss.fff}");
             Log.Debug($"StartCountdown: countdownSeconds={countdownSeconds}, currentPhotoIndex={currentPhotoIndex}");
             
+            // Check if countdown is enabled
+            bool showCountdown = Properties.Settings.Default.ShowCountdown;
+            Log.Debug($"StartCountdown: ShowCountdown setting = {showCountdown}");
+            
+            if (!showCountdown)
+            {
+                // Skip countdown and capture immediately
+                Log.Debug("StartCountdown: Countdown disabled, capturing immediately");
+                statusText.Text = "Taking photo...";
+                Task.Delay(500).ContinueWith(_ =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        CapturePhoto();
+                    });
+                });
+                return;
+            }
+            
             // Ensure timer is completely stopped and reset
             countdownTimer.Stop();
             Log.Debug($"StartCountdown: Timer stopped, IsEnabled={countdownTimer.IsEnabled}");
@@ -971,10 +994,11 @@ namespace Photobooth.Pages
                         StopPhotoSequence();
                         
                         // Preview delay before next photo
-                        Log.Debug("HandlePhotoSequenceProgress: Starting 4-second delay before next photo");
-                        Task.Delay(4000).ContinueWith(_ =>
+                        int displayDuration = Properties.Settings.Default.PhotoDisplayDuration * 1000; // Convert to milliseconds
+                        Log.Debug($"HandlePhotoSequenceProgress: Starting {displayDuration}ms delay before next photo");
+                        Task.Delay(displayDuration).ContinueWith(_ =>
                         {
-                            Log.Debug("HandlePhotoSequenceProgress: 4-second delay complete, checking camera state");
+                            Log.Debug($"HandlePhotoSequenceProgress: {displayDuration}ms delay complete, checking camera state");
                             Dispatcher.Invoke(async () =>
                             {
                                 Log.Debug($"HandlePhotoSequenceProgress: Camera state - Device!=null: {DeviceManager.SelectedCameraDevice != null}, IsBusy: {DeviceManager.SelectedCameraDevice?.IsBusy}");

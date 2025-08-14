@@ -74,36 +74,24 @@ namespace Photobooth.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool AutoCaptureMode {
-            get {
-                return ((bool)(this["AutoCaptureMode"]));
-            }
-            set {
-                this["AutoCaptureMode"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("10")]
-        public int AutoCaptureDelay {
-            get {
-                return ((int)(this["AutoCaptureDelay"]));
-            }
-            set {
-                this["AutoCaptureDelay"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
         public bool PhotographerMode {
             get {
                 return ((bool)(this["PhotographerMode"]));
             }
             set {
                 this["PhotographerMode"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("4")]
+        public int PhotoDisplayDuration {
+            get {
+                return ((int)(this["PhotoDisplayDuration"]));
+            }
+            set {
+                this["PhotoDisplayDuration"] = value;
             }
         }
         

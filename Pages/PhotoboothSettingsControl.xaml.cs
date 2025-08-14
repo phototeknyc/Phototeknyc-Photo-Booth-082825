@@ -106,9 +106,8 @@ namespace Photobooth.Pages
                 countdownSlider.Value = Properties.Settings.Default.CountdownSeconds;
                 showCountdownCheckBox.IsChecked = Properties.Settings.Default.ShowCountdown;
                 
-                // Load auto capture settings
-                autoCaptureCheckBox.IsChecked = Properties.Settings.Default.AutoCaptureMode;
-                autoCaptureDelaySlider.Value = Properties.Settings.Default.AutoCaptureDelay;
+                // Load capture timing settings
+                photoDisplayDurationSlider.Value = Properties.Settings.Default.PhotoDisplayDuration;
                 photographerModeCheckBox.IsChecked = Properties.Settings.Default.PhotographerMode;
                 
                 // Load photo storage settings
@@ -173,7 +172,7 @@ namespace Photobooth.Pages
         private void UpdateSliderTexts()
         {
             countdownValueText.Text = $"{(int)countdownSlider.Value} seconds";
-            autoCaptureDelayValueText.Text = $"{(int)autoCaptureDelaySlider.Value} seconds";
+            photoDisplayDurationValueText.Text = $"{(int)photoDisplayDurationSlider.Value} seconds";
             frameRateValueText.Text = $"{(int)frameRateSlider.Value} FPS";
             buttonSizeValueText.Text = $"{(int)(buttonSizeSlider.Value * 100)}%";
             if (retakeTimeoutValueText != null)
@@ -188,10 +187,10 @@ namespace Photobooth.Pages
                 countdownValueText.Text = $"{(int)e.NewValue} seconds";
         }
 
-        private void AutoCaptureDelaySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        private void PhotoDisplayDurationSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (autoCaptureDelayValueText != null)
-                autoCaptureDelayValueText.Text = $"{(int)e.NewValue} seconds";
+            if (photoDisplayDurationValueText != null)
+                photoDisplayDurationValueText.Text = $"{(int)e.NewValue} seconds";
         }
 
         private void FrameRateSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -264,9 +263,8 @@ namespace Photobooth.Pages
                 Properties.Settings.Default.CountdownSeconds = (int)countdownSlider.Value;
                 Properties.Settings.Default.ShowCountdown = showCountdownCheckBox.IsChecked ?? true;
                 
-                // Save auto capture settings
-                Properties.Settings.Default.AutoCaptureMode = autoCaptureCheckBox.IsChecked ?? false;
-                Properties.Settings.Default.AutoCaptureDelay = (int)autoCaptureDelaySlider.Value;
+                // Save capture timing settings
+                Properties.Settings.Default.PhotoDisplayDuration = (int)photoDisplayDurationSlider.Value;
                 Properties.Settings.Default.PhotographerMode = photographerModeCheckBox.IsChecked ?? false;
                 
                 // Save photo storage settings
@@ -396,8 +394,8 @@ namespace Photobooth.Pages
         {
             countdownSlider.Value = 5;
             showCountdownCheckBox.IsChecked = true;
-            autoCaptureCheckBox.IsChecked = false;
-            autoCaptureDelaySlider.Value = 10;
+            photoDisplayDurationSlider.Value = 4;
+            photographerModeCheckBox.IsChecked = false;
             photoLocationTextBox.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Photobooth");
             mirrorLiveViewCheckBox.IsChecked = false;
             frameRateSlider.Value = 30;

@@ -764,28 +764,23 @@
                 <StackPanel>
                     <StackPanel Style="{StaticResource SectionHeaderStyle}">
                         <TextBlock Text="📷" Style="{StaticResource SectionIconStyle}"/>
-                        <TextBlock Text="Auto Capture Mode" Style="{StaticResource SectionTitleStyle}"/>
+                        <TextBlock Text="Capture Timing" Style="{StaticResource SectionTitleStyle}"/>
                     </StackPanel>
                     
-                    <CheckBox x:Name="autoCaptureCheckBox" 
-                              Content="Enable continuous auto-capture mode" 
-                              IsChecked="False"
-                              Style="{StaticResource SettingsCheckBoxStyle}"/>
-                    
-                    <TextBlock Text="Delay between captures (seconds)" Style="{StaticResource SettingsTextStyle}"/>
+                    <TextBlock Text="Photo display time (seconds)" Style="{StaticResource SettingsTextStyle}"/>
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
-                        <Slider x:Name="autoCaptureDelaySlider" 
-                                Minimum="3" 
-                                Maximum="30" 
-                                Value="10" 
+                        <Slider x:Name="photoDisplayDurationSlider" 
+                                Minimum="1" 
+                                Maximum="10" 
+                                Value="4" 
                                 TickPlacement="BottomRight" 
-                                TickFrequency="5" 
+                                TickFrequency="1" 
                                 IsSnapToTickEnabled="True"
                                 Width="300"
-                                ValueChanged="AutoCaptureDelaySlider_ValueChanged"
+                                ValueChanged="PhotoDisplayDurationSlider_ValueChanged"
                                 Style="{StaticResource SettingsSliderStyle}"/>
-                        <TextBlock x:Name="autoCaptureDelayValueText" 
-                                   Text="10 seconds" 
+                        <TextBlock x:Name="photoDisplayDurationValueText" 
+                                   Text="4 seconds" 
                                    VerticalAlignment="Center" 
                                    Margin="20,0,0,0" 
                                    Foreground="White" 
