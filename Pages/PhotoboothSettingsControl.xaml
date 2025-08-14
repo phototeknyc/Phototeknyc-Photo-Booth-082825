@@ -849,6 +849,10 @@
                               Content="Mirror live view (for front-facing setup)" 
                               Style="{StaticResource SettingsCheckBoxStyle}"/>
                     
+                    <CheckBox x:Name="enableIdleLiveViewCheckBox" 
+                              Content="Enable live view when idle (not in session)" 
+                              Style="{StaticResource SettingsCheckBoxStyle}"/>
+                    
                     <TextBlock Text="Live view frame rate (FPS)" Style="{StaticResource SettingsTextStyle}"/>
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
                         <Slider x:Name="frameRateSlider" 
@@ -863,6 +867,43 @@
                                 Style="{StaticResource SettingsSliderStyle}"/>
                         <TextBlock x:Name="frameRateValueText" 
                                    Text="30 FPS" 
+                                   VerticalAlignment="Center" 
+                                   Margin="20,0,0,0" 
+                                   Foreground="White" 
+                                   FontWeight="Bold"
+                                   FontSize="18"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- Session Clear Settings -->
+            <Border Style="{StaticResource GlassSectionStyle}">
+                <StackPanel>
+                    <StackPanel Style="{StaticResource SectionHeaderStyle}">
+                        <TextBlock Text="🔄" Style="{StaticResource SectionIconStyle}"/>
+                        <TextBlock Text="Session Auto-Clear" Style="{StaticResource SectionTitleStyle}"/>
+                    </StackPanel>
+                    
+                    <CheckBox x:Name="autoClearSessionCheckBox" 
+                              Content="Auto-clear session after completion" 
+                              IsChecked="True"
+                              Style="{StaticResource SettingsCheckBoxStyle}"
+                              ToolTip="Automatically clear the screen after session completes"/>
+                    
+                    <TextBlock Text="Auto-clear timeout (seconds)" Style="{StaticResource SettingsTextStyle}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                        <Slider x:Name="autoClearTimeoutSlider" 
+                                Minimum="10" 
+                                Maximum="120" 
+                                Value="30" 
+                                TickPlacement="BottomRight" 
+                                TickFrequency="10" 
+                                IsSnapToTickEnabled="True"
+                                Width="300"
+                                ValueChanged="AutoClearTimeoutSlider_ValueChanged"
+                                Style="{StaticResource SettingsSliderStyle}"/>
+                        <TextBlock x:Name="autoClearTimeoutValueText" 
+                                   Text="30 seconds" 
                                    VerticalAlignment="Center" 
                                    Margin="20,0,0,0" 
                                    Foreground="White" 
@@ -1696,6 +1737,145 @@
             </StackPanel>
             </Border>
             
+            <!-- Security Settings -->
+            <Border Style="{StaticResource GlassSectionStyle}">
+                <StackPanel>
+                    <StackPanel Style="{StaticResource SectionHeaderStyle}">
+                        <TextBlock Text="🔒" Style="{StaticResource SectionIconStyle}"/>
+                        <TextBlock Text="Security Settings" Style="{StaticResource SectionTitleStyle}"/>
+                    </StackPanel>
+                    
+                    <CheckBox x:Name="enableLockCheckBox" 
+                              Content="Enable PIN lock feature" 
+                              Style="{StaticResource SettingsCheckBoxStyle}"
+                              Checked="EnableLockCheckBox_Checked"
+                              Unchecked="EnableLockCheckBox_Unchecked"/>
+                    
+                    <StackPanel x:Name="pinSettingsPanel" Margin="0,10,0,0" Visibility="Collapsed">
+                        <TextBlock Text="Current PIN Code" Style="{StaticResource SettingsTextStyle}"/>
+                        <Grid Margin="0,5,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <PasswordBox x:Name="currentPinBox" 
+                                         Grid.Column="0"
+                                         MaxLength="6"
+                                         FontSize="16"
+                                         Padding="8"
+                                         Background="#1E1E1E"
+                                         Foreground="White"
+                                         BorderBrush="#555"
+                                         PasswordChanged="CurrentPinBox_PasswordChanged"/>
+                            <TextBlock Grid.Column="1" 
+                                       Text="(Enter to verify)" 
+                                       FontSize="12"
+                                       Foreground="#AAA"
+                                       VerticalAlignment="Center"
+                                       Margin="10,0,0,0"/>
+                        </Grid>
+                        
+                        <TextBlock Text="New PIN Code (4-6 digits)" Style="{StaticResource SettingsTextStyle}"/>
+                        <Grid Margin="0,5,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <PasswordBox x:Name="newPinBox" 
+                                         Grid.Column="0"
+                                         MaxLength="6"
+                                         FontSize="16"
+                                         Padding="8"
+                                         Background="#1E1E1E"
+                                         Foreground="White"
+                                         BorderBrush="#555"
+                                         IsEnabled="False"
+                                         PasswordChanged="NewPinBox_PasswordChanged"/>
+                            <TextBlock x:Name="pinStrengthText"
+                                       Grid.Column="1" 
+                                       Text="" 
+                                       FontSize="12"
+                                       Foreground="#AAA"
+                                       VerticalAlignment="Center"
+                                       Margin="10,0,0,0"/>
+                        </Grid>
+                        
+                        <TextBlock Text="Confirm New PIN" Style="{StaticResource SettingsTextStyle}"/>
+                        <Grid Margin="0,5,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <PasswordBox x:Name="confirmPinBox" 
+                                         Grid.Column="0"
+                                         MaxLength="6"
+                                         FontSize="16"
+                                         Padding="8"
+                                         Background="#1E1E1E"
+                                         Foreground="White"
+                                         BorderBrush="#555"
+                                         IsEnabled="False"
+                                         PasswordChanged="ConfirmPinBox_PasswordChanged"/>
+                            <TextBlock x:Name="pinMatchText"
+                                       Grid.Column="1" 
+                                       Text="" 
+                                       FontSize="12"
+                                       VerticalAlignment="Center"
+                                       Margin="10,0,0,0"/>
+                        </Grid>
+                        
+                        <Button x:Name="changePinButton" 
+                                Content="Change PIN" 
+                                Width="150"
+                                HorizontalAlignment="Left"
+                                Padding="10,8"
+                                Background="#4CAF50"
+                                Foreground="White"
+                                FontSize="14"
+                                FontWeight="Bold"
+                                IsEnabled="False"
+                                Click="ChangePinButton_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="5">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        
+                        <TextBlock x:Name="pinStatusText" 
+                                   Text="" 
+                                   FontSize="12"
+                                   Margin="0,10,0,0"
+                                   HorizontalAlignment="Left"/>
+                    </StackPanel>
+                    
+                    <TextBlock Text="Auto-lock timeout (0 = disabled)" 
+                               Style="{StaticResource SettingsTextStyle}"
+                               Margin="0,15,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                        <Slider x:Name="autoLockTimeoutSlider" 
+                                Minimum="0" 
+                                Maximum="60" 
+                                Value="0" 
+                                TickPlacement="BottomRight" 
+                                TickFrequency="5" 
+                                IsSnapToTickEnabled="True"
+                                Width="300"
+                                ValueChanged="AutoLockTimeoutSlider_ValueChanged"
+                                Style="{StaticResource SettingsSliderStyle}"/>
+                        <TextBlock x:Name="autoLockTimeoutText" 
+                                   Text="Disabled" 
+                                   VerticalAlignment="Center"
+                                   Margin="10,0,0,0"
+                                   FontSize="14"
+                                   Foreground="White"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
             
             <!-- Action Buttons -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,40,0,40">

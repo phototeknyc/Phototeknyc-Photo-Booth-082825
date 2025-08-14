@@ -6,6 +6,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Photobooth.Services;
 using System.Runtime.InteropServices;
 using System.Drawing.Printing;
@@ -110,6 +111,10 @@ namespace Photobooth.Pages
                 photoDisplayDurationSlider.Value = Properties.Settings.Default.PhotoDisplayDuration;
                 photographerModeCheckBox.IsChecked = Properties.Settings.Default.PhotographerMode;
                 
+                // Load auto-clear settings
+                autoClearSessionCheckBox.IsChecked = Properties.Settings.Default.AutoClearSession;
+                autoClearTimeoutSlider.Value = Properties.Settings.Default.AutoClearTimeout;
+                
                 // Load photo storage settings
                 string photoLocation = Properties.Settings.Default.PhotoLocation;
                 if (string.IsNullOrEmpty(photoLocation))
@@ -121,12 +126,19 @@ namespace Photobooth.Pages
                 
                 // Load live view settings
                 mirrorLiveViewCheckBox.IsChecked = Properties.Settings.Default.MirrorLiveView;
+                enableIdleLiveViewCheckBox.IsChecked = Properties.Settings.Default.EnableIdleLiveView;
                 frameRateSlider.Value = Properties.Settings.Default.LiveViewFrameRate;
                 
                 // Load touch interface settings
                 fullscreenCheckBox.IsChecked = Properties.Settings.Default.FullscreenMode;
                 hideCursorCheckBox.IsChecked = Properties.Settings.Default.HideCursor;
                 buttonSizeSlider.Value = Properties.Settings.Default.ButtonSizeScale;
+                
+                // Load security settings
+                enableLockCheckBox.IsChecked = Properties.Settings.Default.EnableLockFeature;
+                autoLockTimeoutSlider.Value = Properties.Settings.Default.AutoLockTimeout;
+                UpdateAutoLockTimeoutText();
+                pinSettingsPanel.Visibility = Properties.Settings.Default.EnableLockFeature ? Visibility.Visible : Visibility.Collapsed;
                 
                 // Load retake settings
                 enableRetakeCheckBox.IsChecked = Properties.Settings.Default.EnableRetake;
@@ -191,6 +203,12 @@ namespace Photobooth.Pages
         {
             if (photoDisplayDurationValueText != null)
                 photoDisplayDurationValueText.Text = $"{(int)e.NewValue} seconds";
+        }
+        
+        private void AutoClearTimeoutSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (autoClearTimeoutValueText != null)
+                autoClearTimeoutValueText.Text = $"{(int)e.NewValue} seconds";
         }
 
         private void FrameRateSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -267,17 +285,26 @@ namespace Photobooth.Pages
                 Properties.Settings.Default.PhotoDisplayDuration = (int)photoDisplayDurationSlider.Value;
                 Properties.Settings.Default.PhotographerMode = photographerModeCheckBox.IsChecked ?? false;
                 
+                // Save auto-clear settings
+                Properties.Settings.Default.AutoClearSession = autoClearSessionCheckBox.IsChecked ?? false;
+                Properties.Settings.Default.AutoClearTimeout = (int)autoClearTimeoutSlider.Value;
+                
                 // Save photo storage settings
                 Properties.Settings.Default.PhotoLocation = photoLocationTextBox.Text;
                 
                 // Save live view settings
                 Properties.Settings.Default.MirrorLiveView = mirrorLiveViewCheckBox.IsChecked ?? false;
+                Properties.Settings.Default.EnableIdleLiveView = enableIdleLiveViewCheckBox.IsChecked ?? true;
                 Properties.Settings.Default.LiveViewFrameRate = (int)frameRateSlider.Value;
                 
                 // Save touch interface settings
                 Properties.Settings.Default.FullscreenMode = fullscreenCheckBox.IsChecked ?? false;
                 Properties.Settings.Default.HideCursor = hideCursorCheckBox.IsChecked ?? false;
                 Properties.Settings.Default.ButtonSizeScale = buttonSizeSlider.Value;
+                
+                // Save security settings
+                Properties.Settings.Default.EnableLockFeature = enableLockCheckBox.IsChecked ?? false;
+                Properties.Settings.Default.AutoLockTimeout = (int)autoLockTimeoutSlider.Value;
                 
                 // Save retake settings  
                 Properties.Settings.Default.EnableRetake = enableRetakeCheckBox.IsChecked ?? false;
@@ -2850,6 +2877,162 @@ namespace Photobooth.Pages
             }
         }
 
+        #endregion
+        
+        #region Security Settings
+        
+        private void EnableLockCheckBox_Checked(object sender, RoutedEventArgs e)
+        {
+            pinSettingsPanel.Visibility = Visibility.Visible;
+        }
+        
+        private void EnableLockCheckBox_Unchecked(object sender, RoutedEventArgs e)
+        {
+            pinSettingsPanel.Visibility = Visibility.Collapsed;
+        }
+        
+        private void CurrentPinBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            // Verify current PIN
+            string currentPin = Properties.Settings.Default.LockPin;
+            bool isValid = currentPinBox.Password == currentPin;
+            
+            if (isValid)
+            {
+                newPinBox.IsEnabled = true;
+                confirmPinBox.IsEnabled = true;
+                pinStatusText.Text = "✓ Current PIN verified";
+                pinStatusText.Foreground = new SolidColorBrush(Colors.LightGreen);
+            }
+            else if (currentPinBox.Password.Length > 0)
+            {
+                newPinBox.IsEnabled = false;
+                confirmPinBox.IsEnabled = false;
+                changePinButton.IsEnabled = false;
+                pinStatusText.Text = "✗ Incorrect PIN";
+                pinStatusText.Foreground = new SolidColorBrush(Colors.LightCoral);
+            }
+            else
+            {
+                newPinBox.IsEnabled = false;
+                confirmPinBox.IsEnabled = false;
+                changePinButton.IsEnabled = false;
+                pinStatusText.Text = "";
+            }
+        }
+        
+        private void NewPinBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            string newPin = newPinBox.Password;
+            
+            // Validate PIN (4-6 digits)
+            if (newPin.Length >= 4 && newPin.Length <= 6 && newPin.All(char.IsDigit))
+            {
+                pinStrengthText.Text = "✓ Valid";
+                pinStrengthText.Foreground = new SolidColorBrush(Colors.LightGreen);
+                ValidatePinMatch();
+            }
+            else if (newPin.Length > 0)
+            {
+                if (newPin.Length < 4)
+                {
+                    pinStrengthText.Text = "Too short";
+                    pinStrengthText.Foreground = new SolidColorBrush(Colors.Orange);
+                }
+                else if (!newPin.All(char.IsDigit))
+                {
+                    pinStrengthText.Text = "Digits only";
+                    pinStrengthText.Foreground = new SolidColorBrush(Colors.Orange);
+                }
+                changePinButton.IsEnabled = false;
+            }
+            else
+            {
+                pinStrengthText.Text = "";
+                changePinButton.IsEnabled = false;
+            }
+        }
+        
+        private void ConfirmPinBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            ValidatePinMatch();
+        }
+        
+        private void ValidatePinMatch()
+        {
+            string newPin = newPinBox.Password;
+            string confirmPin = confirmPinBox.Password;
+            
+            if (confirmPin.Length > 0)
+            {
+                if (newPin == confirmPin && newPin.Length >= 4 && newPin.Length <= 6 && newPin.All(char.IsDigit))
+                {
+                    pinMatchText.Text = "✓ Match";
+                    pinMatchText.Foreground = new SolidColorBrush(Colors.LightGreen);
+                    changePinButton.IsEnabled = true;
+                }
+                else
+                {
+                    pinMatchText.Text = "✗ No match";
+                    pinMatchText.Foreground = new SolidColorBrush(Colors.LightCoral);
+                    changePinButton.IsEnabled = false;
+                }
+            }
+            else
+            {
+                pinMatchText.Text = "";
+                changePinButton.IsEnabled = false;
+            }
+        }
+        
+        private void ChangePinButton_Click(object sender, RoutedEventArgs e)
+        {
+            string newPin = newPinBox.Password;
+            
+            // Save new PIN
+            Properties.Settings.Default.LockPin = newPin;
+            Properties.Settings.Default.Save();
+            
+            // Clear fields
+            currentPinBox.Clear();
+            newPinBox.Clear();
+            confirmPinBox.Clear();
+            newPinBox.IsEnabled = false;
+            confirmPinBox.IsEnabled = false;
+            changePinButton.IsEnabled = false;
+            
+            // Show success message
+            pinStatusText.Text = "✓ PIN changed successfully!";
+            pinStatusText.Foreground = new SolidColorBrush(Colors.LightGreen);
+            pinStrengthText.Text = "";
+            pinMatchText.Text = "";
+        }
+        
+        private void AutoLockTimeoutSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            UpdateAutoLockTimeoutText();
+        }
+        
+        private void UpdateAutoLockTimeoutText()
+        {
+            if (autoLockTimeoutText != null)
+            {
+                int minutes = (int)autoLockTimeoutSlider.Value;
+                if (minutes == 0)
+                {
+                    autoLockTimeoutText.Text = "Disabled";
+                }
+                else if (minutes == 1)
+                {
+                    autoLockTimeoutText.Text = "1 minute";
+                }
+                else
+                {
+                    autoLockTimeoutText.Text = $"{minutes} minutes";
+                }
+            }
+        }
+        
         #endregion
     }
 }

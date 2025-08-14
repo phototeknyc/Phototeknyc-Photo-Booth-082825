@@ -97,6 +97,30 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool AutoClearSession {
+            get {
+                return ((bool)(this["AutoClearSession"]));
+            }
+            set {
+                this["AutoClearSession"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("30")]
+        public int AutoClearTimeout {
+            get {
+                return ((int)(this["AutoClearTimeout"]));
+            }
+            set {
+                this["AutoClearTimeout"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]
         public string PhotoLocation {
             get {
@@ -128,6 +152,18 @@ namespace Photobooth.Properties {
             }
             set {
                 this["LiveViewFrameRate"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnableIdleLiveView {
+            get {
+                return ((bool)(this["EnableIdleLiveView"]));
+            }
+            set {
+                this["EnableIdleLiveView"] = value;
             }
         }
         

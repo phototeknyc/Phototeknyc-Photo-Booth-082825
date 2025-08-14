@@ -20,6 +20,12 @@
     <Setting Name="PhotoDisplayDuration" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">4</Value>
     </Setting>
+    <Setting Name="AutoClearSession" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">True</Value>
+    </Setting>
+    <Setting Name="AutoClearTimeout" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">30</Value>
+    </Setting>
     <Setting Name="PhotoLocation" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
@@ -28,6 +34,9 @@
     </Setting>
     <Setting Name="LiveViewFrameRate" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">30</Value>
+    </Setting>
+    <Setting Name="EnableIdleLiveView" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="FullscreenMode" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>

@@ -248,6 +248,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Pages\PhotoboothSettingsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\FilterSelectionControl.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -395,6 +399,9 @@
     </Compile>
     <Compile Include="Pages\PhotoboothSettingsControl.xaml.cs">
       <DependentUpon>PhotoboothSettingsControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\PhotoboothSettingsPage.xaml.cs">
+      <DependentUpon>PhotoboothSettingsPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>

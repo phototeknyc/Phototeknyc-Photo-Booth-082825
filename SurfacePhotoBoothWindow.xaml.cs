@@ -320,6 +320,12 @@ namespace Photobooth
             NavigateToPage(new Pages.EventSelectionPage(), "Select Event");
         }
         
+        private void NavigateToPhotoboothSettings_Click(object sender, MouseButtonEventArgs e)
+        {
+            // Navigate to Photobooth Settings page
+            NavigateToPage(new Pages.PhotoboothSettingsPage(), "Photobooth Settings");
+        }
+        
         private void NavigateToEvents_Click(object sender, MouseButtonEventArgs e)
         {
             // For now, still open as dialog but could be converted to page
@@ -519,12 +525,6 @@ namespace Photobooth
         
         #region Window Control Events
         
-        private void OpenSettings_Click(object sender, RoutedEventArgs e)
-        {
-            var settingsWindow = new ModernSettingsWindow();
-            settingsWindow.Show();
-        }
-        
         private void MinimizeWindow_Click(object sender, RoutedEventArgs e)
         {
             // Directly minimize without animation to avoid rendering issues
@@ -660,7 +660,7 @@ namespace Photobooth
                         e.Handled = true;
                         break;
                     case Key.S: // Ctrl+S for Settings
-                        OpenSettings_Click(null, null);
+                        NavigateToPhotoboothSettings_Click(null, null);
                         e.Handled = true;
                         break;
                 }

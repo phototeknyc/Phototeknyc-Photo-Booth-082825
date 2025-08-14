@@ -188,6 +188,38 @@
                            VerticalAlignment="Center" 
                            Stretch="Uniform"/>
                     
+                    <!-- Centered Start Button -->
+                    <Border x:Name="startButtonOverlay"
+                            Width="300"
+                            Height="300"
+                            CornerRadius="150"
+                            Background="#CC4CAF50"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Cursor="Hand"
+                            MouseLeftButtonDown="StartButton_Click"
+                            Visibility="Collapsed">
+                        <Border.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="5" Opacity="0.5"/>
+                        </Border.Effect>
+                        <Grid>
+                            <TextBlock Text="TOUCH TO"
+                                       FontSize="32"
+                                       FontWeight="Bold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Margin="0,-50,0,0"/>
+                            <TextBlock Text="START"
+                                       FontSize="48"
+                                       FontWeight="Bold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Margin="0,40,0,0"/>
+                        </Grid>
+                    </Border>
+                    
                     <!-- Countdown Overlay -->
                     <Grid x:Name="countdownOverlay" 
                           Background="#80000000" 
@@ -206,6 +238,35 @@
                                        Margin="0,20,0,0"/>
                         </StackPanel>
                     </Grid>
+                    
+                    <!-- Stop Button (Top Right) - Placed after countdown overlay to be on top -->
+                    <Button x:Name="stopSessionButton"
+                            Width="50"
+                            Height="50"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="0,20,20,0"
+                            Background="#CCFF5252"
+                            BorderThickness="0"
+                            Visibility="Collapsed"
+                            Click="StopButton_Click"
+                            Cursor="Hand"
+                            ToolTip="Stop Session"
+                            Panel.ZIndex="1000">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="25">
+                                    <TextBlock Text="✕"
+                                               FontSize="24"
+                                               FontWeight="Bold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
                     
                     <!-- Session Loaded Indicator -->
                     <Border x:Name="sessionLoadedIndicator"
@@ -325,13 +386,13 @@
                                    HorizontalAlignment="Center"/>
                     </Border>
                     
-                    <!-- Info Panel - Top Right -->
-                    <Border VerticalAlignment="Top" 
-                            HorizontalAlignment="Right" 
+                    <!-- Info Panel - Bottom Left -->
+                    <Border VerticalAlignment="Bottom" 
+                            HorizontalAlignment="Left" 
                             Background="#CC333333" 
                             CornerRadius="10" 
                             Padding="15" 
-                            Margin="20"
+                            Margin="20,0,0,100"
                             MinWidth="250">
                         <StackPanel>
                             <!-- Camera Status -->
@@ -431,13 +492,142 @@
                         </StackPanel>
                     </Border>
                     
+                    <!-- Countdown Quick Controls (Floating Panel) -->
+                    <Border VerticalAlignment="Top" 
+                            HorizontalAlignment="Right" 
+                            Background="#CC333333" 
+                            CornerRadius="10" 
+                            Padding="10" 
+                            Margin="0,80,20,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Countdown:" 
+                                       FontSize="14" 
+                                       Foreground="White" 
+                                       VerticalAlignment="Center" 
+                                       Margin="0,0,10,0"/>
+                            <Button Content="-" 
+                                    Width="40" 
+                                    Height="40" 
+                                    FontSize="20" 
+                                    FontWeight="Bold"
+                                    Background="#FF555555"
+                                    Foreground="White"
+                                    BorderThickness="0"
+                                    Click="DecreaseCountdown_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}" 
+                                                CornerRadius="20">
+                                            <ContentPresenter HorizontalAlignment="Center" 
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <TextBlock x:Name="countdownSecondsDisplay" 
+                                       Text="5s" 
+                                       FontSize="20" 
+                                       FontWeight="Bold" 
+                                       Foreground="#4CAF50" 
+                                       VerticalAlignment="Center" 
+                                       Margin="10,0,10,0"/>
+                            <Button Content="+" 
+                                    Width="40" 
+                                    Height="40" 
+                                    FontSize="20" 
+                                    FontWeight="Bold"
+                                    Background="#FF555555"
+                                    Foreground="White"
+                                    BorderThickness="0"
+                                    Click="IncreaseCountdown_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}" 
+                                                CornerRadius="20">
+                                            <ContentPresenter HorizontalAlignment="Center" 
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Done Button - Above Print Button -->
+                    <Button x:Name="doneButton" 
+                            Width="80" 
+                            Height="80"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,50,300"
+                            Background="#CC4CAF50"
+                            BorderThickness="0"
+                            FontSize="18"
+                            FontWeight="Bold"
+                            Foreground="White"
+                            ToolTip="Clear Session"
+                            Visibility="Collapsed"
+                            Click="DoneButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="40">
+                                    <StackPanel HorizontalAlignment="Center" 
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="✓" 
+                                                   FontSize="32"
+                                                   HorizontalAlignment="Center"/>
+                                        <TextBlock Text="DONE" 
+                                                   FontSize="14"
+                                                   Margin="0,2,0,0"
+                                                   HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <!-- Gallery Button - Below Print Button -->
+                    <Button x:Name="galleryButton" 
+                            Width="80" 
+                            Height="80"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,50,100"
+                            Background="#FF9C27B0"
+                            BorderThickness="0"
+                            FontSize="28"
+                            FontWeight="Bold"
+                            Foreground="White"
+                            ToolTip="View Sessions"
+                            Visibility="Visible"
+                            Click="GalleryButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="40">
+                                    <StackPanel HorizontalAlignment="Center" 
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="📂" 
+                                                   FontSize="32"
+                                                   HorizontalAlignment="Center"/>
+                                        <TextBlock Text="GALLERY" 
+                                                   FontSize="12"
+                                                   Margin="0,2,0,0"
+                                                   HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
                     <!-- Print Button - Positioned to the right of preview screen -->
                     <Button x:Name="printButton" 
                             Width="80" 
                             Height="80"
                             HorizontalAlignment="Right"
-                            VerticalAlignment="Center"
-                            Margin="0,0,300,0"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,50,200"
                             Background="#FF2196F3"
                             BorderThickness="0"
                             Content="🖨️"
@@ -528,30 +718,6 @@
                             </Button.Template>
                         </Button>
                         
-                        <!-- Gallery/Sessions Button -->
-                        <Button x:Name="galleryButton" 
-                                Width="60" 
-                                Height="60"
-                                Margin="0,0,10,0"
-                                Background="#FF9C27B0"
-                                BorderThickness="0"
-                                Content="📷"
-                                FontSize="24"
-                                Foreground="White"
-                                FontWeight="Bold"
-                                ToolTip="View Sessions"
-                                Click="GalleryButton_Click">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Border Background="{TemplateBinding Background}" 
-                                            CornerRadius="5">
-                                        <ContentPresenter HorizontalAlignment="Center" 
-                                                          VerticalAlignment="Center"/>
-                                    </Border>
-                                </ControlTemplate>
-                            </Button.Template>
-                        </Button>
-                        
                         <!-- Lock/Unlock Button -->
                         <Button x:Name="lockButton" 
                                 Width="60" 
@@ -579,8 +745,12 @@
             </Border>
         </Grid>
 
-        <!-- Photo Strip Display -->
-        <Border Grid.Row="1" Background="#1E1E1E" Padding="10,15">
+        <!-- Photo Strip Display (Expanded) -->
+        <Border Grid.Row="1" 
+                Grid.RowSpan="2"
+                Background="#1E1E1E" 
+                Padding="15,20"
+                Margin="0,0,0,40">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -612,9 +782,9 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border x:Name="PhotoStripItemBorder"
-                                        Width="90" 
-                                        Height="70" 
-                                        Margin="5"
+                                        Width="150" 
+                                        Height="120" 
+                                        Margin="10"
                                         CornerRadius="8"
                                         BorderThickness="2"
                                         RenderTransformOrigin="0.5,0.5"
@@ -683,7 +853,7 @@
                                         <TextBlock Text="{Binding PhotoNumber}" 
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"
-                                                   FontSize="28"
+                                                   FontSize="48"
                                                    FontWeight="Light"
                                                    Foreground="#666">
                                             <TextBlock.Style>
@@ -718,8 +888,8 @@
                                                 HorizontalAlignment="Center"
                                                 Background="#CC000000"
                                                 CornerRadius="4"
-                                                Padding="6,2"
-                                                Margin="0,0,0,4">
+                                                Padding="8,3"
+                                                Margin="0,0,0,6">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -733,7 +903,7 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
-                                            <TextBlock FontSize="10" Foreground="White" FontWeight="Bold">
+                                            <TextBlock FontSize="12" Foreground="White" FontWeight="Bold">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="Text" Value=""/>
@@ -754,12 +924,12 @@
                                         <Border HorizontalAlignment="Right"
                                                 VerticalAlignment="Top"
                                                 Background="#AA000000"
-                                                CornerRadius="3"
-                                                Margin="2"
-                                                Padding="4,2">
+                                                CornerRadius="5"
+                                                Margin="4"
+                                                Padding="6,3">
                                             <TextBlock Text="{Binding PhotoNumber}" 
                                                        Foreground="White"
-                                                       FontSize="10"
+                                                       FontSize="14"
                                                        FontWeight="Bold"/>
                                         </Border>
                                     </Grid>
@@ -771,8 +941,12 @@
             </Grid>
         </Border>
 
-        <!-- Bottom Control Bar -->
-        <Border Grid.Row="2" Background="#333333" Padding="20">
+        <!-- Bottom Control Bar (Collapsible) -->
+        <Border x:Name="bottomControlBar" 
+                Grid.Row="2" 
+                Background="#333333" 
+                Padding="20"
+                Visibility="Collapsed">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -780,88 +954,74 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 
-                <!-- Countdown Controls -->
+                <!-- Left side empty now that countdown moved to top-right -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Countdown:" 
-                               FontSize="20" 
-                               Foreground="White" 
-                               VerticalAlignment="Center" 
-                               Margin="0,0,15,0"/>
-                    <Button Content="-" 
-                            Width="60" 
-                            Height="60" 
-                            FontSize="30" 
-                            FontWeight="Bold"
-                            Style="{StaticResource SettingsButtonStyle}"
-                            Click="DecreaseCountdown_Click"/>
-                    <TextBlock x:Name="countdownSecondsText" 
-                               Text="5" 
-                               FontSize="36" 
-                               FontWeight="Bold" 
-                               Foreground="White" 
-                               VerticalAlignment="Center" 
-                               Margin="20,0,20,0"/>
-                    <Button Content="+" 
-                            Width="60" 
-                            Height="60" 
-                            FontSize="30" 
-                            FontWeight="Bold"
-                            Style="{StaticResource SettingsButtonStyle}"
-                            Click="IncreaseCountdown_Click"/>
+                    <!-- Empty - chevron toggle is now positioned absolutely -->
                 </StackPanel>
 
-                <!-- Main Action Buttons -->
+                <!-- Spacer for Center Alignment -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
-                    <Button x:Name="startButton" 
-                            Content="🚀 START PHOTOBOOTH" 
-                            Style="{StaticResource TouchButtonStyle}"
-                            Width="300"
-                            Height="100"
-                            FontSize="28"
-                            FontWeight="Bold"
-                            Margin="20,0"
-                            Click="StartButton_Click"/>
-
-                    <Button x:Name="stopButton" 
-                            Content="⏹ STOP" 
-                            Style="{StaticResource StopButtonStyle}"
-                            Width="150"
-                            Height="100"
-                            FontSize="24"
-                            FontWeight="Bold"
-                            IsEnabled="False"
-                            Click="StopButton_Click"/>
+                    <!-- Empty space - buttons moved to main preview area -->
                 </StackPanel>
                 
                 <!-- Event/Template Selection Controls -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button x:Name="resetCameraButton" 
-                            Content="🔄 Reset Camera" 
                             Style="{StaticResource SettingsButtonStyle}"
-                            Width="180"
-                            Height="60"
-                            FontSize="14"
+                            Width="70"
+                            Height="70"
                             Margin="0,0,10,0"
                             Click="ResetCameraButton_Click"
-                            ToolTip="Reset camera connection if stuck"/>
+                            ToolTip="Reset Camera">
+                        <Viewbox Width="35" Height="35">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" Fill="White"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
                     
                     <Button x:Name="cameraSettingsButton" 
-                            Content="📷 Camera Settings" 
                             Style="{StaticResource SettingsButtonStyle}"
-                            Width="180"
-                            Height="60"
-                            FontSize="14"
+                            Width="70"
+                            Height="70"
                             Margin="0,0,10,0"
                             Click="CameraSettingsButton_Click"
-                            ToolTip="Open camera settings"/>
+                            ToolTip="Camera Settings">
+                        <Viewbox Width="35" Height="35">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" Fill="White" Opacity="0"/>
+                                <Path Data="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z" Fill="White"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
                     
                     <Button x:Name="eventSettingsButton" 
-                            Content="⚙ Event Settings" 
                             Style="{StaticResource SettingsButtonStyle}"
-                            Width="200"
-                            Height="60"
-                            FontSize="16"
-                            Click="EventSettingsButton_Click"/>
+                            Width="70"
+                            Height="70"
+                            Margin="0,0,10,0"
+                            Click="EventSettingsButton_Click"
+                            ToolTip="Event Settings">
+                        <Viewbox Width="35" Height="35">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" Fill="White"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
+                    
+                    <Button x:Name="modernSettingsButton" 
+                            Style="{StaticResource SettingsButtonStyle}"
+                            Width="70"
+                            Height="70"
+                            Margin="0,0,10,0"
+                            Click="ModernSettingsButton_Click"
+                            ToolTip="Advanced Settings">
+                        <Viewbox Width="35" Height="35">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" Fill="White"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -1907,17 +2067,109 @@
             </Border>
         </Grid>
         
+        <!-- Bottom Bar Toggle Button (Chevron) - Left side -->
+        <Border Grid.RowSpan="3"
+                VerticalAlignment="Bottom" 
+                HorizontalAlignment="Left" 
+                Background="#FF444444" 
+                CornerRadius="0,20,0,0" 
+                Padding="20,15" 
+                Margin="20,0,0,0"
+                Cursor="Hand"
+                Panel.ZIndex="500"
+                MouseLeftButtonDown="ToggleBottomBar_Click">
+            <Border.Effect>
+                <DropShadowEffect Color="Black" BlurRadius="15" ShadowDepth="5" Opacity="0.7"/>
+            </Border.Effect>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="bottomBarToggleChevron" 
+                           Text="⌃" 
+                           FontSize="24" 
+                           Foreground="White" 
+                           FontWeight="Bold"
+                           Margin="0,0,10,0"/>
+                <TextBlock Text="Settings" 
+                           FontSize="14" 
+                           Foreground="White" 
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+        
         <!-- PIN Entry Overlay -->
         <Grid x:Name="pinEntryOverlay" 
               Grid.RowSpan="3" 
-              Background="#E0000000" 
+              Background="#CC000000" 
               Visibility="Collapsed">
-            <Border Background="#FF2E2E2E" 
-                    CornerRadius="20" 
-                    Width="400"
-                    Height="500"
+            <Grid.Resources>
+                <!-- Modern PIN Button Style -->
+                <Style x:Key="ModernPinButtonStyle" TargetType="Button">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#FF3A3A3A" Offset="0"/>
+                                <GradientStop Color="#FF2A2A2A" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="BorderBrush" Value="#FF555555"/>
+                    <Setter Property="BorderThickness" Value="1"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                    <Setter Property="Cursor" Value="Hand"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="border" 
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="15">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border" Property="Background">
+                                            <Setter.Value>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                    <GradientStop Color="#FF4A4A4A" Offset="0"/>
+                                                    <GradientStop Color="#FF3A3A3A" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter TargetName="border" Property="BorderBrush" Value="#FF00D9FF"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="border" Property="RenderTransform">
+                                            <Setter.Value>
+                                                <ScaleTransform ScaleX="0.95" ScaleY="0.95" CenterX="40" CenterY="40"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter TargetName="border" Property="Background">
+                                            <Setter.Value>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                    <GradientStop Color="#FF00D9FF" Offset="0"/>
+                                                    <GradientStop Color="#FF0099BB" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Grid.Resources>
+            
+            <Border Background="#FF1A1A1A" 
+                    CornerRadius="30" 
+                    Width="450"
+                    Height="600"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="30" ShadowDepth="10" Opacity="0.8"/>
+                </Border.Effect>
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -1927,39 +2179,56 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     
-                    <!-- Title -->
-                    <TextBlock Grid.Row="0" 
-                               Text="Enter PIN to Unlock" 
-                               FontSize="24" 
-                               FontWeight="Bold"
-                               Foreground="White"
-                               HorizontalAlignment="Center"
-                               Margin="0,20,0,20"/>
+                    <!-- Lock Icon and Title -->
+                    <StackPanel Grid.Row="0" Margin="0,30,0,20">
+                        <Border Width="80" Height="80" 
+                                Background="#22FFFFFF"
+                                CornerRadius="40"
+                                HorizontalAlignment="Center"
+                                Margin="0,0,0,15">
+                            <TextBlock Text="🔒" 
+                                       FontSize="40"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Enter Security PIN" 
+                                   FontSize="28" 
+                                   FontWeight="Light"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
                     
-                    <!-- PIN Display -->
+                    <!-- PIN Display Dots -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" 
+                                HorizontalAlignment="Center" 
+                                Margin="0,10,0,30">
+                        <Border x:Name="pinDot1" Width="20" Height="20" 
+                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
+                        <Border x:Name="pinDot2" Width="20" Height="20" 
+                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
+                        <Border x:Name="pinDot3" Width="20" Height="20" 
+                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
+                        <Border x:Name="pinDot4" Width="20" Height="20" 
+                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
+                        <Border x:Name="pinDot5" Width="20" Height="20" 
+                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
+                        <Border x:Name="pinDot6" Width="20" Height="20" 
+                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
+                    </StackPanel>
+                    
+                    <!-- Hidden TextBox for PIN storage -->
                     <TextBox x:Name="pinDisplayBox" 
                              Grid.Row="1"
-                             FontSize="36"
-                             FontWeight="Bold"
-                             MaxLength="6"
-                             Width="250"
-                             Height="60"
-                             HorizontalAlignment="Center"
-                             TextAlignment="Center"
-                             IsReadOnly="True"
-                             Background="#FF1E1E1E"
-                             Foreground="White"
-                             BorderBrush="#FF00D9FF"
-                             BorderThickness="2"
-                             Margin="0,10,0,20"/>
+                             Visibility="Collapsed"
+                             MaxLength="6"/>
                     
-                    <!-- Number Pad -->
-                    <Grid Grid.Row="2" Width="300" HorizontalAlignment="Center">
+                    <!-- Modern Number Pad -->
+                    <Grid Grid.Row="2" Width="350" HorizontalAlignment="Center">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="60"/>
-                            <RowDefinition Height="60"/>
-                            <RowDefinition Height="60"/>
-                            <RowDefinition Height="60"/>
+                            <RowDefinition Height="80"/>
+                            <RowDefinition Height="80"/>
+                            <RowDefinition Height="80"/>
+                            <RowDefinition Height="80"/>
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -1967,43 +2236,127 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         
-                        <!-- Number buttons 1-9 -->
-                        <Button Grid.Row="0" Grid.Column="0" Content="1" Style="{StaticResource TouchButtonStyle}" FontSize="24" Margin="5" Click="PinPadButton_Click"/>
-                        <Button Grid.Row="0" Grid.Column="1" Content="2" Style="{StaticResource TouchButtonStyle}" FontSize="24" Margin="5" Click="PinPadButton_Click"/>
-                        <Button Grid.Row="0" Grid.Column="2" Content="3" Style="{StaticResource TouchButtonStyle}" FontSize="24" Margin="5" Click="PinPadButton_Click"/>
+                        <!-- Number buttons with modern styling -->
+                        <Button Grid.Row="0" Grid.Column="0" Content="1" 
+                                Style="{StaticResource ModernPinButtonStyle}" 
+                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                Click="PinPadButton_Click"/>
+                        <Button Grid.Row="0" Grid.Column="1" Content="2" 
+                                Style="{StaticResource ModernPinButtonStyle}" 
+                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                Click="PinPadButton_Click"/>
+                        <Button Grid.Row="0" Grid.Column="2" Content="3" 
+                                Style="{StaticResource ModernPinButtonStyle}" 
+                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                Click="PinPadButton_Click"/>
                         
-                        <Button Grid.Row="1" Grid.Column="0" Content="4" Style="{StaticResource TouchButtonStyle}" FontSize="24" Margin="5" Click="PinPadButton_Click"/>
-                        <Button Grid.Row="1" Grid.Column="1" Content="5" Style="{StaticResource TouchButtonStyle}" FontSize="24" Margin="5" Click="PinPadButton_Click"/>
-                        <Button Grid.Row="1" Grid.Column="2" Content="6" Style="{StaticResource TouchButtonStyle}" FontSize="24" Margin="5" Click="PinPadButton_Click"/>
+                        <Button Grid.Row="1" Grid.Column="0" Content="4" 
+                                Style="{StaticResource ModernPinButtonStyle}" 
+                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                Click="PinPadButton_Click"/>
+                        <Button Grid.Row="1" Grid.Column="1" Content="5" 
+                                Style="{StaticResource ModernPinButtonStyle}" 
+                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                Click="PinPadButton_Click"/>
+                        <Button Grid.Row="1" Grid.Column="2" Content="6" 
+                                Style="{StaticResource ModernPinButtonStyle}" 
+                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                Click="PinPadButton_Click"/>
                         
-                        <Button Grid.Row="2" Grid.Column="0" Content="7" Style="{StaticResource TouchButtonStyle}" FontSize="24" Margin="5" Click="PinPadButton_Click"/>
-                        <Button Grid.Row="2" Grid.Column="1" Content="8" Style="{StaticResource TouchButtonStyle}" FontSize="24" Margin="5" Click="PinPadButton_Click"/>
-                        <Button Grid.Row="2" Grid.Column="2" Content="9" Style="{StaticResource TouchButtonStyle}" FontSize="24" Margin="5" Click="PinPadButton_Click"/>
+                        <Button Grid.Row="2" Grid.Column="0" Content="7" 
+                                Style="{StaticResource ModernPinButtonStyle}" 
+                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                Click="PinPadButton_Click"/>
+                        <Button Grid.Row="2" Grid.Column="1" Content="8" 
+                                Style="{StaticResource ModernPinButtonStyle}" 
+                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                Click="PinPadButton_Click"/>
+                        <Button Grid.Row="2" Grid.Column="2" Content="9" 
+                                Style="{StaticResource ModernPinButtonStyle}" 
+                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                Click="PinPadButton_Click"/>
                         
-                        <Button Grid.Row="3" Grid.Column="0" Content="Clear" Style="{StaticResource StopButtonStyle}" FontSize="18" Margin="5" Click="PinClearButton_Click"/>
-                        <Button Grid.Row="3" Grid.Column="1" Content="0" Style="{StaticResource TouchButtonStyle}" FontSize="24" Margin="5" Click="PinPadButton_Click"/>
-                        <Button Grid.Row="3" Grid.Column="2" Content="✓" Style="{StaticResource HomeButtonStyle}" FontSize="24" Margin="5" Click="PinSubmitButton_Click"/>
+                        <!-- Bottom row with special buttons -->
+                        <Button Grid.Row="3" Grid.Column="0" Content="←" 
+                                Width="80" Height="80" Margin="8"
+                                FontSize="28" FontWeight="Bold"
+                                Click="PinClearButton_Click">
+                            <Button.Style>
+                                <Style BasedOn="{StaticResource ModernPinButtonStyle}" TargetType="Button">
+                                    <Setter Property="Background">
+                                        <Setter.Value>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#FF5A2A2A" Offset="0"/>
+                                                <GradientStop Color="#FF3A1A1A" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        
+                        <Button Grid.Row="3" Grid.Column="1" Content="0" 
+                                Style="{StaticResource ModernPinButtonStyle}" 
+                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                Click="PinPadButton_Click"/>
+                        
+                        <Button Grid.Row="3" Grid.Column="2" Content="✓" 
+                                Width="80" Height="80" Margin="8"
+                                FontSize="36" FontWeight="Bold"
+                                Click="PinSubmitButton_Click">
+                            <Button.Style>
+                                <Style BasedOn="{StaticResource ModernPinButtonStyle}" TargetType="Button">
+                                    <Setter Property="Background">
+                                        <Setter.Value>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#FF2A5A2A" Offset="0"/>
+                                                <GradientStop Color="#FF1A3A1A" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
                     </Grid>
                     
-                    <!-- Error Message -->
-                    <TextBlock x:Name="pinErrorText" 
-                               Grid.Row="3"
-                               Text="Incorrect PIN"
-                               FontSize="16"
-                               Foreground="Red"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Visibility="Collapsed"/>
+                    <!-- Error/Status Message -->
+                    <Border Grid.Row="3" Margin="20,10">
+                        <TextBlock x:Name="pinErrorText" 
+                                   Text=""
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FFFF6B6B"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Visibility="Collapsed"/>
+                    </Border>
                     
                     <!-- Cancel Button -->
                     <Button Grid.Row="4" 
-                            Content="Cancel" 
-                            Style="{StaticResource TouchButtonStyle}"
-                            Width="150"
+                            Content="CANCEL" 
+                            Width="180"
                             Height="50"
-                            FontSize="18"
-                            Margin="0,10,0,20"
-                            Click="PinCancelButton_Click"/>
+                            FontSize="16"
+                            FontWeight="Bold"
+                            Foreground="#AAA"
+                            Background="Transparent"
+                            BorderBrush="#555"
+                            BorderThickness="1"
+                            Margin="0,0,0,30"
+                            Cursor="Hand"
+                            Click="PinCancelButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="25">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
                 </Grid>
             </Border>
         </Grid>
@@ -2082,6 +2435,53 @@
                     </StackPanel>
                 </Grid>
             </Border>
+        </Grid>
+        
+        <!-- Modern Settings Overlay (Fullscreen) -->
+        <Grid x:Name="modernSettingsOverlay" 
+              Grid.RowSpan="3" 
+              Background="#FF1E1E1E" 
+              Visibility="Collapsed"
+              Panel.ZIndex="1000">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="80"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                
+                <!-- Title Bar -->
+                <Border Grid.Row="0" Background="#FF2E2E2E">
+                    <Grid>
+                        <TextBlock Text="🔧 Advanced Photobooth Settings" 
+                                   FontSize="28" 
+                                   FontWeight="Bold"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                        <Button Content="✕ Close" 
+                                FontSize="20"
+                                FontWeight="Bold"
+                                Foreground="White"
+                                Background="#FFDC2626"
+                                BorderThickness="0"
+                                HorizontalAlignment="Right"
+                                Width="150"
+                                Height="50"
+                                Margin="20"
+                                Click="CloseModernSettings_Click"
+                                Style="{StaticResource TouchButtonStyle}"/>
+                    </Grid>
+                </Border>
+                
+                <!-- Settings Content -->
+                <ScrollViewer Grid.Row="1" 
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Background="#FF1E1E1E">
+                    <local:PhotoboothSettingsControl x:Name="modernSettingsControl" 
+                                                      Margin="40,20,40,20"/>
+                </ScrollViewer>
+            </Grid>
         </Grid>
     </Grid>
 </Page>

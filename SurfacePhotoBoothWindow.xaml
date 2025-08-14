@@ -231,14 +231,6 @@
                 <StackPanel Grid.Column="2" 
                             Orientation="Horizontal" 
                             VerticalAlignment="Center">
-                    <Button x:Name="SettingsBtn"
-                            Style="{StaticResource TouchButtonStyle}"
-                            Width="80" Height="50"
-                            Background="{StaticResource AccentGradient}"
-                            Click="OpenSettings_Click"
-                            Margin="0,0,10,0">
-                        <TextBlock Text="⚙️" FontSize="20"/>
-                    </Button>
                     <Button x:Name="MinimizeBtn"
                             Style="{StaticResource TouchButtonStyle}"
                             Width="50" Height="50"
@@ -432,6 +424,39 @@
                                        VerticalAlignment="Center"
                                        Margin="0,20,0,0"/>
                             <TextBlock Text="Configure camera options" 
+                                       FontSize="14"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" 
+                                       VerticalAlignment="Bottom"
+                                       Margin="0,0,0,20"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource NavCardStyle}"
+                            Width="300" Height="180"
+                            MouseLeftButtonDown="NavigateToPhotoboothSettings_Click">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#4A5568" Offset="0"/>
+                                <GradientStop Color="#2D3748" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Border.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="5" Opacity="0.3"/>
+                        </Border.Effect>
+                        <Grid>
+                            <TextBlock Text="⚙️" FontSize="48" 
+                                       HorizontalAlignment="Center" 
+                                       VerticalAlignment="Top"
+                                       Margin="0,20,0,0"/>
+                            <TextBlock Text="Photobooth Settings" 
+                                       FontSize="24" 
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       HorizontalAlignment="Center" 
+                                       VerticalAlignment="Center"
+                                       Margin="0,20,0,0"/>
+                            <TextBlock Text="Configure photobooth options" 
                                        FontSize="14"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        HorizontalAlignment="Center" 

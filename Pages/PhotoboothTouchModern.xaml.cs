@@ -62,6 +62,9 @@ namespace Photobooth.Pages
         // Retake functionality
         private DispatcherTimer retakeReviewTimer;
         
+        // Auto-clear session timer
+        private DispatcherTimer autoClearTimer;
+        
         // Print functionality
         private string lastProcessedImagePath;
         private string lastProcessedImagePathForPrinting; // Separate path for 4x6 version if needed
@@ -132,7 +135,7 @@ namespace Photobooth.Pages
             currentCountdown = countdownSeconds;
             
             // Initialize UI
-            countdownSecondsText.Text = countdownSeconds.ToString();
+            countdownSecondsDisplay.Text = $"{countdownSeconds}s";
             photoCountText.Text = photoCount.ToString();
             
             // Bind photo strip to collection
@@ -145,12 +148,73 @@ namespace Photobooth.Pages
             Unloaded += PhotoboothTouchModern_Unloaded;
         }
 
+        private void CloseAllOverlays()
+        {
+            // Close all overlays
+            if (cameraSettingsOverlay != null && cameraSettingsOverlay.Visibility == Visibility.Visible)
+            {
+                cameraSettingsOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("CloseAllOverlays: Closed camera settings overlay");
+            }
+            
+            if (eventSelectionOverlay != null && eventSelectionOverlay.Visibility == Visibility.Visible)
+            {
+                eventSelectionOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("CloseAllOverlays: Closed event selection overlay");
+            }
+            
+            if (retakeReviewOverlay != null && retakeReviewOverlay.Visibility == Visibility.Visible)
+            {
+                retakeReviewOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("CloseAllOverlays: Closed retake review overlay");
+            }
+            
+            if (filterSelectionOverlay != null && filterSelectionOverlay.Visibility == Visibility.Visible)
+            {
+                filterSelectionOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("CloseAllOverlays: Closed filter selection overlay");
+            }
+            
+            if (galleryOverlay != null && galleryOverlay.Visibility == Visibility.Visible)
+            {
+                galleryOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("CloseAllOverlays: Closed gallery overlay");
+            }
+            
+            if (postSessionFilterOverlay != null && postSessionFilterOverlay.Visibility == Visibility.Visible)
+            {
+                postSessionFilterOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("CloseAllOverlays: Closed post session filter overlay");
+            }
+            
+            if (pinEntryOverlay != null && pinEntryOverlay.Visibility == Visibility.Visible)
+            {
+                pinEntryOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("CloseAllOverlays: Closed PIN entry overlay");
+            }
+            
+            if (videoPlayerOverlay != null && videoPlayerOverlay.Visibility == Visibility.Visible)
+            {
+                videoPlayerOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("CloseAllOverlays: Closed video player overlay");
+            }
+            
+            if (modernSettingsOverlay != null && modernSettingsOverlay.Visibility == Visibility.Visible)
+            {
+                modernSettingsOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("CloseAllOverlays: Closed modern settings overlay");
+            }
+        }
+        
         private void PhotoboothTouchModern_Unloaded(object sender, RoutedEventArgs e)
         {
             Log.Debug("PhotoboothTouch_Unloaded: Page is being unloaded, cleaning up camera resources");
             
             try
             {
+                // Close any open overlays
+                CloseAllOverlays();
+                
                 // Unsubscribe from camera events to prevent duplicate handlers
                 DeviceManager.CameraSelected -= DeviceManager_CameraSelected;
                 DeviceManager.CameraConnected -= DeviceManager_CameraConnected;
@@ -220,6 +284,11 @@ namespace Photobooth.Pages
             retakeReviewTimer = new DispatcherTimer();
             retakeReviewTimer.Tick += RetakeReviewTimer_Tick;
             retakeReviewTimer.Interval = new TimeSpan(0, 0, 1);
+            
+            // Auto-clear timer (1 second intervals)
+            autoClearTimer = new DispatcherTimer();
+            autoClearTimer.Tick += AutoClearTimer_Tick;
+            autoClearTimer.Interval = new TimeSpan(0, 0, 1);
         }
 
         private void PhotoboothTouchModern_Loaded(object sender, RoutedEventArgs e)
@@ -243,9 +312,16 @@ namespace Photobooth.Pages
             
             // Reset state when page loads
             isCapturing = false;
-            startButton.IsEnabled = true;
-            stopButton.IsEnabled = false;
             countdownOverlay.Visibility = Visibility.Collapsed;
+            
+            // Show start button initially only if we have a template selected
+            if (startButtonOverlay != null)
+            {
+                // Show the start button if a template is already selected (for first use)
+                startButtonOverlay.Visibility = (currentTemplate != null) ? Visibility.Visible : Visibility.Collapsed;
+            }
+            if (stopSessionButton != null)
+                stopSessionButton.Visibility = Visibility.Collapsed;
             
             // Stop any timers that might be running
             if (liveViewTimer != null)
@@ -270,6 +346,33 @@ namespace Photobooth.Pages
             // Initialize printer status
             CheckPrinterStatus();
             
+            // Check if interface should be locked on startup
+            if (Properties.Settings.Default.EnableLockFeature)
+            {
+                // Start in locked state
+                _isLocked = true;
+                if (lockButton != null)
+                {
+                    lockButton.Content = "🔒";
+                    lockButton.ToolTip = "Unlock Interface";
+                }
+                
+                // Disable critical controls
+                DisableCriticalControls();
+                
+                // Ensure navbar is hidden
+                if (bottomControlBar != null)
+                {
+                    bottomControlBar.Visibility = Visibility.Collapsed;
+                    if (bottomBarToggleChevron != null)
+                    {
+                        bottomBarToggleChevron.Text = "⌃"; // Up chevron
+                    }
+                }
+                
+                Log.Debug("PhotoboothTouch_Loaded: Interface started in locked state");
+            }
+            
             // Use exact same synchronous approach as working Camera.xaml.cs
             try
             {
@@ -279,18 +382,36 @@ namespace Photobooth.Pages
                 DeviceManager.ConnectToCamera();
                 RefreshDisplay();
                 
-                // Ensure camera is not in live view mode when page loads
+                // Handle live view based on idle setting
                 if (DeviceManager?.SelectedCameraDevice != null)
                 {
-                    try
+                    if (Properties.Settings.Default.EnableIdleLiveView)
                     {
-                        // Try to stop live view if it might be running
-                        DeviceManager.SelectedCameraDevice.StopLiveView();
-                        Log.Debug("PhotoboothTouch_Loaded: Stopped live view that was already running");
+                        // Start live view if idle live view is enabled
+                        try
+                        {
+                            liveViewTimer.Start();
+                            DeviceManager.SelectedCameraDevice.StartLiveView();
+                            Log.Debug("PhotoboothTouch_Loaded: Started idle live view");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Debug($"PhotoboothTouch_Loaded: Failed to start idle live view: {ex.Message}");
+                        }
                     }
-                    catch 
-                    { 
-                        // Expected if live view wasn't running
+                    else
+                    {
+                        // Stop live view if it might be running and idle live view is disabled
+                        try
+                        {
+                            liveViewTimer.Stop();
+                            DeviceManager.SelectedCameraDevice.StopLiveView();
+                            Log.Debug("PhotoboothTouch_Loaded: Stopped live view (idle live view disabled)");
+                        }
+                        catch 
+                        { 
+                            // Expected if live view wasn't running
+                        }
                     }
                 }
             }
@@ -436,6 +557,12 @@ namespace Photobooth.Pages
 
         private void StartButton_Click(object sender, RoutedEventArgs e)
         {
+            // Handle both Button and Border click events
+            if (sender is Border)
+            {
+                Log.Debug("StartButton_Click: Triggered from centered touch button");
+            }
+            
             if (DeviceManager.SelectedCameraDevice == null)
             {
                 statusText.Text = "No camera connected";
@@ -444,6 +571,18 @@ namespace Photobooth.Pages
 
             if (isCapturing)
                 return;
+            
+            // Hide the centered start button
+            if (startButtonOverlay != null)
+            {
+                startButtonOverlay.Visibility = Visibility.Collapsed;
+            }
+            
+            // Show the stop button in top-right
+            if (stopSessionButton != null)
+            {
+                stopSessionButton.Visibility = Visibility.Visible;
+            }
 
             // Critical: Enforce minimum time between captures to prevent Canon SDK issues
             var timeSinceLastCapture = DateTime.Now - lastCaptureTime;
@@ -495,16 +634,45 @@ namespace Photobooth.Pages
 
         private void StopButton_Click(object sender, RoutedEventArgs e)
         {
-            StopPhotoSequence();
-            
-            if (currentEvent != null && currentTemplate != null)
+            // If this is the first photo and no photos have been captured yet, stop the entire session
+            if (currentPhotoIndex == 0 && capturedPhotoPaths.Count == 0)
             {
-                statusText.Text = $"Event: {currentEvent.Name} - Touch START to continue";
+                Log.Debug("StopButton_Click: No photos captured yet, stopping entire session");
+                StopPhotoSequence();
+                
+                statusText.Text = "Session cancelled";
+                return;
+            }
+            
+            // Otherwise, only abort the current photo countdown and restart it
+            Log.Debug($"StopButton_Click: Aborting current photo {currentPhotoIndex + 1} of {totalPhotosNeeded}, will restart countdown");
+            
+            // Stop the countdown timer
+            countdownTimer.Stop();
+            countdownOverlay.Visibility = Visibility.Collapsed;
+            
+            // Cancel any pending capture
+            currentCaptureToken?.Cancel();
+            
+            // Update status
+            if (currentEvent != null && totalPhotosNeeded > 1)
+            {
+                statusText.Text = $"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Restarting countdown...";
             }
             else
             {
-                statusText.Text = "Touch START to begin";
+                statusText.Text = "Restarting countdown...";
             }
+            
+            // Restart the countdown for the same photo after a brief delay
+            Task.Delay(1000).ContinueWith(_ =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    Log.Debug("StopButton_Click: Restarting countdown for same photo");
+                    StartCountdown();
+                });
+            });
         }
 
         private async void StartPhotoSequence()
@@ -538,8 +706,13 @@ namespace Photobooth.Pages
             try
             {
                 isCapturing = true;
-                startButton.IsEnabled = false;
-                stopButton.IsEnabled = true;
+                
+                // Show stop button when starting sequence
+                if (stopSessionButton != null)
+                {
+                    stopSessionButton.Visibility = Visibility.Visible;
+                    Log.Debug("StartPhotoSequence: Showing stop button");
+                }
                 
                 // Hide session loaded indicator and navigation when starting new capture
                 if (sessionLoadedIndicator != null)
@@ -637,6 +810,13 @@ namespace Photobooth.Pages
         {
             Log.Debug($"StartCountdown: Called at {DateTime.Now:HH:mm:ss.fff}");
             Log.Debug($"StartCountdown: countdownSeconds={countdownSeconds}, currentPhotoIndex={currentPhotoIndex}");
+            
+            // Show stop button during countdown so user can abort
+            if (stopSessionButton != null)
+            {
+                stopSessionButton.Visibility = Visibility.Visible;
+                Log.Debug("StartCountdown: Showing stop button for countdown abort");
+            }
             
             // Check if countdown is enabled
             bool showCountdown = Properties.Settings.Default.ShowCountdown;
@@ -924,8 +1104,14 @@ namespace Photobooth.Pages
             // Cancel any pending capture timeouts
             currentCaptureToken?.Cancel();
             
-            startButton.IsEnabled = true;
-            stopButton.IsEnabled = false;
+            // Don't show start button here - only show after successful composition
+            // Hide the stop button
+            if (stopSessionButton != null)
+            {
+                stopSessionButton.Visibility = Visibility.Collapsed;
+            }
+            
+            // Note: Removed old button enable/disable since they don't exist in bottom bar anymore
             
             try
             {
@@ -1030,7 +1216,11 @@ namespace Photobooth.Pages
                                     {
                                         Log.Error("HandlePhotoSequenceProgress: Camera reset failed during multi-photo", ex);
                                         statusText.Text = $"Camera reset failed - Touch START for photo {currentPhotoIndex + 1} of {totalPhotosNeeded}";
-                                        startButton.IsEnabled = true;
+                                        // Show start button for retry
+                                        if (startButtonOverlay != null)
+                                            startButtonOverlay.Visibility = Visibility.Visible;
+                                        if (stopSessionButton != null)
+                                            stopSessionButton.Visibility = Visibility.Collapsed;
                                     }
                                 }
                                 else
@@ -1038,7 +1228,11 @@ namespace Photobooth.Pages
                                     Log.Debug("HandlePhotoSequenceProgress: No camera - showing manual prompt");
                                     // No camera - show manual prompt
                                     statusText.Text = $"Camera not connected - Touch START for photo {currentPhotoIndex + 1} of {totalPhotosNeeded}";
-                                    startButton.IsEnabled = true;
+                                    // Show start button for retry
+                                    if (startButtonOverlay != null)
+                                        startButtonOverlay.Visibility = Visibility.Visible;
+                                    if (stopSessionButton != null)
+                                        stopSessionButton.Visibility = Visibility.Collapsed;
                                 }
                             });
                         });
@@ -1108,7 +1302,11 @@ namespace Photobooth.Pages
             if (countdownSeconds < 10)
             {
                 countdownSeconds++;
-                countdownSecondsText.Text = countdownSeconds.ToString();
+                countdownSecondsDisplay.Text = $"{countdownSeconds}s";
+                
+                // Save to settings
+                Properties.Settings.Default.CountdownSeconds = countdownSeconds;
+                Properties.Settings.Default.Save();
             }
         }
 
@@ -1117,7 +1315,38 @@ namespace Photobooth.Pages
             if (countdownSeconds > 1)
             {
                 countdownSeconds--;
-                countdownSecondsText.Text = countdownSeconds.ToString();
+                countdownSecondsDisplay.Text = $"{countdownSeconds}s";
+                
+                // Save to settings
+                Properties.Settings.Default.CountdownSeconds = countdownSeconds;
+                Properties.Settings.Default.Save();
+            }
+        }
+        
+        private void ToggleBottomBar_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (bottomControlBar.Visibility == Visibility.Collapsed)
+            {
+                // Check if locked and PIN is enabled before showing the navbar
+                if (Properties.Settings.Default.EnableLockFeature && _isLocked)
+                {
+                    Log.Debug("ToggleBottomBar_Click: Interface is locked, showing PIN entry");
+                    _pendingActionAfterUnlock = () => 
+                    {
+                        bottomControlBar.Visibility = Visibility.Visible;
+                        bottomBarToggleChevron.Text = "⌄"; // Down chevron
+                    };
+                    ShowPinEntryDialog();
+                    return;
+                }
+                
+                bottomControlBar.Visibility = Visibility.Visible;
+                bottomBarToggleChevron.Text = "⌄"; // Down chevron
+            }
+            else
+            {
+                bottomControlBar.Visibility = Visibility.Collapsed;
+                bottomBarToggleChevron.Text = "⌃"; // Up chevron
             }
         }
 
@@ -1127,6 +1356,22 @@ namespace Photobooth.Pages
             Dispatcher.Invoke(() =>
             {
                 cameraStatusText.Text = $"Connected: {cameraDevice.DeviceName}";
+                
+                // Only start live view if we're idle and the setting allows it
+                // Live view will always work during active sessions
+                if (!isCapturing && Properties.Settings.Default.EnableIdleLiveView)
+                {
+                    try
+                    {
+                        liveViewTimer.Start();
+                        DeviceManager.SelectedCameraDevice?.StartLiveView();
+                        Log.Debug("DeviceManager_CameraConnected: Started idle live view");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"DeviceManager_CameraConnected: Failed to start idle live view: {ex.Message}");
+                    }
+                }
                 
                 if (currentEvent != null && currentTemplate != null)
                 {
@@ -2016,6 +2261,9 @@ namespace Photobooth.Pages
         {
             Log.Debug("HomeButton_Click: User clicked home, navigating back");
             
+            // Close any open overlays
+            CloseAllOverlays();
+            
             // Navigate back to home/event selection
             var parentWindow = Window.GetWindow(this);
             if (parentWindow is SurfacePhotoBoothWindow surfaceWindow)
@@ -2038,6 +2286,9 @@ namespace Photobooth.Pages
         private void ExitButton_Click(object sender, RoutedEventArgs e)
         {
             Log.Debug("ExitButton_Click: User clicked exit, performing cleanup");
+            
+            // Close any open overlays
+            CloseAllOverlays();
             
             // Stop any ongoing operations
             StopPhotoSequence();
@@ -2253,6 +2504,25 @@ namespace Photobooth.Pages
         // Event Selection Overlay Methods
         private void EventSettingsButton_Click(object sender, RoutedEventArgs e)
         {
+            // Check if locked and PIN is enabled
+            if (Properties.Settings.Default.EnableLockFeature && _isLocked)
+            {
+                Log.Debug("EventSettingsButton_Click: Interface is locked, showing PIN entry");
+                _pendingActionAfterUnlock = () => 
+                {
+                    // Clear current event to allow selecting a new one
+                    currentEvent = null;
+                    currentTemplate = null;
+                    currentPhotoIndex = 0;
+                    totalPhotosNeeded = 0;
+                    capturedPhotoPaths.Clear();
+                    
+                    ShowEventSelectionOverlay();
+                };
+                ShowPinEntryDialog();
+                return;
+            }
+            
             // Clear current event to allow selecting a new one
             currentEvent = null;
             currentTemplate = null;
@@ -2261,6 +2531,33 @@ namespace Photobooth.Pages
             capturedPhotoPaths.Clear();
             
             ShowEventSelectionOverlay();
+        }
+        
+        private void ModernSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Check if locked and PIN is enabled
+            if (Properties.Settings.Default.EnableLockFeature && _isLocked)
+            {
+                Log.Debug("ModernSettingsButton_Click: Interface is locked, showing PIN entry");
+                _pendingActionAfterUnlock = () => 
+                {
+                    Log.Debug("ModernSettingsButton_Click: Opening modern settings overlay in fullscreen");
+                    modernSettingsOverlay.Visibility = Visibility.Visible;
+                };
+                ShowPinEntryDialog();
+                return;
+            }
+            
+            Log.Debug("ModernSettingsButton_Click: Opening modern settings overlay in fullscreen");
+            
+            // Show the modern settings overlay in fullscreen
+            modernSettingsOverlay.Visibility = Visibility.Visible;
+        }
+        
+        private void CloseModernSettings_Click(object sender, RoutedEventArgs e)
+        {
+            Log.Debug("CloseModernSettings_Click: Closing modern settings overlay");
+            modernSettingsOverlay.Visibility = Visibility.Collapsed;
         }
         
         private void ShowEventSelectionOverlay()
@@ -2357,6 +2654,10 @@ namespace Photobooth.Pages
                     currentTemplate = availableTemplates[0];
                     totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
                     currentPhotoIndex = 0;
+                    
+                    // Show start button when template is auto-selected
+                    if (startButtonOverlay != null)
+                        startButtonOverlay.Visibility = Visibility.Visible;
                     UpdatePhotoStripPlaceholders();
                     statusText.Text = $"Event: {currentEvent.Name} - Ready to start";
                     Log.Debug($"Auto-selected single template: {currentTemplate.Name} for event: {currentEvent.Name}");
@@ -2437,6 +2738,10 @@ namespace Photobooth.Pages
                     // Hide overlay
                     eventSelectionOverlay.Visibility = Visibility.Collapsed;
                     
+                    // Show start button when template is selected
+                    if (startButtonOverlay != null)
+                        startButtonOverlay.Visibility = Visibility.Visible;
+                    
                     // Restore events list visibility for next time
                     eventsListControl.Visibility = Visibility.Visible;
                     
@@ -2478,6 +2783,10 @@ namespace Photobooth.Pages
                 
                 // Hide overlay
                 eventSelectionOverlay.Visibility = Visibility.Collapsed;
+                
+                // Show start button when event and template are selected
+                if (startButtonOverlay != null)
+                    startButtonOverlay.Visibility = Visibility.Visible;
                 
                 statusText.Text = $"Event: {currentEvent.Name} - Template: {currentTemplate.Name} selected";
                 
@@ -2541,6 +2850,10 @@ namespace Photobooth.Pages
                     // Hide overlay
                     eventSelectionOverlay.Visibility = Visibility.Collapsed;
                     
+                    // Show start button when template is selected
+                    if (startButtonOverlay != null)
+                        startButtonOverlay.Visibility = Visibility.Visible;
+                    
                     // Restore UI for next time
                     eventsListControl.Visibility = Visibility.Visible;
                     // confirmSelectionButton.Visibility = Visibility.Visible; // Button removed from UI
@@ -2570,6 +2883,24 @@ namespace Photobooth.Pages
         
         private void CameraSettingsButton_Click(object sender, RoutedEventArgs e)
         {
+            // Check if locked and PIN is enabled
+            if (Properties.Settings.Default.EnableLockFeature && _isLocked)
+            {
+                Log.Debug("CameraSettingsButton_Click: Interface is locked, showing PIN entry");
+                _pendingActionAfterUnlock = () => 
+                {
+                    Log.Debug("CameraSettingsButton_Click: Opening camera settings modal");
+                    
+                    // Load current camera settings
+                    LoadCameraSettings();
+                    
+                    // Show the overlay
+                    cameraSettingsOverlay.Visibility = Visibility.Visible;
+                };
+                ShowPinEntryDialog();
+                return;
+            }
+            
             Log.Debug("CameraSettingsButton_Click: Opening camera settings modal");
             
             // Load current camera settings
@@ -3052,8 +3383,12 @@ namespace Photobooth.Pages
                 
                 // Set capture state
                 isCapturing = true;
-                startButton.IsEnabled = false;
-                stopButton.IsEnabled = true;
+                
+                // Hide start button, show stop button for retake
+                if (startButtonOverlay != null)
+                    startButtonOverlay.Visibility = Visibility.Collapsed;
+                if (stopSessionButton != null)
+                    stopSessionButton.Visibility = Visibility.Visible;
                 
                 statusText.Text = "Preparing camera for retake...";
                 
@@ -3260,6 +3595,20 @@ namespace Photobooth.Pages
                             // Show print button
                             printButton.Visibility = Visibility.Visible;
                             
+                            // Show Done button
+                            if (doneButton != null)
+                            {
+                                doneButton.Visibility = Visibility.Visible;
+                            }
+                            
+                            // Don't show start button yet - wait for Done button or auto-clear
+                            
+                            // Hide stop button since session is complete
+                            if (stopSessionButton != null)
+                            {
+                                stopSessionButton.Visibility = Visibility.Collapsed;
+                            }
+                            
                             // Optional: Auto-stop after processing (with delay)
                             Task.Delay(3000).ContinueWith(_ =>
                             {
@@ -3267,6 +3616,15 @@ namespace Photobooth.Pages
                                 {
                                     StopPhotoSequence();
                                     statusText.Text = "Session complete - Touch START for new session";
+                                    
+                                    // Show Done button if enabled
+                                    if (doneButton != null)
+                                    {
+                                        doneButton.Visibility = Visibility.Visible;
+                                    }
+                                    
+                                    // Start auto-clear timer if enabled
+                                    StartAutoClearTimer();
                                 });
                             });
                         });
@@ -3795,11 +4153,25 @@ namespace Photobooth.Pages
                             // Show print button
                             ShowPrintButton();
                             
+                            // Don't show start button yet - wait for Done button or auto-clear
+                            
+                            // Hide stop button since session is complete
+                            if (stopSessionButton != null)
+                            {
+                                stopSessionButton.Visibility = Visibility.Collapsed;
+                            }
+                            
                             // Fallback: ensure button is visible even if animation fails
                             if (printButton != null)
                             {
                                 printButton.Visibility = Visibility.Visible;
                                 printButton.Opacity = 1;
+                            }
+                            
+                            // Show Done button
+                            if (doneButton != null)
+                            {
+                                doneButton.Visibility = Visibility.Visible;
                             }
                             
                             // Optional: Auto-stop after processing (with delay)
@@ -3809,6 +4181,15 @@ namespace Photobooth.Pages
                                 {
                                     StopPhotoSequence();
                                     statusText.Text = "Session complete - Click photos to view or touch PRINT to print";
+                                    
+                                    // Show Done button if enabled
+                                    if (doneButton != null)
+                                    {
+                                        doneButton.Visibility = Visibility.Visible;
+                                    }
+                                    
+                                    // Start auto-clear timer if enabled
+                                    StartAutoClearTimer();
                                     
                                     // Show photo view mode indicator
                                     if (photoViewModeIndicator != null && photoStripItems.Any(p => !p.IsPlaceholder))
@@ -4124,6 +4505,7 @@ namespace Photobooth.Pages
         
         private bool _isLocked = false;
         private string _enteredPin = "";
+        private Action _pendingActionAfterUnlock = null;
         
         private void LockButton_Click(object sender, RoutedEventArgs e)
         {
@@ -4136,6 +4518,16 @@ namespace Photobooth.Pages
                 
                 // Disable critical controls
                 DisableCriticalControls();
+                
+                // Hide the bottom navbar if it's visible and PIN is enabled
+                if (Properties.Settings.Default.EnableLockFeature && bottomControlBar != null && bottomControlBar.Visibility == Visibility.Visible)
+                {
+                    bottomControlBar.Visibility = Visibility.Collapsed;
+                    if (bottomBarToggleChevron != null)
+                    {
+                        bottomBarToggleChevron.Text = "⌃"; // Up chevron
+                    }
+                }
                 
                 // Show locked status
                 statusText.Text = "Interface Locked - Click lock icon to unlock";
@@ -4153,10 +4545,12 @@ namespace Photobooth.Pages
             exitButton.IsEnabled = false;
             homeButton.IsEnabled = false; // Disable home button when locked
             printButton.IsEnabled = false; // Disable print button when locked
-            startButton.IsEnabled = false;
-            stopButton.IsEnabled = false;
             resetCameraButton.IsEnabled = false;
             cameraSettingsButton.IsEnabled = false;
+            
+            // Hide start button when locked
+            if (startButtonOverlay != null)
+                startButtonOverlay.Visibility = Visibility.Collapsed;
             galleryButton.IsEnabled = false;
             eventSettingsButton.IsEnabled = false;
         }
@@ -4167,10 +4561,12 @@ namespace Photobooth.Pages
             exitButton.IsEnabled = true;
             homeButton.IsEnabled = true; // Re-enable home button when unlocked
             printButton.IsEnabled = true; // Re-enable print button when unlocked
-            startButton.IsEnabled = true;
-            stopButton.IsEnabled = true;
             resetCameraButton.IsEnabled = true;
             cameraSettingsButton.IsEnabled = true;
+            
+            // Show start button when unlocked
+            if (startButtonOverlay != null)
+                startButtonOverlay.Visibility = Visibility.Visible;
             galleryButton.IsEnabled = true;
             eventSettingsButton.IsEnabled = true;
         }
@@ -4181,6 +4577,7 @@ namespace Photobooth.Pages
             pinDisplayBox.Text = "";
             pinErrorText.Visibility = Visibility.Collapsed;
             pinEntryOverlay.Visibility = Visibility.Visible;
+            UpdatePinDots();
         }
         
         private void PinPadButton_Click(object sender, RoutedEventArgs e)
@@ -4189,7 +4586,19 @@ namespace Photobooth.Pages
             {
                 _enteredPin += button.Content.ToString();
                 pinDisplayBox.Text = new string('●', _enteredPin.Length);
+                UpdatePinDots();
             }
+        }
+        
+        private void UpdatePinDots()
+        {
+            // Update visual PIN dots based on entered length
+            pinDot1.Background = _enteredPin.Length >= 1 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
+            pinDot2.Background = _enteredPin.Length >= 2 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
+            pinDot3.Background = _enteredPin.Length >= 3 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
+            pinDot4.Background = _enteredPin.Length >= 4 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
+            pinDot5.Background = _enteredPin.Length >= 5 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
+            pinDot6.Background = _enteredPin.Length >= 6 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
         }
         
         private void PinClearButton_Click(object sender, RoutedEventArgs e)
@@ -4197,6 +4606,7 @@ namespace Photobooth.Pages
             _enteredPin = "";
             pinDisplayBox.Text = "";
             pinErrorText.Visibility = Visibility.Collapsed;
+            UpdatePinDots();
         }
         
         private void PinSubmitButton_Click(object sender, RoutedEventArgs e)
@@ -4211,8 +4621,9 @@ namespace Photobooth.Pages
             }
             else
             {
-                // Default PIN validation
-                isValid = _enteredPin == "1234";
+                // Use PIN from settings
+                string settingsPin = Properties.Settings.Default.LockPin;
+                isValid = _enteredPin == settingsPin;
             }
             
             if (isValid)
@@ -4230,6 +4641,14 @@ namespace Photobooth.Pages
                 
                 // Update status
                 statusText.Text = "Interface Unlocked";
+                
+                // Execute pending action if any
+                if (_pendingActionAfterUnlock != null)
+                {
+                    var action = _pendingActionAfterUnlock;
+                    _pendingActionAfterUnlock = null;
+                    action.Invoke();
+                }
             }
             else
             {
@@ -4493,6 +4912,168 @@ namespace Photobooth.Pages
             }
         }
 
+        private void DoneButton_Click(object sender, RoutedEventArgs e)
+        {
+            Log.Debug("DoneButton_Click: Clearing session");
+            ClearSession();
+        }
+        
+        private void AutoClearTimer_Tick(object sender, EventArgs e)
+        {
+            // This timer runs every second when active
+            // We'll track elapsed time using a tag on the timer
+            if (autoClearTimer.Tag == null)
+            {
+                autoClearTimer.Tag = 0;
+            }
+            
+            int elapsedSeconds = (int)autoClearTimer.Tag;
+            elapsedSeconds++;
+            autoClearTimer.Tag = elapsedSeconds;
+            
+            int timeoutSeconds = Properties.Settings.Default.AutoClearTimeout;
+            
+            if (elapsedSeconds >= timeoutSeconds)
+            {
+                Log.Debug($"AutoClearTimer_Tick: Auto-clearing session after {timeoutSeconds} seconds");
+                autoClearTimer.Stop();
+                autoClearTimer.Tag = null;
+                ClearSession();
+            }
+        }
+        
+        private void ClearSession()
+        {
+            Log.Debug("ClearSession: Clearing current session");
+            
+            // Stop any timers
+            autoClearTimer.Stop();
+            autoClearTimer.Tag = null;
+            countdownTimer.Stop();
+            retakeReviewTimer.Stop();
+            
+            // Clear photo collections
+            capturedPhotoPaths.Clear();
+            photoStripItems.Clear();
+            retakePhotos.Clear();
+            
+            // Reset counters
+            currentPhotoIndex = 0;
+            photoCount = 0;
+            photoIndexToRetake = -1;
+            isRetakingPhoto = false;
+            
+            // Clear processed image paths
+            lastProcessedImagePath = null;
+            lastProcessedImagePathForPrinting = null;
+            lastProcessedWas2x6Template = false;
+            
+            // Reset database session tracking
+            currentDatabaseSessionId = null;
+            currentSessionGuid = null;
+            currentSessionPhotoIds.Clear();
+            
+            // Clear UI
+            liveViewImage.Source = null;
+            statusText.Text = "Touch START to begin";
+            photoCountText.Text = "0";
+            
+            // Hide buttons that should only show during/after session
+            if (printButton != null)
+            {
+                printButton.Visibility = Visibility.Collapsed;
+            }
+            if (doneButton != null)
+            {
+                doneButton.Visibility = Visibility.Collapsed;
+            }
+            if (stopSessionButton != null)
+            {
+                stopSessionButton.Visibility = Visibility.Collapsed;
+            }
+            
+            // Show start button
+            if (startButtonOverlay != null)
+            {
+                startButtonOverlay.Visibility = Visibility.Visible;
+            }
+            
+            // Hide any overlays
+            if (retakeReviewOverlay != null)
+            {
+                retakeReviewOverlay.Visibility = Visibility.Collapsed;
+            }
+            if (countdownOverlay != null)
+            {
+                countdownOverlay.Visibility = Visibility.Collapsed;
+            }
+            if (postSessionFilterOverlay != null)
+            {
+                postSessionFilterOverlay.Visibility = Visibility.Collapsed;
+            }
+            if (photoViewModeIndicator != null)
+            {
+                photoViewModeIndicator.Visibility = Visibility.Collapsed;
+            }
+            if (sessionLoadedIndicator != null)
+            {
+                sessionLoadedIndicator.Visibility = Visibility.Collapsed;
+            }
+            if (composedImageNavigation != null)
+            {
+                composedImageNavigation.Visibility = Visibility.Collapsed;
+            }
+            
+            // Clear loaded session data
+            loadedComposedImages = null;
+            currentComposedImageIndex = 0;
+            
+            // Restart live view if camera is connected AND idle live view is enabled
+            if (DeviceManager.SelectedCameraDevice != null && 
+                DeviceManager.SelectedCameraDevice.IsConnected && 
+                Properties.Settings.Default.EnableIdleLiveView)
+            {
+                try
+                {
+                    liveViewTimer.Start();
+                    DeviceManager.SelectedCameraDevice.StartLiveView();
+                    Log.Debug("ClearSession: Started idle live view");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("ClearSession: Failed to restart live view", ex);
+                }
+            }
+            else if (DeviceManager.SelectedCameraDevice != null && 
+                     DeviceManager.SelectedCameraDevice.IsConnected &&
+                     !Properties.Settings.Default.EnableIdleLiveView)
+            {
+                // Stop live view if idle live view is disabled
+                try
+                {
+                    liveViewTimer.Stop();
+                    DeviceManager.SelectedCameraDevice.StopLiveView();
+                    Log.Debug("ClearSession: Stopped live view (idle live view disabled)");
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"ClearSession: Failed to stop live view: {ex.Message}");
+                }
+            }
+            
+            Log.Debug("ClearSession: Session cleared successfully");
+        }
+        
+        private void StartAutoClearTimer()
+        {
+            if (Properties.Settings.Default.AutoClearSession)
+            {
+                Log.Debug($"StartAutoClearTimer: Starting auto-clear timer for {Properties.Settings.Default.AutoClearTimeout} seconds");
+                autoClearTimer.Tag = 0;
+                autoClearTimer.Start();
+            }
+        }
+
         #endregion
 
         #region Session Gallery Management
@@ -4581,11 +5162,41 @@ namespace Photobooth.Pages
                     printButton.Visibility = Visibility.Visible;
                     printButton.IsEnabled = true;
                     
+                    // Show Done button for loaded sessions
+                    if (doneButton != null)
+                    {
+                        doneButton.Visibility = Visibility.Visible;
+                    }
+                    
+                    // DON'T show start button yet - wait for Done button or auto-clear
+                    if (startButtonOverlay != null)
+                    {
+                        startButtonOverlay.Visibility = Visibility.Collapsed;
+                    }
+                    
                     statusText.Text = $"Session loaded! {photoCount} photos, {composedImages.Count} layouts. Ready to reprint.";
+                    
+                    // Start auto-clear timer if enabled
+                    StartAutoClearTimer();
                 }
                 else
                 {
                     statusText.Text = $"Session loaded! {photoCount} photos. No composed layouts found.";
+                    
+                    // Show Done button even without composed images
+                    if (doneButton != null)
+                    {
+                        doneButton.Visibility = Visibility.Visible;
+                    }
+                    
+                    // DON'T show start button yet - wait for Done button or auto-clear
+                    if (startButtonOverlay != null)
+                    {
+                        startButtonOverlay.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    // Start auto-clear timer if enabled
+                    StartAutoClearTimer();
                 }
                 
                 Log.Debug($"LoadSessionData: Session '{sessionData.SessionName}' loaded successfully");
