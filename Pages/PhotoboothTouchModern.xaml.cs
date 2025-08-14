@@ -839,6 +839,7 @@ namespace Photobooth.Pages
             {
                 // Skip countdown and capture immediately
                 Log.Debug("StartCountdown: Countdown disabled, capturing immediately");
+                countdownOverlay.Visibility = Visibility.Collapsed;
                 UpdateStatusText("Taking photo...");
                 Task.Delay(500).ContinueWith(_ =>
                 {
