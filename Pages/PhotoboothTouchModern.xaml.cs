@@ -835,21 +835,8 @@ namespace Photobooth.Pages
             bool showCountdown = Properties.Settings.Default.ShowCountdown;
             Log.Debug($"StartCountdown: ShowCountdown setting = {showCountdown}");
             
-            if (!showCountdown)
-            {
-                // Skip countdown and capture immediately
-                Log.Debug("StartCountdown: Countdown disabled, capturing immediately");
-                countdownOverlay.Visibility = Visibility.Collapsed;
-                UpdateStatusText("Taking photo...");
-                Task.Delay(500).ContinueWith(_ =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        CapturePhoto();
-                    });
-                });
-                return;
-            }
+            // Note: We now interpret ShowCountdown as controlling only the status text countdown,
+            // not the main visual countdown overlay. The overlay stays visible.
             
             // Ensure timer is completely stopped and reset
             countdownTimer.Stop();
@@ -864,14 +851,18 @@ namespace Photobooth.Pages
             Log.Debug($"StartCountdown: Timer started, currentCountdown={currentCountdown}, overlay visible={countdownOverlay.Visibility}");
             Log.Debug($"StartCountdown: Timer IsEnabled after start={countdownTimer.IsEnabled}");
             
-            // Update countdown message based on event workflow
-            if (currentEvent != null && totalPhotosNeeded > 1)
+            // Only update initial status text countdown if ShowCountdown is enabled
+            if (showCountdown)
             {
-                statusText.Text = $"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Get ready! {currentCountdown}";
-            }
-            else
-            {
-                statusText.Text = $"Get ready! {currentCountdown}";
+                // Update countdown message based on event workflow
+                if (currentEvent != null && totalPhotosNeeded > 1)
+                {
+                    UpdateStatusText($"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Get ready! {currentCountdown}");
+                }
+                else
+                {
+                    UpdateStatusText($"Get ready! {currentCountdown}");
+                }
             }
         }
 
@@ -884,14 +875,19 @@ namespace Photobooth.Pages
             {
                 countdownText.Text = currentCountdown.ToString();
                 
-                // Update countdown message based on event workflow
-                if (currentEvent != null && totalPhotosNeeded > 1)
+                // Only update status text countdown if ShowCountdown is enabled
+                bool showCountdown = Properties.Settings.Default.ShowCountdown;
+                if (showCountdown)
                 {
-                    statusText.Text = $"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Get ready! {currentCountdown}";
-                }
-                else
-                {
-                    statusText.Text = $"Get ready! {currentCountdown}";
+                    // Update countdown message based on event workflow
+                    if (currentEvent != null && totalPhotosNeeded > 1)
+                    {
+                        UpdateStatusText($"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Get ready! {currentCountdown}");
+                    }
+                    else
+                    {
+                        UpdateStatusText($"Get ready! {currentCountdown}");
+                    }
                 }
             }
             else

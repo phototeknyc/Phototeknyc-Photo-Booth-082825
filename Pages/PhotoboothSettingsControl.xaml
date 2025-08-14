@@ -753,9 +753,10 @@
                     </StackPanel>
                     
                     <CheckBox x:Name="showCountdownCheckBox" 
-                              Content="Show visual countdown overlay" 
+                              Content="Show countdown in status text (bottom)" 
                               IsChecked="True"
-                              Style="{StaticResource SettingsCheckBoxStyle}"/>
+                              Style="{StaticResource SettingsCheckBoxStyle}"
+                              ToolTip="Shows 'Get ready! 3, 2, 1...' text at bottom during countdown. Main countdown overlay still visible."/>
                 </StackPanel>
             </Border>
             
