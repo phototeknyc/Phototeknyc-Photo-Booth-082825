@@ -115,7 +115,11 @@
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Border x:Name="border" CornerRadius="22" 
-                                          Background="#764BA2">
+                                          Background="#764BA2"
+                                          RenderTransformOrigin="0.5,0.5">
+                                        <Border.RenderTransform>
+                                            <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                        </Border.RenderTransform>
                                         <Border.Effect>
                                             <DropShadowEffect Color="#764BA2" 
                                                             BlurRadius="20" 
@@ -165,7 +169,11 @@
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Border x:Name="border" CornerRadius="22" 
-                                          Background="#667EEA">
+                                          Background="#667EEA"
+                                          RenderTransformOrigin="0.5,0.5">
+                                        <Border.RenderTransform>
+                                            <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                        </Border.RenderTransform>
                                         <Border.Effect>
                                             <DropShadowEffect Color="#667EEA" 
                                                             BlurRadius="20" 

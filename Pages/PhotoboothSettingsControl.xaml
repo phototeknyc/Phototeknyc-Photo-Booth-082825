@@ -16,6 +16,136 @@
     </UserControl.Background>
     
     <UserControl.Resources>
+        <!-- Converters -->
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        
+        <!-- Wide ScrollBar Style for Touch/Mouse -->
+        <Style x:Key="WideScrollBar" TargetType="{x:Type ScrollBar}">
+            <Setter Property="Width" Value="20"/>
+            <Setter Property="Background" Value="#1A1E37"/>
+            <Setter Property="BorderBrush" Value="#2A2E47"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollBar}">
+                        <Grid x:Name="GridRoot" Width="20">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="10"/>
+                            
+                            <Track x:Name="PART_Track" IsDirectionReversed="true" Focusable="false">
+                                <Track.Thumb>
+                                    <Thumb x:Name="Thumb">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="{x:Type Thumb}">
+                                                <Border x:Name="ThumbBorder"
+                                                        CornerRadius="8"
+                                                        Margin="2">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                            <GradientStop Color="#667EEA" Offset="0"/>
+                                                            <GradientStop Color="#764BA2" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <Border.Effect>
+                                                        <DropShadowEffect Color="#667EEA" BlurRadius="8" ShadowDepth="0" Opacity="0.5"/>
+                                                    </Border.Effect>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="true">
+                                                        <Setter TargetName="ThumbBorder" Property="Background">
+                                                            <Setter.Value>
+                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                                    <GradientStop Color="#7986EA" Offset="0"/>
+                                                                    <GradientStop Color="#865BA2" Offset="1"/>
+                                                                </LinearGradientBrush>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                        <Setter TargetName="ThumbBorder" Property="Effect">
+                                                            <Setter.Value>
+                                                                <DropShadowEffect Color="#667EEA" BlurRadius="12" ShadowDepth="0" Opacity="0.8"/>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Trigger>
+                                                    <Trigger Property="IsDragging" Value="true">
+                                                        <Setter TargetName="ThumbBorder" Property="Background">
+                                                            <Setter.Value>
+                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                                    <GradientStop Color="#8996EA" Offset="0"/>
+                                                                    <GradientStop Color="#966BA2" Offset="1"/>
+                                                                </LinearGradientBrush>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton x:Name="PageUp" Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="false"/>
+                                </Track.IncreaseRepeatButton>
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton x:Name="PageDown" Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="false"/>
+                                </Track.DecreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
+        <!-- ScrollViewer Style with Wide ScrollBar -->
+        <Style x:Key="WideScrollViewerStyle" TargetType="{x:Type ScrollViewer}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollViewer}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                    Grid.Column="0"
+                                                    Grid.Row="0"
+                                                    Margin="{TemplateBinding Padding}"
+                                                    Content="{TemplateBinding Content}"
+                                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                    CanContentScroll="{TemplateBinding CanContentScroll}"/>
+                            
+                            <ScrollBar x:Name="PART_VerticalScrollBar"
+                                       Grid.Column="1"
+                                       Grid.Row="0"
+                                       Style="{StaticResource WideScrollBar}"
+                                       Orientation="Vertical"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"/>
+                            
+                            <ScrollBar x:Name="PART_HorizontalScrollBar"
+                                       Grid.Column="0"
+                                       Grid.Row="1"
+                                       Style="{StaticResource WideScrollBar}"
+                                       Orientation="Horizontal"
+                                       Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"
+                                       Value="{TemplateBinding HorizontalOffset}"
+                                       Maximum="{TemplateBinding ScrollableWidth}"
+                                       ViewportSize="{TemplateBinding ViewportWidth}"
+                                       Height="20"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
         <!-- Modern Glassmorphic Header Style -->
         <Style x:Key="SettingsHeaderStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="22"/>
@@ -68,38 +198,92 @@
             <Setter Property="Margin" Value="0,8,0,20"/>
             <Setter Property="Height" Value="48"/>
             <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Focusable" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Slider">
                         <Grid>
-                            <Border x:Name="TrackBackground"
-                                    Height="8"
-                                    Background="#2D3748"
-                                    CornerRadius="4"
-                                    VerticalAlignment="Center">
-                                <Border.Effect>
-                                    <DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="2" Opacity="0.3"/>
-                                </Border.Effect>
-                            </Border>
-                            <Border x:Name="PART_SelectionRange"
-                                    Height="8"
-                                    CornerRadius="4"
-                                    VerticalAlignment="Center"
-                                    HorizontalAlignment="Left">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                        <GradientStop Color="#667EEA" Offset="0"/>
-                                        <GradientStop Color="#764BA2" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                                <Border.Effect>
-                                    <DropShadowEffect Color="#667EEA" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
-                                </Border.Effect>
-                            </Border>
-                            <Thumb x:Name="PART_Thumb"
-                                   Width="32"
-                                   Height="32"
-                                   Style="{DynamicResource ModernSliderThumb}"/>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto" MinHeight="{TemplateBinding MinHeight}"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <!-- Track for Horizontal Slider -->
+                            <Track x:Name="PART_Track" Grid.Row="1">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge">
+                                        <RepeatButton.Style>
+                                            <Style TargetType="RepeatButton">
+                                                <Setter Property="OverridesDefaultStyle" Value="true"/>
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Setter Property="Focusable" Value="false"/>
+                                                <Setter Property="IsTabStop" Value="false"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="RepeatButton">
+                                                            <Grid>
+                                                                <Border Height="8" 
+                                                                        Background="#2D3748"
+                                                                        CornerRadius="4,0,0,4"
+                                                                        VerticalAlignment="Center"/>
+                                                                <Border Height="8"
+                                                                        CornerRadius="4,0,0,4"
+                                                                        VerticalAlignment="Center">
+                                                                    <Border.Background>
+                                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                                            <GradientStop Color="#667EEA" Offset="0"/>
+                                                                            <GradientStop Color="#764BA2" Offset="1"/>
+                                                                        </LinearGradientBrush>
+                                                                    </Border.Background>
+                                                                    <Border.Effect>
+                                                                        <DropShadowEffect Color="#667EEA" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                                                                    </Border.Effect>
+                                                                </Border>
+                                                            </Grid>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </RepeatButton.Style>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge">
+                                        <RepeatButton.Style>
+                                            <Style TargetType="RepeatButton">
+                                                <Setter Property="OverridesDefaultStyle" Value="true"/>
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Setter Property="Focusable" Value="false"/>
+                                                <Setter Property="IsTabStop" Value="false"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="RepeatButton">
+                                                            <Border Height="8"
+                                                                    Background="#2D3748"
+                                                                    CornerRadius="0,4,4,0"
+                                                                    VerticalAlignment="Center">
+                                                                <Border.Effect>
+                                                                    <DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="2" Opacity="0.3"/>
+                                                                </Border.Effect>
+                                                            </Border>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </RepeatButton.Style>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                                
+                                <Track.Thumb>
+                                    <Thumb x:Name="PART_Thumb"
+                                           Width="32"
+                                           Height="32"
+                                           Focusable="True"
+                                           Style="{DynamicResource ModernSliderThumb}"/>
+                                </Track.Thumb>
+                            </Track>
                         </Grid>
                     </ControlTemplate>
                 </Setter.Value>
@@ -118,6 +302,9 @@
                                  Width="32" 
                                  Height="32"
                                  RenderTransformOrigin="0.5,0.5">
+                            <Ellipse.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Ellipse.RenderTransform>
                             <Ellipse.Effect>
                                 <DropShadowEffect Color="#667EEA" BlurRadius="12" ShadowDepth="0" Opacity="0.8"/>
                             </Ellipse.Effect>
@@ -389,7 +576,11 @@
                         <Border x:Name="ButtonBorder"
                                 Background="{TemplateBinding Background}"
                                 CornerRadius="24"
-                                Padding="{TemplateBinding Padding}">
+                                Padding="{TemplateBinding Padding}"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
                             <Border.Effect>
                                 <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="4" Opacity="0.3"/>
                             </Border.Effect>
@@ -513,7 +704,13 @@
         </Style>
     </UserControl.Resources>
     
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="40">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                  HorizontalScrollBarVisibility="Disabled"
+                  Padding="40" 
+                  Style="{StaticResource WideScrollViewerStyle}"
+                  CanContentScroll="False"
+                  PanningMode="VerticalOnly"
+                  PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
         <StackPanel>
             <TextBlock Text="⚙️ Photobooth Settings" 
                        FontSize="28" 
@@ -811,7 +1008,9 @@
                                 <Border.Effect>
                                     <DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="2" Opacity="0.3"/>
                                 </Border.Effect>
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                                              MaxHeight="200"
+                                              PreviewMouseWheel="InnerScrollViewer_PreviewMouseWheel">
                                     <StackPanel x:Name="filterListPanel">
                                         <!-- Filter checkboxes with reduced margins for compact display -->
                                         <CheckBox x:Name="filterBlackWhiteCheckBox" 
@@ -890,6 +1089,175 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
+                </StackPanel>
+            </Border>
+            
+            <!-- GIF Animation Settings -->
+            <Border Style="{StaticResource GlassSectionStyle}">
+                <StackPanel>
+                    <StackPanel Style="{StaticResource SectionHeaderStyle}">
+                        <TextBlock Text="🎬" Style="{StaticResource SectionIconStyle}"/>
+                        <TextBlock Text="GIF Animation Settings" Style="{StaticResource SectionTitleStyle}"/>
+                    </StackPanel>
+                    
+                    <CheckBox x:Name="enableGifGenerationCheckBox" 
+                              Content="Enable GIF generation for multi-photo sessions" 
+                              IsChecked="True"
+                              Style="{StaticResource SettingsCheckBoxStyle}"
+                              Checked="EnableGifGeneration_Changed"
+                              Unchecked="EnableGifGeneration_Changed"
+                              ToolTip="Automatically create animated GIFs when multiple photos are taken"/>
+                    
+                    <TextBlock Text="Frame delay (seconds between photos):" 
+                               Style="{StaticResource SettingsTextStyle}"
+                               IsEnabled="{Binding IsChecked, ElementName=enableGifGenerationCheckBox}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                        <Slider x:Name="gifFrameDelaySlider" 
+                                Minimum="0.5" 
+                                Maximum="5" 
+                                Value="1.5" 
+                                TickPlacement="BottomRight" 
+                                TickFrequency="0.5" 
+                                IsSnapToTickEnabled="True"
+                                Width="300"
+                                ValueChanged="GifFrameDelaySlider_ValueChanged"
+                                Style="{StaticResource SettingsSliderStyle}"
+                                IsEnabled="{Binding IsChecked, ElementName=enableGifGenerationCheckBox}"/>
+                        <TextBlock x:Name="gifFrameDelayValueText" 
+                                   Text="1.5 seconds" 
+                                   VerticalAlignment="Center" 
+                                   Margin="20,0,0,0" 
+                                   Foreground="White" 
+                                   FontWeight="Bold"
+                                   FontSize="18"/>
+                    </StackPanel>
+                    
+                    <CheckBox x:Name="enableGifOverlayCheckBox" 
+                              Content="Add overlay to GIF animations" 
+                              IsChecked="False"
+                              Style="{StaticResource SettingsCheckBoxStyle}"
+                              Checked="EnableGifOverlay_Changed"
+                              Unchecked="EnableGifOverlay_Changed"
+                              IsEnabled="{Binding IsChecked, ElementName=enableGifGenerationCheckBox}"
+                              ToolTip="Add a custom overlay image to the animated GIFs"/>
+                    
+                    <TextBlock Text="Overlay image file:" 
+                               Style="{StaticResource SettingsTextStyle}"
+                               Visibility="{Binding IsChecked, ElementName=enableGifOverlayCheckBox, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,20"
+                                Visibility="{Binding IsChecked, ElementName=enableGifOverlayCheckBox, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBox x:Name="gifOverlayPathTextBox" 
+                                 Width="400"
+                                 Height="48"
+                                 Padding="15,0"
+                                 VerticalContentAlignment="Center"
+                                 Background="#2D3748"
+                                 Foreground="White"
+                                 BorderBrush="#667EEA"
+                                 BorderThickness="2"
+                                 FontSize="14"
+                                 Text=""
+                                 TextChanged="GifOverlayPath_TextChanged"
+                                 IsEnabled="{Binding IsChecked, ElementName=enableGifOverlayCheckBox}">
+                            <TextBox.Resources>
+                                <Style TargetType="Border">
+                                    <Setter Property="CornerRadius" Value="8"/>
+                                </Style>
+                            </TextBox.Resources>
+                        </TextBox>
+                        <Button Content="📁 Browse" 
+                                Width="120"
+                                Height="48"
+                                Margin="15,0,0,0"
+                                Click="BrowseGifOverlay_Click"
+                                Style="{StaticResource ModernButtonStyle}"
+                                IsEnabled="{Binding IsChecked, ElementName=enableGifOverlayCheckBox}">
+                            <Button.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#667EEA" Offset="0"/>
+                                    <GradientStop Color="#764BA2" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Button.Background>
+                        </Button>
+                    </StackPanel>
+                    
+                    <TextBlock Text="GIF output quality:" 
+                               Style="{StaticResource SettingsTextStyle}"
+                               IsEnabled="{Binding IsChecked, ElementName=enableGifGenerationCheckBox}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                        <Slider x:Name="gifQualitySlider" 
+                                Minimum="50" 
+                                Maximum="100" 
+                                Value="75" 
+                                TickPlacement="BottomRight" 
+                                TickFrequency="10" 
+                                IsSnapToTickEnabled="True"
+                                Width="300"
+                                ValueChanged="GifQualitySlider_ValueChanged"
+                                Style="{StaticResource SettingsSliderStyle}"
+                                IsEnabled="{Binding IsChecked, ElementName=enableGifGenerationCheckBox}"/>
+                        <TextBlock x:Name="gifQualityValueText" 
+                                   Text="75%" 
+                                   VerticalAlignment="Center" 
+                                   Margin="20,0,0,0" 
+                                   Foreground="White" 
+                                   FontWeight="Bold"
+                                   FontSize="18"/>
+                    </StackPanel>
+                    
+                    <TextBlock Text="Maximum GIF dimensions:" 
+                               Style="{StaticResource SettingsTextStyle}"
+                               IsEnabled="{Binding IsChecked, ElementName=enableGifGenerationCheckBox}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                        <TextBox x:Name="gifMaxWidthTextBox" 
+                                 Width="100"
+                                 Height="48"
+                                 Padding="10,0"
+                                 VerticalContentAlignment="Center"
+                                 Background="#2D3748"
+                                 Foreground="White"
+                                 BorderBrush="#667EEA"
+                                 BorderThickness="2"
+                                 FontSize="16"
+                                 Text="1920"
+                                 TextChanged="GifMaxWidth_TextChanged"
+                                 IsEnabled="{Binding IsChecked, ElementName=enableGifGenerationCheckBox}">
+                            <TextBox.Resources>
+                                <Style TargetType="Border">
+                                    <Setter Property="CornerRadius" Value="8"/>
+                                </Style>
+                            </TextBox.Resources>
+                        </TextBox>
+                        <TextBlock Text=" x " 
+                                   VerticalAlignment="Center" 
+                                   Margin="10,0" 
+                                   Foreground="White" 
+                                   FontSize="16"/>
+                        <TextBox x:Name="gifMaxHeightTextBox" 
+                                 Width="100"
+                                 Height="48"
+                                 Padding="10,0"
+                                 VerticalContentAlignment="Center"
+                                 Background="#2D3748"
+                                 Foreground="White"
+                                 BorderBrush="#667EEA"
+                                 BorderThickness="2"
+                                 FontSize="16"
+                                 Text="1080"
+                                 TextChanged="GifMaxHeight_TextChanged"
+                                 IsEnabled="{Binding IsChecked, ElementName=enableGifGenerationCheckBox}">
+                            <TextBox.Resources>
+                                <Style TargetType="Border">
+                                    <Setter Property="CornerRadius" Value="8"/>
+                                </Style>
+                            </TextBox.Resources>
+                        </TextBox>
+                        <TextBlock Text=" pixels" 
+                                   VerticalAlignment="Center" 
+                                   Margin="10,0,0,0" 
+                                   Foreground="#8A8BA3" 
+                                   FontSize="14"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
             
@@ -1216,6 +1584,22 @@
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                             <GradientStop Color="#48BB78" Offset="0"/>
                                             <GradientStop Color="#38A169" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Button.Background>
+                                </Button>
+                                <Button Content="🎯" 
+                                        Width="48"
+                                        Height="48"
+                                        Margin="8,0,0,0"
+                                        FontSize="20"
+                                        Click="PrinterAlignment_Click"
+                                        ToolTip="Printer alignment and calibration for both printers"
+                                        IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
+                                        Style="{StaticResource ModernButtonStyle}">
+                                    <Button.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#FF6B6B" Offset="0"/>
+                                            <GradientStop Color="#FF5252" Offset="1"/>
                                         </LinearGradientBrush>
                                     </Button.Background>
                                 </Button>

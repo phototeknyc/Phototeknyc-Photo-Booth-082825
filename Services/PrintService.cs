@@ -194,6 +194,11 @@ namespace Photobooth.Services
 
         public PrintResult PrintPhotos(List<string> photoPaths, string sessionId, int copies = 1)
         {
+            return PrintPhotos(photoPaths, sessionId, copies, false);
+        }
+        
+        public PrintResult PrintPhotos(List<string> photoPaths, string sessionId, int copies, bool isOriginal2x6Format)
+        {
             var result = new PrintResult();
             
             // Validate print allowance
@@ -224,33 +229,95 @@ namespace Photobooth.Services
                 
                 // Configure print settings
                 printDocument.PrinterSettings.Copies = 1; // We handle copies manually
-                printDocument.DefaultPageSettings.Landscape = Properties.Settings.Default.PrintLandscape;
                 
-                // Determine printer based on image size and pooling
-                string printerName = DeterminePrinterByImageSize(photoPaths);
+                // Store orientation setting to apply AFTER DEVMODE
+                bool desiredLandscapeOrientation = Properties.Settings.Default.PrintLandscape;
+                bool isDuplicated4x6 = false;
                 
-                // Check if printer pooling is enabled and get pooled printer
-                bool isStripFormat = false;
-                if (photoPaths != null && photoPaths.Count > 0)
+                // Determine orientation based on format and duplication
+                if (isOriginal2x6Format)
                 {
-                    try
+                    // For 2x6, check if we're printing a duplicated 4x6 or original 2x6
+                    // If the image is 1200x1800 (portrait 4x6), we need landscape printing
+                    // If the image is 600x1800 (original 2x6), we need portrait printing
+                    if (photoPaths != null && photoPaths.Count > 0)
                     {
-                        using (var image = System.Drawing.Image.FromFile(photoPaths[0]))
+                        try
                         {
-                            float aspectRatio = (float)image.Width / image.Height;
-                            isStripFormat = aspectRatio < 0.5f;
+                            using (var image = System.Drawing.Image.FromFile(photoPaths[0]))
+                            {
+                                // Check if this is a duplicated 4x6 (width around 1200) vs original 2x6 (width around 600)
+                                isDuplicated4x6 = image.Width > 1000; // 4x6 would be ~1200 pixels wide at 300 DPI
+                                System.Diagnostics.Debug.WriteLine($"ORIENTATION: Image is {image.Width}x{image.Height}, isDuplicated4x6={isDuplicated4x6}");
+                            }
                         }
+                        catch { }
                     }
-                    catch { }
+                    
+                    if (isDuplicated4x6)
+                    {
+                        // For duplicated 4x6 in portrait format (1200x1800), use landscape printing
+                        desiredLandscapeOrientation = true;
+                        System.Diagnostics.Debug.WriteLine($"ORIENTATION: Will use LANDSCAPE mode for duplicated 4x6 from 2x6");
+                    }
+                    else
+                    {
+                        // For original 2x6 strips, use portrait
+                        desiredLandscapeOrientation = false;
+                        System.Diagnostics.Debug.WriteLine($"ORIENTATION: Will use PORTRAIT mode for original 2x6 strip");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"ORIENTATION: Will use default landscape setting: {desiredLandscapeOrientation}");
                 }
                 
-                // Get pooled printer if pooling is enabled
+                // Determine printer based on image size and pooling
+                // If isOriginal2x6Format is true, we know it's a 2x6 strip regardless of the actual image dimensions
+                string printerName;
+                bool isStripFormat = isOriginal2x6Format;
+                
+                if (isOriginal2x6Format && Properties.Settings.Default.AutoRoutePrinter)
+                {
+                    // Use the 2x6 printer for original 2x6 templates
+                    printerName = Properties.Settings.Default.Printer2x6Name;
+                    System.Diagnostics.Debug.WriteLine($"Using 2x6 printer for original 2x6 template: {printerName}");
+                }
+                else
+                {
+                    // Determine printer based on actual image size
+                    printerName = DeterminePrinterByImageSize(photoPaths);
+                    
+                    // Check if it's actually a strip format (if not already determined)
+                    if (!isOriginal2x6Format && photoPaths != null && photoPaths.Count > 0)
+                    {
+                        try
+                        {
+                            using (var image = System.Drawing.Image.FromFile(photoPaths[0]))
+                            {
+                                float aspectRatio = (float)image.Width / image.Height;
+                                isStripFormat = aspectRatio < 0.5f;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                
+                // Get pooled printer if pooling is enabled (but don't override if we already have a 2x6 printer selected)
                 var poolManager = PrinterPoolManager.Instance;
                 string pooledPrinter = poolManager.GetPooledPrinter(isStripFormat);
                 if (!string.IsNullOrEmpty(pooledPrinter))
                 {
-                    System.Diagnostics.Debug.WriteLine($"Using pooled printer: {pooledPrinter}");
-                    printerName = pooledPrinter;
+                    // Only use pooled printer if we don't already have a specific 2x6 printer selected
+                    if (!(isOriginal2x6Format && Properties.Settings.Default.AutoRoutePrinter && !string.IsNullOrEmpty(Properties.Settings.Default.Printer2x6Name)))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Using pooled printer: {pooledPrinter}");
+                        printerName = pooledPrinter;
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Keeping 2x6 printer selection, not using pooled printer");
+                    }
                 }
                 
                 // CRITICAL: Set the printer FIRST before applying settings
@@ -268,9 +335,11 @@ namespace Photobooth.Services
                     // Check if we're using auto-routing and have format-specific settings
                     if (Properties.Settings.Default.AutoRoutePrinter)
                     {
-                        // Determine format based on first image
-                        bool is2x6Format = false;
-                        if (photoPaths != null && photoPaths.Count > 0)
+                        // Use the isOriginal2x6Format flag if provided, otherwise check actual image
+                        bool is2x6Format = isOriginal2x6Format;
+                        
+                        // Only check actual image if we don't have the format flag
+                        if (!isOriginal2x6Format && photoPaths != null && photoPaths.Count > 0)
                         {
                             try
                             {
@@ -287,12 +356,14 @@ namespace Photobooth.Services
                         if (is2x6Format)
                         {
                             savedDriverSettings = Properties.Settings.Default.Printer2x6DriverSettings;
-                            System.Diagnostics.Debug.WriteLine("Using 2x6 printer DEVMODE settings");
+                            System.Diagnostics.Debug.WriteLine($"DEVMODE: Selected 2x6 printer DEVMODE settings (isOriginal2x6Format={isOriginal2x6Format})");
+                            System.Diagnostics.Debug.WriteLine($"DEVMODE: 2x6 settings length: {savedDriverSettings?.Length ?? 0} bytes");
                         }
                         else
                         {
                             savedDriverSettings = Properties.Settings.Default.Printer4x6DriverSettings;
-                            System.Diagnostics.Debug.WriteLine("Using 4x6 printer DEVMODE settings");
+                            System.Diagnostics.Debug.WriteLine($"DEVMODE: Selected 4x6 printer DEVMODE settings (isOriginal2x6Format={isOriginal2x6Format})");
+                            System.Diagnostics.Debug.WriteLine($"DEVMODE: 4x6 settings length: {savedDriverSettings?.Length ?? 0} bytes");
                         }
                     }
                     
@@ -418,6 +489,23 @@ namespace Photobooth.Services
                         printDocument.DefaultPageSettings.Margins = new Margins(left, right, top, bottom);
                     }
                 }
+                
+                // CRITICAL: Apply landscape orientation AFTER all DEVMODE settings
+                // This must be done last as DEVMODE can override orientation
+                printDocument.DefaultPageSettings.Landscape = desiredLandscapeOrientation;
+                System.Diagnostics.Debug.WriteLine($"ORIENTATION FINAL: Set landscape to {desiredLandscapeOrientation} (AFTER DEVMODE)");
+                
+                // Also ensure it's set on the printer settings
+                if (printDocument.PrinterSettings != null && printDocument.PrinterSettings.DefaultPageSettings != null)
+                {
+                    printDocument.PrinterSettings.DefaultPageSettings.Landscape = desiredLandscapeOrientation;
+                    System.Diagnostics.Debug.WriteLine($"ORIENTATION: Also set printer settings landscape to {desiredLandscapeOrientation}");
+                }
+                
+                // Log the actual page settings that will be used
+                System.Diagnostics.Debug.WriteLine($"ORIENTATION CHECK: DefaultPageSettings.Landscape = {printDocument.DefaultPageSettings.Landscape}");
+                System.Diagnostics.Debug.WriteLine($"ORIENTATION CHECK: Page bounds = {printDocument.DefaultPageSettings.Bounds.Width}x{printDocument.DefaultPageSettings.Bounds.Height}");
+                System.Diagnostics.Debug.WriteLine($"ORIENTATION CHECK: Printable area = {printDocument.DefaultPageSettings.PrintableArea.Width}x{printDocument.DefaultPageSettings.PrintableArea.Height}");
                 
                 // Show print dialog if configured
                 if (Properties.Settings.Default.ShowPrintDialog)
@@ -608,21 +696,162 @@ namespace Photobooth.Services
             {
                 try
                 {
-                    using (var image = Image.FromFile(imagesToPrint[currentPrintIndex]))
+                    using (var originalImage = Image.FromFile(imagesToPrint[currentPrintIndex]))
                     {
-                        // Calculate scaling to fit page
-                        float scaleX = e.PageBounds.Width / (float)image.Width;
-                        float scaleY = e.PageBounds.Height / (float)image.Height;
-                        float scale = Math.Min(scaleX, scaleY);
+                        // Create a working copy of the image for potential rotation
+                        Image imageToprint = originalImage;
+                        bool disposeRotatedImage = false;
                         
-                        int scaledWidth = (int)(image.Width * scale);
-                        int scaledHeight = (int)(image.Height * scale);
+                        // Check if this is a 2x6 that was duplicated to 4x6
+                        // A duplicated 4x6 will have dimensions roughly:
+                        // - Portrait: 1200x1800 at 300 DPI (aspect ratio 0.667)
+                        // - Landscape: 1800x1200 at 300 DPI (aspect ratio 1.5)
+                        bool isDuplicated4x6 = false;
+                        float aspectRatio = (float)originalImage.Width / originalImage.Height;
                         
-                        // Center the image on the page
-                        int x = (e.PageBounds.Width - scaledWidth) / 2;
-                        int y = (e.PageBounds.Height - scaledHeight) / 2;
+                        // Check for both portrait (4x6) and landscape (6x4) orientations
+                        bool isPortrait4x6 = Math.Abs(aspectRatio - (4.0f / 6.0f)) < 0.05f; // 0.667
+                        bool isLandscape4x6 = Math.Abs(aspectRatio - (6.0f / 4.0f)) < 0.05f; // 1.5
                         
-                        e.Graphics.DrawImage(image, x, y, scaledWidth, scaledHeight);
+                        if (isPortrait4x6 || isLandscape4x6)
+                        {
+                            isDuplicated4x6 = true;
+                            System.Diagnostics.Debug.WriteLine($"ORIENTATION: Detected duplicated 4x6 image (aspect ratio: {aspectRatio:F3}, portrait={isPortrait4x6}, landscape={isLandscape4x6})");
+                        }
+                        
+                        // For landscape 4x6 images (1800x1200), ensure landscape printing
+                        if (isDuplicated4x6 && isLandscape4x6 && !e.PageSettings.Landscape)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"ORIENTATION FIX: Forcing landscape for landscape 4x6 (was {e.PageSettings.Landscape})");
+                            e.PageSettings.Landscape = true;
+                        }
+                        // For portrait 4x6 images (1200x1800), ensure portrait printing
+                        else if (isDuplicated4x6 && isPortrait4x6 && e.PageSettings.Landscape)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"ORIENTATION FIX: Forcing portrait for portrait 4x6 (was {e.PageSettings.Landscape})");
+                            e.PageSettings.Landscape = false;
+                        }
+                        
+                        // Auto-rotate logic based on printer orientation and image dimensions
+                        bool printerIsLandscape = e.PageSettings.Landscape;
+                        bool imageIsLandscape = originalImage.Width > originalImage.Height;
+                        
+                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Image dimensions: {originalImage.Width}x{originalImage.Height}");
+                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Page bounds: {e.PageBounds.Width}x{e.PageBounds.Height}");
+                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Printer landscape setting: {printerIsLandscape}");
+                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Image is landscape: {imageIsLandscape}");
+                        
+                        // Determine if rotation is needed
+                        bool needsRotation = false;
+                        
+                        // Check if auto-rotation is enabled in settings
+                        bool autoRotateEnabled = Properties.Settings.Default.AutoRotateForPrinting;
+                        
+                        // Skip auto-rotation for duplicated 4x6 images as we've already set the correct orientation
+                        if (isDuplicated4x6)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Auto-rotation SKIPPED for duplicated 4x6 (orientation already corrected)");
+                        }
+                        // If printer is landscape and image is portrait, OR
+                        // If printer is portrait and image is landscape, rotate 90 degrees
+                        else if (autoRotateEnabled && (printerIsLandscape != imageIsLandscape))
+                        {
+                            needsRotation = true;
+                            System.Diagnostics.Debug.WriteLine($"Auto-rotation WILL BE applied: Printer landscape={printerIsLandscape}, Image landscape={imageIsLandscape}");
+                        }
+                        else if (!autoRotateEnabled)
+                        {
+                            System.Diagnostics.Debug.WriteLine("Auto-rotation is DISABLED in settings");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Auto-rotation NOT needed: Orientations match (Printer landscape={printerIsLandscape}, Image landscape={imageIsLandscape})");
+                        }
+                        
+                        // Apply rotation if needed
+                        if (needsRotation)
+                        {
+                            // Create a new bitmap for rotation
+                            var rotatedBitmap = new Bitmap(originalImage.Height, originalImage.Width);
+                            rotatedBitmap.SetResolution(originalImage.HorizontalResolution, originalImage.VerticalResolution);
+                            
+                            using (var g = Graphics.FromImage(rotatedBitmap))
+                            {
+                                g.TranslateTransform(rotatedBitmap.Width / 2, rotatedBitmap.Height / 2);
+                                g.RotateTransform(90);
+                                g.TranslateTransform(-originalImage.Width / 2, -originalImage.Height / 2);
+                                g.DrawImage(originalImage, 0, 0, originalImage.Width, originalImage.Height);
+                            }
+                            
+                            imageToprint = rotatedBitmap;
+                            disposeRotatedImage = true;
+                            System.Diagnostics.Debug.WriteLine($"Image rotated 90 degrees: New dimensions {imageToprint.Width}x{imageToprint.Height}");
+                        }
+                        
+                        // Apply alignment adjustments based on printer type
+                        double alignmentScaleX = 1.0;
+                        double alignmentScaleY = 1.0;
+                        int alignmentOffsetX = 0;
+                        int alignmentOffsetY = 0;
+                        
+                        // Determine which alignment settings to use
+                        bool is2x6Printer = false;
+                        string currentPrinter = printDocument.PrinterSettings.PrinterName;
+                        if (currentPrinter == Properties.Settings.Default.Printer2x6Name && 
+                            !string.IsNullOrEmpty(Properties.Settings.Default.Printer2x6Name))
+                        {
+                            // Use 2x6 printer alignment settings (for 4x6 output)
+                            alignmentScaleX = Properties.Settings.Default.Printer2x6ScaleX;
+                            alignmentScaleY = Properties.Settings.Default.Printer2x6ScaleY;
+                            alignmentOffsetX = Properties.Settings.Default.Printer2x6OffsetX;
+                            alignmentOffsetY = Properties.Settings.Default.Printer2x6OffsetY;
+                            is2x6Printer = true;
+                            System.Diagnostics.Debug.WriteLine($"ALIGNMENT: Using 2x6 printer settings - ScaleX:{alignmentScaleX:F2}, ScaleY:{alignmentScaleY:F2}, OffsetX:{alignmentOffsetX}, OffsetY:{alignmentOffsetY}");
+                        }
+                        else
+                        {
+                            // Use default printer alignment settings
+                            alignmentScaleX = Properties.Settings.Default.DefaultPrinterScaleX;
+                            alignmentScaleY = Properties.Settings.Default.DefaultPrinterScaleY;
+                            alignmentOffsetX = Properties.Settings.Default.DefaultPrinterOffsetX;
+                            alignmentOffsetY = Properties.Settings.Default.DefaultPrinterOffsetY;
+                            System.Diagnostics.Debug.WriteLine($"ALIGNMENT: Using default printer settings - ScaleX:{alignmentScaleX:F2}, ScaleY:{alignmentScaleY:F2}, OffsetX:{alignmentOffsetX}, OffsetY:{alignmentOffsetY}");
+                        }
+                        
+                        // Calculate scaling to fit page with alignment adjustments
+                        float baseScaleX = e.PageBounds.Width / (float)imageToprint.Width;
+                        float baseScaleY = e.PageBounds.Height / (float)imageToprint.Height;
+                        float baseScale = Math.Min(baseScaleX, baseScaleY);
+                        
+                        // Apply alignment scale adjustments
+                        float scaleX = baseScale * (float)alignmentScaleX;
+                        float scaleY = baseScale * (float)alignmentScaleY;
+                        
+                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Final image to print: {imageToprint.Width}x{imageToprint.Height}");
+                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Base scale: {baseScale:F3}, Adjusted scales - X:{scaleX:F3}, Y:{scaleY:F3}");
+                        
+                        int scaledWidth = (int)(imageToprint.Width * scaleX);
+                        int scaledHeight = (int)(imageToprint.Height * scaleY);
+                        
+                        // Center the image on the page with alignment offset adjustments
+                        int x = (e.PageBounds.Width - scaledWidth) / 2 + alignmentOffsetX;
+                        int y = (e.PageBounds.Height - scaledHeight) / 2 + alignmentOffsetY;
+                        
+                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Position - X:{x}, Y:{y}, Width:{scaledWidth}, Height:{scaledHeight}");
+                        
+                        // Set high quality rendering
+                        e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                        e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                        e.Graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+                        
+                        e.Graphics.DrawImage(imageToprint, x, y, scaledWidth, scaledHeight);
+                        
+                        // Dispose rotated image if we created one
+                        if (disposeRotatedImage)
+                        {
+                            imageToprint.Dispose();
+                        }
                     }
                     
                     currentPrintIndex++;
@@ -679,6 +908,84 @@ namespace Photobooth.Services
         {
             var settings = new PrinterSettings();
             return settings.PrinterName;
+        }
+        
+        public string GetCurrentPrinterName()
+        {
+            // Get the currently configured printer name
+            string printerName = Properties.Settings.Default.PrinterName;
+            
+            // If no printer configured or invalid, get auto-selected USB printer
+            if (string.IsNullOrEmpty(printerName) || !IsValidPrinter(printerName))
+            {
+                printerName = AutoSelectUSBPrinter();
+            }
+            
+            return printerName;
+        }
+        
+        public bool IsPrinterReady()
+        {
+            try
+            {
+                string printerName = GetCurrentPrinterName();
+                if (string.IsNullOrEmpty(printerName))
+                    return false;
+                    
+                return IsPrinterOnline(printerName);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        private bool IsPrinterOnline(string printerName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(printerName))
+                    return false;
+                
+                // First check if printer is valid
+                var settings = new PrinterSettings();
+                settings.PrinterName = printerName;
+                
+                if (!settings.IsValid)
+                    return false;
+                
+                // Check printer status using WMI
+                using (var searcher = new ManagementObjectSearcher($"SELECT * FROM Win32_Printer WHERE Name = '{printerName.Replace("\\", "\\\\")}'"))
+                {
+                    foreach (ManagementObject printer in searcher.Get())
+                    {
+                        // Check PrinterStatus: 3 = Idle/Ready, 4 = Printing
+                        int printerStatus = Convert.ToInt32(printer["PrinterStatus"] ?? 0);
+                        bool isOffline = Convert.ToBoolean(printer["WorkOffline"] ?? false);
+                        
+                        // Printer is online if it's not offline and status is idle (3) or printing (4)
+                        return !isOffline && (printerStatus == 3 || printerStatus == 4 || printerStatus == 0);
+                    }
+                }
+                
+                // If we can't determine status via WMI, assume it's online if it's valid
+                return settings.IsValid;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error checking printer online status: {ex.Message}");
+                // Fallback: if printer is valid, assume it's online
+                try
+                {
+                    var settings = new PrinterSettings();
+                    settings.PrinterName = printerName;
+                    return settings.IsValid;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
         }
 
         public static List<PrinterInfo> GetUSBPrinters()

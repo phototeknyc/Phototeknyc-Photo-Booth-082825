@@ -253,6 +253,18 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool AutoApplyFilters {
+            get {
+                return ((bool)(this["AutoApplyFilters"]));
+            }
+            set {
+                this["AutoApplyFilters"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool ShowFilterPreview {
             get {
@@ -812,6 +824,258 @@ namespace Photobooth.Properties {
             }
             set {
                 this["PrinterProfiles"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool Duplicate2x6To4x6 {
+            get {
+                return ((bool)(this["Duplicate2x6To4x6"]));
+            }
+            set {
+                this["Duplicate2x6To4x6"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool AutoRotateForPrinting {
+            get {
+                return ((bool)(this["AutoRotateForPrinting"]));
+            }
+            set {
+                this["AutoRotateForPrinting"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1")]
+        public int PrintCopies {
+            get {
+                return ((int)(this["PrintCopies"]));
+            }
+            set {
+                this["PrintCopies"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1.0")]
+        public double DefaultPrinterScaleX {
+            get {
+                return ((double)(this["DefaultPrinterScaleX"]));
+            }
+            set {
+                this["DefaultPrinterScaleX"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1.0")]
+        public double DefaultPrinterScaleY {
+            get {
+                return ((double)(this["DefaultPrinterScaleY"]));
+            }
+            set {
+                this["DefaultPrinterScaleY"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int DefaultPrinterOffsetX {
+            get {
+                return ((int)(this["DefaultPrinterOffsetX"]));
+            }
+            set {
+                this["DefaultPrinterOffsetX"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int DefaultPrinterOffsetY {
+            get {
+                return ((int)(this["DefaultPrinterOffsetY"]));
+            }
+            set {
+                this["DefaultPrinterOffsetY"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1.0")]
+        public double Printer2x6ScaleX {
+            get {
+                return ((double)(this["Printer2x6ScaleX"]));
+            }
+            set {
+                this["Printer2x6ScaleX"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1.0")]
+        public double Printer2x6ScaleY {
+            get {
+                return ((double)(this["Printer2x6ScaleY"]));
+            }
+            set {
+                this["Printer2x6ScaleY"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int Printer2x6OffsetX {
+            get {
+                return ((int)(this["Printer2x6OffsetX"]));
+            }
+            set {
+                this["Printer2x6OffsetX"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int Printer2x6OffsetY {
+            get {
+                return ((int)(this["Printer2x6OffsetY"]));
+            }
+            set {
+                this["Printer2x6OffsetY"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1234")]
+        public string LockPin {
+            get {
+                return ((string)(this["LockPin"]));
+            }
+            set {
+                this["LockPin"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnableLockFeature {
+            get {
+                return ((bool)(this["EnableLockFeature"]));
+            }
+            set {
+                this["EnableLockFeature"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int AutoLockTimeout {
+            get {
+                return ((int)(this["AutoLockTimeout"]));
+            }
+            set {
+                this["AutoLockTimeout"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnableGifGeneration {
+            get {
+                return ((bool)(this["EnableGifGeneration"]));
+            }
+            set {
+                this["EnableGifGeneration"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1500")]
+        public int GifFrameDelay {
+            get {
+                return ((int)(this["GifFrameDelay"]));
+            }
+            set {
+                this["GifFrameDelay"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("75")]
+        public int GifQuality {
+            get {
+                return ((int)(this["GifQuality"]));
+            }
+            set {
+                this["GifQuality"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1920")]
+        public int GifMaxWidth {
+            get {
+                return ((int)(this["GifMaxWidth"]));
+            }
+            set {
+                this["GifMaxWidth"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1080")]
+        public int GifMaxHeight {
+            get {
+                return ((int)(this["GifMaxHeight"]));
+            }
+            set {
+                this["GifMaxHeight"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool EnableGifOverlay {
+            get {
+                return ((bool)(this["EnableGifOverlay"]));
+            }
+            set {
+                this["EnableGifOverlay"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string GifOverlayPath {
+            get {
+                return ((string)(this["GifOverlayPath"]));
+            }
+            set {
+                this["GifOverlayPath"] = value;
             }
         }
     }

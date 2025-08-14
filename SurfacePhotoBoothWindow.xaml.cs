@@ -76,6 +76,9 @@ namespace Photobooth
             
             // Add keyboard shortcuts
             this.PreviewKeyDown += Window_PreviewKeyDown;
+            
+            // Handle window state changes to fix black screen on restore
+            this.StateChanged += Window_StateChanged;
         }
         
         private void SetupDpiAwareness()
@@ -524,15 +527,8 @@ namespace Photobooth
         
         private void MinimizeWindow_Click(object sender, RoutedEventArgs e)
         {
-            // Animate minimize
-            var animation = new DoubleAnimation
-            {
-                From = 1.0,
-                To = 0.0,
-                Duration = TimeSpan.FromMilliseconds(200)
-            };
-            animation.Completed += (s, args) => this.WindowState = WindowState.Minimized;
-            this.BeginAnimation(OpacityProperty, animation);
+            // Directly minimize without animation to avoid rendering issues
+            this.WindowState = WindowState.Minimized;
         }
         
         private void CloseWindow_Click(object sender, RoutedEventArgs e)
@@ -578,6 +574,44 @@ namespace Photobooth
         private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             CheckOrientation();
+        }
+        
+        private void Window_StateChanged(object sender, EventArgs e)
+        {
+            // Handle window state changes
+            if (this.WindowState == WindowState.Normal || this.WindowState == WindowState.Maximized)
+            {
+                // Window is being restored
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    // Force refresh the visual tree
+                    this.InvalidateVisual();
+                    
+                    // Re-apply rendering settings
+                    RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.HighQuality);
+                    RenderOptions.SetEdgeMode(this, EdgeMode.Unspecified);
+                    RenderOptions.SetClearTypeHint(this, ClearTypeHint.Enabled);
+                    
+                    // Force layout update
+                    this.UpdateLayout();
+                    
+                    // Refresh all child controls
+                    if (NavigationGrid != null)
+                    {
+                        NavigationGrid.InvalidateVisual();
+                        NavigationGrid.UpdateLayout();
+                    }
+                    
+                    if (ContentFrame != null)
+                    {
+                        ContentFrame.InvalidateVisual();
+                        ContentFrame.UpdateLayout();
+                    }
+                    
+                    // Reset opacity in case it was affected
+                    this.Opacity = 1.0;
+                }), DispatcherPriority.Render);
+            }
         }
         
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)

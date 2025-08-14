@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Photobooth.Services;
 using System.Runtime.InteropServices;
 using System.Drawing.Printing;
@@ -141,6 +142,15 @@ namespace Photobooth.Pages
                 
                 // Load enabled filters (default to all enabled if setting doesn't exist)
                 LoadEnabledFilters();
+                
+                // Load GIF animation settings
+                enableGifGenerationCheckBox.IsChecked = Properties.Settings.Default.EnableGifGeneration;
+                gifFrameDelaySlider.Value = Properties.Settings.Default.GifFrameDelay / 1000.0; // Convert from ms to seconds
+                enableGifOverlayCheckBox.IsChecked = Properties.Settings.Default.EnableGifOverlay;
+                gifOverlayPathTextBox.Text = Properties.Settings.Default.GifOverlayPath;
+                gifQualitySlider.Value = Properties.Settings.Default.GifQuality;
+                gifMaxWidthTextBox.Text = Properties.Settings.Default.GifMaxWidth.ToString();
+                gifMaxHeightTextBox.Text = Properties.Settings.Default.GifMaxHeight.ToString();
                 
                 // Load print settings including dual printer configuration
                 LoadPrintSettings();
@@ -1026,6 +1036,20 @@ namespace Photobooth.Pages
             }
         }
         
+        private void PrinterAlignment_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var alignmentDialog = new PrinterAlignmentDialog();
+                alignmentDialog.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening printer alignment dialog: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void AdvancedDriver2x6_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -2668,5 +2692,164 @@ namespace Photobooth.Pages
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+        private void ScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            try
+            {
+                ScrollViewer scrollViewer = sender as ScrollViewer;
+                if (scrollViewer != null)
+                {
+                    // Handle mouse wheel scrolling
+                    double offset = scrollViewer.VerticalOffset;
+                    
+                    // Adjust scroll speed (multiply delta for faster scrolling)
+                    double scrollAmount = e.Delta * 0.5; // Adjust multiplier for scroll speed
+                    
+                    scrollViewer.ScrollToVerticalOffset(offset - scrollAmount);
+                    
+                    // Mark event as handled to prevent bubbling
+                    e.Handled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ScrollViewer mouse wheel error: {ex.Message}");
+            }
+        }
+
+        private void InnerScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            try
+            {
+                ScrollViewer innerScrollViewer = sender as ScrollViewer;
+                if (innerScrollViewer != null)
+                {
+                    double offset = innerScrollViewer.VerticalOffset;
+                    double scrollAmount = e.Delta * 0.3; // Slower scroll for inner viewers
+                    
+                    // Check if we can scroll in the inner viewer
+                    bool canScrollUp = offset > 0;
+                    bool canScrollDown = offset < innerScrollViewer.ScrollableHeight;
+                    
+                    if ((e.Delta > 0 && canScrollUp) || (e.Delta < 0 && canScrollDown))
+                    {
+                        // Scroll the inner viewer
+                        innerScrollViewer.ScrollToVerticalOffset(offset - scrollAmount);
+                        e.Handled = true;
+                    }
+                    // If inner can't scroll, let the event bubble to parent
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Inner ScrollViewer mouse wheel error: {ex.Message}");
+            }
+        }
+
+        #region GIF Animation Settings Event Handlers
+
+        private void EnableGifGeneration_Changed(object sender, RoutedEventArgs e)
+        {
+            if (enableGifGenerationCheckBox != null)
+            {
+                Properties.Settings.Default.EnableGifGeneration = enableGifGenerationCheckBox.IsChecked ?? false;
+                Properties.Settings.Default.Save();
+            }
+        }
+
+        private void GifFrameDelaySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (gifFrameDelaySlider != null && gifFrameDelayValueText != null)
+            {
+                double seconds = Math.Round(gifFrameDelaySlider.Value, 1);
+                gifFrameDelayValueText.Text = $"{seconds} seconds";
+                
+                // Convert to milliseconds for storage
+                Properties.Settings.Default.GifFrameDelay = (int)(seconds * 1000);
+                Properties.Settings.Default.Save();
+            }
+        }
+
+        private void EnableGifOverlay_Changed(object sender, RoutedEventArgs e)
+        {
+            if (enableGifOverlayCheckBox != null)
+            {
+                Properties.Settings.Default.EnableGifOverlay = enableGifOverlayCheckBox.IsChecked ?? false;
+                Properties.Settings.Default.Save();
+            }
+        }
+
+        private void GifOverlayPath_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (gifOverlayPathTextBox != null && !string.IsNullOrEmpty(gifOverlayPathTextBox.Text))
+            {
+                Properties.Settings.Default.GifOverlayPath = gifOverlayPathTextBox.Text;
+                Properties.Settings.Default.Save();
+            }
+        }
+
+        private void BrowseGifOverlay_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Select Overlay Image",
+                    Filter = "Image Files (*.png;*.jpg;*.jpeg;*.gif;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.bmp|All Files (*.*)|*.*",
+                    CheckFileExists = true
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    gifOverlayPathTextBox.Text = dialog.FileName;
+                    Properties.Settings.Default.GifOverlayPath = dialog.FileName;
+                    Properties.Settings.Default.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error selecting overlay image: {ex.Message}", "Browse Overlay", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void GifQualitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (gifQualitySlider != null && gifQualityValueText != null)
+            {
+                int quality = (int)gifQualitySlider.Value;
+                gifQualityValueText.Text = $"{quality}%";
+                
+                Properties.Settings.Default.GifQuality = quality;
+                Properties.Settings.Default.Save();
+            }
+        }
+
+        private void GifMaxWidth_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (gifMaxWidthTextBox != null && int.TryParse(gifMaxWidthTextBox.Text, out int width))
+            {
+                if (width > 0 && width <= 4096)
+                {
+                    Properties.Settings.Default.GifMaxWidth = width;
+                    Properties.Settings.Default.Save();
+                }
+            }
+        }
+
+        private void GifMaxHeight_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (gifMaxHeightTextBox != null && int.TryParse(gifMaxHeightTextBox.Text, out int height))
+            {
+                if (height > 0 && height <= 4096)
+                {
+                    Properties.Settings.Default.GifMaxHeight = height;
+                    Properties.Settings.Default.Save();
+                }
+            }
+        }
+
+        #endregion
     }
 }

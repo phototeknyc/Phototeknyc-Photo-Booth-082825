@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.SQLite;
 using System.IO;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace Photobooth.Database
@@ -195,9 +196,58 @@ namespace Photobooth.Database
                         PhotosTaken INTEGER DEFAULT 0,
                         StartTime DATETIME DEFAULT CURRENT_TIMESTAMP,
                         EndTime DATETIME,
+                        SessionGuid TEXT UNIQUE, -- Unique identifier for file organization
                         IsActive BOOLEAN DEFAULT 1,
                         FOREIGN KEY (EventId) REFERENCES Events(Id) ON DELETE CASCADE,
                         FOREIGN KEY (TemplateId) REFERENCES Templates(Id) ON DELETE RESTRICT
+                    )";
+
+                // Create Photos table for individual photos within sessions
+                string createPhotosTable = @"
+                    CREATE TABLE IF NOT EXISTS Photos (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        SessionId INTEGER NOT NULL,
+                        FilePath TEXT NOT NULL,
+                        FileName TEXT NOT NULL,
+                        FileSize INTEGER,
+                        PhotoType TEXT DEFAULT 'Original', -- 'Original', 'Filtered', 'Preview'
+                        SequenceNumber INTEGER DEFAULT 1,
+                        CreatedDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        ThumbnailPath TEXT,
+                        CameraSettings TEXT, -- JSON for camera metadata
+                        IsActive BOOLEAN DEFAULT 1,
+                        FOREIGN KEY (SessionId) REFERENCES PhotoSessions(Id) ON DELETE CASCADE
+                    )";
+
+                // Create ComposedImages table for final layout images
+                string createComposedImagesTable = @"
+                    CREATE TABLE IF NOT EXISTS ComposedImages (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        SessionId INTEGER NOT NULL,
+                        FilePath TEXT NOT NULL,
+                        FileName TEXT NOT NULL,
+                        FileSize INTEGER,
+                        TemplateId INTEGER NOT NULL,
+                        OutputFormat TEXT DEFAULT '4x6', -- '4x6', '2x6', 'Custom'
+                        CreatedDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        PrintCount INTEGER DEFAULT 0,
+                        LastPrintDate DATETIME,
+                        ThumbnailPath TEXT,
+                        IsActive BOOLEAN DEFAULT 1,
+                        FOREIGN KEY (SessionId) REFERENCES PhotoSessions(Id) ON DELETE CASCADE,
+                        FOREIGN KEY (TemplateId) REFERENCES Templates(Id) ON DELETE RESTRICT
+                    )";
+
+                // Create ComposedImagePhotos junction table
+                string createComposedImagePhotosTable = @"
+                    CREATE TABLE IF NOT EXISTS ComposedImagePhotos (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ComposedImageId INTEGER NOT NULL,
+                        PhotoId INTEGER NOT NULL,
+                        PlaceholderIndex INTEGER, -- Which placeholder in template this photo fills
+                        FOREIGN KEY (ComposedImageId) REFERENCES ComposedImages(Id) ON DELETE CASCADE,
+                        FOREIGN KEY (PhotoId) REFERENCES Photos(Id) ON DELETE CASCADE,
+                        UNIQUE(ComposedImageId, PhotoId)
                     )";
                 
                 // Create indexes
@@ -213,6 +263,14 @@ namespace Photobooth.Database
                     CREATE INDEX IF NOT EXISTS idx_eventtemplates_event ON EventTemplates(EventId);
                     CREATE INDEX IF NOT EXISTS idx_eventtemplates_template ON EventTemplates(TemplateId);
                     CREATE INDEX IF NOT EXISTS idx_photosessions_event ON PhotoSessions(EventId);
+                    CREATE INDEX IF NOT EXISTS idx_photosessions_guid ON PhotoSessions(SessionGuid);
+                    CREATE INDEX IF NOT EXISTS idx_photos_session ON Photos(SessionId);
+                    CREATE INDEX IF NOT EXISTS idx_photos_type ON Photos(PhotoType);
+                    CREATE INDEX IF NOT EXISTS idx_photos_sequence ON Photos(SequenceNumber);
+                    CREATE INDEX IF NOT EXISTS idx_composedimages_session ON ComposedImages(SessionId);
+                    CREATE INDEX IF NOT EXISTS idx_composedimages_template ON ComposedImages(TemplateId);
+                    CREATE INDEX IF NOT EXISTS idx_composedimagephotos_composed ON ComposedImagePhotos(ComposedImageId);
+                    CREATE INDEX IF NOT EXISTS idx_composedimagephotos_photo ON ComposedImagePhotos(PhotoId);
                 ";
                 
                 using (var command = new SQLiteCommand(createTemplatesTable, connection))
@@ -250,13 +308,28 @@ namespace Photobooth.Database
                     command.ExecuteNonQuery();
                 }
                 
-                using (var command = new SQLiteCommand(createIndexes, connection))
+                using (var command = new SQLiteCommand(createPhotosTable, connection))
                 {
                     command.ExecuteNonQuery();
                 }
                 
-                // Run database migrations
+                using (var command = new SQLiteCommand(createComposedImagesTable, connection))
+                {
+                    command.ExecuteNonQuery();
+                }
+                
+                using (var command = new SQLiteCommand(createComposedImagePhotosTable, connection))
+                {
+                    command.ExecuteNonQuery();
+                }
+                
+                // Run database migrations BEFORE creating indexes
                 MigrateDatabase(connection);
+                
+                using (var command = new SQLiteCommand(createIndexes, connection))
+                {
+                    command.ExecuteNonQuery();
+                }
                 
                 // Insert default categories
                 InsertDefaultCategories(connection);
@@ -348,10 +421,53 @@ namespace Photobooth.Database
                     System.Diagnostics.Debug.WriteLine("Added HasNoStroke column to CanvasItems table");
                 }
                 
+                // Migration 3: Add SessionGuid column to PhotoSessions table if it doesn't exist
+                string checkPhotoSessionsColumns = "PRAGMA table_info(PhotoSessions)";
+                bool hasSessionGuid = false;
+                
+                try
+                {
+                    using (var command = new SQLiteCommand(checkPhotoSessionsColumns, connection))
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            string columnName = reader.GetString(1); // Column 1 is 'name' in PRAGMA table_info
+                            if (columnName == "SessionGuid") hasSessionGuid = true;
+                        }
+                    }
+                    
+                    if (!hasSessionGuid)
+                    {
+                        string addSessionGuidColumn = "ALTER TABLE PhotoSessions ADD COLUMN SessionGuid TEXT";
+                        using (var command = new SQLiteCommand(addSessionGuidColumn, connection))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        System.Diagnostics.Debug.WriteLine("Added SessionGuid column to PhotoSessions table");
+                        
+                        // Generate GUIDs for existing sessions
+                        string updateExistingSessions = @"
+                            UPDATE PhotoSessions 
+                            SET SessionGuid = LOWER(HEX(RANDOMBLOB(4)) || '-' || HEX(RANDOMBLOB(2)) || '-4' || SUBSTR(HEX(RANDOMBLOB(2)), 2) || '-' || SUBSTR('89AB', ABS(RANDOM()) % 4 + 1, 1) || SUBSTR(HEX(RANDOMBLOB(2)), 2) || '-' || HEX(RANDOMBLOB(6)))
+                            WHERE SessionGuid IS NULL OR SessionGuid = ''";
+                        using (var command = new SQLiteCommand(updateExistingSessions, connection))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        System.Diagnostics.Debug.WriteLine("Generated GUIDs for existing PhotoSessions");
+                    }
+                }
+                catch (Exception sessionMigrationEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"PhotoSessions migration failed: {sessionMigrationEx.Message}");
+                    // Continue anyway - table might not exist yet
+                }
+                
                 // Migration 2: Remove BLOB columns if path columns exist (optional cleanup)
                 // Note: SQLite doesn't support DROP COLUMN, so we'll just ignore the old columns
                 
-                System.Diagnostics.Debug.WriteLine($"Database migration check complete. BackgroundImagePath: {hasBackgroundImagePath}, ThumbnailImagePath: {hasThumbnailImagePath}");
+                System.Diagnostics.Debug.WriteLine($"Database migration check complete. BackgroundImagePath: {hasBackgroundImagePath}, ThumbnailImagePath: {hasThumbnailImagePath}, SessionGuid: {hasSessionGuid}");
             }
             catch (Exception ex)
             {
@@ -1407,6 +1523,58 @@ namespace Photobooth.Database
             return assetFiles;
         }
         
+        public List<ComposedImageData> GetRecentComposedImages(int limit = 10)
+        {
+            var images = new List<ComposedImageData>();
+            try
+            {
+                using (var conn = new SQLiteConnection(connectionString))
+                {
+                    conn.Open();
+                    string query = @"
+                        SELECT Id, SessionId, FilePath, FileName, FileSize, TemplateId, 
+                               OutputFormat, CreatedDate, PrintCount, LastPrintDate, 
+                               ThumbnailPath, IsActive
+                        FROM ComposedImages
+                        WHERE IsActive = 1
+                        ORDER BY CreatedDate DESC
+                        LIMIT @limit";
+                    
+                    using (var cmd = new SQLiteCommand(query, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@limit", limit);
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var img = new ComposedImageData
+                                {
+                                    Id = Convert.ToInt32(reader["Id"]),
+                                    SessionId = Convert.ToInt32(reader["SessionId"]),
+                                    FilePath = reader["FilePath"].ToString(),
+                                    FileName = reader["FileName"].ToString(),
+                                    FileSize = reader["FileSize"] != DBNull.Value ? Convert.ToInt64(reader["FileSize"]) : (long?)null,
+                                    TemplateId = Convert.ToInt32(reader["TemplateId"]),
+                                    OutputFormat = reader["OutputFormat"].ToString(),
+                                    CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
+                                    PrintCount = Convert.ToInt32(reader["PrintCount"]),
+                                    LastPrintDate = reader["LastPrintDate"] != DBNull.Value ? Convert.ToDateTime(reader["LastPrintDate"]) : (DateTime?)null,
+                                    ThumbnailPath = reader["ThumbnailPath"]?.ToString(),
+                                    IsActive = Convert.ToBoolean(reader["IsActive"])
+                                };
+                                images.Add(img);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting recent composed images: {ex.Message}");
+            }
+            return images;
+        }
+        
         private string SafeGetString(SQLiteDataReader reader, string columnName)
         {
             try
@@ -1437,6 +1605,467 @@ namespace Photobooth.Database
             }
             return defaultValue;
         }
+        
+        #endregion
+        
+        #region Photo Session Management Methods
+        
+        public int CreatePhotoSession(int eventId, int templateId, string sessionName = null)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string sessionGuid = Guid.NewGuid().ToString();
+                sessionName = sessionName ?? $"Session {DateTime.Now:yyyy-MM-dd HH:mm}";
+                
+                string insertSession = @"
+                    INSERT INTO PhotoSessions (EventId, TemplateId, SessionName, SessionGuid, StartTime)
+                    VALUES (@eventId, @templateId, @sessionName, @sessionGuid, CURRENT_TIMESTAMP);
+                    SELECT last_insert_rowid();";
+                
+                using (var command = new SQLiteCommand(insertSession, connection))
+                {
+                    command.Parameters.AddWithValue("@eventId", eventId);
+                    command.Parameters.AddWithValue("@templateId", templateId);
+                    command.Parameters.AddWithValue("@sessionName", sessionName);
+                    command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    
+                    return Convert.ToInt32(command.ExecuteScalar());
+                }
+            }
+        }
+        
+        public void EndPhotoSession(int sessionId)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string updateSession = @"
+                    UPDATE PhotoSessions 
+                    SET EndTime = CURRENT_TIMESTAMP,
+                        PhotosTaken = (SELECT COUNT(*) FROM Photos WHERE SessionId = @sessionId AND IsActive = 1)
+                    WHERE Id = @sessionId";
+                
+                using (var command = new SQLiteCommand(updateSession, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionId", sessionId);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+        
+        public void DeletePhotoSession(int sessionId)
+        {
+            try
+            {
+                using (var connection = new SQLiteConnection(connectionString))
+                {
+                    connection.Open();
+                    
+                    // Delete the session (cascade will handle related records)
+                    string deleteSession = "DELETE FROM PhotoSessions WHERE Id = @sessionId";
+                    
+                    using (var command = new SQLiteCommand(deleteSession, connection))
+                    {
+                        command.Parameters.AddWithValue("@sessionId", sessionId);
+                        int rowsAffected = command.ExecuteNonQuery();
+                        
+                        if (rowsAffected > 0)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"DeletePhotoSession: Deleted empty session {sessionId}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"DeletePhotoSession: Failed to delete session {sessionId}: {ex.Message}");
+            }
+        }
+        
+        public int SavePhoto(PhotoData photo)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string insertPhoto = @"
+                    INSERT INTO Photos (SessionId, FilePath, FileName, FileSize, PhotoType, 
+                                      SequenceNumber, ThumbnailPath, CameraSettings)
+                    VALUES (@sessionId, @filePath, @fileName, @fileSize, @photoType, 
+                            @sequenceNumber, @thumbnailPath, @cameraSettings);
+                    SELECT last_insert_rowid();";
+                
+                using (var command = new SQLiteCommand(insertPhoto, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionId", photo.SessionId);
+                    command.Parameters.AddWithValue("@filePath", photo.FilePath);
+                    command.Parameters.AddWithValue("@fileName", photo.FileName);
+                    command.Parameters.AddWithValue("@fileSize", photo.FileSize ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@photoType", photo.PhotoType ?? "Original");
+                    command.Parameters.AddWithValue("@sequenceNumber", photo.SequenceNumber);
+                    command.Parameters.AddWithValue("@thumbnailPath", photo.ThumbnailPath ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@cameraSettings", photo.CameraSettings ?? (object)DBNull.Value);
+                    
+                    return Convert.ToInt32(command.ExecuteScalar());
+                }
+            }
+        }
+        
+        public int SaveComposedImage(ComposedImageData composedImage)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string insertComposed = @"
+                    INSERT INTO ComposedImages (SessionId, FilePath, FileName, FileSize, TemplateId, 
+                                              OutputFormat, ThumbnailPath)
+                    VALUES (@sessionId, @filePath, @fileName, @fileSize, @templateId, 
+                            @outputFormat, @thumbnailPath);
+                    SELECT last_insert_rowid();";
+                
+                using (var command = new SQLiteCommand(insertComposed, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionId", composedImage.SessionId);
+                    command.Parameters.AddWithValue("@filePath", composedImage.FilePath);
+                    command.Parameters.AddWithValue("@fileName", composedImage.FileName);
+                    command.Parameters.AddWithValue("@fileSize", composedImage.FileSize ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@templateId", composedImage.TemplateId);
+                    command.Parameters.AddWithValue("@outputFormat", composedImage.OutputFormat ?? "4x6");
+                    command.Parameters.AddWithValue("@thumbnailPath", composedImage.ThumbnailPath ?? (object)DBNull.Value);
+                    
+                    return Convert.ToInt32(command.ExecuteScalar());
+                }
+            }
+        }
+        
+        public void LinkPhotosToComposedImage(int composedImageId, List<int> photoIds)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                for (int i = 0; i < photoIds.Count; i++)
+                {
+                    string insertLink = @"
+                        INSERT OR REPLACE INTO ComposedImagePhotos (ComposedImageId, PhotoId, PlaceholderIndex)
+                        VALUES (@composedImageId, @photoId, @placeholderIndex)";
+                    
+                    using (var command = new SQLiteCommand(insertLink, connection))
+                    {
+                        command.Parameters.AddWithValue("@composedImageId", composedImageId);
+                        command.Parameters.AddWithValue("@photoId", photoIds[i]);
+                        command.Parameters.AddWithValue("@placeholderIndex", i);
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+        
+        public List<PhotoSessionData> GetPhotoSessions(int? eventId = null)
+        {
+            var sessions = new List<PhotoSessionData>();
+            
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string selectSessions = @"
+                    SELECT ps.*, e.Name as EventName, t.Name as TemplateName,
+                           (SELECT COUNT(*) FROM Photos p WHERE p.SessionId = ps.Id AND p.IsActive = 1) as ActualPhotoCount,
+                           (SELECT COUNT(*) FROM ComposedImages ci WHERE ci.SessionId = ps.Id AND ci.IsActive = 1) as ComposedImageCount
+                    FROM PhotoSessions ps
+                    LEFT JOIN Events e ON ps.EventId = e.Id
+                    LEFT JOIN Templates t ON ps.TemplateId = t.Id
+                    WHERE ps.IsActive = 1" + (eventId.HasValue ? " AND ps.EventId = @eventId" : "") + @"
+                    ORDER BY ps.StartTime DESC";
+                
+                using (var command = new SQLiteCommand(selectSessions, connection))
+                {
+                    if (eventId.HasValue)
+                        command.Parameters.AddWithValue("@eventId", eventId.Value);
+                    
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            sessions.Add(MapReaderToPhotoSessionData(reader));
+                        }
+                    }
+                }
+            }
+            
+            return sessions;
+        }
+        
+        public List<PhotoData> GetSessionPhotos(int sessionId)
+        {
+            var photos = new List<PhotoData>();
+            
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string selectPhotos = @"
+                    SELECT * FROM Photos 
+                    WHERE SessionId = @sessionId AND IsActive = 1
+                    ORDER BY SequenceNumber";
+                
+                using (var command = new SQLiteCommand(selectPhotos, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionId", sessionId);
+                    
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            photos.Add(MapReaderToPhotoData(reader));
+                        }
+                    }
+                }
+            }
+            
+            return photos;
+        }
+        
+        public List<ComposedImageData> GetSessionComposedImages(int sessionId)
+        {
+            var composedImages = new List<ComposedImageData>();
+            
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string selectComposed = @"
+                    SELECT ci.*, t.Name as TemplateName
+                    FROM ComposedImages ci
+                    LEFT JOIN Templates t ON ci.TemplateId = t.Id
+                    WHERE ci.SessionId = @sessionId AND ci.IsActive = 1
+                    ORDER BY ci.CreatedDate";
+                
+                using (var command = new SQLiteCommand(selectComposed, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionId", sessionId);
+                    
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            composedImages.Add(MapReaderToComposedImageData(reader));
+                        }
+                    }
+                }
+            }
+            
+            return composedImages;
+        }
+        
+        public void UpdateComposedImagePrintCount(int composedImageId)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string updatePrintCount = @"
+                    UPDATE ComposedImages 
+                    SET PrintCount = PrintCount + 1, LastPrintDate = CURRENT_TIMESTAMP
+                    WHERE Id = @composedImageId";
+                
+                using (var command = new SQLiteCommand(updatePrintCount, connection))
+                {
+                    command.Parameters.AddWithValue("@composedImageId", composedImageId);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+        
+        private PhotoSessionData MapReaderToPhotoSessionData(SQLiteDataReader reader)
+        {
+            return new PhotoSessionData
+            {
+                Id = Convert.ToInt32(reader["Id"]),
+                EventId = Convert.ToInt32(reader["EventId"]),
+                TemplateId = Convert.ToInt32(reader["TemplateId"]),
+                SessionName = reader.IsDBNull(reader.GetOrdinal("SessionName")) ? null : reader.GetString(reader.GetOrdinal("SessionName")),
+                SessionGuid = reader.IsDBNull(reader.GetOrdinal("SessionGuid")) ? null : reader.GetString(reader.GetOrdinal("SessionGuid")),
+                PhotosTaken = Convert.ToInt32(reader["PhotosTaken"]),
+                ActualPhotoCount = Convert.ToInt32(reader["ActualPhotoCount"]),
+                ComposedImageCount = Convert.ToInt32(reader["ComposedImageCount"]),
+                StartTime = Convert.ToDateTime(reader["StartTime"]),
+                EndTime = reader.IsDBNull(reader.GetOrdinal("EndTime")) ? (DateTime?)null : Convert.ToDateTime(reader["EndTime"]),
+                EventName = reader.IsDBNull(reader.GetOrdinal("EventName")) ? null : reader.GetString(reader.GetOrdinal("EventName")),
+                TemplateName = reader.IsDBNull(reader.GetOrdinal("TemplateName")) ? null : reader.GetString(reader.GetOrdinal("TemplateName")),
+                IsActive = Convert.ToBoolean(reader["IsActive"])
+            };
+        }
+        
+        private PhotoData MapReaderToPhotoData(SQLiteDataReader reader)
+        {
+            return new PhotoData
+            {
+                Id = Convert.ToInt32(reader["Id"]),
+                SessionId = Convert.ToInt32(reader["SessionId"]),
+                FilePath = reader.GetString(reader.GetOrdinal("FilePath")),
+                FileName = reader.GetString(reader.GetOrdinal("FileName")),
+                FileSize = reader.IsDBNull(reader.GetOrdinal("FileSize")) ? (long?)null : Convert.ToInt64(reader["FileSize"]),
+                PhotoType = reader.IsDBNull(reader.GetOrdinal("PhotoType")) ? "Original" : reader.GetString(reader.GetOrdinal("PhotoType")),
+                SequenceNumber = Convert.ToInt32(reader["SequenceNumber"]),
+                CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
+                ThumbnailPath = reader.IsDBNull(reader.GetOrdinal("ThumbnailPath")) ? null : reader.GetString(reader.GetOrdinal("ThumbnailPath")),
+                CameraSettings = reader.IsDBNull(reader.GetOrdinal("CameraSettings")) ? null : reader.GetString(reader.GetOrdinal("CameraSettings")),
+                IsActive = Convert.ToBoolean(reader["IsActive"])
+            };
+        }
+        
+        private ComposedImageData MapReaderToComposedImageData(SQLiteDataReader reader)
+        {
+            return new ComposedImageData
+            {
+                Id = Convert.ToInt32(reader["Id"]),
+                SessionId = Convert.ToInt32(reader["SessionId"]),
+                FilePath = reader.GetString(reader.GetOrdinal("FilePath")),
+                FileName = reader.GetString(reader.GetOrdinal("FileName")),
+                FileSize = reader.IsDBNull(reader.GetOrdinal("FileSize")) ? (long?)null : Convert.ToInt64(reader["FileSize"]),
+                TemplateId = Convert.ToInt32(reader["TemplateId"]),
+                TemplateName = reader.IsDBNull(reader.GetOrdinal("TemplateName")) ? null : reader.GetString(reader.GetOrdinal("TemplateName")),
+                OutputFormat = reader.IsDBNull(reader.GetOrdinal("OutputFormat")) ? "4x6" : reader.GetString(reader.GetOrdinal("OutputFormat")),
+                CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
+                PrintCount = Convert.ToInt32(reader["PrintCount"]),
+                LastPrintDate = reader.IsDBNull(reader.GetOrdinal("LastPrintDate")) ? (DateTime?)null : Convert.ToDateTime(reader["LastPrintDate"]),
+                ThumbnailPath = reader.IsDBNull(reader.GetOrdinal("ThumbnailPath")) ? null : reader.GetString(reader.GetOrdinal("ThumbnailPath")),
+                IsActive = Convert.ToBoolean(reader["IsActive"])
+            };
+        }
+        
+        #region Session Cleanup
+        
+        public void CleanupOldSessions(int ageInHours = 24)
+        {
+            try
+            {
+                using (var connection = new SQLiteConnection(connectionString))
+                {
+                    connection.Open();
+                    
+                    var cutoffTime = DateTime.Now.AddHours(-ageInHours);
+                    
+                    // Get sessions older than cutoff time
+                    string selectOldSessions = @"
+                        SELECT Id, SessionGuid FROM PhotoSessions 
+                        WHERE StartTime < @cutoffTime";
+                    
+                    var oldSessionIds = new List<int>();
+                    var oldSessionGuids = new List<string>();
+                    
+                    using (var command = new SQLiteCommand(selectOldSessions, connection))
+                    {
+                        command.Parameters.AddWithValue("@cutoffTime", cutoffTime);
+                        using (var reader = command.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                oldSessionIds.Add(reader.GetInt32(0));
+                                var guid = reader.IsDBNull(1) ? null : reader.GetString(1);
+                                if (!string.IsNullOrEmpty(guid))
+                                {
+                                    oldSessionGuids.Add(guid);
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (oldSessionIds.Count > 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"CleanupOldSessions: Found {oldSessionIds.Count} sessions older than {ageInHours} hours");
+                        
+                        // Delete from database (cascade will handle related records)
+                        string deleteOldSessions = @"
+                            DELETE FROM PhotoSessions 
+                            WHERE StartTime < @cutoffTime";
+                        
+                        using (var command = new SQLiteCommand(deleteOldSessions, connection))
+                        {
+                            command.Parameters.AddWithValue("@cutoffTime", cutoffTime);
+                            int deletedCount = command.ExecuteNonQuery();
+                            System.Diagnostics.Debug.WriteLine($"CleanupOldSessions: Deleted {deletedCount} old sessions from database");
+                        }
+                        
+                        // Clean up associated files
+                        CleanupOldSessionFiles(oldSessionGuids);
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"CleanupOldSessions: No sessions older than {ageInHours} hours found");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CleanupOldSessions: Error during cleanup: {ex.Message}");
+                // Don't throw - cleanup is not critical to app functionality
+            }
+        }
+        
+        private void CleanupOldSessionFiles(List<string> sessionGuids)
+        {
+            try
+            {
+                foreach (var sessionGuid in sessionGuids)
+                {
+                    if (string.IsNullOrEmpty(sessionGuid)) continue;
+                    
+                    // Look for session directories in common photo locations
+                    var photoLocations = new[]
+                    {
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Photobooth", "Sessions", sessionGuid),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Photobooth", sessionGuid),
+                        Path.Combine("Photos", "Sessions", sessionGuid),
+                        Path.Combine("Photos", sessionGuid)
+                    };
+                    
+                    foreach (var location in photoLocations)
+                    {
+                        if (Directory.Exists(location))
+                        {
+                            try
+                            {
+                                Directory.Delete(location, true);
+                                System.Diagnostics.Debug.WriteLine($"CleanupOldSessionFiles: Deleted directory {location}");
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"CleanupOldSessionFiles: Failed to delete {location}: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CleanupOldSessionFiles: Error during file cleanup: {ex.Message}");
+            }
+        }
+        
+        public void RunPeriodicCleanup()
+        {
+            try
+            {
+                // Run cleanup on a background thread
+                Task.Run(() =>
+                {
+                    CleanupOldSessions(24); // Clean sessions older than 24 hours
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"RunPeriodicCleanup: Error starting cleanup task: {ex.Message}");
+            }
+        }
+        
+        #endregion
         
         #endregion
     }
@@ -1543,5 +2172,55 @@ namespace Photobooth.Database
         public bool IsActive { get; set; } = true;
         public DateTime CreatedDate { get; set; }
         public DateTime ModifiedDate { get; set; }
+    }
+    
+    // New data classes for photo session management
+    public class PhotoSessionData
+    {
+        public int Id { get; set; }
+        public int EventId { get; set; }
+        public int TemplateId { get; set; }
+        public string SessionName { get; set; }
+        public string SessionGuid { get; set; }
+        public int PhotosTaken { get; set; }
+        public int ActualPhotoCount { get; set; }
+        public int ComposedImageCount { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+        public string EventName { get; set; }
+        public string TemplateName { get; set; }
+        public bool IsActive { get; set; }
+    }
+    
+    public class PhotoData
+    {
+        public int Id { get; set; }
+        public int SessionId { get; set; }
+        public string FilePath { get; set; }
+        public string FileName { get; set; }
+        public long? FileSize { get; set; }
+        public string PhotoType { get; set; } // 'Original', 'Filtered', 'Preview'
+        public int SequenceNumber { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public string ThumbnailPath { get; set; }
+        public string CameraSettings { get; set; } // JSON for camera metadata
+        public bool IsActive { get; set; }
+    }
+    
+    public class ComposedImageData
+    {
+        public int Id { get; set; }
+        public int SessionId { get; set; }
+        public string FilePath { get; set; }
+        public string FileName { get; set; }
+        public long? FileSize { get; set; }
+        public int TemplateId { get; set; }
+        public string TemplateName { get; set; }
+        public string OutputFormat { get; set; } // '4x6', '2x6', 'Custom'
+        public DateTime CreatedDate { get; set; }
+        public int PrintCount { get; set; }
+        public DateTime? LastPrintDate { get; set; }
+        public string ThumbnailPath { get; set; }
+        public bool IsActive { get; set; }
     }
 }

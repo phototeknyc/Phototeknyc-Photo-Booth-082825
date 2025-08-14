@@ -2,6 +2,8 @@ using CameraControl.Devices;
 using CameraControl.Devices.Classes;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
@@ -14,6 +16,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Path = System.IO.Path;
@@ -23,6 +26,7 @@ using Photobooth.Services;
 using Photobooth.Database;
 using System.Linq;
 using Photobooth.Controls;
+using System.ComponentModel;
 
 namespace Photobooth.Pages
 {
@@ -57,6 +61,11 @@ namespace Photobooth.Pages
         
         // Retake functionality
         private DispatcherTimer retakeReviewTimer;
+        
+        // Print functionality
+        private string lastProcessedImagePath;
+        private string lastProcessedImagePathForPrinting; // Separate path for 4x6 version if needed
+        private bool lastProcessedWas2x6Template; // Track if original was 2x6 for proper printer routing
         private int retakeTimeRemaining;
         private int photoIndexToRetake = -1;
         private bool isRetakingPhoto = false;
@@ -72,11 +81,16 @@ namespace Photobooth.Pages
         private TemplateData selectedTemplateForOverlay;
         private bool isSelectingTemplateForSession = false;
         
-        // Filter service
-        private PhotoFilterService filterService;
+        // Filter service - using hybrid Magick.NET/GDI+ service for best performance
+        private PhotoFilterServiceHybrid filterService;
         
         // Printer monitoring
         private PrinterMonitorService printerMonitor;
+        
+        // Database session tracking
+        private int? currentDatabaseSessionId = null;
+        private string currentSessionGuid = null;
+        private List<int> currentSessionPhotoIds = new List<int>();
 
         public PhotoboothTouchModern()
         {
@@ -89,7 +103,11 @@ namespace Photobooth.Pages
             photoboothService = new PhotoboothService();
             eventService = new EventService();
             database = new TemplateDatabase();
-            filterService = new PhotoFilterService();
+            // Use hybrid filter service for best performance with Magick.NET + GDI+ fallback
+            filterService = new PhotoFilterServiceHybrid();
+            
+            // Run database cleanup for sessions older than 24 hours
+            database.RunPeriodicCleanup();
             
             // Initialize printer monitoring
             printerMonitor = PrinterMonitorService.Instance;
@@ -245,6 +263,9 @@ namespace Photobooth.Pages
             // Check for event/template workflow data
             LoadEventTemplateWorkflow();
             
+            // Initialize printer status
+            CheckPrinterStatus();
+            
             // Use exact same synchronous approach as working Camera.xaml.cs
             try
             {
@@ -289,6 +310,9 @@ namespace Photobooth.Pages
             
             if (currentEvent != null && currentTemplate != null)
             {
+                // Don't create database session yet - wait until first photo is captured
+                // CreateDatabaseSession(); // Moved to first photo capture
+                
                 // Update UI with event information
                 statusText.Text = $"Event: {currentEvent.Name} - Template: {currentTemplate.Name}";
                 
@@ -493,6 +517,14 @@ namespace Photobooth.Pages
                 photoStripImages.Clear();
                 photoStripItems.Clear();
                 
+                // Clear previous processed image paths
+                lastProcessedImagePath = null;
+                lastProcessedImagePathForPrinting = null;
+                lastProcessedWas2x6Template = false;
+                
+                // Hide print button when starting a new session
+                HidePrintButton();
+                
                 // Add placeholder boxes for all photos needed
                 UpdatePhotoStripPlaceholders();
                 
@@ -504,6 +536,18 @@ namespace Photobooth.Pages
                 isCapturing = true;
                 startButton.IsEnabled = false;
                 stopButton.IsEnabled = true;
+                
+                // Hide session loaded indicator and navigation when starting new capture
+                if (sessionLoadedIndicator != null)
+                    sessionLoadedIndicator.Visibility = Visibility.Collapsed;
+                if (composedImageNavigation != null)
+                    composedImageNavigation.Visibility = Visibility.Collapsed;
+                if (photoViewModeIndicator != null)
+                    photoViewModeIndicator.Visibility = Visibility.Collapsed;
+                
+                // Clear loaded session data
+                loadedComposedImages = null;
+                currentComposedImageIndex = 0;
                 
                 statusText.Text = "Preparing camera...";
                 Log.Debug("StartPhotoSequence: Set isCapturing=true, disabled start button");
@@ -822,9 +866,18 @@ namespace Photobooth.Pages
             Log.Debug("PhotoboothTouch: Exiting Capture() method");
         }
 
-        private void UpdatePhotoStripPlaceholders()
+        private void UpdatePhotoStripPlaceholders(bool preserveExisting = false)
         {
-            photoStripItems.Clear();
+            if (!preserveExisting)
+            {
+                photoStripItems.Clear();
+            }
+            
+            if (preserveExisting)
+            {
+                // Don't clear if we're preserving existing photos
+                return;
+            }
             
             // Add placeholder items for all photos needed
             for (int i = 0; i < totalPhotosNeeded; i++)
@@ -1173,6 +1226,9 @@ namespace Photobooth.Pages
                             // Add captured photo to list for template composition
                             capturedPhotoPaths.Add(fileName);
                             Log.Debug($"PhotoCaptured: Added photo {currentPhotoIndex} to list: {fileName}");
+                            
+                            // Save photo to database
+                            SavePhotoToDatabase(fileName, currentPhotoIndex, "Original");
                         }
                         
                         // Add to photo strip
@@ -1210,6 +1266,8 @@ namespace Photobooth.Pages
                                 {
                                     photoStripItems[currentPhotoIndex - 1].Image = bitmap;
                                     photoStripItems[currentPhotoIndex - 1].IsPlaceholder = false;
+                                    photoStripItems[currentPhotoIndex - 1].ItemType = "Photo";
+                                    photoStripItems[currentPhotoIndex - 1].FilePath = fileName;
                                 }
                             }
                             
@@ -1716,6 +1774,13 @@ namespace Photobooth.Pages
                     }
                 }
                 
+                // Check if this is a 2x6 template and needs duplication for 4x6 printing
+                bool is2x6Template = Is2x6Template(templateWidth, templateHeight);
+                lastProcessedWas2x6Template = is2x6Template; // Store for printer routing
+                
+                // Check setting for 2x6 duplication behavior
+                bool duplicate2x6To4x6 = Properties.Settings.Default.Duplicate2x6To4x6;
+                
                 // Save the final composed image
                 string outputDir = Path.Combine(FolderForPhotos, "Composed");
                 if (!Directory.Exists(outputDir))
@@ -1733,16 +1798,172 @@ namespace Photobooth.Pages
                 encoderParams.Param[0] = new EncoderParameter(
                     Encoder.Quality, 95L);
                 
+                // Always save the original composed image for display
                 finalBitmap.Save(outputPath, jpegEncoder, encoderParams);
+                Log.Debug($"ComposeTemplateWithPhotos: Saved original composed image to {outputPath}");
+                
+                // Store the display path
+                lastProcessedImagePath = outputPath;
+                
+                // Save composed image to database
+                string outputFormat = is2x6Template ? "2x6" : "4x6";
+                SaveComposedImageToDatabase(outputPath, outputFormat);
+                
+                // Add composed image to photo strip (must be on UI thread) - use BeginInvoke to avoid deadlock
+                Dispatcher.BeginInvoke(new Action(() => AddComposedImageToPhotoStrip(outputPath)));
+                
+                Log.Debug("ComposeTemplateWithPhotos: After Dispatcher.BeginInvoke call");
+                
+                // If it's a 2x6 template and duplication is enabled, create a 4x6 version for printing only
+                if (is2x6Template && duplicate2x6To4x6)
+                {
+                    Log.Debug($"ComposeTemplateWithPhotos: Detected 2x6 template ({templateWidth}x{templateHeight}), creating hidden 4x6 version for printing");
+                    
+                    using (var duplicatedBitmap = Create4x6From2x6(finalBitmap))
+                    {
+                        string printPath = Path.Combine(outputDir, $"{currentEvent.Name}_{currentTemplate.Name}_{timestamp}_4x6_print.jpg");
+                        duplicatedBitmap.Save(printPath, jpegEncoder, encoderParams);
+                        lastProcessedImagePathForPrinting = printPath;
+                        Log.Debug($"ComposeTemplateWithPhotos: Saved 4x6 print version to {printPath}");
+                    }
+                }
+                else
+                {
+                    // For non-2x6 templates or when duplication is disabled, use the same image for printing
+                    lastProcessedImagePathForPrinting = outputPath;
+                    if (is2x6Template)
+                    {
+                        Log.Debug($"ComposeTemplateWithPhotos: Detected 2x6 template, keeping as single 2x6 for printing (duplication disabled)");
+                    }
+                }
+                
                 finalBitmap.Dispose();
                 
-                Log.Debug($"ComposeTemplateWithPhotos: Saved composed image to {outputPath}");
-                return outputPath;
+                Log.Debug($"ComposeTemplateWithPhotos: About to return outputPath: '{outputPath}'");
+                Log.Debug($"ComposeTemplateWithPhotos: File exists at return: {File.Exists(outputPath)}");
+                
+                return outputPath; // Return the original for display
             }
             catch (Exception ex)
             {
                 Log.Error("ComposeTemplateWithPhotos: Failed to compose template", ex);
                 return null;
+            }
+        }
+        
+        private bool Is2x6Template(int width, int height)
+        {
+            // Check if dimensions match 2x6 at common DPI (300 DPI)
+            // 2x6 inches at 300 DPI = 600x1800 pixels
+            // Allow some tolerance for different DPI settings
+            
+            float aspectRatio = (float)width / height;
+            float expectedRatio = 2.0f / 6.0f; // 0.333
+            
+            // Check if aspect ratio matches 2:6 (with 5% tolerance)
+            bool ratioMatches = Math.Abs(aspectRatio - expectedRatio) < 0.02f;
+            
+            // Also check for common 2x6 pixel dimensions at various DPI
+            bool dimensionsMatch = 
+                (width >= 590 && width <= 610 && height >= 1790 && height <= 1810) || // 300 DPI
+                (width >= 295 && width <= 305 && height >= 895 && height <= 905) ||   // 150 DPI
+                (width >= 196 && width <= 204 && height >= 596 && height <= 604);     // 100 DPI
+            
+            Log.Debug($"Is2x6Template: Width={width}, Height={height}, Ratio={aspectRatio:F3}, RatioMatches={ratioMatches}, DimensionsMatch={dimensionsMatch}");
+            
+            return ratioMatches || dimensionsMatch;
+        }
+        
+        private System.Drawing.Bitmap Create4x6From2x6(System.Drawing.Bitmap source2x6)
+        {
+            try
+            {
+                // Check if we should keep portrait orientation for strip printers
+                bool keepPortraitForStrips = Properties.Settings.Default.AutoRoutePrinter && 
+                                           !string.IsNullOrEmpty(Properties.Settings.Default.Printer2x6Name);
+                
+                if (keepPortraitForStrips)
+                {
+                    // Keep portrait orientation: place two 2x6 strips side by side vertically (still 2" wide x 6" tall, but with both strips)
+                    // This creates a 4x6 in portrait orientation (1200x1800 at 300 DPI)
+                    int outputWidth = source2x6.Width * 2;  // Double the width (2" becomes 4")
+                    int outputHeight = source2x6.Height;    // Keep same height (6")
+                    
+                    Log.Debug($"Create4x6From2x6: Creating portrait {outputWidth}x{outputHeight} from {source2x6.Width}x{source2x6.Height}");
+                    
+                    var output4x6 = new System.Drawing.Bitmap(outputWidth, outputHeight);
+                    output4x6.SetResolution(source2x6.HorizontalResolution, source2x6.VerticalResolution);
+                    
+                    using (var graphics = Graphics.FromImage(output4x6))
+                    {
+                        // Set high quality rendering
+                        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        graphics.SmoothingMode = SmoothingMode.HighQuality;
+                        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                        graphics.CompositingQuality = CompositingQuality.HighQuality;
+                        
+                        // Fill background (usually white for photo prints)
+                        graphics.Clear(System.Drawing.Color.White);
+                        
+                        // Place two strips side by side (no rotation needed)
+                        // First strip on the left
+                        graphics.DrawImage(source2x6, 0, 0, source2x6.Width, source2x6.Height);
+                        
+                        // Second strip on the right
+                        graphics.DrawImage(source2x6, source2x6.Width, 0, source2x6.Width, source2x6.Height);
+                        
+                        Log.Debug($"Create4x6From2x6: Successfully created 4x6 portrait composite with duplicated 2x6 strips");
+                    }
+                    
+                    return output4x6;
+                }
+                else
+                {
+                    // Original landscape orientation for standard 4x6 printers
+                    // Rotate and place side by side horizontally (creates 1800x1200 at 300 DPI)
+                    int outputWidth = source2x6.Height;  // 6 inches becomes width
+                    int outputHeight = source2x6.Width * 2; // 2 inches doubled to 4 inches
+                    
+                    Log.Debug($"Create4x6From2x6: Creating landscape {outputWidth}x{outputHeight} from {source2x6.Width}x{source2x6.Height}");
+                    
+                    var output4x6 = new System.Drawing.Bitmap(outputWidth, outputHeight);
+                    output4x6.SetResolution(source2x6.HorizontalResolution, source2x6.VerticalResolution);
+                    
+                    using (var graphics = Graphics.FromImage(output4x6))
+                    {
+                        // Set high quality rendering
+                        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        graphics.SmoothingMode = SmoothingMode.HighQuality;
+                        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                        graphics.CompositingQuality = CompositingQuality.HighQuality;
+                        
+                        // Fill background (usually white for photo prints)
+                        graphics.Clear(System.Drawing.Color.White);
+                        
+                        // Rotate 90 degrees and place side by side
+                        // First strip (top half) - rotate 90 degrees clockwise
+                        graphics.TranslateTransform(0, source2x6.Width);
+                        graphics.RotateTransform(-90);
+                        graphics.DrawImage(source2x6, 0, 0, source2x6.Width, source2x6.Height);
+                        graphics.ResetTransform();
+                        
+                        // Second strip (bottom half) - rotate 90 degrees clockwise
+                        graphics.TranslateTransform(0, source2x6.Width * 2);
+                        graphics.RotateTransform(-90);
+                        graphics.DrawImage(source2x6, 0, 0, source2x6.Width, source2x6.Height);
+                        graphics.ResetTransform();
+                        
+                        Log.Debug($"Create4x6From2x6: Successfully created 4x6 landscape composite with duplicated 2x6 strips");
+                    }
+                    
+                    return output4x6;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Create4x6From2x6: Failed to create 4x6 from 2x6: {ex.Message}");
+                // Return original if conversion fails
+                return source2x6;
             }
         }
         
@@ -2190,6 +2411,9 @@ namespace Photobooth.Pages
                 currentEvent = selectedEventForOverlay;
                 currentTemplate = selectedTemplateForOverlay;
                 
+                // Don't create database session yet - wait until first photo is captured
+                // CreateDatabaseSession(); // Moved to first photo capture
+                
                 // Get photo count from template
                 totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
                 currentPhotoIndex = 0;
@@ -2298,21 +2522,6 @@ namespace Photobooth.Pages
         
         private bool _isLoadingSettings = false; // Flag to prevent infinite recursion
         
-        private void GalleryButton_Click(object sender, RoutedEventArgs e)
-        {
-            Log.Debug("GalleryButton_Click: Opening gallery overlay");
-            
-            try
-            {
-                // Show the gallery overlay
-                galleryOverlay.Show();
-            }
-            catch (Exception ex)
-            {
-                Log.Error("Failed to open gallery overlay", ex);
-                MessageBox.Show($"Failed to open gallery: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
         
         private void CameraSettingsButton_Click(object sender, RoutedEventArgs e)
         {
@@ -2683,13 +2892,8 @@ namespace Photobooth.Pages
             if (!Properties.Settings.Default.EnableRetake)
             {
                 // Check if we should show filter selection without retake
-                if (Properties.Settings.Default.EnableFilters && Properties.Settings.Default.AllowFilterChange)
-                {
-                    // Show filter-only review (simplified version of retake review)
-                    ShowFilterOnlyReview();
-                    return;
-                }
-                else if (Properties.Settings.Default.EnableFilters)
+                // Filters are now handled in post-session overlay, skip the old filter review
+                if (Properties.Settings.Default.EnableFilters)
                 {
                     // Apply default filter without UI
                     if (Properties.Settings.Default.DefaultFilter > 0)
@@ -2741,56 +2945,12 @@ namespace Photobooth.Pages
                 });
             }
             
-            // Initialize filter controls based on settings
-            if (Properties.Settings.Default.EnableFilters)
-            {
-                // Show filter section
-                filterSectionContainer.Visibility = Visibility.Visible;
-                
-                // Show filter UI only if filters are enabled in settings
-                if (Properties.Settings.Default.AllowFilterChange)
-                {
-                    // Show filter selection if users are allowed to change filters
-                    enableFiltersCheckBox.Visibility = Visibility.Visible;
-                    enableFiltersCheckBox.IsChecked = true;
-                    filterSelectionControl.Visibility = Visibility.Visible;
-                    
-                    // Use the first photo as the preview source
-                    if (capturedPhotoPaths.Count > 0)
-                    {
-                        Task.Run(async () =>
-                        {
-                            await Dispatcher.InvokeAsync(async () =>
-                            {
-                                await filterSelectionControl.SetSourceImage(capturedPhotoPaths[0]);
-                            });
-                        });
-                    }
-                }
-                else
-                {
-                    // Filters enabled but users can't change them - hide UI but apply default filter
-                    enableFiltersCheckBox.Visibility = Visibility.Collapsed;
-                    filterSelectionControl.Visibility = Visibility.Collapsed;
-                    
-                    // Set default filter if specified
-                    if (Properties.Settings.Default.DefaultFilter > 0)
-                    {
-                        FilterType defaultFilter = (FilterType)Properties.Settings.Default.DefaultFilter;
-                        filterSelectionControl.SetSelectedFilter(defaultFilter);
-                    }
-                }
-            }
-            else
-            {
-                // Filters completely disabled - hide entire filter section
-                filterSectionContainer.Visibility = Visibility.Collapsed;
+            // Filter selection is now handled in post-session overlay - always keep old controls hidden
+            filterSectionContainer.Visibility = Visibility.Collapsed;
+            if (enableFiltersCheckBox != null)
                 enableFiltersCheckBox.Visibility = Visibility.Collapsed;
+            if (filterSelectionControl != null)
                 filterSelectionControl.Visibility = Visibility.Collapsed;
-                
-                // Ensure no filter is selected
-                filterSelectionControl.SetSelectedFilter(FilterType.None);
-            }
             
             // Set up and start timer
             retakeTimeRemaining = Properties.Settings.Default.RetakeTimeout;
@@ -2983,25 +3143,29 @@ namespace Photobooth.Pages
         {
             statusText.Text = $"Processing template with {capturedPhotoPaths.Count} photos...";
             
+            // Check if filters are enabled and we should show the filter selection
+            // For now, always show filter selection when filters are enabled
+            if (Properties.Settings.Default.EnableFilters)
+            {
+                Log.Debug("ProcessTemplateWithPhotos: Filters enabled with selection UI - showing filter overlay");
+                // Show filter selection overlay on UI thread
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    ShowPostSessionFilterOverlay();
+                }));
+                return; // The filter selection will call ProcessTemplateWithPhotosInternal when done
+            }
+            
             Task.Run(async () =>
             {
                 try
                 {
                     Log.Debug($"ProcessTemplateWithPhotos: Processing {capturedPhotoPaths.Count} photos into template");
                     
-                    // Apply filters only if enabled in settings
+                    // Apply filters only if enabled in settings (but no UI selection)
                     if (Properties.Settings.Default.EnableFilters)
                     {
                         FilterType selectedFilter = FilterType.None;
-                        
-                        // Try to get the selected filter from the control if available
-                        if (filterSelectionControl != null)
-                        {
-                            await Dispatcher.InvokeAsync(() =>
-                            {
-                                selectedFilter = filterSelectionControl.GetSelectedFilter();
-                            });
-                        }
                         
                         // If no filter selected, use default filter from settings
                         if (selectedFilter == FilterType.None && Properties.Settings.Default.DefaultFilter > 0)
@@ -3019,7 +3183,7 @@ namespace Photobooth.Pages
                             List<string> filteredPaths = new List<string>();
                             for (int i = 0; i < capturedPhotoPaths.Count; i++)
                             {
-                                string filteredPath = await ApplyFilterToPhoto(capturedPhotoPaths[i], selectedFilter);
+                                string filteredPath = await ApplyFilterToPhoto(capturedPhotoPaths[i], selectedFilter, false);
                                 filteredPaths.Add(filteredPath);
                             }
                             
@@ -3029,7 +3193,543 @@ namespace Photobooth.Pages
                     }
                     else
                     {
-                        Log.Debug("Filters are disabled - skipping filter application");
+                        Log.Debug("Filters disabled, processing without filters");
+                    }
+                    
+                    // Process the template with the captured photos
+                    string processedImagePath = await ComposeTemplateWithPhotos();
+                    
+                    Log.Debug($"ProcessTemplateWithPhotos: ComposeTemplateWithPhotos returned: '{processedImagePath}'");
+                    Log.Debug($"ProcessTemplateWithPhotos: File exists check: {(processedImagePath != null ? File.Exists(processedImagePath).ToString() : "null path")}");
+                    
+                    if (!string.IsNullOrEmpty(processedImagePath) && File.Exists(processedImagePath))
+                    {
+                        Log.Debug($"ProcessTemplateWithPhotos: Template processed successfully: {processedImagePath}");
+                        
+                        Dispatcher.Invoke(() =>
+                        {
+                            // Show the processed image (always show the original, not the 4x6 duplicate)
+                            liveViewImage.Source = new BitmapImage(new Uri(processedImagePath));
+                            statusText.Text = "Photos processed successfully!";
+                            
+                            // Show print button
+                            printButton.Visibility = Visibility.Visible;
+                            
+                            // Optional: Auto-stop after processing (with delay)
+                            Task.Delay(3000).ContinueWith(_ =>
+                            {
+                                Dispatcher.Invoke(() =>
+                                {
+                                    StopPhotoSequence();
+                                    statusText.Text = "Session complete - Touch START for new session";
+                                });
+                            });
+                        });
+                    }
+                    else
+                    {
+                        Log.Error("ProcessTemplateWithPhotos: No processed image returned");
+                        Dispatcher.Invoke(() =>
+                        {
+                            statusText.Text = "Failed to process template";
+                            StopPhotoSequence();
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("ProcessTemplateWithPhotos: Failed to process template", ex);
+                    Dispatcher.Invoke(() =>
+                    {
+                        statusText.Text = $"Template processing error: {ex.Message}";
+                        StopPhotoSequence();
+                    });
+                }
+            });
+        }
+        
+        private async void ShowPostSessionFilterOverlay()
+        {
+            // Prepare filter items with preview from first captured photo
+            if (capturedPhotoPaths.Count > 0)
+            {
+                try
+                {
+                    Log.Debug($"ShowPostSessionFilterOverlay: Starting filter preview generation with {capturedPhotoPaths.Count} photos");
+                    statusText.Text = "Preparing filter options...";
+                    
+                    // Ensure live view is visible for preview
+                    liveViewImage.Visibility = Visibility.Visible;
+                    
+                    // Show overlay immediately with loading state
+                    postSessionFilterOverlay.Visibility = Visibility.Visible;
+                    Log.Debug($"ShowPostSessionFilterOverlay: Set overlay to visible, actual visibility: {postSessionFilterOverlay.Visibility}");
+                    
+                    // Generate filter previews directly on UI thread with proper async handling
+                    try
+                    {
+                        Log.Debug($"ShowPostSessionFilterOverlay: Generating previews for photo: {capturedPhotoPaths[0]}");
+                        await GenerateFilterPreviews(capturedPhotoPaths[0]);
+                        statusText.Text = "Select a filter to preview";
+                        Log.Debug("ShowPostSessionFilterOverlay: Filter previews generated successfully");
+                        
+                        // Ensure overlay is visible after preview generation
+                        Log.Debug($"ShowPostSessionFilterOverlay: Overlay visibility = {postSessionFilterOverlay.Visibility}");
+                        if (postSessionFilterOverlay.Visibility != Visibility.Visible)
+                        {
+                            postSessionFilterOverlay.Visibility = Visibility.Visible;
+                            Log.Debug("ShowPostSessionFilterOverlay: Forced overlay to visible");
+                        }
+                        
+                        // Force UI update and check again after small delay
+                        await Task.Delay(100);
+                        postSessionFilterOverlay.UpdateLayout();
+                        Log.Debug($"ShowPostSessionFilterOverlay: After UpdateLayout, visibility = {postSessionFilterOverlay.Visibility}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"ShowPostSessionFilterOverlay: Error generating previews: {ex.Message}", ex);
+                        statusText.Text = "Error loading filters - proceeding without filters";
+                        postSessionFilterOverlay.Visibility = Visibility.Collapsed;
+                        ProcessTemplateWithPhotosInternal();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"ShowPostSessionFilterOverlay: Fatal error: {ex.Message}", ex);
+                    statusText.Text = "Error - proceeding without filters";
+                    postSessionFilterOverlay.Visibility = Visibility.Collapsed;
+                    ProcessTemplateWithPhotosInternal();
+                }
+            }
+            else
+            {
+                Log.Debug("ShowPostSessionFilterOverlay: No photos to filter");
+                // No photos to filter, proceed directly
+                ProcessTemplateWithPhotosInternal();
+            }
+        }
+        
+        private async Task GenerateFilterPreviews(string samplePhotoPath)
+        {
+            var filterItems = new System.Collections.ObjectModel.ObservableCollection<Photobooth.Controls.FilterItem>();
+            
+            // Get enabled filters from settings at method level
+            var enabledFilters = GetEnabledFiltersFromSettings();
+            Log.Debug($"GenerateFilterPreviews: Found {enabledFilters.Length} enabled filters: {string.Join(", ", enabledFilters)}");
+            
+            // If no filters are enabled, hide overlay and proceed directly
+            if (enabledFilters.Length == 0)
+            {
+                Log.Debug("GenerateFilterPreviews: No filters enabled, proceeding without filter selection");
+                postSessionFilterOverlay.Visibility = Visibility.Collapsed;
+                ProcessTemplateWithPhotosInternal();
+                return;
+            }
+            
+            try
+            {
+                Log.Debug($"GenerateFilterPreviews: Loading original image from {samplePhotoPath}");
+                
+                // Check if file exists
+                if (!File.Exists(samplePhotoPath))
+                {
+                    Log.Error($"GenerateFilterPreviews: Sample photo not found: {samplePhotoPath}");
+                    throw new FileNotFoundException("Sample photo not found", samplePhotoPath);
+                }
+                
+                // Load original image
+                var originalImage = new BitmapImage();
+                originalImage.BeginInit();
+                originalImage.CacheOption = BitmapCacheOption.OnLoad;
+                originalImage.UriSource = new Uri(samplePhotoPath);
+                originalImage.DecodePixelWidth = 800; // Limit size for performance
+                originalImage.EndInit();
+                originalImage.Freeze();
+                
+                // Add "No Filter" option
+                var noFilterItem = new Photobooth.Controls.FilterItem
+                {
+                    Name = "No Filter",
+                    FilterType = FilterType.None,
+                    PreviewImage = originalImage,
+                    IsSelected = true
+                };
+                filterItems.Add(noFilterItem);
+                
+                // Show initial preview in live view
+                liveViewImage.Source = originalImage;
+                statusText.Text = "Select a filter to preview";
+                
+                Log.Debug("GenerateFilterPreviews: Original image loaded, generating filter previews");
+                
+                // Start with just the first few enabled filters for instant loading
+                var instantFilters = enabledFilters.Take(4).ToArray();
+                
+                Log.Debug($"GenerateFilterPreviews: Starting parallel generation of {instantFilters.Length} filters");
+                
+                // Generate all filters in parallel for much faster loading
+                var filterTasks = instantFilters.Select(async filterType =>
+                {
+                    try
+                    {
+                        Log.Debug($"GenerateFilterPreviews: Starting {filterType}");
+                        
+                        // Reduced timeout for faster response
+                        var filterTask = ApplyFilterToPhoto(samplePhotoPath, filterType, true);
+                        var timeoutTask = Task.Delay(2000); // Reduced to 2 seconds
+                        
+                        var completedTask = await Task.WhenAny(filterTask, timeoutTask);
+                        
+                        if (completedTask == filterTask)
+                        {
+                            string previewPath = await filterTask;
+                            
+                            if (!string.IsNullOrEmpty(previewPath) && File.Exists(previewPath))
+                            {
+                                var previewImage = new BitmapImage();
+                                previewImage.BeginInit();
+                                previewImage.CacheOption = BitmapCacheOption.OnLoad;
+                                previewImage.UriSource = new Uri(previewPath);
+                                previewImage.DecodePixelWidth = 300; // Even smaller for faster loading
+                                previewImage.EndInit();
+                                previewImage.Freeze();
+                                
+                                var filterItem = new Photobooth.Controls.FilterItem
+                                {
+                                    Name = GetFilterDisplayName(filterType),
+                                    FilterType = filterType,
+                                    PreviewImage = previewImage,
+                                    IsSelected = false
+                                };
+                                
+                                Log.Debug($"GenerateFilterPreviews: Completed {filterType}");
+                                return filterItem;
+                            }
+                        }
+                        else
+                        {
+                            Log.Debug($"GenerateFilterPreviews: Timeout for {filterType}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"GenerateFilterPreviews: Failed {filterType}: {ex.Message}");
+                    }
+                    return null;
+                }).ToArray();
+                
+                // Wait for all parallel tasks to complete
+                var results = await Task.WhenAll(filterTasks);
+                
+                // Add successful results to the collection
+                foreach (var result in results)
+                {
+                    if (result != null)
+                    {
+                        filterItems.Add(result);
+                    }
+                }
+                
+                Log.Debug($"GenerateFilterPreviews: Parallel generation completed, got {filterItems.Count - 1} filter previews");
+                
+                Log.Debug($"GenerateFilterPreviews: Generated {filterItems.Count} filter previews");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"GenerateFilterPreviews: Critical error: {ex.Message}", ex);
+                // At minimum, add the no-filter option
+                if (filterItems.Count == 0)
+                {
+                    try
+                    {
+                        filterItems.Add(new Photobooth.Controls.FilterItem
+                        {
+                            Name = "No Filter",
+                            FilterType = FilterType.None,
+                            PreviewImage = new BitmapImage(new Uri(samplePhotoPath)),
+                            IsSelected = true
+                        });
+                    }
+                    catch
+                    {
+                        // If even this fails, create a minimal item
+                        filterItems.Add(new Photobooth.Controls.FilterItem
+                        {
+                            Name = "No Filter",
+                            FilterType = FilterType.None,
+                            PreviewImage = null,
+                            IsSelected = true
+                        });
+                    }
+                }
+            }
+            
+            postSessionFilterControl.ItemsSource = filterItems;
+            Log.Debug($"GenerateFilterPreviews: Set ItemsSource with {filterItems.Count} items");
+            
+            // Force update the UI
+            postSessionFilterControl.UpdateLayout();
+            Log.Debug($"GenerateFilterPreviews: UpdateLayout called");
+            
+            // Load additional filters in background for more options
+            var remainingFilters = enabledFilters.Skip(4).ToArray();
+            if (remainingFilters.Length > 0)
+            {
+                Task.Run(async () =>
+                {
+                    await LoadAdditionalFilters(samplePhotoPath, filterItems, remainingFilters);
+                });
+            }
+        }
+        
+        private FilterType[] GetEnabledFiltersFromSettings()
+        {
+            var enabledFiltersString = Properties.Settings.Default.EnabledFilters;
+            var enabledFiltersList = new List<FilterType>();
+            
+            // If no enabled filters configured, use default popular filters
+            if (string.IsNullOrEmpty(enabledFiltersString))
+            {
+                return new[] 
+                { 
+                    FilterType.BlackAndWhite,  
+                    FilterType.Glamour,        
+                    FilterType.Vintage,        
+                    FilterType.Sepia,
+                    FilterType.Warm,
+                    FilterType.Cool,
+                    FilterType.Vivid,
+                    FilterType.Soft
+                };
+            }
+            
+            // Parse the enabled filters string (comma-separated filter names)
+            var filterNames = enabledFiltersString.Split(',', ';');
+            foreach (var filterName in filterNames)
+            {
+                var trimmedName = filterName.Trim();
+                if (Enum.TryParse<FilterType>(trimmedName, true, out var filterType))
+                {
+                    enabledFiltersList.Add(filterType);
+                }
+            }
+            
+            // If parsing failed or no valid filters, use defaults
+            if (enabledFiltersList.Count == 0)
+            {
+                return new[] 
+                { 
+                    FilterType.BlackAndWhite,  
+                    FilterType.Glamour,        
+                    FilterType.Vintage,        
+                    FilterType.Sepia 
+                };
+            }
+            
+            return enabledFiltersList.ToArray();
+        }
+        
+        private async Task LoadAdditionalFilters(string samplePhotoPath, System.Collections.ObjectModel.ObservableCollection<Photobooth.Controls.FilterItem> filterItems, FilterType[] remainingFilters)
+        {
+            try
+            {
+                Log.Debug($"LoadAdditionalFilters: Loading {remainingFilters.Length} additional filters in background");
+                
+                // Generate remaining filters in smaller batches to avoid overwhelming the UI
+                const int batchSize = 2;
+                for (int i = 0; i < remainingFilters.Length; i += batchSize)
+                {
+                    var batch = remainingFilters.Skip(i).Take(batchSize).ToArray();
+                    var batchTasks = batch.Select(async filterType =>
+                    {
+                        try
+                        {
+                            Log.Debug($"LoadAdditionalFilters: Starting {filterType}");
+                            
+                            var filterTask = ApplyFilterToPhoto(samplePhotoPath, filterType, true);
+                            var timeoutTask = Task.Delay(3000); // 3 second timeout for background loading
+                            var completedTask = await Task.WhenAny(filterTask, timeoutTask);
+                            
+                            if (completedTask == filterTask)
+                            {
+                                var filteredImagePath = await filterTask;
+                                if (!string.IsNullOrEmpty(filteredImagePath) && File.Exists(filteredImagePath))
+                                {
+                                    var previewImage = new BitmapImage();
+                                    previewImage.BeginInit();
+                                    previewImage.UriSource = new Uri(filteredImagePath);
+                                    previewImage.CacheOption = BitmapCacheOption.OnLoad;
+                                    previewImage.DecodePixelWidth = 300;
+                                    previewImage.EndInit();
+                                    previewImage.Freeze();
+                                    
+                                    var filterItem = new Photobooth.Controls.FilterItem
+                                    {
+                                        Name = GetFilterDisplayName(filterType),
+                                        FilterType = filterType,
+                                        PreviewImage = previewImage,
+                                        IsSelected = false
+                                    };
+                                    
+                                    Log.Debug($"LoadAdditionalFilters: Completed {filterType}");
+                                    return filterItem;
+                                }
+                            }
+                            else
+                            {
+                                Log.Debug($"LoadAdditionalFilters: Timeout for {filterType}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error($"LoadAdditionalFilters: Failed {filterType}: {ex.Message}");
+                        }
+                        return null;
+                    }).ToArray();
+                    
+                    // Wait for this batch to complete
+                    var batchResults = await Task.WhenAll(batchTasks);
+                    
+                    // Add successful results to the UI on the main thread
+                    foreach (var result in batchResults)
+                    {
+                        if (result != null)
+                        {
+                            await Dispatcher.InvokeAsync(() =>
+                            {
+                                filterItems.Add(result);
+                                Log.Debug($"LoadAdditionalFilters: Added {result.FilterType} to UI");
+                            });
+                        }
+                    }
+                    
+                    // Small delay between batches to keep UI responsive
+                    await Task.Delay(500);
+                }
+                
+                Log.Debug($"LoadAdditionalFilters: Completed loading all additional filters");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"LoadAdditionalFilters: Critical error: {ex.Message}", ex);
+            }
+        }
+        
+        private string GetFilterDisplayName(FilterType filterType)
+        {
+            // Convert filter type to friendly display name
+            switch (filterType)
+            {
+                case FilterType.BlackAndWhite:
+                    return "Black & White";
+                case FilterType.Sepia:
+                    return "Sepia Tone";
+                case FilterType.Vintage:
+                    return "Vintage";
+                case FilterType.Glamour:
+                    return "Glamour";
+                case FilterType.Warm:
+                    return "Warm";
+                case FilterType.Cool:
+                    return "Cool";
+                case FilterType.HighContrast:
+                    return "High Contrast";
+                case FilterType.Soft:
+                    return "Soft Focus";
+                case FilterType.Vivid:
+                    return "Vivid Colors";
+                case FilterType.Custom:
+                    return "Custom";
+                default:
+                    return filterType.ToString();
+            }
+        }
+        
+        private FilterType GetRandomEnabledFilter()
+        {
+            // Get the list of enabled filters from settings
+            string enabledFiltersString = Properties.Settings.Default.EnabledFilters;
+            List<FilterType> enabledFilters = new List<FilterType>();
+            
+            // If no specific filters are enabled in settings, use popular filters
+            if (string.IsNullOrEmpty(enabledFiltersString))
+            {
+                // Popular filters that users love - weighted towards these
+                enabledFilters.Add(FilterType.None);           // 10% chance - No Filter
+                enabledFilters.Add(FilterType.BlackAndWhite);  // Popular - Classic B&W
+                enabledFilters.Add(FilterType.BlackAndWhite);  // Double weight for B&W
+                enabledFilters.Add(FilterType.Glamour);        // Popular - B&W Glamour
+                enabledFilters.Add(FilterType.Glamour);        // Double weight for Glamour
+                enabledFilters.Add(FilterType.Vintage);        // Popular - Instagram style
+                enabledFilters.Add(FilterType.Vintage);        // Double weight for Vintage
+                enabledFilters.Add(FilterType.Vivid);          // Popular - Bright colors
+                enabledFilters.Add(FilterType.Sepia);          // Classic
+                enabledFilters.Add(FilterType.Warm);           // Summer feel
+                enabledFilters.Add(FilterType.Cool);           // Cool tones
+                enabledFilters.Add(FilterType.Soft);           // Romantic soft focus
+            }
+            else
+            {
+                // Parse the comma-separated list of enabled filters
+                string[] filterNames = enabledFiltersString.Split(',');
+                foreach (string filterName in filterNames)
+                {
+                    if (Enum.TryParse<FilterType>(filterName.Trim(), out FilterType filter))
+                    {
+                        enabledFilters.Add(filter);
+                    }
+                }
+                
+                // If no valid filters were parsed, add at least "No Filter"
+                if (enabledFilters.Count == 0)
+                {
+                    enabledFilters.Add(FilterType.None);
+                }
+            }
+            
+            // If DefaultFilter is set and AutoApplyFilters uses default only
+            if (Properties.Settings.Default.DefaultFilter > 0 && !Properties.Settings.Default.AllowFilterChange)
+            {
+                return (FilterType)Properties.Settings.Default.DefaultFilter;
+            }
+            
+            // Randomly select one filter from the enabled list
+            Random random = new Random();
+            int index = random.Next(enabledFilters.Count);
+            return enabledFilters[index];
+        }
+        
+        private void ProcessTemplateWithPhotosInternal(FilterType selectedFilter = FilterType.None)
+        {
+            statusText.Text = $"Processing template with {capturedPhotoPaths.Count} photos...";
+            
+            Task.Run(async () =>
+            {
+                try
+                {
+                    Log.Debug($"ProcessTemplateWithPhotosInternal: Processing {capturedPhotoPaths.Count} photos into template");
+                    
+                    // Apply filters if a filter was selected
+                    if (selectedFilter != FilterType.None && Properties.Settings.Default.EnableFilters)
+                    {
+                        Log.Debug($"Applying {selectedFilter} filter to photos");
+                        await Dispatcher.InvokeAsync(() => statusText.Text = "Applying filters...");
+                        
+                        // Apply filter to each photo
+                        List<string> filteredPaths = new List<string>();
+                        for (int i = 0; i < capturedPhotoPaths.Count; i++)
+                        {
+                            string filteredPath = await ApplyFilterToPhoto(capturedPhotoPaths[i], selectedFilter);
+                            filteredPaths.Add(filteredPath);
+                        }
+                        
+                        // Update paths to use filtered versions
+                        capturedPhotoPaths = filteredPaths;
+                    }
+                    else
+                    {
+                        Log.Debug("No filter selected or filters disabled - skipping filter application");
                     }
                     
                     // Process the template with the captured photos
@@ -3041,9 +3741,21 @@ namespace Photobooth.Pages
                         
                         Dispatcher.Invoke(() =>
                         {
-                            // Show the processed image
+                            // Show the processed image (always show the original, not the 4x6 duplicate)
                             liveViewImage.Source = new BitmapImage(new Uri(processedImagePath));
                             statusText.Text = "Photos processed successfully!";
+                            
+                            // Note: lastProcessedImagePath and lastProcessedImagePathForPrinting are already set in ComposeTemplateWithPhotos
+                            
+                            // Show print button
+                            ShowPrintButton();
+                            
+                            // Fallback: ensure button is visible even if animation fails
+                            if (printButton != null)
+                            {
+                                printButton.Visibility = Visibility.Visible;
+                                printButton.Opacity = 1;
+                            }
                             
                             // Optional: Auto-stop after processing (with delay)
                             Task.Delay(3000).ContinueWith(_ =>
@@ -3051,18 +3763,32 @@ namespace Photobooth.Pages
                                 Dispatcher.Invoke(() =>
                                 {
                                     StopPhotoSequence();
-                                    statusText.Text = "Session complete - Touch START for new session";
+                                    statusText.Text = "Session complete - Click photos to view or touch PRINT to print";
+                                    
+                                    // Show photo view mode indicator
+                                    if (photoViewModeIndicator != null && photoStripItems.Any(p => !p.IsPlaceholder))
+                                    {
+                                        photoViewModeIndicator.Visibility = Visibility.Visible;
+                                    }
                                     
                                     // Automatically stop after processing template
                                     Task.Delay(500).ContinueWith(__ =>
                                     {
                                         Dispatcher.Invoke(() =>
                                         {
-                                            // Reset for next session
+                                            // End the database session
+                                            EndDatabaseSession();
+                                            
+                                            // Keep photos viewable - don't clear the strip
                                             currentPhotoIndex = 0;
-                                            capturedPhotoPaths.Clear();
-                                            photoStripImages.Clear();
-                                            photoStripItems.Clear();
+                                            
+                                            // Don't clear these to allow viewing:
+                                            // capturedPhotoPaths.Clear();
+                                            // photoStripImages.Clear();
+                                            // photoStripItems.Clear();
+                                            
+                                            // Don't hide print button here - keep it visible for user to print
+                                            // It will be hidden when they start a new session or print
                                             
                                             // Reset template but keep the event
                                             currentTemplate = null;
@@ -3080,7 +3806,7 @@ namespace Photobooth.Pages
                                                 currentTemplate = availableTemplates[0];
                                                 totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
                                                 currentPhotoIndex = 0;
-                                                UpdatePhotoStripPlaceholders();
+                                                UpdatePhotoStripPlaceholders(true); // Preserve existing photos
                                                 statusText.Text = $"Event: {currentEvent.Name} - Touch START for another session";
                                             }
                                             else
@@ -3149,26 +3875,48 @@ namespace Photobooth.Pages
             }
         }
         
-        private async Task<string> ApplyFilterToPhoto(string inputPath, FilterType filterType)
+        private async Task<string> ApplyFilterToPhoto(string inputPath, FilterType filterType, bool isPreview = false)
         {
             try
             {
                 if (filterType == FilterType.None)
                     return inputPath;
-                    
+                
+                if (!File.Exists(inputPath))
+                {
+                    Log.Error($"ApplyFilterToPhoto: Input file not found: {inputPath}");
+                    return inputPath;
+                }
+                
                 string outputPath = Path.Combine(
                     Path.GetDirectoryName(inputPath),
-                    $"{Path.GetFileNameWithoutExtension(inputPath)}_filtered{Path.GetExtension(inputPath)}"
+                    isPreview 
+                        ? $"{Path.GetFileNameWithoutExtension(inputPath)}_preview_{filterType}{Path.GetExtension(inputPath)}"
+                        : $"{Path.GetFileNameWithoutExtension(inputPath)}_filtered{Path.GetExtension(inputPath)}"
                 );
                 
-                float intensity = Properties.Settings.Default.FilterIntensity / 100f;
-                string filteredPath = filterService.ApplyFilterToFile(inputPath, outputPath, filterType, intensity);
+                // Check if preview already exists to save time
+                if (isPreview && File.Exists(outputPath))
+                {
+                    Log.Debug($"ApplyFilterToPhoto: Using cached preview for {filterType}");
+                    return outputPath;
+                }
                 
-                return filteredPath;
+                float intensity = Properties.Settings.Default.FilterIntensity / 100f;
+                
+                if (filterService == null)
+                {
+                    Log.Error("ApplyFilterToPhoto: Filter service is not initialized");
+                    return inputPath;
+                }
+                
+                // Run filter processing on thread pool for non-blocking operation
+                return await Task.Run(() => 
+                    filterService.ApplyFilterToFile(inputPath, outputPath, filterType, intensity));
             }
             catch (Exception ex)
             {
-                Log.Error($"ApplyFilterToPhoto: Failed to apply filter to {inputPath}", ex);
+                Log.Error($"ApplyFilterToPhoto: Failed to apply filter {filterType} to {inputPath}: {ex.Message}");
                 return inputPath; // Return original if filter fails
             }
         }
@@ -3359,6 +4107,7 @@ namespace Photobooth.Pages
             // Disable buttons that could change settings or exit
             exitButton.IsEnabled = false;
             homeButton.IsEnabled = false; // Disable home button when locked
+            printButton.IsEnabled = false; // Disable print button when locked
             startButton.IsEnabled = false;
             stopButton.IsEnabled = false;
             resetCameraButton.IsEnabled = false;
@@ -3372,6 +4121,7 @@ namespace Photobooth.Pages
             // Re-enable all controls
             exitButton.IsEnabled = true;
             homeButton.IsEnabled = true; // Re-enable home button when unlocked
+            printButton.IsEnabled = true; // Re-enable print button when unlocked
             startButton.IsEnabled = true;
             stopButton.IsEnabled = true;
             resetCameraButton.IsEnabled = true;
@@ -3452,6 +4202,1807 @@ namespace Photobooth.Pages
             pinDisplayBox.Text = "";
         }
         
+        #endregion
+        
+        #region Print Functionality
+        
+        private void CheckPrinterStatus()
+        {
+            try
+            {
+                var printService = PrintService.Instance;
+                string printerName = printService.GetCurrentPrinterName();
+                bool isReady = printService.IsPrinterReady();
+                
+                if (!string.IsNullOrEmpty(printerName))
+                {
+                    if (isReady)
+                    {
+                        printerStatusText.Text = $"🖨️ {printerName} Ready";
+                        printerStatusText.Foreground = new SolidColorBrush(Colors.LimeGreen);
+                        Log.Debug($"CheckPrinterStatus: Printer {printerName} is ready");
+                    }
+                    else
+                    {
+                        printerStatusText.Text = $"🖨️ {printerName} Offline";
+                        printerStatusText.Foreground = new SolidColorBrush(Colors.Orange);
+                        Log.Debug($"CheckPrinterStatus: Printer {printerName} is offline");
+                    }
+                }
+                else
+                {
+                    printerStatusText.Text = "🖨️ No Printer";
+                    printerStatusText.Foreground = new SolidColorBrush(Colors.Red);
+                    Log.Debug("CheckPrinterStatus: No printer configured");
+                }
+                
+                // Check print limits
+                int remainingEventPrints = printService.GetRemainingEventPrints();
+                if (remainingEventPrints < int.MaxValue && remainingEventPrints < 50)
+                {
+                    // Show warning if running low on prints
+                    Log.Debug($"CheckPrinterStatus: Only {remainingEventPrints} event prints remaining");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"CheckPrinterStatus: Error checking printer status: {ex.Message}");
+                printerStatusText.Text = "🖨️ Error";
+                printerStatusText.Foreground = new SolidColorBrush(Colors.Red);
+            }
+        }
+        
+        private void ShowPrintButton()
+        {
+            Log.Debug("ShowPrintButton: Called - attempting to show print button");
+            
+            if (printButton != null)
+            {
+                Log.Debug($"ShowPrintButton: Print button found, current visibility: {printButton.Visibility}");
+                
+                // First set opacity to 0 for animation
+                printButton.Opacity = 0;
+                printButton.Visibility = Visibility.Visible;
+                
+                // Animate the print button appearance
+                var fadeIn = new DoubleAnimation
+                {
+                    From = 0,
+                    To = 1,
+                    Duration = TimeSpan.FromMilliseconds(500),
+                    FillBehavior = FillBehavior.HoldEnd
+                };
+                
+                fadeIn.Completed += (s, e) => 
+                {
+                    printButton.Opacity = 1; // Ensure opacity stays at 1
+                    Log.Debug("ShowPrintButton: Animation completed, opacity set to 1");
+                };
+                
+                printButton.BeginAnimation(Button.OpacityProperty, fadeIn);
+                Log.Debug("ShowPrintButton: Print button made visible with animation");
+            }
+            else
+            {
+                Log.Error("ShowPrintButton: Print button is null!");
+            }
+        }
+        
+        private void HidePrintButton()
+        {
+            if (printButton != null)
+            {
+                printButton.Visibility = Visibility.Collapsed;
+                printButton.Opacity = 1; // Reset opacity for next time
+                Log.Debug("HidePrintButton: Print button hidden");
+            }
+        }
+        
+        private bool ShouldKeepPrintButtonVisible(string sessionId)
+        {
+            // Check if we should keep the print button visible based on remaining prints
+            var printService = PrintService.Instance;
+            int remainingSessionPrints = printService.GetRemainingSessionPrints(sessionId);
+            int remainingEventPrints = printService.GetRemainingEventPrints();
+            
+            // Keep button visible if we have prints remaining
+            bool hasRemainingPrints = remainingSessionPrints > 0 && remainingEventPrints > 0;
+            
+            // Also check if print limits are disabled (infinite prints)
+            bool unlimitedSession = Properties.Settings.Default.MaxSessionPrints <= 0;
+            bool unlimitedEvent = Properties.Settings.Default.MaxEventPrints <= 0;
+            
+            // Keep visible if we have remaining prints or if limits are disabled
+            return hasRemainingPrints || (unlimitedSession && unlimitedEvent);
+        }
+        
+        private void PrintButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Use the print version if available, otherwise use the display version
+            string imageToPrint = !string.IsNullOrEmpty(lastProcessedImagePathForPrinting) ? 
+                lastProcessedImagePathForPrinting : lastProcessedImagePath;
+            
+            // Use the display version for the dialog preview
+            string imageToPreview = lastProcessedImagePath;
+                
+            if (string.IsNullOrEmpty(imageToPrint) || !File.Exists(imageToPrint))
+            {
+                statusText.Text = "No image available to print";
+                return;
+            }
+            
+            try
+            {
+                Log.Debug($"PrintButton_Click: Opening print dialog for {imageToPrint}");
+                if (imageToPrint != lastProcessedImagePath)
+                {
+                    Log.Debug($"PrintButton_Click: Will use 4x6 duplicated version for printing");
+                }
+                
+                // Create session ID if not exists
+                string sessionId = currentEvent != null ? 
+                    $"{currentEvent.Id}_{DateTime.Now:yyyyMMdd_HHmmss}" : 
+                    $"Session_{DateTime.Now:yyyyMMdd_HHmmss}";
+                
+                // Show the print dialog with the display image for preview
+                var printDialog = new Photobooth.PrintCopyDialog(imageToPreview, sessionId, lastProcessedWas2x6Template);
+                
+                if (printDialog.ShowDialog() == true && printDialog.PrintConfirmed)
+                {
+                    int copies = printDialog.SelectedCopies;
+                    Log.Debug($"PrintButton_Click: User selected {copies} copies");
+                    
+                    statusText.Text = "Sending to printer...";
+                    
+                    // Disable print button to prevent multiple clicks
+                    printButton.IsEnabled = false;
+                    
+                    // Use the PrintService to handle printing
+                    var printService = PrintService.Instance;
+                    
+                    // Prepare photos for printing (use the print version)
+                    var photoPaths = new List<string> { imageToPrint };
+                    
+                    // Print using the service - pass the original format information for proper routing
+                    var result = printService.PrintPhotos(photoPaths, sessionId, copies, lastProcessedWas2x6Template);
+                    
+                    if (result.Success)
+                    {
+                        // For 2x6 duplicated to 4x6, show the actual strip count
+                        string printMessage = lastProcessedWas2x6Template && Properties.Settings.Default.Duplicate2x6To4x6 ?
+                            $"Photo sent to printer! ({copies} sheets, {copies * 2} strips)" :
+                            $"Photo sent to printer! ({result.PrintedCount} copies)";
+                        statusText.Text = printMessage;
+                        
+                        // Update remaining print counts
+                        if (result.RemainingSessionPrints < int.MaxValue)
+                        {
+                            Log.Debug($"PrintButton_Click: Remaining session prints: {result.RemainingSessionPrints}");
+                        }
+                        if (result.RemainingEventPrints < int.MaxValue)
+                        {
+                            Log.Debug($"PrintButton_Click: Remaining event prints: {result.RemainingEventPrints}");
+                        }
+                        
+                        // Log successful print
+                        Log.Debug($"PrintButton_Click: Successfully printed {result.PrintedCount} copies");
+                        
+                        // Check if we should keep print button visible or hide it
+                        Task.Delay(3000).ContinueWith(_ =>
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                // Only hide if no prints remaining
+                                if (!ShouldKeepPrintButtonVisible(sessionId))
+                                {
+                                    HidePrintButton();
+                                    statusText.Text = "Print limit reached! Touch START for new session";
+                                    Log.Debug($"PrintButton_Click: Hiding print button - no remaining prints");
+                                }
+                                else
+                                {
+                                    // Keep button visible and enabled for more prints
+                                    printButton.IsEnabled = true;
+                                    
+                                    // Show remaining prints if limited
+                                    if (result.RemainingSessionPrints < int.MaxValue)
+                                    {
+                                        statusText.Text = $"Print complete! {result.RemainingSessionPrints} prints remaining. Touch PRINT again or START for new session";
+                                    }
+                                    else
+                                    {
+                                        statusText.Text = "Print complete! Touch PRINT again or START for new session";
+                                    }
+                                    Log.Debug($"PrintButton_Click: Keeping print button visible - {result.RemainingSessionPrints} prints remaining");
+                                }
+                            });
+                        });
+                    }
+                    else
+                    {
+                        statusText.Text = result.Message;
+                        Log.Error($"PrintButton_Click: Print failed - {result.Message}");
+                        printButton.IsEnabled = true;
+                        
+                        // Show error for a few seconds then restore
+                        Task.Delay(3000).ContinueWith(_ =>
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                statusText.Text = "Touch PRINT to try again or START for new session";
+                            });
+                        });
+                    }
+                }
+                else
+                {
+                    Log.Debug("PrintButton_Click: User cancelled print dialog");
+                    statusText.Text = "Print cancelled";
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PrintButton_Click: Error printing image: {ex.Message}");
+                statusText.Text = $"Print error: {ex.Message}";
+                printButton.IsEnabled = true;
+            }
+        }
+
+        #endregion
+
+        #region Session Gallery Management
+        
+        private void GalleryButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Log.Debug("GalleryButton_Click: Opening session selection modal");
+                
+                // Set up modal event handlers
+                SessionSelectionModal.SessionSelected -= OnSessionSelected;
+                SessionSelectionModal.ModalClosed -= OnModalClosed;
+                SessionSelectionModal.SessionSelected += OnSessionSelected;
+                SessionSelectionModal.ModalClosed += OnModalClosed;
+                
+                // Show the modal with current event filter
+                int? eventId = currentEvent?.Id;
+                SessionSelectionModal.ShowModal(eventId);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"GalleryButton_Click: Error opening session selection: {ex.Message}");
+                statusText.Text = $"Error opening gallery: {ex.Message}";
+            }
+        }
+        
+        private void OnSessionSelected(PhotoSessionData sessionData)
+        {
+            try
+            {
+                Log.Debug($"OnSessionSelected: Loading session {sessionData.SessionName} (ID: {sessionData.Id})");
+                LoadSessionData(sessionData);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"OnSessionSelected: Error loading session: {ex.Message}");
+                statusText.Text = $"Error loading session: {ex.Message}";
+            }
+        }
+        
+        private void OnModalClosed()
+        {
+            Log.Debug("OnModalClosed: Session selection modal closed");
+        }
+        
+        private List<ComposedImageData> loadedComposedImages = null;
+        private int currentComposedImageIndex = 0;
+        
+        private void LoadSessionData(PhotoSessionData sessionData)
+        {
+            try
+            {
+                // Set current session data
+                currentEvent = database.GetEvent(sessionData.EventId);
+                currentTemplate = database.GetTemplate(sessionData.TemplateId);
+                
+                if (currentEvent == null || currentTemplate == null)
+                {
+                    throw new Exception("Session references invalid event or template");
+                }
+                
+                // Update UI to show loaded session
+                statusText.Text = $"Loading session: {sessionData.SessionName} - {sessionData.EventName}...";
+                
+                // Load session photos and composed images
+                var sessionPhotos = database.GetSessionPhotos(sessionData.Id);
+                var composedImages = database.GetSessionComposedImages(sessionData.Id);
+                
+                Log.Debug($"LoadSessionData: Found {sessionPhotos.Count} photos and {composedImages.Count} composed images");
+                
+                // Display session info and load photo strip
+                LoadPhotoStripFromSession(sessionPhotos, composedImages);
+                
+                // Update photo count
+                photoCount = sessionPhotos.Count(p => p.PhotoType == "Original");
+                photoCountText.Text = $"Photos: {photoCount}";
+                
+                // Enable print button if there are composed images
+                if (composedImages.Any())
+                {
+                    var latestComposed = composedImages.OrderByDescending(c => c.CreatedDate).First();
+                    lastProcessedImagePath = latestComposed.FilePath;
+                    lastProcessedWas2x6Template = latestComposed.OutputFormat == "2x6";
+                    
+                    printButton.Visibility = Visibility.Visible;
+                    printButton.IsEnabled = true;
+                    
+                    statusText.Text = $"Session loaded! {photoCount} photos, {composedImages.Count} layouts. Ready to reprint.";
+                }
+                else
+                {
+                    statusText.Text = $"Session loaded! {photoCount} photos. No composed layouts found.";
+                }
+                
+                Log.Debug($"LoadSessionData: Session '{sessionData.SessionName}' loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"LoadSessionData: Error loading session data: {ex.Message}");
+                statusText.Text = $"Error loading session: {ex.Message}";
+                throw;
+            }
+        }
+        
+        private void LoadPhotoStripFromSession(List<PhotoData> sessionPhotos, List<ComposedImageData> composedImages)
+        {
+            try
+            {
+                // Clear current photo strip
+                photoStripImages.Clear();
+                photoStripItems.Clear();
+                capturedPhotoPaths.Clear();
+                
+                // Stop live view if camera is running
+                try
+                {
+                    if (DeviceManager.SelectedCameraDevice != null)
+                    {
+                        DeviceManager.SelectedCameraDevice.StopLiveView();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"LoadPhotoStripFromSession: StopLiveView failed (may not be running): {ex.Message}");
+                }
+                
+                // Clear live view initially
+                liveViewImage.Source = null;
+                
+                // Load original photos into photo strip
+                var originalPhotos = sessionPhotos.Where(p => p.PhotoType == "Original")
+                                                 .OrderBy(p => p.SequenceNumber)
+                                                 .ToList();
+                
+                foreach (var photo in originalPhotos)
+                {
+                    if (System.IO.File.Exists(photo.FilePath))
+                    {
+                        try
+                        {
+                            var bitmap = new BitmapImage();
+                            bitmap.BeginInit();
+                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                            bitmap.DecodePixelWidth = 150; // Thumbnail size
+                            bitmap.UriSource = new Uri(photo.FilePath);
+                            bitmap.EndInit();
+                            bitmap.Freeze();
+                            
+                            photoStripImages.Add(bitmap);
+                            capturedPhotoPaths.Add(photo.FilePath);
+                            
+                            // Add to photo strip items
+                            var stripItem = new PhotoStripItem
+                            {
+                                Image = bitmap,
+                                PhotoNumber = photo.SequenceNumber,
+                                IsPlaceholder = false,
+                                ItemType = "Photo",
+                                FilePath = photo.FilePath  // Store the full path for loading full-size image
+                            };
+                            photoStripItems.Add(stripItem);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error($"LoadPhotoStripFromSession: Error loading photo {photo.FilePath}: {ex.Message}");
+                        }
+                    }
+                }
+                
+                // Add composed images and GIFs to photo strip
+                if (composedImages.Any())
+                {
+                    // Store composed images for navigation
+                    loadedComposedImages = composedImages.OrderByDescending(c => c.CreatedDate).ToList();
+                    currentComposedImageIndex = 0;
+                    
+                    // Add each composed image to the photo strip
+                    foreach (var composedImage in composedImages)
+                    {
+                        if (System.IO.File.Exists(composedImage.FilePath))
+                        {
+                            try
+                            {
+                                // Check if it's a video/animation
+                                bool isVideo = composedImage.OutputFormat == "MP4" || 
+                                             composedImage.FilePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase);
+                                bool isGif = composedImage.OutputFormat == "GIF" || 
+                                           composedImage.FilePath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
+                                
+                                BitmapImage bitmap = null;
+                                
+                                if (isVideo)
+                                {
+                                    // For MP4, try to use thumbnail or first photo
+                                    if (!string.IsNullOrEmpty(composedImage.ThumbnailPath) && 
+                                        System.IO.File.Exists(composedImage.ThumbnailPath))
+                                    {
+                                        bitmap = new BitmapImage();
+                                        bitmap.BeginInit();
+                                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                                        bitmap.DecodePixelWidth = 150;
+                                        bitmap.UriSource = new Uri(composedImage.ThumbnailPath);
+                                        bitmap.EndInit();
+                                        bitmap.Freeze();
+                                    }
+                                    else if (capturedPhotoPaths.Count > 0)
+                                    {
+                                        // Use first captured photo as thumbnail
+                                        bitmap = new BitmapImage();
+                                        bitmap.BeginInit();
+                                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                                        bitmap.DecodePixelWidth = 150;
+                                        bitmap.UriSource = new Uri(capturedPhotoPaths[0]);
+                                        bitmap.EndInit();
+                                        bitmap.Freeze();
+                                    }
+                                    else
+                                    {
+                                        // Create placeholder
+                                        bitmap = CreatePlaceholderBitmap("Video");
+                                    }
+                                }
+                                else
+                                {
+                                    // For regular images and GIFs
+                                    bitmap = new BitmapImage();
+                                    bitmap.BeginInit();
+                                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                                    bitmap.DecodePixelWidth = 150; // Thumbnail size
+                                    bitmap.UriSource = new Uri(composedImage.FilePath);
+                                    bitmap.EndInit();
+                                    bitmap.Freeze();
+                                }
+                                
+                                string itemType = isVideo ? "VIDEO" : (isGif ? "GIF" : "Composed");
+                                
+                                var stripItem = new PhotoStripItem
+                                {
+                                    Image = bitmap,
+                                    PhotoNumber = 0,
+                                    IsPlaceholder = false,
+                                    ItemType = itemType,
+                                    FilePath = composedImage.FilePath
+                                };
+                                photoStripItems.Add(stripItem);
+                                
+                                Log.Debug($"LoadPhotoStripFromSession: Added {stripItem.ItemType} ({composedImage.OutputFormat}) to photo strip");
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Error($"LoadPhotoStripFromSession: Error loading composed image {composedImage.FilePath}: {ex.Message}");
+                            }
+                        }
+                    }
+                    
+                    // Display first composed image
+                    DisplayComposedImage(currentComposedImageIndex);
+                    
+                    // Show/hide navigation controls based on count
+                    if (composedImages.Count > 1 && composedImageNavigation != null)
+                    {
+                        composedImageNavigation.Visibility = Visibility.Visible;
+                        UpdateComposedImageNavigationUI();
+                    }
+                    else if (composedImageNavigation != null)
+                    {
+                        composedImageNavigation.Visibility = Visibility.Collapsed;
+                    }
+                }
+                
+                Log.Debug($"LoadPhotoStripFromSession: Loaded {originalPhotos.Count} photos into strip");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"LoadPhotoStripFromSession: Error loading photo strip: {ex.Message}");
+                throw;
+            }
+        }
+        
+        private void DisplayComposedImage(int index)
+        {
+            try
+            {
+                if (loadedComposedImages == null || index < 0 || index >= loadedComposedImages.Count)
+                    return;
+                
+                var composedImage = loadedComposedImages[index];
+                if (System.IO.File.Exists(composedImage.FilePath))
+                {
+                    var composedBitmap = new BitmapImage();
+                    composedBitmap.BeginInit();
+                    composedBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    // Don't decode to thumbnail size - load full image
+                    // composedBitmap.DecodePixelWidth = removed to get full size
+                    composedBitmap.UriSource = new Uri(composedImage.FilePath);
+                    composedBitmap.EndInit();
+                    composedBitmap.Freeze();
+                    
+                    // Show in live view area with fade-in animation
+                    liveViewImage.Opacity = 0;
+                    liveViewImage.Source = composedBitmap;
+                    liveViewImage.Visibility = Visibility.Visible;
+                    
+                    // Hide countdown overlay if visible
+                    if (countdownOverlay != null)
+                        countdownOverlay.Visibility = Visibility.Collapsed;
+                    
+                    // Show session loaded indicator
+                    if (sessionLoadedIndicator != null)
+                    {
+                        sessionLoadedIndicator.Visibility = Visibility.Visible;
+                        if (sessionInfoText != null)
+                        {
+                            sessionInfoText.Text = $"Layout {index + 1} of {loadedComposedImages.Count}";
+                        }
+                    }
+                    
+                    // Animate fade-in
+                    var fadeIn = new System.Windows.Media.Animation.DoubleAnimation
+                    {
+                        From = 0,
+                        To = 1,
+                        Duration = TimeSpan.FromMilliseconds(300)
+                    };
+                    liveViewImage.BeginAnimation(System.Windows.Controls.Image.OpacityProperty, fadeIn);
+                    
+                    // Update for printing
+                    lastProcessedImagePath = composedImage.FilePath;
+                    lastProcessedWas2x6Template = composedImage.OutputFormat == "2x6";
+                    
+                    Log.Debug($"DisplayComposedImage: Displayed composed image {index + 1}/{loadedComposedImages.Count}: {composedImage.FilePath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"DisplayComposedImage: Error displaying composed image at index {index}: {ex.Message}");
+            }
+        }
+        
+        private void UpdateComposedImageNavigationUI()
+        {
+            if (composedImageIndexText != null && loadedComposedImages != null)
+            {
+                composedImageIndexText.Text = $"{currentComposedImageIndex + 1} / {loadedComposedImages.Count}";
+            }
+            
+            if (prevComposedButton != null)
+            {
+                prevComposedButton.IsEnabled = currentComposedImageIndex > 0;
+                prevComposedButton.Opacity = prevComposedButton.IsEnabled ? 1.0 : 0.5;
+            }
+            
+            if (nextComposedButton != null)
+            {
+                nextComposedButton.IsEnabled = loadedComposedImages != null && 
+                                              currentComposedImageIndex < loadedComposedImages.Count - 1;
+                nextComposedButton.Opacity = nextComposedButton.IsEnabled ? 1.0 : 0.5;
+            }
+        }
+        
+        private void PrevComposedImage_Click(object sender, RoutedEventArgs e)
+        {
+            if (loadedComposedImages != null && currentComposedImageIndex > 0)
+            {
+                currentComposedImageIndex--;
+                DisplayComposedImage(currentComposedImageIndex);
+                UpdateComposedImageNavigationUI();
+            }
+        }
+        
+        private void NextComposedImage_Click(object sender, RoutedEventArgs e)
+        {
+            if (loadedComposedImages != null && currentComposedImageIndex < loadedComposedImages.Count - 1)
+            {
+                currentComposedImageIndex++;
+                DisplayComposedImage(currentComposedImageIndex);
+                UpdateComposedImageNavigationUI();
+            }
+        }
+        
+        private void PhotoStripItem_Click(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                if (sender is Border border && border.Tag is PhotoStripItem clickedItem)
+                {
+                    SelectPhotoStripItem(clickedItem);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PhotoStripItem_Click: Error displaying photo: {ex.Message}");
+            }
+        }
+        
+        private void SelectPhotoStripItem(PhotoStripItem itemToSelect)
+        {
+            try
+            {
+                // Only allow selecting actual photos, not placeholders
+                if (itemToSelect == null || itemToSelect.IsPlaceholder)
+                    return;
+                
+                // Check if this is a video/animation
+                if (itemToSelect.ItemType == "VIDEO" || itemToSelect.ItemType == "GIF")
+                {
+                    // Play the video in the overlay
+                    PlayVideoInOverlay(itemToSelect.FilePath);
+                    return;
+                }
+                
+                // Clear previous selection
+                foreach (var item in photoStripItems)
+                {
+                    item.IsSelected = false;
+                }
+                
+                // Mark this item as selected
+                itemToSelect.IsSelected = true;
+                
+                // Display the selected photo in the main view
+                if (itemToSelect.Image != null)
+                {
+                    // Hide session indicators and navigation
+                    if (sessionLoadedIndicator != null)
+                        sessionLoadedIndicator.Visibility = Visibility.Collapsed;
+                    if (composedImageNavigation != null)
+                        composedImageNavigation.Visibility = Visibility.Collapsed;
+                    
+                    // Load full-size image from file path if available
+                    BitmapImage fullSizeImage = null;
+                    if (!string.IsNullOrEmpty(itemToSelect.FilePath) && File.Exists(itemToSelect.FilePath))
+                    {
+                        try
+                        {
+                            fullSizeImage = new BitmapImage();
+                            fullSizeImage.BeginInit();
+                            fullSizeImage.CacheOption = BitmapCacheOption.OnLoad;
+                            // Load full size, not thumbnail
+                            fullSizeImage.UriSource = new Uri(itemToSelect.FilePath);
+                            fullSizeImage.EndInit();
+                            fullSizeImage.Freeze();
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Debug($"SelectPhotoStripItem: Could not load full-size image, using thumbnail: {ex.Message}");
+                            fullSizeImage = itemToSelect.Image; // Fall back to thumbnail
+                        }
+                    }
+                    else
+                    {
+                        // For photos without FilePath, try to get from capturedPhotoPaths
+                        if (itemToSelect.PhotoNumber > 0 && itemToSelect.PhotoNumber <= capturedPhotoPaths.Count)
+                        {
+                            string photoPath = capturedPhotoPaths[itemToSelect.PhotoNumber - 1];
+                            if (File.Exists(photoPath))
+                            {
+                                try
+                                {
+                                    fullSizeImage = new BitmapImage();
+                                    fullSizeImage.BeginInit();
+                                    fullSizeImage.CacheOption = BitmapCacheOption.OnLoad;
+                                    fullSizeImage.UriSource = new Uri(photoPath);
+                                    fullSizeImage.EndInit();
+                                    fullSizeImage.Freeze();
+                                }
+                                catch
+                                {
+                                    fullSizeImage = itemToSelect.Image; // Fall back to thumbnail
+                                }
+                            }
+                        }
+                        else
+                        {
+                            fullSizeImage = itemToSelect.Image; // Use thumbnail if no path available
+                        }
+                    }
+                    
+                    // Display the image with fade-in effect
+                    liveViewImage.Opacity = 0;
+                    liveViewImage.Source = fullSizeImage ?? itemToSelect.Image;
+                    liveViewImage.Visibility = Visibility.Visible;
+                    
+                    // Animate fade-in
+                    var fadeIn = new System.Windows.Media.Animation.DoubleAnimation
+                    {
+                        From = 0,
+                        To = 1,
+                        Duration = TimeSpan.FromMilliseconds(200)
+                    };
+                    liveViewImage.BeginAnimation(System.Windows.Controls.Image.OpacityProperty, fadeIn);
+                    
+                    // Update status based on item type
+                    string statusMessage = "";
+                    switch (itemToSelect.ItemType)
+                    {
+                        case "Composed":
+                            statusMessage = "Viewing composed layout";
+                            break;
+                        case "GIF":
+                            statusMessage = "Viewing animated GIF";
+                            break;
+                        default:
+                            int photoIndex = itemToSelect.PhotoNumber;
+                            statusMessage = $"Viewing photo {photoIndex} of {photoStripItems.Count(p => !p.IsPlaceholder && p.ItemType == "Photo")}";
+                            break;
+                    }
+                    statusText.Text = statusMessage;
+                    
+                    Log.Debug($"SelectPhotoStripItem: Displaying {itemToSelect.ItemType} in main view");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SelectPhotoStripItem: Error displaying item: {ex.Message}");
+            }
+        }
+        
+        private void AddComposedImageToPhotoStrip(string composedImagePath)
+        {
+            try
+            {
+                Log.Debug($"AddComposedImageToPhotoStrip: Starting - Path: {composedImagePath}");
+                
+                if (!System.IO.File.Exists(composedImagePath))
+                {
+                    Log.Error($"AddComposedImageToPhotoStrip: File does not exist: {composedImagePath}");
+                    return;
+                }
+                
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.DecodePixelWidth = 150; // Thumbnail size
+                bitmap.UriSource = new Uri(composedImagePath);
+                bitmap.EndInit();
+                bitmap.Freeze();
+                
+                var composedItem = new PhotoStripItem
+                {
+                    Image = bitmap,
+                    PhotoNumber = 0, // Special number for composed
+                    IsPlaceholder = false,
+                    ItemType = "Composed",
+                    FilePath = composedImagePath
+                };
+                
+                // Add to the end of photo strip
+                photoStripItems.Add(composedItem);
+                
+                Log.Debug($"AddComposedImageToPhotoStrip: Successfully added composed image to photo strip. Total items: {photoStripItems.Count}");
+                
+                // Log all items in strip for debugging
+                for (int i = 0; i < photoStripItems.Count; i++)
+                {
+                    var item = photoStripItems[i];
+                    Log.Debug($"  Strip item {i}: Type={item.ItemType}, IsPlaceholder={item.IsPlaceholder}, PhotoNumber={item.PhotoNumber}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"AddComposedImageToPhotoStrip: Error adding composed image: {ex.Message}", ex);
+            }
+        }
+        
+        private void AddGifToPhotoStrip(string animationPath)
+        {
+            try
+            {
+                if (!System.IO.File.Exists(animationPath))
+                    return;
+                
+                BitmapImage bitmap = null;
+                string itemType = "GIF";
+                
+                // Check if it's an MP4 video
+                if (animationPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                {
+                    itemType = "VIDEO";
+                    // For MP4, use the first captured photo as thumbnail
+                    if (capturedPhotoPaths != null && capturedPhotoPaths.Count > 0)
+                    {
+                        try
+                        {
+                            bitmap = new BitmapImage();
+                            bitmap.BeginInit();
+                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                            bitmap.DecodePixelWidth = 150; // Thumbnail size
+                            bitmap.UriSource = new Uri(capturedPhotoPaths[0]); // Use first photo as thumbnail
+                            bitmap.EndInit();
+                            bitmap.Freeze();
+                        }
+                        catch
+                        {
+                            // If first photo fails, try a placeholder
+                            bitmap = CreatePlaceholderBitmap("Video");
+                        }
+                    }
+                    else
+                    {
+                        // Create a simple placeholder for video
+                        bitmap = CreatePlaceholderBitmap("Video");
+                    }
+                }
+                else
+                {
+                    // For GIF, we'll show the first frame as thumbnail
+                    try
+                    {
+                        bitmap = new BitmapImage();
+                        bitmap.BeginInit();
+                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                        bitmap.DecodePixelWidth = 150; // Thumbnail size
+                        bitmap.UriSource = new Uri(animationPath);
+                        bitmap.EndInit();
+                        bitmap.Freeze();
+                    }
+                    catch
+                    {
+                        // If GIF loading fails, use first photo
+                        if (capturedPhotoPaths != null && capturedPhotoPaths.Count > 0)
+                        {
+                            bitmap = new BitmapImage();
+                            bitmap.BeginInit();
+                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                            bitmap.DecodePixelWidth = 150;
+                            bitmap.UriSource = new Uri(capturedPhotoPaths[0]);
+                            bitmap.EndInit();
+                            bitmap.Freeze();
+                        }
+                    }
+                }
+                
+                if (bitmap != null)
+                {
+                    var animationItem = new PhotoStripItem
+                    {
+                        Image = bitmap,
+                        PhotoNumber = 0, // Special number for animation
+                        IsPlaceholder = false,
+                        ItemType = itemType,
+                        FilePath = animationPath
+                    };
+                    
+                    // Add to the end of photo strip
+                    photoStripItems.Add(animationItem);
+                    
+                    Log.Debug($"AddGifToPhotoStrip: Added {itemType} to photo strip");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"AddGifToPhotoStrip: Error adding animation: {ex.Message}");
+            }
+        }
+        
+        private void PlayVideoInOverlay(string videoPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(videoPath) || !File.Exists(videoPath))
+                    return;
+                
+                // Show the overlay
+                if (videoPlayerOverlay != null)
+                {
+                    videoPlayerOverlay.Visibility = Visibility.Visible;
+                    
+                    // Load and play the video
+                    if (videoPlayer != null)
+                    {
+                        videoPlayer.Source = new Uri(videoPath);
+                        videoPlayer.Play();
+                        
+                        // Update play/pause button
+                        if (playPauseButton != null)
+                            playPauseButton.Content = "⏸️";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PlayVideoInOverlay: Error playing video: {ex.Message}");
+            }
+        }
+        
+        private void CloseVideoPlayer_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (videoPlayer != null)
+                {
+                    videoPlayer.Stop();
+                    videoPlayer.Source = null;
+                }
+                
+                if (videoPlayerOverlay != null)
+                    videoPlayerOverlay.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"CloseVideoPlayer_Click: Error: {ex.Message}");
+            }
+        }
+        
+        private void VideoPlayerOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Close overlay when clicking outside the video player
+            if (e.OriginalSource == sender)
+            {
+                CloseVideoPlayer_Click(null, null);
+            }
+        }
+        
+        private void PlayPauseButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (videoPlayer != null)
+                {
+                    if (videoPlayer.Position < videoPlayer.NaturalDuration.TimeSpan && 
+                        videoPlayer.NaturalDuration.HasTimeSpan)
+                    {
+                        // Toggle play/pause
+                        if (playPauseButton?.Content?.ToString() == "▶️")
+                        {
+                            videoPlayer.Play();
+                            playPauseButton.Content = "⏸️";
+                        }
+                        else
+                        {
+                            videoPlayer.Pause();
+                            if (playPauseButton != null)
+                                playPauseButton.Content = "▶️";
+                        }
+                    }
+                    else
+                    {
+                        // Restart from beginning
+                        videoPlayer.Position = TimeSpan.Zero;
+                        videoPlayer.Play();
+                        if (playPauseButton != null)
+                            playPauseButton.Content = "⏸️";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PlayPauseButton_Click: Error: {ex.Message}");
+            }
+        }
+        
+        private void RestartButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (videoPlayer != null)
+                {
+                    videoPlayer.Position = TimeSpan.Zero;
+                    videoPlayer.Play();
+                    
+                    if (playPauseButton != null)
+                        playPauseButton.Content = "⏸️";
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"RestartButton_Click: Error: {ex.Message}");
+            }
+        }
+        
+        private void VideoPlayer_MediaEnded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Loop the video
+                if (videoPlayer != null)
+                {
+                    videoPlayer.Position = TimeSpan.Zero;
+                    videoPlayer.Play();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"VideoPlayer_MediaEnded: Error: {ex.Message}");
+            }
+        }
+        
+        private BitmapImage CreatePlaceholderBitmap(string text)
+        {
+            try
+            {
+                // Create a simple text-based placeholder
+                var renderTarget = new RenderTargetBitmap(150, 150, 96, 96, PixelFormats.Pbgra32);
+                var visual = new DrawingVisual();
+                using (var context = visual.RenderOpen())
+                {
+                    context.DrawRectangle(System.Windows.Media.Brushes.DarkGray, null, new Rect(0, 0, 150, 150));
+                    var formattedText = new FormattedText(
+                        text,
+                        System.Globalization.CultureInfo.CurrentCulture,
+                        FlowDirection.LeftToRight,
+                        new Typeface("Arial"),
+                        24,
+                        System.Windows.Media.Brushes.White,
+                        96);
+                    context.DrawText(formattedText, new System.Windows.Point(75 - formattedText.Width / 2, 75 - formattedText.Height / 2));
+                }
+                renderTarget.Render(visual);
+                
+                // Convert to BitmapImage
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(renderTarget));
+                using (var stream = new MemoryStream())
+                {
+                    encoder.Save(stream);
+                    stream.Position = 0;
+                    
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.StreamSource = stream;
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+                    return bitmap;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        
+        #region Database Session Management
+        
+        private void CreateDatabaseSession()
+        {
+            try
+            {
+                if (currentEvent == null || currentTemplate == null)
+                {
+                    Log.Debug("CreateDatabaseSession: Cannot create session - missing event or template");
+                    return;
+                }
+                
+                if (currentDatabaseSessionId.HasValue)
+                {
+                    Log.Debug("CreateDatabaseSession: Database session already exists");
+                    return;
+                }
+                
+                string sessionName = $"{currentEvent.Name}_{currentTemplate.Name}_{DateTime.Now:yyyyMMdd_HHmmss}";
+                currentDatabaseSessionId = database.CreatePhotoSession(currentEvent.Id, currentTemplate.Id, sessionName);
+                currentSessionGuid = System.Guid.NewGuid().ToString();
+                currentSessionPhotoIds.Clear();
+                
+                Log.Debug($"CreateDatabaseSession: Created session ID {currentDatabaseSessionId} with GUID {currentSessionGuid}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"CreateDatabaseSession: Failed to create database session: {ex.Message}");
+            }
+        }
+        
+        private void SavePhotoToDatabase(string filePath, int sequenceNumber, string photoType = "Original")
+        {
+            try
+            {
+                if (!currentDatabaseSessionId.HasValue)
+                {
+                    Log.Debug("SavePhotoToDatabase: No active session, creating one");
+                    CreateDatabaseSession();
+                }
+                
+                if (!currentDatabaseSessionId.HasValue)
+                {
+                    Log.Error("SavePhotoToDatabase: Failed to create session");
+                    return;
+                }
+                
+                var photoData = new PhotoData
+                {
+                    SessionId = currentDatabaseSessionId.Value,
+                    FilePath = filePath,
+                    FileName = Path.GetFileName(filePath),
+                    FileSize = new FileInfo(filePath).Length,
+                    PhotoType = photoType,
+                    SequenceNumber = sequenceNumber,
+                    CreatedDate = DateTime.Now,
+                    ThumbnailPath = GenerateThumbnailPath(filePath),
+                    IsActive = true
+                };
+                
+                int photoId = database.SavePhoto(photoData);
+                currentSessionPhotoIds.Add(photoId);
+                
+                Log.Debug($"SavePhotoToDatabase: Saved photo {photoId} - {Path.GetFileName(filePath)}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SavePhotoToDatabase: Failed to save photo: {ex.Message}");
+            }
+        }
+        
+        private void SaveComposedImageToDatabase(string filePath, string outputFormat = "4x6")
+        {
+            try
+            {
+                if (!currentDatabaseSessionId.HasValue)
+                {
+                    Log.Error("SaveComposedImageToDatabase: No active session");
+                    return;
+                }
+                
+                var composedImageData = new ComposedImageData
+                {
+                    SessionId = currentDatabaseSessionId.Value,
+                    FilePath = filePath,
+                    FileName = Path.GetFileName(filePath),
+                    FileSize = new FileInfo(filePath).Length,
+                    TemplateId = currentTemplate.Id,
+                    OutputFormat = outputFormat,
+                    CreatedDate = DateTime.Now,
+                    ThumbnailPath = GenerateThumbnailForComposedImage(filePath),
+                    IsActive = true
+                };
+                
+                int composedImageId = database.SaveComposedImage(composedImageData);
+                
+                // Link this composed image to all photos in the current session
+                if (currentSessionPhotoIds.Count > 0)
+                {
+                    database.LinkPhotosToComposedImage(composedImageId, currentSessionPhotoIds);
+                    Log.Debug($"SaveComposedImageToDatabase: Linked composed image {composedImageId} to {currentSessionPhotoIds.Count} photos");
+                }
+                
+                Log.Debug($"SaveComposedImageToDatabase: Saved composed image {composedImageId} - {Path.GetFileName(filePath)}");
+                
+                // Generate GIF in background without blocking (fire and forget)
+                if (Properties.Settings.Default.EnableGifGeneration && capturedPhotoPaths.Count > 1)
+                {
+                    Log.Debug("SaveComposedImageToDatabase: Starting GIF generation in background");
+                    Task.Run(() =>
+                    {
+                        try
+                        {
+                            GenerateAndSaveSessionGif();
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error($"Background GIF generation failed: {ex.Message}");
+                        }
+                    });
+                }
+                else
+                {
+                    Log.Debug("SaveComposedImageToDatabase: GIF generation disabled or insufficient photos");
+                }
+                
+                Log.Debug("SaveComposedImageToDatabase: Method completing");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SaveComposedImageToDatabase: Failed to save composed image: {ex.Message}");
+            }
+        }
+        
+        private string GenerateThumbnailPath(string originalPath)
+        {
+            string directory = Path.GetDirectoryName(originalPath);
+            string filename = Path.GetFileNameWithoutExtension(originalPath);
+            string extension = Path.GetExtension(originalPath);
+            return Path.Combine(directory, "Thumbnails", $"{filename}_thumb{extension}");
+        }
+        
+        private string GenerateThumbnailForComposedImage(string composedImagePath)
+        {
+            try
+            {
+                string thumbnailPath = GenerateThumbnailPath(composedImagePath);
+                string thumbnailDir = Path.GetDirectoryName(thumbnailPath);
+                
+                // Create thumbnail directory if it doesn't exist
+                if (!Directory.Exists(thumbnailDir))
+                {
+                    Directory.CreateDirectory(thumbnailDir);
+                }
+                
+                // Generate thumbnail from composed image (200x200 pixels)
+                var originalImage = new BitmapImage(new Uri(composedImagePath));
+                var thumbnail = CreateThumbnail(originalImage, 200, 200);
+                SaveThumbnail(thumbnail, thumbnailPath);
+                Log.Debug($"GenerateThumbnailForComposedImage: Created thumbnail {thumbnailPath}");
+                
+                return thumbnailPath;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"GenerateThumbnailForComposedImage: Failed to create thumbnail: {ex.Message}");
+                return null;
+            }
+        }
+        
+        private BitmapImage CreateThumbnail(BitmapImage source, int maxWidth, int maxHeight)
+        {
+            // Calculate thumbnail size maintaining aspect ratio
+            double sourceAspect = (double)source.PixelWidth / source.PixelHeight;
+            int thumbWidth, thumbHeight;
+            
+            if (sourceAspect > 1)
+            {
+                thumbWidth = maxWidth;
+                thumbHeight = (int)(maxWidth / sourceAspect);
+            }
+            else
+            {
+                thumbHeight = maxHeight;
+                thumbWidth = (int)(maxHeight * sourceAspect);
+            }
+            
+            // Create thumbnail
+            var thumbnail = new TransformedBitmap(source, new ScaleTransform(
+                (double)thumbWidth / source.PixelWidth,
+                (double)thumbHeight / source.PixelHeight));
+            
+            // Convert to BitmapImage
+            var encoder = new JpegBitmapEncoder { QualityLevel = 85 };
+            encoder.Frames.Add(BitmapFrame.Create(thumbnail));
+            
+            using (var stream = new MemoryStream())
+            {
+                encoder.Save(stream);
+                stream.Position = 0;
+                
+                var result = new BitmapImage();
+                result.BeginInit();
+                result.StreamSource = stream;
+                result.CacheOption = BitmapCacheOption.OnLoad;
+                result.EndInit();
+                result.Freeze();
+                
+                return result;
+            }
+        }
+        
+        private void SaveThumbnail(BitmapImage thumbnail, string path)
+        {
+            var encoder = new JpegBitmapEncoder { QualityLevel = 85 };
+            encoder.Frames.Add(BitmapFrame.Create(thumbnail));
+            
+            using (var fileStream = new FileStream(path, FileMode.Create))
+            {
+                encoder.Save(fileStream);
+            }
+        }
+        
+        private static readonly object gifGenerationLock = new object();
+        private static bool isGeneratingGif = false;
+        
+        private void GenerateAndSaveSessionGif()
+        {
+            // Prevent concurrent executions
+            lock (gifGenerationLock)
+            {
+                if (isGeneratingGif)
+                {
+                    Log.Debug("GenerateAndSaveSessionGif: Already generating, skipping duplicate call");
+                    return;
+                }
+                isGeneratingGif = true;
+            }
+            
+            try
+            {
+                if (capturedPhotoPaths == null || capturedPhotoPaths.Count < 2)
+                {
+                    Log.Debug("GenerateAndSaveSessionGif: Not enough photos for animation");
+                    return;
+                }
+                
+                if (!isGeneratingGif) return; // Double check after lock
+                Log.Debug($"GenerateAndSaveSessionGif: Starting MP4 video generation with {capturedPhotoPaths.Count} photos");
+                
+                // Create output path for MP4
+                string outputDir = Path.Combine(FolderForPhotos, "Animations");
+                if (!Directory.Exists(outputDir))
+                {
+                    Directory.CreateDirectory(outputDir);
+                }
+                
+                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff"); // Added milliseconds to prevent conflicts
+                string uniqueId = Guid.NewGuid().ToString("N").Substring(0, 8); // Extra uniqueness
+                string videoPath = Path.Combine(outputDir, $"Animation_{timestamp}_{uniqueId}.mp4");
+                
+                // Try MP4 generation first (much faster and better quality)
+                try
+                {
+                    string generatedPath = VideoGenerationService.GenerateLoopingMP4(
+                        capturedPhotoPaths, 
+                        videoPath, 
+                        400); // 400ms per frame for smoother GIF-like animation
+                    
+                    if (!string.IsNullOrEmpty(generatedPath) && File.Exists(generatedPath))
+                    {
+                        Log.Debug($"GenerateAndSaveSessionGif: MP4 video created at {generatedPath}");
+                        
+                        // Save to database
+                        SaveAnimationToDatabase(generatedPath, "MP4");
+                        
+                        // Quick UI update
+                        Dispatcher.BeginInvoke(new Action(() => 
+                        {
+                            try
+                            {
+                                AddGifToPhotoStrip(generatedPath);
+                                Log.Debug("GenerateAndSaveSessionGif: Added video to UI");
+                            }
+                            catch { }
+                        }));
+                        
+                        return; // Success with MP4
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"GenerateAndSaveSessionGif: MP4 generation failed: {ex.Message}");
+                }
+                
+                // Fallback to GIF if MP4 fails (no FFmpeg)
+                Log.Debug("GenerateAndSaveSessionGif: Falling back to GIF generation");
+                string gifPath = Path.Combine(outputDir, $"Animation_{timestamp}_{uniqueId}.gif");
+                
+                try
+                {
+                    string generatedPath = GifGenerationService.GenerateSimpleAnimatedGif(
+                        capturedPhotoPaths, 
+                        gifPath, 
+                        50,  // Fast frame rate
+                        400, // Small width
+                        300); // Small height
+                    
+                    if (!string.IsNullOrEmpty(generatedPath) && File.Exists(generatedPath))
+                    {
+                        Log.Debug($"GenerateAndSaveSessionGif: Fallback GIF created at {generatedPath}");
+                        
+                        // Save to database
+                        SaveAnimationToDatabase(generatedPath, "GIF");
+                        
+                        Dispatcher.BeginInvoke(new Action(() => 
+                        {
+                            try
+                            {
+                                AddGifToPhotoStrip(generatedPath);
+                            }
+                            catch { }
+                        }));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"GenerateAndSaveSessionGif: GIF fallback also failed: {ex.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"GenerateAndSaveSessionGif: Error: {ex.Message}");
+            }
+            finally
+            {
+                // Reset the flag
+                lock (gifGenerationLock)
+                {
+                    isGeneratingGif = false;
+                }
+            }
+        }
+        
+        private void SaveAnimationToDatabase(string animationPath, string animationType)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(animationPath) || !File.Exists(animationPath))
+                {
+                    Log.Debug("SaveAnimationToDatabase: Invalid animation path");
+                    return;
+                }
+                
+                if (database == null)
+                {
+                    Log.Debug("SaveAnimationToDatabase: Database not initialized");
+                    return;
+                }
+                
+                // Generate thumbnail from first photo
+                string thumbnailPath = null;
+                if (capturedPhotoPaths != null && capturedPhotoPaths.Count > 0)
+                {
+                    try
+                    {
+                        thumbnailPath = GenerateThumbnailPath(capturedPhotoPaths[0]);
+                        if (!File.Exists(thumbnailPath))
+                        {
+                            // Create thumbnail from first photo
+                            using (var image = System.Drawing.Image.FromFile(capturedPhotoPaths[0]))
+                            {
+                                int thumbWidth = 150;
+                                int thumbHeight = (int)(image.Height * (150.0 / image.Width));
+                                using (var thumbnail = image.GetThumbnailImage(thumbWidth, thumbHeight, null, IntPtr.Zero))
+                                {
+                                    thumbnail.Save(thumbnailPath, System.Drawing.Imaging.ImageFormat.Jpeg);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"SaveAnimationToDatabase: Failed to create thumbnail: {ex.Message}");
+                    }
+                }
+                
+                // Save to database as a composed image with animation type
+                if (!currentDatabaseSessionId.HasValue)
+                {
+                    Log.Debug("SaveAnimationToDatabase: No active session");
+                    return;
+                }
+                
+                var animationData = new ComposedImageData
+                {
+                    SessionId = currentDatabaseSessionId.Value,
+                    FilePath = animationPath,
+                    FileName = Path.GetFileName(animationPath),
+                    FileSize = new FileInfo(animationPath).Length,
+                    TemplateId = currentTemplate?.Id ?? 0,
+                    OutputFormat = animationType,  // "MP4" or "GIF"
+                    CreatedDate = DateTime.Now,
+                    ThumbnailPath = thumbnailPath ?? animationPath,
+                    IsActive = true
+                };
+                
+                int animationId = database.SaveComposedImage(animationData);
+                
+                // Link to the photos in this session
+                if (animationId > 0 && currentSessionPhotoIds.Count > 0)
+                {
+                    database.LinkPhotosToComposedImage(animationId, currentSessionPhotoIds);
+                    Log.Debug($"SaveAnimationToDatabase: Saved {animationType} animation ID {animationId} linked to {currentSessionPhotoIds.Count} photos");
+                }
+                else if (animationId <= 0)
+                {
+                    Log.Error($"SaveAnimationToDatabase: Failed to save to database - returned ID {animationId}");
+                }
+                
+                Log.Debug($"SaveAnimationToDatabase: Animation saved to database - {Path.GetFileName(animationPath)}");
+                
+                // Debug: Check if it's actually in the database
+                try
+                {
+                    var recentComposed = database.GetRecentComposedImages(10);
+                    if (recentComposed != null && recentComposed.Count > 0)
+                    {
+                        Log.Debug($"SaveAnimationToDatabase: Recent composed images in DB:");
+                        foreach (var img in recentComposed.Take(3))
+                        {
+                            Log.Debug($"  - ID:{img.Id} Type:{img.OutputFormat} File:{img.FileName}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"SaveAnimationToDatabase: Could not query recent images: {ex.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SaveAnimationToDatabase: Failed to save animation: {ex.Message}");
+            }
+        }
+        
+        private void EndDatabaseSession()
+        {
+            try
+            {
+                if (currentDatabaseSessionId.HasValue)
+                {
+                    // Only end the session if it has photos
+                    if (currentSessionPhotoIds.Count > 0)
+                    {
+                        database.EndPhotoSession(currentDatabaseSessionId.Value);
+                        Log.Debug($"EndDatabaseSession: Ended session {currentDatabaseSessionId} with {currentSessionPhotoIds.Count} photos");
+                    }
+                    else
+                    {
+                        // Delete empty session from database
+                        Log.Debug($"EndDatabaseSession: Deleting empty session {currentDatabaseSessionId}");
+                        database.DeletePhotoSession(currentDatabaseSessionId.Value);
+                    }
+                    
+                    currentDatabaseSessionId = null;
+                    currentSessionGuid = null;
+                    currentSessionPhotoIds.Clear();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EndDatabaseSession: Failed to end session: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #endregion
+
+        #region Fullscreen Filter Overlay Event Handlers
+
+        private void CloseFilterOverlay_Click(object sender, RoutedEventArgs e)
+        {
+            filterSelectionOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void FilterOverlay_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Close overlay if clicked outside the content
+            if (e.OriginalSource == sender)
+            {
+                filterSelectionOverlay.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void FullscreenFilterItem_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border border && border.Tag != null)
+            {
+                // Update selection state for filter items
+                foreach (var item in fullscreenFilterControl.Items)
+                {
+                    var filterItem = item as Photobooth.Controls.FilterItem;
+                    if (filterItem != null)
+                    {
+                        filterItem.IsSelected = (item == border.Tag);
+                    }
+                }
+                
+                // Refresh the display
+                fullscreenFilterControl.Items.Refresh();
+            }
+        }
+
+        private void ApplyFilter_Click(object sender, RoutedEventArgs e)
+        {
+            // Apply the selected filter
+            foreach (var item in fullscreenFilterControl.Items)
+            {
+                var filterItem = item as Photobooth.Controls.FilterItem;
+                if (filterItem != null && filterItem.IsSelected)
+                {
+                    // Apply filter logic here
+                    ApplySelectedFilter(filterItem);
+                    break;
+                }
+            }
+            
+            // Close overlay
+            filterSelectionOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void ApplySelectedFilter(dynamic filterItem)
+        {
+            // Implementation for applying the selected filter
+            Log.Debug($"Applying filter: {filterItem.Name}");
+            // Add your filter application logic here
+        }
+
+        #endregion
+
+        #region Fullscreen Retake Overlay Event Handlers
+
+        private void CloseRetakeOverlay_Click(object sender, RoutedEventArgs e)
+        {
+            retakeReviewOverlay.Visibility = Visibility.Collapsed;
+            retakeReviewTimer?.Stop();
+        }
+
+        private void RetakeSelected_Click(object sender, RoutedEventArgs e)
+        {
+            // Get list of photos marked for retake
+            var photosToRetake = new List<int>();
+            
+            foreach (var item in retakePhotoGrid.Items)
+            {
+                var photo = item as RetakePhotoItem;
+                if (photo != null && photo.MarkedForRetake)
+                {
+                    photosToRetake.Add(photo.PhotoIndex);
+                }
+            }
+            
+            if (photosToRetake.Count > 0)
+            {
+                Log.Debug($"Retaking {photosToRetake.Count} photos");
+                
+                // Hide overlay
+                retakeReviewOverlay.Visibility = Visibility.Collapsed;
+                retakeReviewTimer?.Stop();
+                
+                // Start retake process for selected photos
+                StartRetakeProcess(photosToRetake);
+            }
+            else
+            {
+                MessageBox.Show("Please select at least one photo to retake.", "No Selection", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        private void StartRetakeProcess(List<int> photoIndices)
+        {
+            // Implementation for retaking specific photos
+            // This would restart the capture process for the selected photo indices
+            Log.Debug($"Starting retake process for photos: {string.Join(", ", photoIndices)}");
+            
+            // Store which photos need retaking
+            photosToRetake = photoIndices;
+            currentRetakeIndex = 0;
+            
+            // Start retaking the first photo
+            if (photosToRetake.Count > 0)
+            {
+                StartRetakeCapture(photosToRetake[0]);
+            }
+        }
+
+        private List<int> photosToRetake = new List<int>();
+        private int currentRetakeIndex = 0;
+
+        private void StartRetakeCapture(int photoIndex)
+        {
+            // Start capture for specific photo index
+            statusText.Text = $"Retaking Photo {photoIndex + 1}";
+            
+            // Show countdown and capture
+            StartCountdown();
+        }
+        
+        private void UpdateStatusText(string text)
+        {
+            statusText.Text = text;
+        }
+        
+        private void ShowCountdown()
+        {
+            StartCountdown();
+        }
+        
+        #endregion
+        
+        #region Post-Session Filter Overlay Events
+        
+        private void PostSessionFilterOverlay_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Don't close when clicking inside the content
+            if (e.OriginalSource == sender)
+            {
+                // Optional: close overlay when clicking outside
+                // postSessionFilterOverlay.Visibility = Visibility.Collapsed;
+            }
+        }
+        
+        private void ClosePostSessionFilterOverlay_Click(object sender, RoutedEventArgs e)
+        {
+            postSessionFilterOverlay.Visibility = Visibility.Collapsed;
+            // Proceed without filter
+            ProcessTemplateWithPhotosInternal(FilterType.None);
+        }
+        
+        private void PostSessionFilterItem_Click(object sender, MouseButtonEventArgs e)
+        {
+            var border = sender as Border;
+            if (border != null)
+            {
+                // Update selection state for filter items
+                foreach (var item in postSessionFilterControl.Items)
+                {
+                    var filterItem = item as Photobooth.Controls.FilterItem;
+                    if (filterItem != null)
+                    {
+                        filterItem.IsSelected = (item == border.Tag);
+                    }
+                }
+                
+                // Refresh the display
+                postSessionFilterControl.Items.Refresh();
+                
+                // Show larger preview of selected filter in live view area
+                var selectedItem = border.Tag as Photobooth.Controls.FilterItem;
+                if (selectedItem != null)
+                {
+                    ShowLargeFilterPreview(selectedItem);
+                }
+            }
+        }
+        
+        private void ShowLargeFilterPreview(Photobooth.Controls.FilterItem filterItem)
+        {
+            // Show the filter preview in the main live view area
+            Log.Debug($"Selected filter: {filterItem.Name}");
+            
+            // Display the filtered preview in the live view
+            if (filterItem.PreviewImage != null)
+            {
+                liveViewImage.Source = filterItem.PreviewImage;
+                statusText.Text = $"Preview: {filterItem.Name} filter";
+            }
+            
+            // If it's the "No Filter" option, show the original image
+            if (filterItem.FilterType == FilterType.None && capturedPhotoPaths.Count > 0)
+            {
+                var originalImage = new BitmapImage(new Uri(capturedPhotoPaths[0]));
+                liveViewImage.Source = originalImage;
+                statusText.Text = "Preview: Original (No Filter)";
+            }
+        }
+        
+        private void ApplyPostSessionFilter_Click(object sender, RoutedEventArgs e)
+        {
+            // Get selected filter
+            FilterType selectedFilter = FilterType.None;
+            
+            foreach (var item in postSessionFilterControl.Items)
+            {
+                var filterItem = item as Photobooth.Controls.FilterItem;
+                if (filterItem != null && filterItem.IsSelected)
+                {
+                    selectedFilter = filterItem.FilterType;
+                    break;
+                }
+            }
+            
+            // Hide overlay immediately so user sees action was taken
+            postSessionFilterOverlay.Visibility = Visibility.Collapsed;
+            
+            // Process with selected filter
+            ProcessTemplateWithPhotosInternal(selectedFilter);
+        }
+        
+        private void SkipPostSessionFilter_Click(object sender, RoutedEventArgs e)
+        {
+            // Hide overlay
+            postSessionFilterOverlay.Visibility = Visibility.Collapsed;
+            
+            // Process without filter
+            ProcessTemplateWithPhotosInternal(FilterType.None);
+        }
+
         #endregion
     }
 }

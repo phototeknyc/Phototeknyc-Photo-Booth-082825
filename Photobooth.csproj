@@ -47,20 +47,26 @@
     <Reference Include="ColorPicker.Models, Version=1.0.7.0, Culture=neutral, PublicKeyToken=bb95a4442a9c0731, processorArchitecture=MSIL">
       <HintPath>packages\PixiEditor.ColorPicker.Models.1.0.7\lib\net451\ColorPicker.Models.dll</HintPath>
     </Reference>
+    <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="Microsoft.Xaml.Behaviors, Version=1.1.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>packages\Microsoft.Xaml.Behaviors.Wpf.1.1.31\lib\net45\Microsoft.Xaml.Behaviors.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.VisualBasic" />
+    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="ReachFramework" />
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Data.SQLite, Version=1.0.119.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=MSIL">
       <HintPath>packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\lib\net46\System.Data.SQLite.dll</HintPath>
     </Reference>
-    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
-    </Reference>
     <Reference Include="System.Drawing" />
+    <Reference Include="Magick.NET-Q16-AnyCPU, Version=13.5.0.0, Culture=neutral, PublicKeyToken=2004825badfa91ec, processorArchitecture=MSIL">
+      <HintPath>packages\Magick.NET-Q16-AnyCPU.13.5.0\lib\netstandard20\Magick.NET-Q16-AnyCPU.dll</HintPath>
+    </Reference>
+    <Reference Include="Magick.NET.Core, Version=13.5.0.0, Culture=neutral, PublicKeyToken=2004825badfa91ec, processorArchitecture=MSIL">
+      <HintPath>packages\Magick.NET.Core.13.5.0\lib\netstandard20\Magick.NET.Core.dll</HintPath>
+    </Reference>
     <Reference Include="System.Drawing.Common, Version=9.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>packages\System.Drawing.Common.9.0.8\lib\net462\System.Drawing.Common.dll</HintPath>
     </Reference>
@@ -104,6 +110,16 @@
     <Compile Include="Controls\PrintDialog.xaml.cs">
       <DependentUpon>PrintDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\SessionSelectionModal.xaml.cs">
+      <DependentUpon>SessionSelectionModal.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Converters\BoolToBrushConverter.cs" />
+    <Compile Include="PrintCopyDialog.xaml.cs">
+      <DependentUpon>PrintCopyDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="PrinterAlignmentDialog.xaml.cs">
+      <DependentUpon>PrinterAlignmentDialog.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Database\TemplateDatabase.cs" />
     <Compile Include="Services\EventService.cs" />
     <Compile Include="Services\TemplateService.cs" />
@@ -112,6 +128,11 @@
     <Compile Include="Services\ImageProcessingService.cs" />
     <Compile Include="Services\CameraSessionManager.cs" />
     <Compile Include="Services\PhotoFilterService.cs" />
+    <Compile Include="Services\PhotoFilterServiceMagick.cs" />
+    <Compile Include="Services\PhotoFilterServiceHybrid.cs" />
+    <Compile Include="Services\GifGenerationService.cs" />
+    <Compile Include="Services\MagickGifService.cs" />
+    <Compile Include="Services\VideoGenerationService.cs" />
     <Compile Include="Services\PrintService.cs" />
     <Compile Include="Services\PrinterPoolService.cs" />
     <Compile Include="Services\PrinterMonitorService.cs" />
@@ -236,6 +257,18 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\PrintDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\SessionSelectionModal.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="PrintCopyDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="PrinterAlignmentDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -452,10 +485,12 @@
     <Copy SourceFiles="@(SQLiteX86Files)" DestinationFolder="$(OutputPath)\x86\" ContinueOnError="true" />
     <Message Text="Attempted to copy SQLite native libraries to output directory" Importance="normal" />
   </Target>
+  <Import Project="packages\Magick.NET-Q16-AnyCPU.13.5.0\build\netstandard20\Magick.NET-Q16-AnyCPU.targets" Condition="Exists('packages\Magick.NET-Q16-AnyCPU.13.5.0\build\netstandard20\Magick.NET-Q16-AnyCPU.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
+    <Error Condition="!Exists('packages\Magick.NET-Q16-AnyCPU.13.5.0\build\netstandard20\Magick.NET-Q16-AnyCPU.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Magick.NET-Q16-AnyCPU.13.5.0\build\netstandard20\Magick.NET-Q16-AnyCPU.targets'))" />
     <Error Condition="!Exists('packages\SQLite.3.13.0\build\net45\SQLite.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\SQLite.3.13.0\build\net45\SQLite.props'))" />
     <Error Condition="!Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets'))" />
   </Target>

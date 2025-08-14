@@ -10,6 +10,14 @@
       Title="Photobooth Touch Interface">
 
     <Page.Resources>
+        <!-- Converters -->
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        
+        <!-- BoolToBrushConverter for filter selection border -->
+        <local:BoolToBrushConverter x:Key="BoolToBrushConverter" 
+                                    TrueBrush="#4CAF50" 
+                                    FalseBrush="Transparent"/>
+        
         <!-- Modern Touch Button Style -->
         <Style x:Key="TouchButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="#FF4CAF50"/>
@@ -23,15 +31,19 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" 
+                        <Border x:Name="border" Background="{TemplateBinding Background}" 
                                 CornerRadius="15"
-                                BorderThickness="{TemplateBinding BorderThickness}">
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#FF45A049"/>
-                                <Setter Property="RenderTransform">
+                                <Setter TargetName="border" Property="Background" Value="#FF45A049"/>
+                                <Setter TargetName="border" Property="RenderTransform">
                                     <Setter.Value>
                                         <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
                                     </Setter.Value>
@@ -55,15 +67,19 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" 
+                        <Border x:Name="border" Background="{TemplateBinding Background}" 
                                 CornerRadius="15"
-                                BorderThickness="{TemplateBinding BorderThickness}">
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#FF388E3C"/>
-                                <Setter Property="RenderTransform">
+                                <Setter TargetName="border" Property="Background" Value="#FF388E3C"/>
+                                <Setter TargetName="border" Property="RenderTransform">
                                     <Setter.Value>
                                         <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
                                     </Setter.Value>
@@ -84,15 +100,19 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" 
+                        <Border x:Name="border" Background="{TemplateBinding Background}" 
                                 CornerRadius="15"
-                                BorderThickness="{TemplateBinding BorderThickness}">
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#FFD32F2F"/>
-                                <Setter Property="RenderTransform">
+                                <Setter TargetName="border" Property="Background" Value="#FFD32F2F"/>
+                                <Setter TargetName="border" Property="RenderTransform">
                                     <Setter.Value>
                                         <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
                                     </Setter.Value>
@@ -116,15 +136,19 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" 
+                        <Border x:Name="border" Background="{TemplateBinding Background}" 
                                 CornerRadius="15"
-                                BorderThickness="{TemplateBinding BorderThickness}">
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#FF1976D2"/>
-                                <Setter Property="RenderTransform">
+                                <Setter TargetName="border" Property="Background" Value="#FF1976D2"/>
+                                <Setter TargetName="border" Property="RenderTransform">
                                     <Setter.Value>
                                         <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
                                     </Setter.Value>
@@ -149,6 +173,11 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
+        
+        <!-- Session Selection Modal (Overlay) -->
+        <controls:SessionSelectionModal x:Name="SessionSelectionModal" 
+                                        Grid.RowSpan="3"
+                                        Panel.ZIndex="1000"/>
         
         <!-- Main Live View Area -->
         <Grid Grid.Row="0">
@@ -177,6 +206,110 @@
                                        Margin="0,20,0,0"/>
                         </StackPanel>
                     </Grid>
+                    
+                    <!-- Session Loaded Indicator -->
+                    <Border x:Name="sessionLoadedIndicator"
+                            VerticalAlignment="Top"
+                            HorizontalAlignment="Right"
+                            Margin="20"
+                            Background="#CC0078D4"
+                            CornerRadius="8"
+                            Padding="15,8"
+                            Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📂" FontSize="18" Margin="0,0,8,0" Foreground="White"/>
+                            <TextBlock x:Name="sessionInfoText" 
+                                       Text="Session Loaded" 
+                                       FontSize="14" 
+                                       FontWeight="SemiBold"
+                                       Foreground="White"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Photo View Mode Indicator -->
+                    <Border x:Name="photoViewModeIndicator"
+                            VerticalAlignment="Bottom"
+                            HorizontalAlignment="Left"
+                            Margin="20"
+                            Background="#CC4CAF50"
+                            CornerRadius="8"
+                            Padding="12,6"
+                            Visibility="Collapsed">
+                        <TextBlock Text="📷 Click photos below to view" 
+                                   FontSize="14" 
+                                   FontWeight="SemiBold"
+                                   Foreground="White"/>
+                    </Border>
+                    
+                    <!-- Composed Image Navigation (when multiple layouts exist) -->
+                    <StackPanel x:Name="composedImageNavigation"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Bottom"
+                                Margin="0,0,0,20"
+                                Visibility="Collapsed">
+                        <Button x:Name="prevComposedButton"
+                                Content="◀"
+                                Width="50"
+                                Height="50"
+                                FontSize="20"
+                                Background="#CC555555"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Margin="0,0,10,0"
+                                Click="PrevComposedImage_Click">
+                            <Button.Resources>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        CornerRadius="25">
+                                                    <ContentPresenter HorizontalAlignment="Center"
+                                                                      VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Resources>
+                        </Button>
+                        
+                        <TextBlock x:Name="composedImageIndexText"
+                                   Text="1 / 1"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   VerticalAlignment="Center"
+                                   Margin="10,0"/>
+                        
+                        <Button x:Name="nextComposedButton"
+                                Content="▶"
+                                Width="50"
+                                Height="50"
+                                FontSize="20"
+                                Background="#CC555555"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Margin="10,0,0,0"
+                                Click="NextComposedImage_Click">
+                            <Button.Resources>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        CornerRadius="25">
+                                                    <ContentPresenter HorizontalAlignment="Center"
+                                                                      VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Resources>
+                        </Button>
+                    </StackPanel>
 
                     <!-- Status Messages -->
                     <Border VerticalAlignment="Top" 
@@ -298,6 +431,50 @@
                         </StackPanel>
                     </Border>
                     
+                    <!-- Print Button - Positioned to the right of preview screen -->
+                    <Button x:Name="printButton" 
+                            Width="80" 
+                            Height="80"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="0,0,300,0"
+                            Background="#FF2196F3"
+                            BorderThickness="0"
+                            Content="🖨️"
+                            FontSize="32"
+                            Foreground="White"
+                            FontWeight="Bold"
+                            ToolTip="Print Photo"
+                            Visibility="Collapsed"
+                            Click="PrintButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="10">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FF1976D2"/>
+                                        <Setter Property="RenderTransform">
+                                            <Setter.Value>
+                                                <ScaleTransform ScaleX="1.05" ScaleY="1.05"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="RenderTransform">
+                                            <Setter.Value>
+                                                <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
                     <!-- Top Left Controls -->
                     <StackPanel Orientation="Horizontal" 
                                 HorizontalAlignment="Left" 
@@ -340,6 +517,30 @@
                                 FontWeight="Bold"
                                 ToolTip="Return to Home"
                                 Click="HomeButton_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}" 
+                                            CornerRadius="5">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        
+                        <!-- Gallery/Sessions Button -->
+                        <Button x:Name="galleryButton" 
+                                Width="60" 
+                                Height="60"
+                                Margin="0,0,10,0"
+                                Background="#FF9C27B0"
+                                BorderThickness="0"
+                                Content="📷"
+                                FontSize="24"
+                                Foreground="White"
+                                FontWeight="Bold"
+                                ToolTip="View Sessions"
+                                Click="GalleryButton_Click">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Border Background="{TemplateBinding Background}" 
@@ -410,26 +611,45 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Width="100" 
-                                        Height="75" 
-                                        Margin="8"
+                                <Border x:Name="PhotoStripItemBorder"
+                                        Width="90" 
+                                        Height="70" 
+                                        Margin="5"
                                         CornerRadius="8"
-                                        BorderThickness="2">
+                                        BorderThickness="2"
+                                        RenderTransformOrigin="0.5,0.5"
+                                        Cursor="Hand"
+                                        MouseLeftButtonDown="PhotoStripItem_Click"
+                                        Tag="{Binding}">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="BorderBrush" Value="#444"/>
+                                            <Setter Property="RenderTransform">
+                                                <Setter.Value>
+                                                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                                </Setter.Value>
+                                            </Setter>
                                             <Style.Triggers>
+                                                <!-- Selected photo highlight -->
+                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#0078D4"/>
+                                                    <Setter Property="BorderThickness" Value="3"/>
+                                                </DataTrigger>
+                                                <!-- Mouse hover effect -->
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Opacity" Value="0.8"/>
+                                                </Trigger>
                                                 <DataTrigger Binding="{Binding IsPlaceholder}" Value="False">
                                                     <DataTrigger.EnterActions>
                                                         <BeginStoryboard>
                                                             <Storyboard>
-                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX"
+                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)"
                                                                                 From="0.8" To="1.0" Duration="0:0:0.3">
                                                                     <DoubleAnimation.EasingFunction>
                                                                         <BackEase EasingMode="EaseOut" Amplitude="0.3"/>
                                                                     </DoubleAnimation.EasingFunction>
                                                                 </DoubleAnimation>
-                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY"
+                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)"
                                                                                 From="0.8" To="1.0" Duration="0:0:0.3">
                                                                     <DoubleAnimation.EasingFunction>
                                                                         <BackEase EasingMode="EaseOut" Amplitude="0.3"/>
@@ -444,9 +664,6 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <Border.RenderTransform>
-                                        <ScaleTransform CenterX="50" CenterY="37.5"/>
-                                    </Border.RenderTransform>
                                     <Grid>
                                         <!-- Placeholder background -->
                                         <Rectangle Fill="#2A2A2A">
@@ -495,6 +712,43 @@
                                                 </Style>
                                             </Image.Style>
                                         </Image>
+                                        
+                                        <!-- Type indicator overlay for Composed and GIF -->
+                                        <Border VerticalAlignment="Bottom" 
+                                                HorizontalAlignment="Center"
+                                                Background="#CC000000"
+                                                CornerRadius="4"
+                                                Padding="6,2"
+                                                Margin="0,0,0,4">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ItemType}" Value="Composed">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding ItemType}" Value="GIF">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock FontSize="10" Foreground="White" FontWeight="Bold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value=""/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Composed">
+                                                                <Setter Property="Text" Value="LAYOUT"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="GIF">
+                                                                <Setter Property="Text" Value="GIF"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
                                         
                                         <!-- Photo number label -->
                                         <Border HorizontalAlignment="Right"
@@ -600,16 +854,6 @@
                             Margin="0,0,10,0"
                             Click="CameraSettingsButton_Click"
                             ToolTip="Open camera settings"/>
-                    
-                    <Button x:Name="galleryButton" 
-                            Content="🖼️ Gallery" 
-                            Style="{StaticResource SettingsButtonStyle}"
-                            Width="140"
-                            Height="60"
-                            FontSize="14"
-                            Margin="0,0,10,0"
-                            Click="GalleryButton_Click"
-                            ToolTip="View all photos from this event"/>
                     
                     <Button x:Name="eventSettingsButton" 
                             Content="⚙ Event Settings" 
@@ -831,45 +1075,60 @@
             </Border>
         </Grid>
         
-        <!-- Retake Review Overlay -->
+        <!-- Fullscreen Retake Review Overlay -->
         <Grid x:Name="retakeReviewOverlay" 
-              Grid.RowSpan="3" 
-              Background="#E0000000" 
+              Grid.RowSpan="3"
+              Grid.ColumnSpan="3"
+              Background="#E6000000" 
               Visibility="Collapsed">
-            <Border Background="#FF2E2E2E" 
+            <Border Background="#1E1E1E" 
                     CornerRadius="20" 
-                    MaxWidth="1000"
-                    MaxHeight="700"
-                    Margin="50" 
-                    Padding="30">
+                    MaxWidth="1800"
+                    MaxHeight="950"
+                    Margin="30">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     
                     <!-- Header -->
-                    <TextBlock Grid.Row="0" 
-                               Text="Review Your Photos" 
-                               FontSize="32" 
-                               FontWeight="Bold" 
-                               Foreground="White"
-                               HorizontalAlignment="Center"
-                               Margin="0,0,0,20"/>
+                    <Border Grid.Row="0" Background="#2D2D30" CornerRadius="20,20,0,0" Padding="25">
+                        <Grid>
+                            <TextBlock Text="Review Your Photos" 
+                                       FontSize="36" 
+                                       FontWeight="Bold" 
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"/>
+                            <Button Content="✕" 
+                                    FontSize="28"
+                                    Width="50" 
+                                    Height="50"
+                                    HorizontalAlignment="Right"
+                                    Background="Transparent"
+                                    Foreground="White"
+                                    BorderThickness="0"
+                                    Cursor="Hand"
+                                    Click="CloseRetakeOverlay_Click"/>
+                        </Grid>
+                    </Border>
                     
                     <!-- Instructions -->
-                    <TextBlock Grid.Row="1" 
-                               Text="Click on any photo below to retake it, or click Continue to proceed" 
-                               FontSize="16" 
-                               Foreground="#CCCCCC"
-                               HorizontalAlignment="Center"
-                               Margin="0,0,0,20"/>
+                    <Border Grid.Row="1" Background="#252525" Padding="20">
+                        <TextBlock Text="Click on any photo you want to retake. Photos will be marked with a red border." 
+                                   FontSize="20" 
+                                   Foreground="#E0E0E0"
+                                   HorizontalAlignment="Center"
+                                   FontWeight="SemiBold"/>
+                    </Border>
                     
-                    <!-- Photo Grid -->
-                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                    <!-- Large Photo Grid -->
+                    <ScrollViewer Grid.Row="2" 
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="30">
                         <ItemsControl x:Name="retakePhotoGrid">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -878,23 +1137,37 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Width="200" 
-                                            Height="150" 
-                                            Margin="10"
-                                            CornerRadius="10"
-                                            BorderThickness="3"
+                                    <Border Width="400" 
+                                            Height="300" 
+                                            Margin="20"
+                                            CornerRadius="15"
+                                            BorderThickness="5"
                                             Cursor="Hand"
                                             MouseLeftButtonUp="RetakePhoto_Click"
                                             Tag="{Binding PhotoIndex}">
                                         <Border.Style>
                                             <Style TargetType="Border">
-                                                <Setter Property="BorderBrush" Value="#666"/>
+                                                <Setter Property="BorderBrush" Value="#444"/>
+                                                <Setter Property="Effect">
+                                                    <Setter.Value>
+                                                        <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="5" Opacity="0.3"/>
+                                                    </Setter.Value>
+                                                </Setter>
                                                 <Style.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                    <DataTrigger Binding="{Binding MarkedForRetake}" Value="True">
                                                         <Setter Property="BorderBrush" Value="#FF5722"/>
+                                                        <Setter Property="BorderThickness" Value="6"/>
+                                                    </DataTrigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="BorderBrush" Value="#FFA726"/>
                                                         <Setter Property="RenderTransform">
                                                             <Setter.Value>
-                                                                <ScaleTransform ScaleX="1.05" ScaleY="1.05" CenterX="100" CenterY="75"/>
+                                                                <ScaleTransform ScaleX="1.03" ScaleY="1.03" CenterX="200" CenterY="150"/>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                        <Setter Property="Effect">
+                                                            <Setter.Value>
+                                                                <DropShadowEffect Color="#FFA726" BlurRadius="20" ShadowDepth="0" Opacity="0.5"/>
                                                             </Setter.Value>
                                                         </Setter>
                                                     </Trigger>
@@ -902,15 +1175,49 @@
                                             </Style>
                                         </Border.Style>
                                         <Grid>
-                                            <Image Source="{Binding Image}" Stretch="UniformToFill"/>
-                                            <Border Background="#AA000000" 
+                                            <!-- Large Photo Preview -->
+                                            <Image Source="{Binding Image}" 
+                                                   Stretch="UniformToFill"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            
+                                            <!-- Photo Label with Number -->
+                                            <Border Background="#CC000000" 
                                                     VerticalAlignment="Bottom" 
-                                                    HorizontalAlignment="Stretch">
-                                                <TextBlock Text="{Binding Label}" 
-                                                           Foreground="White" 
-                                                           FontSize="14"
-                                                           HorizontalAlignment="Center"
-                                                           Padding="5"/>
+                                                    CornerRadius="0,0,15,15">
+                                                <Grid>
+                                                    <TextBlock Text="{Binding Label}" 
+                                                               Foreground="White" 
+                                                               FontSize="18"
+                                                               FontWeight="SemiBold"
+                                                               HorizontalAlignment="Center"
+                                                               Padding="10"/>
+                                                    
+                                                    <!-- Retake Indicator -->
+                                                    <TextBlock Text="RETAKE" 
+                                                               Foreground="#FF5722"
+                                                               FontSize="14"
+                                                               FontWeight="Bold"
+                                                               HorizontalAlignment="Right"
+                                                               Margin="0,0,15,0"
+                                                               VerticalAlignment="Center"
+                                                               Visibility="{Binding MarkedForRetake, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                </Grid>
+                                            </Border>
+                                            
+                                            <!-- Retake Icon Overlay -->
+                                            <Border HorizontalAlignment="Right" 
+                                                    VerticalAlignment="Top"
+                                                    Margin="15"
+                                                    Visibility="{Binding MarkedForRetake, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Grid Width="60" Height="60">
+                                                    <Ellipse Fill="#FF5722" Opacity="0.95"/>
+                                                    <TextBlock Text="↻" 
+                                                               Foreground="White" 
+                                                               FontSize="32"
+                                                               FontWeight="Bold"
+                                                               HorizontalAlignment="Center" 
+                                                               VerticalAlignment="Center"/>
+                                                </Grid>
                                             </Border>
                                             <!-- Retake icon overlay on hover -->
                                             <Border Background="#CC000000" 
@@ -942,91 +1249,302 @@
                         </ItemsControl>
                     </ScrollViewer>
                     
-                    <!-- Timer and Action Buttons -->
-                    <Grid Grid.Row="3">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        
-                        <!-- Timer Display -->
-                        <StackPanel Grid.Column="0" 
-                                    Orientation="Horizontal" 
-                                    HorizontalAlignment="Left"
-                                    VerticalAlignment="Center">
-                            <TextBlock Text="Time remaining: " 
-                                       FontSize="16" 
-                                       Foreground="#CCCCCC"/>
-                            <TextBlock x:Name="retakeTimerText" 
-                                       Text="15" 
-                                       FontSize="20" 
+                    <!-- Footer with Timer and Action Buttons -->
+                    <Border Grid.Row="3" Background="#2D2D30" CornerRadius="0,0,20,20" Padding="25">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <!-- Timer Display -->
+                            <StackPanel Grid.Column="0" 
+                                        Orientation="Horizontal" 
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="Time remaining: " 
+                                           FontSize="20" 
+                                           Foreground="#E0E0E0"/>
+                                <TextBlock x:Name="retakeTimerText" 
+                                           Text="15" 
+                                           FontSize="24" 
+                                           FontWeight="Bold" 
+                                           Foreground="#4CAF50"/>
+                                <TextBlock Text=" seconds" 
+                                           FontSize="20" 
+                                           Foreground="#E0E0E0"/>
+                            </StackPanel>
+                            
+                            <!-- Action Buttons -->
+                            <StackPanel Grid.Column="1" 
+                                        Orientation="Horizontal" 
+                                        HorizontalAlignment="Right">
+                                <Button Content="Retake Selected" 
+                                        Width="200"
+                                        Height="60"
+                                        Margin="10"
+                                        FontSize="20"
+                                        FontWeight="SemiBold"
+                                        Background="#FF5722"
+                                        Foreground="White"
+                                        Cursor="Hand"
+                                        Click="RetakeSelected_Click">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    CornerRadius="30">
+                                                <ContentPresenter HorizontalAlignment="Center" 
+                                                                  VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                
+                                <Button Content="Skip Review" 
+                                        Width="180"
+                                        Height="60"
+                                        Margin="10"
+                                        FontSize="20"
+                                        Background="#757575"
+                                        Foreground="White"
+                                        Cursor="Hand"
+                                        Click="SkipRetakeReview_Click">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    CornerRadius="30">
+                                                <ContentPresenter HorizontalAlignment="Center" 
+                                                                  VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                
+                                <Button Content="✓ Continue" 
+                                        Width="220"
+                                        Height="60"
+                                        Margin="10"
+                                        FontSize="22"
+                                        FontWeight="Bold"
+                                        Background="#4CAF50"
+                                        Foreground="White"
+                                        Cursor="Hand"
+                                        Click="ContinueFromRetake_Click">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    CornerRadius="30">
+                                                <ContentPresenter HorizontalAlignment="Center" 
+                                                                  VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+        
+        <!-- Filter Selection Section (now removed from retake overlay) -->
+        <Grid x:Name="filterSectionContainer" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="150"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Filter Section Header -->
+            <StackPanel Grid.Row="0" 
+                        Orientation="Horizontal" 
+                        HorizontalAlignment="Center"
+                        Margin="0,0,0,5"
+                        Visibility="{Binding ElementName=filterSelectionControl, Path=Visibility}">
+                <TextBlock Text="Apply Filters: " 
+                           FontSize="16" 
+                           Foreground="White"
+                           VerticalAlignment="Center"/>
+                <CheckBox x:Name="enableFiltersCheckBox" 
+                          Content="Enable Filters" 
+                          Foreground="White"
+                          FontSize="14"
+                          Margin="10,0,0,0"
+                          IsChecked="True"
+                          VerticalAlignment="Center"
+                          Checked="EnableFilters_Checked"
+                          Unchecked="EnableFilters_Unchecked"/>
+            </StackPanel>
+            
+            <!-- Filter Selection Control -->
+            <controls:FilterSelectionControl x:Name="filterSelectionControl" 
+                                             Grid.Row="1"
+                                             Visibility="Visible"/>
+        </Grid>
+        
+        <!-- Fullscreen Filter Selection Overlay -->
+        <Grid x:Name="filterSelectionOverlay" 
+              Grid.RowSpan="3"
+              Grid.ColumnSpan="3"
+              Background="#E6000000"
+              Visibility="Collapsed"
+              MouseLeftButtonDown="FilterOverlay_MouseDown">
+            
+            <Border MaxWidth="1600" MaxHeight="900" Margin="40"
+                    Background="#1E1E1E"
+                    CornerRadius="15">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Header -->
+                    <Border Grid.Row="0" Background="#2D2D30" CornerRadius="15,15,0,0" Padding="20">
+                        <Grid>
+                            <TextBlock Text="Select Photo Filter" 
+                                       FontSize="32" 
                                        FontWeight="Bold" 
-                                       Foreground="#4CAF50"/>
-                            <TextBlock Text=" seconds" 
-                                       FontSize="16" 
-                                       Foreground="#CCCCCC"/>
-                        </StackPanel>
-                        
-                        <!-- Action Buttons -->
-                        <StackPanel Grid.Column="2" 
-                                    Orientation="Horizontal" 
-                                    HorizontalAlignment="Right">
-                            <Button Content="Skip Review" 
-                                    Width="150"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"/>
+                            <Button Content="✕" 
+                                    FontSize="28"
+                                    Width="50" 
                                     Height="50"
-                                    Margin="10"
-                                    FontSize="16"
-                                    Background="#757575"
+                                    HorizontalAlignment="Right"
+                                    Background="Transparent"
                                     Foreground="White"
                                     BorderThickness="0"
-                                    Click="SkipRetakeReview_Click"/>
-                            <Button Content="✓ Continue" 
-                                    Width="180"
-                                    Height="50"
-                                    Margin="10"
-                                    FontSize="18"
+                                    Cursor="Hand"
+                                    Click="CloseFilterOverlay_Click"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Filter Grid -->
+                    <ScrollViewer Grid.Row="1" 
+                                  VerticalScrollBarVisibility="Auto" 
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="20">
+                        <ItemsControl x:Name="fullscreenFilterControl">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="320" 
+                                            Height="380" 
+                                            Margin="20"
+                                            Background="#2A2A2A"
+                                            CornerRadius="12"
+                                            Cursor="Hand"
+                                            MouseLeftButtonUp="FullscreenFilterItem_Click"
+                                            Tag="{Binding}">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="Black" BlurRadius="15" ShadowDepth="8" Opacity="0.4"/>
+                                        </Border.Effect>
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="60"/>
+                                            </Grid.RowDefinitions>
+                                            
+                                            <!-- Large Filter Preview -->
+                                            <Border Grid.Row="0" 
+                                                    Margin="12"
+                                                    CornerRadius="10"
+                                                    ClipToBounds="True"
+                                                    BorderThickness="3"
+                                                    BorderBrush="{Binding IsSelected, Converter={StaticResource BoolToBrushConverter}}">
+                                                <Image Source="{Binding PreviewImage}" 
+                                                       Stretch="UniformToFill"
+                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            </Border>
+                                            
+                                            <!-- Filter Name -->
+                                            <Border Grid.Row="1" 
+                                                    Background="#1A1A1A" 
+                                                    CornerRadius="0,0,12,12">
+                                                <TextBlock Text="{Binding Name}"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="White"
+                                                           FontSize="20"
+                                                           FontWeight="SemiBold"/>
+                                            </Border>
+                                            
+                                            <!-- Selected Indicator -->
+                                            <Border Grid.Row="0" 
+                                                    HorizontalAlignment="Right" 
+                                                    VerticalAlignment="Top"
+                                                    Margin="20"
+                                                    Visibility="{Binding IsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Grid Width="50" Height="50">
+                                                    <Ellipse Fill="#4CAF50" Opacity="0.95"/>
+                                                    <TextBlock Text="✓" 
+                                                               Foreground="White" 
+                                                               FontSize="30"
+                                                               FontWeight="Bold"
+                                                               HorizontalAlignment="Center" 
+                                                               VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    
+                    <!-- Footer with Apply Button -->
+                    <Border Grid.Row="2" Background="#2D2D30" CornerRadius="0,0,15,15" Padding="25">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button x:Name="applyFilterButton"
+                                    Content="Apply Filter" 
+                                    Width="250" 
+                                    Height="60"
+                                    FontSize="22"
                                     FontWeight="Bold"
                                     Background="#4CAF50"
                                     Foreground="White"
-                                    BorderThickness="0"
-                                    Click="ContinueFromRetake_Click"/>
+                                    Cursor="Hand"
+                                    Click="ApplyFilter_Click"
+                                    Margin="15,0">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                CornerRadius="30">
+                                            <ContentPresenter HorizontalAlignment="Center" 
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            
+                            <Button Content="Cancel" 
+                                    Width="250" 
+                                    Height="60"
+                                    FontSize="22"
+                                    FontWeight="Bold"
+                                    Background="#E53E3E"
+                                    Foreground="White"
+                                    Cursor="Hand"
+                                    Click="CloseFilterOverlay_Click"
+                                    Margin="15,0">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                CornerRadius="30">
+                                            <ContentPresenter HorizontalAlignment="Center" 
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
                         </StackPanel>
-                    </Grid>
-                    
-                    <!-- Filter Selection Strip -->
-                    <Grid x:Name="filterSectionContainer" Grid.Row="4" Margin="0,10,0,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="150"/>
-                        </Grid.RowDefinitions>
-                        
-                        <!-- Filter Section Header -->
-                        <StackPanel Grid.Row="0" 
-                                    Orientation="Horizontal" 
-                                    HorizontalAlignment="Center"
-                                    Margin="0,0,0,5"
-                                    Visibility="{Binding ElementName=filterSelectionControl, Path=Visibility}">
-                            <TextBlock Text="Apply Filters: " 
-                                       FontSize="16" 
-                                       Foreground="White"
-                                       VerticalAlignment="Center"/>
-                            <CheckBox x:Name="enableFiltersCheckBox" 
-                                      Content="Enable Filters" 
-                                      Foreground="White"
-                                      FontSize="14"
-                                      Margin="10,0,0,0"
-                                      IsChecked="True"
-                                      VerticalAlignment="Center"
-                                      Checked="EnableFilters_Checked"
-                                      Unchecked="EnableFilters_Unchecked"/>
-                        </StackPanel>
-                        
-                        <!-- Filter Selection Control -->
-                        <controls:FilterSelectionControl x:Name="filterSelectionControl" 
-                                                         Grid.Row="1"
-                                                         Visibility="Visible"/>
-                    </Grid>
+                    </Border>
                 </Grid>
             </Border>
         </Grid>
@@ -1193,6 +1711,202 @@
                                          Visibility="Collapsed"
                                          Grid.RowSpan="3"/>
         
+        <!-- Post-Session Filter Selection Overlay -->
+        <Grid x:Name="postSessionFilterOverlay" 
+              Grid.RowSpan="3"
+              Grid.ColumnSpan="3"
+              Background="#E6000000"
+              Visibility="Collapsed"
+              Panel.ZIndex="1000"
+              MouseLeftButtonDown="PostSessionFilterOverlay_MouseDown">
+            
+            <Border MaxWidth="1400" MaxHeight="850" Margin="50"
+                    Background="#1E1E1E"
+                    CornerRadius="15">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Header -->
+                    <Border Grid.Row="0" Background="#2D2D30" CornerRadius="15,15,0,0" Padding="25">
+                        <Grid>
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="Apply Filters to Your Photos" 
+                                           FontSize="36" 
+                                           FontWeight="Bold" 
+                                           Foreground="White"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="Select a filter to apply to all photos from this session" 
+                                           FontSize="18" 
+                                           Foreground="#B0B0B0"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,10,0,0"/>
+                            </StackPanel>
+                            <Button Content="✕" 
+                                    FontSize="32"
+                                    Width="60" 
+                                    Height="60"
+                                    HorizontalAlignment="Right"
+                                    Background="Transparent"
+                                    Foreground="White"
+                                    BorderThickness="0"
+                                    Cursor="Hand"
+                                    Click="ClosePostSessionFilterOverlay_Click"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Filter Grid with Preview -->
+                    <ScrollViewer Grid.Row="1" 
+                                  VerticalScrollBarVisibility="Auto" 
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="30">
+                        <ItemsControl x:Name="postSessionFilterControl">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="280" 
+                                            Height="340" 
+                                            Margin="15"
+                                            Background="#2A2A2A"
+                                            CornerRadius="12"
+                                            Cursor="Hand"
+                                            MouseLeftButtonUp="PostSessionFilterItem_Click"
+                                            Tag="{Binding}">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="5" Opacity="0.3"/>
+                                        </Border.Effect>
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="60"/>
+                                            </Grid.RowDefinitions>
+                                            
+                                            <!-- Filter Preview -->
+                                            <Border Grid.Row="0" 
+                                                    Margin="10"
+                                                    CornerRadius="8"
+                                                    ClipToBounds="True"
+                                                    BorderThickness="3"
+                                                    BorderBrush="{Binding IsSelected, Converter={StaticResource BoolToBrushConverter}}">
+                                                <Image Source="{Binding PreviewImage}" 
+                                                       Stretch="UniformToFill"
+                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            </Border>
+                                            
+                                            <!-- Filter Name -->
+                                            <Border Grid.Row="1" 
+                                                    Background="#1A1A1A" 
+                                                    CornerRadius="0,0,12,12">
+                                                <TextBlock Text="{Binding Name}"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="White"
+                                                           FontSize="18"
+                                                           FontWeight="SemiBold"/>
+                                            </Border>
+                                            
+                                            <!-- Selected Indicator -->
+                                            <Border Grid.Row="0" 
+                                                    HorizontalAlignment="Right" 
+                                                    VerticalAlignment="Top"
+                                                    Margin="18"
+                                                    Visibility="{Binding IsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Grid Width="45" Height="45">
+                                                    <Ellipse Fill="#4CAF50" Opacity="0.95"/>
+                                                    <TextBlock Text="✓" 
+                                                               Foreground="White" 
+                                                               FontSize="26"
+                                                               FontWeight="Bold"
+                                                               HorizontalAlignment="Center" 
+                                                               VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    
+                    <!-- Footer with Action Buttons -->
+                    <Border Grid.Row="2" Background="#2D2D30" CornerRadius="0,0,15,15" Padding="30">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <!-- Skip Filter Option -->
+                            <CheckBox Grid.Column="0"
+                                      x:Name="skipFiltersCheckBox"
+                                      Content="Don't apply any filters" 
+                                      Foreground="White"
+                                      FontSize="16"
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,20,0"/>
+                            
+                            <!-- Action Buttons -->
+                            <StackPanel Grid.Column="2" 
+                                        Orientation="Horizontal" 
+                                        HorizontalAlignment="Right">
+                                <Button x:Name="applyPostSessionFilterButton"
+                                        Content="Apply Filter &amp; Continue" 
+                                        Width="280" 
+                                        Height="65"
+                                        FontSize="20"
+                                        FontWeight="Bold"
+                                        Background="#4CAF50"
+                                        Foreground="White"
+                                        Cursor="Hand"
+                                        Click="ApplyPostSessionFilter_Click"
+                                        Margin="10,0">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    CornerRadius="32">
+                                                <ContentPresenter HorizontalAlignment="Center" 
+                                                                  VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                
+                                <Button Content="Skip Filters" 
+                                        Width="200" 
+                                        Height="65"
+                                        FontSize="20"
+                                        FontWeight="Bold"
+                                        Background="#666666"
+                                        Foreground="White"
+                                        Cursor="Hand"
+                                        Click="SkipPostSessionFilter_Click"
+                                        Margin="10,0">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    CornerRadius="32">
+                                                <ContentPresenter HorizontalAlignment="Center" 
+                                                                  VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+        
         <!-- PIN Entry Overlay -->
         <Grid x:Name="pinEntryOverlay" 
               Grid.RowSpan="3" 
@@ -1290,6 +2004,82 @@
                             FontSize="18"
                             Margin="0,10,0,20"
                             Click="PinCancelButton_Click"/>
+                </Grid>
+            </Border>
+        </Grid>
+        
+        <!-- Video Player Overlay -->
+        <Grid x:Name="videoPlayerOverlay" 
+              Grid.RowSpan="3" 
+              Background="#E0000000" 
+              Visibility="Collapsed"
+              MouseLeftButtonDown="VideoPlayerOverlay_MouseLeftButtonDown">
+            <Border Background="#FF1E1E1E" 
+                    CornerRadius="20" 
+                    Width="800"
+                    Height="600"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Title Bar -->
+                    <Border Grid.Row="0" Background="#FF2E2E2E" CornerRadius="20,20,0,0" Padding="20,15">
+                        <Grid>
+                            <TextBlock Text="Animation Preview" 
+                                       FontSize="18" 
+                                       FontWeight="Bold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"/>
+                            <Button Content="✕" 
+                                    FontSize="20"
+                                    Foreground="White"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    HorizontalAlignment="Right"
+                                    Width="30"
+                                    Height="30"
+                                    Click="CloseVideoPlayer_Click"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Video Player -->
+                    <MediaElement Grid.Row="1" 
+                                  x:Name="videoPlayer"
+                                  LoadedBehavior="Manual"
+                                  UnloadedBehavior="Stop"
+                                  Stretch="Uniform"
+                                  MediaEnded="VideoPlayer_MediaEnded"/>
+                    
+                    <!-- Controls -->
+                    <StackPanel Grid.Row="2" 
+                                Orientation="Horizontal" 
+                                HorizontalAlignment="Center"
+                                Margin="0,10,0,20">
+                        <Button x:Name="playPauseButton"
+                                Content="▶️" 
+                                FontSize="24"
+                                Width="60"
+                                Height="40"
+                                Margin="5"
+                                Background="#FF2196F3"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Click="PlayPauseButton_Click"/>
+                        <Button Content="🔄" 
+                                FontSize="24"
+                                Width="60"
+                                Height="40"
+                                Margin="5"
+                                Background="#FF4CAF50"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Click="RestartButton_Click"/>
+                    </StackPanel>
                 </Grid>
             </Border>
         </Grid>

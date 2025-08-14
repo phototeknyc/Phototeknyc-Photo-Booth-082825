@@ -318,26 +318,33 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Width="100" 
+                                <Border x:Name="PhotoStripItemBorder"
+                                        Width="100" 
                                         Height="75" 
                                         Margin="8"
                                         CornerRadius="8"
-                                        BorderThickness="2">
+                                        BorderThickness="2"
+                                        RenderTransformOrigin="0.5,0.5">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="BorderBrush" Value="#444"/>
+                                            <Setter Property="RenderTransform">
+                                                <Setter.Value>
+                                                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                                </Setter.Value>
+                                            </Setter>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsPlaceholder}" Value="False">
                                                     <DataTrigger.EnterActions>
                                                         <BeginStoryboard>
                                                             <Storyboard>
-                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX"
+                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)"
                                                                                 From="0.8" To="1.0" Duration="0:0:0.3">
                                                                     <DoubleAnimation.EasingFunction>
                                                                         <BackEase EasingMode="EaseOut" Amplitude="0.3"/>
                                                                     </DoubleAnimation.EasingFunction>
                                                                 </DoubleAnimation>
-                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY"
+                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)"
                                                                                 From="0.8" To="1.0" Duration="0:0:0.3">
                                                                     <DoubleAnimation.EasingFunction>
                                                                         <BackEase EasingMode="EaseOut" Amplitude="0.3"/>
@@ -352,8 +359,6 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <Border.RenderTransform>
-                                        <ScaleTransform CenterX="50" CenterY="37.5"/></Border.RenderTransform>
                                     <Grid>
                                         <!-- Placeholder background -->
                                         <Rectangle Fill="#2A2A2A">

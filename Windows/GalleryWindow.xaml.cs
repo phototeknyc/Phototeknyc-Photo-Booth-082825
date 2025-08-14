@@ -84,15 +84,70 @@ namespace Photobooth.Windows
                     string photoType = "Original";
                     string badgeColor = "#2196F3"; // Blue for original
                     
-                    if (file.Contains("_filtered"))
+                    // Check if it's a video/animation
+                    string extension = Path.GetExtension(file).ToLower();
+                    if (extension == ".mp4" || extension == ".avi" || extension == ".mov" || extension == ".wmv")
+                    {
+                        photoType = "Video";
+                        badgeColor = "#FF5722"; // Orange for video
+                    }
+                    else if (extension == ".gif")
+                    {
+                        photoType = "GIF";
+                        badgeColor = "#FF9800"; // Amber for GIF
+                    }
+                    else if (file.Contains("Animation"))
+                    {
+                        photoType = "Animation";
+                        badgeColor = "#FF5722"; // Orange for animation
+                    }
+                    else if (file.Contains("_filtered"))
                     {
                         photoType = "Filtered";
                         badgeColor = "#9C27B0"; // Purple for filtered
                     }
-                    else if (file.Contains("template") || file.Contains("processed"))
+                    else if (file.Contains("template") || file.Contains("processed") || file.Contains("Composed"))
                     {
                         photoType = "Template";
                         badgeColor = "#4CAF50"; // Green for template
+                    }
+                    
+                    // For videos, try to find a thumbnail or use a placeholder
+                    string thumbnailPath = file;
+                    if (photoType == "Video" || photoType == "Animation")
+                    {
+                        // Look for a thumbnail in the same directory
+                        string dir = Path.GetDirectoryName(file);
+                        string nameWithoutExt = Path.GetFileNameWithoutExtension(file);
+                        
+                        // Check for possible thumbnail files
+                        var possibleThumbnails = new[] 
+                        {
+                            Path.Combine(dir, nameWithoutExt + "_thumb.jpg"),
+                            Path.Combine(dir, nameWithoutExt + ".jpg"),
+                            Path.Combine(dir, "..", "Thumbnails", Path.GetFileName(file) + ".jpg")
+                        };
+                        
+                        foreach (var thumb in possibleThumbnails)
+                        {
+                            if (File.Exists(thumb))
+                            {
+                                thumbnailPath = thumb;
+                                break;
+                            }
+                        }
+                        
+                        // If no thumbnail found and it's in Animations folder, 
+                        // try to use the first photo from the parent folder
+                        if (thumbnailPath == file && dir.Contains("Animations"))
+                        {
+                            string parentDir = Path.GetDirectoryName(dir);
+                            var firstPhoto = Directory.GetFiles(parentDir, "IMG_*.JPG")
+                                                     .OrderBy(f => f)
+                                                     .FirstOrDefault();
+                            if (firstPhoto != null)
+                                thumbnailPath = firstPhoto;
+                        }
                     }
                     
                     var photoItem = new PhotoItem
@@ -102,7 +157,7 @@ namespace Photobooth.Windows
                         FileSize = FormatFileSize(fileInfo.Length),
                         PhotoType = photoType,
                         TypeBadgeColor = badgeColor,
-                        ThumbnailPath = file, // For now, use full image as thumbnail
+                        ThumbnailPath = thumbnailPath,
                         CreationTime = creationTime
                     };
                     
@@ -133,8 +188,9 @@ namespace Photobooth.Windows
         private bool IsImageFile(string path)
         {
             string[] imageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff" };
+            string[] videoExtensions = { ".mp4", ".avi", ".mov", ".wmv" };
             string extension = Path.GetExtension(path).ToLower();
-            return imageExtensions.Contains(extension);
+            return imageExtensions.Contains(extension) || videoExtensions.Contains(extension);
         }
 
         private string FormatFileSize(long bytes)
@@ -163,6 +219,20 @@ namespace Photobooth.Windows
         {
             try
             {
+                // Check if it's a video file
+                string extension = Path.GetExtension(filePath).ToLower();
+                if (extension == ".mp4" || extension == ".avi" || extension == ".mov" || extension == ".wmv")
+                {
+                    // Open video with default player
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = filePath,
+                        UseShellExecute = true
+                    });
+                    return;
+                }
+                
+                // For images, show in full screen viewer
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit();
                 bitmap.CacheOption = BitmapCacheOption.OnLoad;

@@ -23,6 +23,7 @@ using Photobooth.Services;
 using Photobooth.Database;
 using System.Linq;
 using Photobooth.Controls;
+using System.ComponentModel;
 
 namespace Photobooth.Pages
 {
@@ -32,6 +33,9 @@ namespace Photobooth.Pages
         private BitmapImage _image;
         private bool _isPlaceholder = true;
         private int _photoNumber;
+        private bool _isSelected = false;
+        private string _itemType = "Photo"; // "Photo", "Composed", "GIF"
+        private string _filePath;
         
         public BitmapImage Image 
         { 
@@ -63,6 +67,36 @@ namespace Photobooth.Pages
             } 
         }
         
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                _isSelected = value;
+                OnPropertyChanged("IsSelected");
+            }
+        }
+        
+        public string ItemType
+        {
+            get => _itemType;
+            set
+            {
+                _itemType = value;
+                OnPropertyChanged("ItemType");
+            }
+        }
+        
+        public string FilePath
+        {
+            get => _filePath;
+            set
+            {
+                _filePath = value;
+                OnPropertyChanged("FilePath");
+            }
+        }
+        
         public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
         
         protected void OnPropertyChanged(string name)
@@ -72,12 +106,31 @@ namespace Photobooth.Pages
     }
     
     // Retake photo item for review grid
-    public class RetakePhotoItem
+    public class RetakePhotoItem : INotifyPropertyChanged
     {
+        private bool _markedForRetake;
+        
         public BitmapImage Image { get; set; }
         public string Label { get; set; }
         public int PhotoIndex { get; set; }
         public string FilePath { get; set; }
+        
+        public bool MarkedForRetake
+        {
+            get => _markedForRetake;
+            set
+            {
+                _markedForRetake = value;
+                OnPropertyChanged(nameof(MarkedForRetake));
+            }
+        }
+        
+        public event PropertyChangedEventHandler PropertyChanged;
+        
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
     
     public partial class PhotoboothTouch : Page

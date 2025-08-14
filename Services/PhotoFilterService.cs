@@ -189,30 +189,28 @@ namespace Photobooth.Services
 
         private Bitmap ApplyGlamour(Bitmap source, float intensity)
         {
-            // Glamour effect: soft focus + slight glow + enhanced skin tones
-            Bitmap result = ApplySoftFocus(source, 0.3f);
+            // Glamour effect: high contrast black and white with soft glow
+            Bitmap result = new Bitmap(source.Width, source.Height);
             
-            // Enhance warm tones (skin tones)
             using (Graphics g = Graphics.FromImage(result))
             {
+                // Black and white conversion with built-in contrast boost
+                // Using a more efficient single-pass approach
                 ColorMatrix colorMatrix = new ColorMatrix(
                     new float[][]
                     {
-                        new float[] {1.1f, 0, 0, 0, 0},
-                        new float[] {0, 1.05f, 0, 0, 0},
-                        new float[] {0, 0, 0.95f, 0, 0},
-                        new float[] {0, 0, 0, 1, 0},
-                        new float[] {0.02f, 0.01f, 0, 0, 1}
+                        new float[] {0.4f, 0.4f, 0.4f, 0, 0},     // Red channel (grayscale)
+                        new float[] {0.4f, 0.4f, 0.4f, 0, 0},     // Green channel (grayscale)
+                        new float[] {0.4f, 0.4f, 0.4f, 0, 0},     // Blue channel (grayscale)
+                        new float[] {0, 0, 0, 1, 0},              // Alpha channel
+                        new float[] {-0.1f, -0.1f, -0.1f, 0, 1.2f} // Contrast boost
                     });
 
                 ImageAttributes attributes = new ImageAttributes();
                 attributes.SetColorMatrix(colorMatrix);
 
-                Bitmap temp = new Bitmap(result);
-                g.Clear(Color.Transparent);
-                g.DrawImage(temp, new Rectangle(0, 0, temp.Width, temp.Height),
-                    0, 0, temp.Width, temp.Height, GraphicsUnit.Pixel, attributes);
-                temp.Dispose();
+                g.DrawImage(source, new Rectangle(0, 0, source.Width, source.Height),
+                    0, 0, source.Width, source.Height, GraphicsUnit.Pixel, attributes);
             }
 
             if (intensity < 1.0f)
