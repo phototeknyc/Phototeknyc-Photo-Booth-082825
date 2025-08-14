@@ -2101,28 +2101,32 @@
               Background="#CC000000" 
               Visibility="Collapsed">
             <Grid.Resources>
-                <!-- Clean Modern PIN Button Style -->
+                <!-- Phone Style Round PIN Button -->
                 <Style x:Key="ModernPinButtonStyle" TargetType="Button">
-                    <Setter Property="Background" Value="#FF4A4A4A"/>
+                    <Setter Property="Background" Value="Transparent"/>
                     <Setter Property="Foreground" Value="White"/>
-                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="BorderBrush" Value="White"/>
+                    <Setter Property="BorderThickness" Value="2"/>
                     <Setter Property="FontWeight" Value="Normal"/>
                     <Setter Property="Cursor" Value="Hand"/>
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="Button">
-                                <Border x:Name="border" 
-                                        Background="{TemplateBinding Background}"
-                                        CornerRadius="10">
+                                <Grid>
+                                    <Ellipse x:Name="border" 
+                                            Stroke="{TemplateBinding BorderBrush}"
+                                            StrokeThickness="2"
+                                            Fill="{TemplateBinding Background}"/>
                                     <ContentPresenter HorizontalAlignment="Center" 
                                                       VerticalAlignment="Center"/>
-                                </Border>
+                                </Grid>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="Background" Value="#FF5A5A5A"/>
+                                        <Setter TargetName="border" Property="Fill" Value="#22FFFFFF"/>
                                     </Trigger>
                                     <Trigger Property="IsPressed" Value="True">
-                                        <Setter TargetName="border" Property="Background" Value="#FF6A6A6A"/>
+                                        <Setter TargetName="border" Property="Fill" Value="#44FFFFFF"/>
+                                        <Setter TargetName="border" Property="Stroke" Value="#FF00D9FF"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -2131,10 +2135,10 @@
                 </Style>
             </Grid.Resources>
             
-            <Border Background="#FF2A2A2A" 
+            <Border Background="#FF1A1A1A" 
                     CornerRadius="20" 
-                    Width="400"
-                    Height="550"
+                    Width="420"
+                    Height="600"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center">
                 <Border.Effect>
@@ -2192,13 +2196,13 @@
                              Visibility="Collapsed"
                              MaxLength="6"/>
                     
-                    <!-- Modern Number Pad -->
-                    <Grid Grid.Row="2" Width="300" HorizontalAlignment="Center">
+                    <!-- Phone Style Number Pad -->
+                    <Grid Grid.Row="2" Width="330" HorizontalAlignment="Center">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="70"/>
-                            <RowDefinition Height="70"/>
-                            <RowDefinition Height="70"/>
-                            <RowDefinition Height="70"/>
+                            <RowDefinition Height="85"/>
+                            <RowDefinition Height="85"/>
+                            <RowDefinition Height="85"/>
+                            <RowDefinition Height="85"/>
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -2206,45 +2210,90 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         
-                        <!-- Number buttons with modern styling -->
-                        <Button Grid.Row="0" Grid.Column="0" Content="1" 
+                        <!-- Number buttons with phone labels -->
+                        <Button Grid.Row="0" Grid.Column="0" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="24" Width="70" Height="55" Margin="7" 
-                                Click="PinPadButton_Click"/>
-                        <Button Grid.Row="0" Grid.Column="1" Content="2" 
+                                Width="70" Height="70" Margin="10" 
+                                Click="PinPadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="1" FontSize="26" HorizontalAlignment="Center"/>
+                                <TextBlock Text="" FontSize="8" HorizontalAlignment="Center" Opacity="0.7"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="0" Grid.Column="1" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="24" Width="70" Height="55" Margin="7" 
-                                Click="PinPadButton_Click"/>
-                        <Button Grid.Row="0" Grid.Column="2" Content="3" 
+                                Width="70" Height="70" Margin="10" 
+                                Click="PinPadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="2" FontSize="26" HorizontalAlignment="Center"/>
+                                <TextBlock Text="ABC" FontSize="8" HorizontalAlignment="Center" Opacity="0.7"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="0" Grid.Column="2" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="24" Width="70" Height="55" Margin="7" 
-                                Click="PinPadButton_Click"/>
+                                Width="70" Height="70" Margin="10" 
+                                Click="PinPadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="3" FontSize="26" HorizontalAlignment="Center"/>
+                                <TextBlock Text="DEF" FontSize="8" HorizontalAlignment="Center" Opacity="0.7"/>
+                            </StackPanel>
+                        </Button>
                         
-                        <Button Grid.Row="1" Grid.Column="0" Content="4" 
+                        <Button Grid.Row="1" Grid.Column="0" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="24" Width="70" Height="55" Margin="7" 
-                                Click="PinPadButton_Click"/>
-                        <Button Grid.Row="1" Grid.Column="1" Content="5" 
+                                Width="70" Height="70" Margin="10" 
+                                Click="PinPadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="4" FontSize="26" HorizontalAlignment="Center"/>
+                                <TextBlock Text="GHI" FontSize="8" HorizontalAlignment="Center" Opacity="0.7"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="1" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="24" Width="70" Height="55" Margin="7" 
-                                Click="PinPadButton_Click"/>
-                        <Button Grid.Row="1" Grid.Column="2" Content="6" 
+                                Width="70" Height="70" Margin="10" 
+                                Click="PinPadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="5" FontSize="26" HorizontalAlignment="Center"/>
+                                <TextBlock Text="JKL" FontSize="8" HorizontalAlignment="Center" Opacity="0.7"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="2" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="24" Width="70" Height="55" Margin="7" 
-                                Click="PinPadButton_Click"/>
+                                Width="70" Height="70" Margin="10" 
+                                Click="PinPadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="6" FontSize="26" HorizontalAlignment="Center"/>
+                                <TextBlock Text="MNO" FontSize="8" HorizontalAlignment="Center" Opacity="0.7"/>
+                            </StackPanel>
+                        </Button>
                         
-                        <Button Grid.Row="2" Grid.Column="0" Content="7" 
+                        <Button Grid.Row="2" Grid.Column="0" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="24" Width="70" Height="55" Margin="7" 
-                                Click="PinPadButton_Click"/>
-                        <Button Grid.Row="2" Grid.Column="1" Content="8" 
+                                Width="70" Height="70" Margin="10" 
+                                Click="PinPadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="7" FontSize="26" HorizontalAlignment="Center"/>
+                                <TextBlock Text="PQRS" FontSize="8" HorizontalAlignment="Center" Opacity="0.7"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="2" Grid.Column="1" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="24" Width="70" Height="55" Margin="7" 
-                                Click="PinPadButton_Click"/>
-                        <Button Grid.Row="2" Grid.Column="2" Content="9" 
+                                Width="70" Height="70" Margin="10" 
+                                Click="PinPadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="8" FontSize="26" HorizontalAlignment="Center"/>
+                                <TextBlock Text="TUV" FontSize="8" HorizontalAlignment="Center" Opacity="0.7"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="2" Grid.Column="2" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="24" Width="70" Height="55" Margin="7" 
-                                Click="PinPadButton_Click"/>
+                                Width="70" Height="70" Margin="10" 
+                                Click="PinPadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="9" FontSize="26" HorizontalAlignment="Center"/>
+                                <TextBlock Text="WXYZ" FontSize="8" HorizontalAlignment="Center" Opacity="0.7"/>
+                            </StackPanel>
+                        </Button>
                         
                         <!-- Bottom row with special buttons -->
                         <Button Grid.Row="3" Grid.Column="0" Content="←" 
@@ -2274,10 +2323,15 @@
                             </Button.Template>
                         </Button>
                         
-                        <Button Grid.Row="3" Grid.Column="1" Content="0" 
+                        <Button Grid.Row="3" Grid.Column="1" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="24" Width="70" Height="55" Margin="7" 
-                                Click="PinPadButton_Click"/>
+                                Width="70" Height="70" Margin="10" 
+                                Click="PinPadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="0" FontSize="26" HorizontalAlignment="Center"/>
+                                <TextBlock Text="+" FontSize="8" HorizontalAlignment="Center" Opacity="0.7"/>
+                            </StackPanel>
+                        </Button>
                         
                         <Button Grid.Row="3" Grid.Column="2" Content="✓" 
                                 Width="70" Height="55" Margin="7"
@@ -2307,44 +2361,106 @@
                         </Button>
                     </Grid>
                     
-                    <!-- Error/Status Message -->
-                    <Border Grid.Row="3" Margin="20,10">
-                        <TextBlock x:Name="pinErrorText" 
-                                   Text=""
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FFFF6B6B"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Visibility="Collapsed"/>
-                    </Border>
+                    <!-- Back and End buttons like in the design -->
+                    <Grid Grid.Row="3" Margin="0,15,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- Back button (Clear) -->
+                        <Button Grid.Column="0" 
+                                Content="Back" 
+                                Width="90"
+                                Height="35"
+                                FontSize="14"
+                                FontWeight="Normal"
+                                Foreground="White"
+                                Background="Transparent"
+                                BorderBrush="White"
+                                BorderThickness="1"
+                                Cursor="Hand"
+                                Click="PinClearButton_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="17">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#22FFFFFF"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter Property="Background" Value="#44FFFFFF"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        
+                        <!-- End button (Submit) -->
+                        <Button Grid.Column="2" 
+                                Content="End" 
+                                Width="90"
+                                Height="35"
+                                FontSize="14"
+                                FontWeight="Normal"
+                                Foreground="White"
+                                Background="Transparent"
+                                BorderBrush="White"
+                                BorderThickness="1"
+                                Cursor="Hand"
+                                Click="PinSubmitButton_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="17">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#22FFFFFF"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter Property="Background" Value="#44FFFFFF"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </Grid>
                     
-                    <!-- Cancel Button -->
-                    <Button Grid.Row="4" 
-                            Content="CANCEL" 
-                            Width="140"
-                            Height="40"
-                            FontSize="14"
-                            FontWeight="Normal"
-                            Foreground="#999"
-                            Background="Transparent"
-                            BorderBrush="#666"
-                            BorderThickness="1"
-                            Margin="0,0,0,25"
-                            Cursor="Hand"
-                            Click="PinCancelButton_Click">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}"
-                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                        CornerRadius="25">
-                                    <ContentPresenter HorizontalAlignment="Center" 
-                                                      VerticalAlignment="Center"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
+                    <!-- Error/Status Message -->
+                    <Border Grid.Row="4" Margin="20,10">
+                        <StackPanel>
+                            <TextBlock x:Name="pinErrorText" 
+                                       Text=""
+                                       FontSize="14"
+                                       FontWeight="Normal"
+                                       Foreground="#FFFF6B6B"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Visibility="Collapsed"/>
+                            
+                            <!-- Cancel link -->
+                            <TextBlock HorizontalAlignment="Center" 
+                                       Margin="0,10,0,20"
+                                       Cursor="Hand"
+                                       MouseLeftButtonUp="PinCancelButton_Click">
+                                <Underline>
+                                    <Run Text="Cancel" Foreground="#AAA" FontSize="12"/>
+                                </Underline>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
                 </Grid>
             </Border>
         </Grid>

@@ -4597,9 +4597,26 @@ namespace Photobooth.Pages
         {
             if (sender is Button button && _enteredPin.Length < 6)
             {
-                _enteredPin += button.Content.ToString();
-                pinDisplayBox.Text = new string('●', _enteredPin.Length);
-                UpdatePinDots();
+                // Extract the number from the button content
+                string digit = "";
+                if (button.Content is StackPanel stackPanel && stackPanel.Children.Count > 0)
+                {
+                    if (stackPanel.Children[0] is TextBlock textBlock)
+                    {
+                        digit = textBlock.Text;
+                    }
+                }
+                else if (button.Content != null)
+                {
+                    digit = button.Content.ToString();
+                }
+                
+                if (!string.IsNullOrEmpty(digit))
+                {
+                    _enteredPin += digit;
+                    pinDisplayBox.Text = new string('●', _enteredPin.Length);
+                    UpdatePinDots();
+                }
             }
         }
         
