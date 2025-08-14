@@ -4592,13 +4592,13 @@ namespace Photobooth.Pages
         
         private void UpdatePinDots()
         {
-            // Update visual PIN dots based on entered length
-            pinDot1.Background = _enteredPin.Length >= 1 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
-            pinDot2.Background = _enteredPin.Length >= 2 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
-            pinDot3.Background = _enteredPin.Length >= 3 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
-            pinDot4.Background = _enteredPin.Length >= 4 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
-            pinDot5.Background = _enteredPin.Length >= 5 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
-            pinDot6.Background = _enteredPin.Length >= 6 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 217, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255));
+            // Update visual PIN dots based on entered length - white when filled, dark gray when empty
+            pinDot1.Background = _enteredPin.Length >= 1 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
+            pinDot2.Background = _enteredPin.Length >= 2 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
+            pinDot3.Background = _enteredPin.Length >= 3 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
+            pinDot4.Background = _enteredPin.Length >= 4 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
+            pinDot5.Background = _enteredPin.Length >= 5 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
+            pinDot6.Background = _enteredPin.Length >= 6 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
         }
         
         private void PinClearButton_Click(object sender, RoutedEventArgs e)

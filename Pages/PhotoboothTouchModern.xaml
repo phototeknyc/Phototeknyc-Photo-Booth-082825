@@ -2101,58 +2101,28 @@
               Background="#CC000000" 
               Visibility="Collapsed">
             <Grid.Resources>
-                <!-- Modern PIN Button Style -->
+                <!-- Clean Modern PIN Button Style -->
                 <Style x:Key="ModernPinButtonStyle" TargetType="Button">
-                    <Setter Property="Background">
-                        <Setter.Value>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#FF3A3A3A" Offset="0"/>
-                                <GradientStop Color="#FF2A2A2A" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Setter.Value>
-                    </Setter>
+                    <Setter Property="Background" Value="#FF4A4A4A"/>
                     <Setter Property="Foreground" Value="White"/>
-                    <Setter Property="BorderBrush" Value="#FF555555"/>
-                    <Setter Property="BorderThickness" Value="1"/>
-                    <Setter Property="FontWeight" Value="Bold"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="FontWeight" Value="Normal"/>
                     <Setter Property="Cursor" Value="Hand"/>
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="border" 
                                         Background="{TemplateBinding Background}"
-                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                        CornerRadius="15">
+                                        CornerRadius="10">
                                     <ContentPresenter HorizontalAlignment="Center" 
                                                       VerticalAlignment="Center"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="Background">
-                                            <Setter.Value>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                    <GradientStop Color="#FF4A4A4A" Offset="0"/>
-                                                    <GradientStop Color="#FF3A3A3A" Offset="1"/>
-                                                </LinearGradientBrush>
-                                            </Setter.Value>
-                                        </Setter>
-                                        <Setter TargetName="border" Property="BorderBrush" Value="#FF00D9FF"/>
+                                        <Setter TargetName="border" Property="Background" Value="#FF5A5A5A"/>
                                     </Trigger>
                                     <Trigger Property="IsPressed" Value="True">
-                                        <Setter TargetName="border" Property="RenderTransform">
-                                            <Setter.Value>
-                                                <ScaleTransform ScaleX="0.95" ScaleY="0.95" CenterX="40" CenterY="40"/>
-                                            </Setter.Value>
-                                        </Setter>
-                                        <Setter TargetName="border" Property="Background">
-                                            <Setter.Value>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                    <GradientStop Color="#FF00D9FF" Offset="0"/>
-                                                    <GradientStop Color="#FF0099BB" Offset="1"/>
-                                                </LinearGradientBrush>
-                                            </Setter.Value>
-                                        </Setter>
+                                        <Setter TargetName="border" Property="Background" Value="#FF6A6A6A"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -2161,14 +2131,14 @@
                 </Style>
             </Grid.Resources>
             
-            <Border Background="#FF1A1A1A" 
-                    CornerRadius="30" 
-                    Width="450"
-                    Height="600"
+            <Border Background="#FF2A2A2A" 
+                    CornerRadius="20" 
+                    Width="400"
+                    Height="550"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center">
                 <Border.Effect>
-                    <DropShadowEffect Color="Black" BlurRadius="30" ShadowDepth="10" Opacity="0.8"/>
+                    <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="5" Opacity="0.6"/>
                 </Border.Effect>
                 <Grid>
                     <Grid.RowDefinitions>
@@ -2180,20 +2150,20 @@
                     </Grid.RowDefinitions>
                     
                     <!-- Lock Icon and Title -->
-                    <StackPanel Grid.Row="0" Margin="0,30,0,20">
-                        <Border Width="80" Height="80" 
-                                Background="#22FFFFFF"
-                                CornerRadius="40"
+                    <StackPanel Grid.Row="0" Margin="0,30,0,10">
+                        <Border Width="70" Height="70" 
+                                Background="#FF3C3C3C"
+                                CornerRadius="35"
                                 HorizontalAlignment="Center"
                                 Margin="0,0,0,15">
                             <TextBlock Text="🔒" 
-                                       FontSize="40"
+                                       FontSize="32"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="Enter Security PIN" 
-                                   FontSize="28" 
-                                   FontWeight="Light"
+                                   FontSize="22" 
+                                   FontWeight="Normal"
                                    Foreground="White"
                                    HorizontalAlignment="Center"/>
                     </StackPanel>
@@ -2201,19 +2171,19 @@
                     <!-- PIN Display Dots -->
                     <StackPanel Grid.Row="1" Orientation="Horizontal" 
                                 HorizontalAlignment="Center" 
-                                Margin="0,10,0,30">
-                        <Border x:Name="pinDot1" Width="20" Height="20" 
-                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
-                        <Border x:Name="pinDot2" Width="20" Height="20" 
-                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
-                        <Border x:Name="pinDot3" Width="20" Height="20" 
-                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
-                        <Border x:Name="pinDot4" Width="20" Height="20" 
-                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
-                        <Border x:Name="pinDot5" Width="20" Height="20" 
-                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
-                        <Border x:Name="pinDot6" Width="20" Height="20" 
-                                Background="#33FFFFFF" CornerRadius="10" Margin="8"/>
+                                Margin="0,10,0,25">
+                        <Border x:Name="pinDot1" Width="14" Height="14" 
+                                Background="#FF4C4C4C" CornerRadius="7" Margin="7"/>
+                        <Border x:Name="pinDot2" Width="14" Height="14" 
+                                Background="#FF4C4C4C" CornerRadius="7" Margin="7"/>
+                        <Border x:Name="pinDot3" Width="14" Height="14" 
+                                Background="#FF4C4C4C" CornerRadius="7" Margin="7"/>
+                        <Border x:Name="pinDot4" Width="14" Height="14" 
+                                Background="#FF4C4C4C" CornerRadius="7" Margin="7"/>
+                        <Border x:Name="pinDot5" Width="14" Height="14" 
+                                Background="#FF4C4C4C" CornerRadius="7" Margin="7"/>
+                        <Border x:Name="pinDot6" Width="14" Height="14" 
+                                Background="#FF4C4C4C" CornerRadius="7" Margin="7"/>
                     </StackPanel>
                     
                     <!-- Hidden TextBox for PIN storage -->
@@ -2223,12 +2193,12 @@
                              MaxLength="6"/>
                     
                     <!-- Modern Number Pad -->
-                    <Grid Grid.Row="2" Width="350" HorizontalAlignment="Center">
+                    <Grid Grid.Row="2" Width="300" HorizontalAlignment="Center">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="80"/>
-                            <RowDefinition Height="80"/>
-                            <RowDefinition Height="80"/>
-                            <RowDefinition Height="80"/>
+                            <RowDefinition Height="70"/>
+                            <RowDefinition Height="70"/>
+                            <RowDefinition Height="70"/>
+                            <RowDefinition Height="70"/>
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -2239,83 +2209,101 @@
                         <!-- Number buttons with modern styling -->
                         <Button Grid.Row="0" Grid.Column="0" Content="1" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                FontSize="24" Width="70" Height="55" Margin="7" 
                                 Click="PinPadButton_Click"/>
                         <Button Grid.Row="0" Grid.Column="1" Content="2" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                FontSize="24" Width="70" Height="55" Margin="7" 
                                 Click="PinPadButton_Click"/>
                         <Button Grid.Row="0" Grid.Column="2" Content="3" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                FontSize="24" Width="70" Height="55" Margin="7" 
                                 Click="PinPadButton_Click"/>
                         
                         <Button Grid.Row="1" Grid.Column="0" Content="4" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                FontSize="24" Width="70" Height="55" Margin="7" 
                                 Click="PinPadButton_Click"/>
                         <Button Grid.Row="1" Grid.Column="1" Content="5" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                FontSize="24" Width="70" Height="55" Margin="7" 
                                 Click="PinPadButton_Click"/>
                         <Button Grid.Row="1" Grid.Column="2" Content="6" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                FontSize="24" Width="70" Height="55" Margin="7" 
                                 Click="PinPadButton_Click"/>
                         
                         <Button Grid.Row="2" Grid.Column="0" Content="7" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                FontSize="24" Width="70" Height="55" Margin="7" 
                                 Click="PinPadButton_Click"/>
                         <Button Grid.Row="2" Grid.Column="1" Content="8" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                FontSize="24" Width="70" Height="55" Margin="7" 
                                 Click="PinPadButton_Click"/>
                         <Button Grid.Row="2" Grid.Column="2" Content="9" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                FontSize="24" Width="70" Height="55" Margin="7" 
                                 Click="PinPadButton_Click"/>
                         
                         <!-- Bottom row with special buttons -->
                         <Button Grid.Row="3" Grid.Column="0" Content="←" 
-                                Width="80" Height="80" Margin="8"
-                                FontSize="28" FontWeight="Bold"
+                                Width="70" Height="55" Margin="7"
+                                FontSize="22" FontWeight="Normal"
+                                Background="#FF5A3A3A"
+                                Foreground="White"
+                                Cursor="Hand"
                                 Click="PinClearButton_Click">
-                            <Button.Style>
-                                <Style BasedOn="{StaticResource ModernPinButtonStyle}" TargetType="Button">
-                                    <Setter Property="Background">
-                                        <Setter.Value>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                <GradientStop Color="#FF5A2A2A" Offset="0"/>
-                                                <GradientStop Color="#FF3A1A1A" Offset="1"/>
-                                            </LinearGradientBrush>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </Button.Style>
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" 
+                                            CornerRadius="10"
+                                            Background="{TemplateBinding Background}">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#FF6A4A4A"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#FF7A5A5A"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
                         </Button>
                         
                         <Button Grid.Row="3" Grid.Column="1" Content="0" 
                                 Style="{StaticResource ModernPinButtonStyle}" 
-                                FontSize="32" Width="80" Height="80" Margin="8" 
+                                FontSize="24" Width="70" Height="55" Margin="7" 
                                 Click="PinPadButton_Click"/>
                         
                         <Button Grid.Row="3" Grid.Column="2" Content="✓" 
-                                Width="80" Height="80" Margin="8"
-                                FontSize="36" FontWeight="Bold"
+                                Width="70" Height="55" Margin="7"
+                                FontSize="26" FontWeight="Normal"
+                                Background="#FF3A5A3A"
+                                Foreground="White"
+                                Cursor="Hand"
                                 Click="PinSubmitButton_Click">
-                            <Button.Style>
-                                <Style BasedOn="{StaticResource ModernPinButtonStyle}" TargetType="Button">
-                                    <Setter Property="Background">
-                                        <Setter.Value>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                <GradientStop Color="#FF2A5A2A" Offset="0"/>
-                                                <GradientStop Color="#FF1A3A1A" Offset="1"/>
-                                            </LinearGradientBrush>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </Button.Style>
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" 
+                                            CornerRadius="10"
+                                            Background="{TemplateBinding Background}">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#FF4A6A4A"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#FF5A7A5A"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
                         </Button>
                     </Grid>
                     
@@ -2334,15 +2322,15 @@
                     <!-- Cancel Button -->
                     <Button Grid.Row="4" 
                             Content="CANCEL" 
-                            Width="180"
-                            Height="50"
-                            FontSize="16"
-                            FontWeight="Bold"
-                            Foreground="#AAA"
+                            Width="140"
+                            Height="40"
+                            FontSize="14"
+                            FontWeight="Normal"
+                            Foreground="#999"
                             Background="Transparent"
-                            BorderBrush="#555"
+                            BorderBrush="#666"
                             BorderThickness="1"
-                            Margin="0,0,0,30"
+                            Margin="0,0,0,25"
                             Cursor="Hand"
                             Click="PinCancelButton_Click">
                         <Button.Template>
