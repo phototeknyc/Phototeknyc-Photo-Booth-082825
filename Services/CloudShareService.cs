@@ -36,14 +36,14 @@ namespace Photobooth.Services
             _httpClient = new HttpClient();
             _optimizationService = new PhotoOptimizationService();
             
-            _bucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME") ?? "photobooth-shares";
-            _baseShareUrl = Environment.GetEnvironmentVariable("GALLERY_BASE_URL") ?? "https://photos.yourapp.com";
+            _bucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME", EnvironmentVariableTarget.User) ?? "photobooth-shares";
+            _baseShareUrl = Environment.GetEnvironmentVariable("GALLERY_BASE_URL", EnvironmentVariableTarget.User) ?? "https://photos.yourapp.com";
             
             // Initialize S3 client if credentials are available
             try
             {
-                var accessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID");
-                var secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY");
+                var accessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID", EnvironmentVariableTarget.User);
+                var secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", EnvironmentVariableTarget.User);
                 
                 if (!string.IsNullOrEmpty(accessKey) && !string.IsNullOrEmpty(secretKey))
                 {
@@ -56,9 +56,9 @@ namespace Photobooth.Services
             }
             
             // Initialize Twilio if configured
-            var twilioSid = Environment.GetEnvironmentVariable("TWILIO_ACCOUNT_SID");
-            var twilioAuth = Environment.GetEnvironmentVariable("TWILIO_AUTH_TOKEN");
-            _twilioPhoneNumber = Environment.GetEnvironmentVariable("TWILIO_PHONE_NUMBER");
+            var twilioSid = Environment.GetEnvironmentVariable("TWILIO_ACCOUNT_SID", EnvironmentVariableTarget.User);
+            var twilioAuth = Environment.GetEnvironmentVariable("TWILIO_AUTH_TOKEN", EnvironmentVariableTarget.User);
+            _twilioPhoneNumber = Environment.GetEnvironmentVariable("TWILIO_PHONE_NUMBER", EnvironmentVariableTarget.User);
             
             _smsEnabled = !string.IsNullOrEmpty(twilioSid) && 
                          !string.IsNullOrEmpty(twilioAuth) && 

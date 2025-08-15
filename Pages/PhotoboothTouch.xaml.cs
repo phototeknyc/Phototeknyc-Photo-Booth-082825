@@ -1831,7 +1831,7 @@ namespace Photobooth.Pages
                 }
                 
                 string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                string outputPath = Path.Combine(outputDir, $"{currentEvent.Name}_{currentTemplate.Name}_{timestamp}.jpg");
+                string outputPath = Path.Combine(outputDir, $"{currentEvent.Name}_{timestamp}.jpg");
                 
                 // Save as high-quality JPEG
                 var jpegEncoder = ImageCodecInfo.GetImageEncoders()

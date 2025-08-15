@@ -28,6 +28,7 @@
     <sys:String x:Key="MDL2_Picture">&#xE91B;</sys:String>
     <sys:String x:Key="MDL2_Rectangle">&#xE73F;</sys:String>
     <sys:String x:Key="MDL2_Circle">&#xE739;</sys:String>
+    <sys:String x:Key="MDL2_Line">&#xE76E;</sys:String>
     <sys:String x:Key="MDL2_Font">&#xE8D2;</sys:String>
     <sys:String x:Key="MDL2_Bold">&#xE8DD;</sys:String>
     <sys:String x:Key="MDL2_Italic">&#xE8DB;</sys:String>
@@ -38,6 +39,11 @@
     <sys:String x:Key="MDL2_AlignCenter">&#xE8E3;</sys:String>
     <sys:String x:Key="MDL2_AlignRight">&#xE8E2;</sys:String>
     <sys:String x:Key="MDL2_AlignJustify">&#xE8E4;</sys:String>
+    <sys:String x:Key="MDL2_AlignTop">&#xE8E5;</sys:String>
+    <sys:String x:Key="MDL2_AlignMiddle">&#xE8E6;</sys:String>
+    <sys:String x:Key="MDL2_AlignBottom">&#xE8E7;</sys:String>
+    <sys:String x:Key="MDL2_AlignStretchH">&#xE8E8;</sys:String>
+    <sys:String x:Key="MDL2_AlignStretchV">&#xE8E9;</sys:String>
     
     <!-- Navigation -->
     <sys:String x:Key="MDL2_Up">&#xE70E;</sys:String>
@@ -71,6 +77,13 @@
     
     <!-- Settings -->
     <sys:String x:Key="MDL2_Settings">&#xE713;</sys:String>
+    <sys:String x:Key="MDL2_Timer">&#xE916;</sys:String>
+    <sys:String x:Key="MDL2_Refresh">&#xE72C;</sys:String>
+    <sys:String x:Key="MDL2_Color">&#xE790;</sys:String>
+    <sys:String x:Key="MDL2_Play">&#xE768;</sys:String>
+    <sys:String x:Key="MDL2_TouchPointer">&#xE7C9;</sys:String>
+    <sys:String x:Key="MDL2_Cloud">&#xE753;</sys:String>
+    <sys:String x:Key="MDL2_Shield">&#xE730;</sys:String>
     
     <!-- Styles for Segoe MDL2 Text Blocks -->
     <Style x:Key="MDL2Icon" TargetType="TextBlock">

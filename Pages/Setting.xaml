@@ -7,7 +7,7 @@
       xmlns:nav="clr-namespace:Photobooth"
       mc:Ignorable="d" 
       d:DesignHeight="450" d:DesignWidth="800"
-Background="#333333">
+Background="{StaticResource SurfaceBackgroundBrush}">
     <Grid>
         <!--create a menu bar at side which shows background to change-->
         <Grid.ColumnDefinitions>
@@ -19,22 +19,22 @@ Background="#333333">
             <RowDefinition Height="100"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <Border BorderBrush="#ccc" Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="2" BorderThickness="0,0,0,0.5">
+        <Border BorderBrush="{StaticResource SurfaceBorderBrush}" Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="2" BorderThickness="0,0,0,0.5">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="Setting" FontSize="30" Foreground="#FFFFFF" FontWeight="Bold"/>
+                <TextBlock Text="Setting" FontSize="30" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold"/>
             </StackPanel>
         </Border>
-        <Border BorderBrush="#ccc" Grid.Column="0" Grid.Row="1" BorderThickness="0,0,0.5,0">
+        <Border BorderBrush="{StaticResource SurfaceBorderBrush}" Grid.Column="0" Grid.Row="1" BorderThickness="0,0,0.5,0">
             <ScrollViewer  VerticalScrollBarVisibility="Auto">
                 <StackPanel  VerticalAlignment="Top" HorizontalAlignment="Left"  Orientation="Vertical"  >
-                    <Expander Header="Style" IsExpanded="True" Foreground="#FFFFFF" FontSize="16">
-                        <ListBox x:Name="styleMenu" SelectionMode="Single" Background="{x:Null}" BorderThickness="0" Width="155" Foreground="#FFFFFF" Margin="30,0,0,0" SelectionChanged="ListBox_SelectionChanged">
+                    <Expander Header="Style" IsExpanded="True" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontSize="16">
+                        <ListBox x:Name="styleMenu" SelectionMode="Single" Background="{x:Null}" BorderThickness="0" Width="155" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Margin="30,0,0,0" SelectionChanged="ListBox_SelectionChanged">
                             <nav:NavButton Label="Background" NavLink="Pages/BackgroundSettingControl.xaml"/>
                         </ListBox>
 
                     </Expander>
-                    <Expander Header="Photobooth" IsExpanded="False" Foreground="#FFFFFF" FontSize="16">
-                        <ListBox x:Name="photoboothMenu" SelectionMode="Single" Background="{x:Null}" BorderThickness="0" Width="155" Foreground="#FFFFFF" Margin="30,0,0,0" SelectionChanged="ListBox_SelectionChanged">
+                    <Expander Header="Photobooth" IsExpanded="False" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontSize="16">
+                        <ListBox x:Name="photoboothMenu" SelectionMode="Single" Background="{x:Null}" BorderThickness="0" Width="155" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Margin="30,0,0,0" SelectionChanged="ListBox_SelectionChanged">
                             <nav:NavButton Label="Touch Interface" NavLink="Pages/PhotoboothSettingsControl.xaml"/>
                         </ListBox>
                     </Expander>

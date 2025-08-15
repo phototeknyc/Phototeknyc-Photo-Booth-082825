@@ -576,8 +576,15 @@ namespace Photobooth
         
         private void OpenTemplateDesigner_Click(object sender, RoutedEventArgs e)
         {
-            // Open the template designer in a new window
-            var templateWindow = new MainWindow();
+            // Open the modern template designer in fullscreen mode
+            var templateWindow = new Window
+            {
+                Title = "Template Designer",
+                WindowState = WindowState.Maximized,
+                WindowStyle = WindowStyle.None, // Fullscreen for touch - same as PhotoboothTouchModern
+                Content = Pages.MainPage.Instance,
+                Background = new SolidColorBrush(Colors.Black)
+            };
             templateWindow.Show();
         }
         

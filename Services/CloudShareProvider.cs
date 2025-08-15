@@ -20,8 +20,11 @@ namespace Photobooth.Services
 
         public static IShareService GetShareService()
         {
+            System.Diagnostics.Debug.WriteLine("CloudShareProvider.GetShareService: Called");
+            
             if (_instance == null)
             {
+                System.Diagnostics.Debug.WriteLine("CloudShareProvider: Instance is null, creating new instance");
                 lock (_lock)
                 {
                     if (_instance == null)
@@ -29,42 +32,82 @@ namespace Photobooth.Services
                         // Try to load the full implementation with AWS/Twilio
                         try
                         {
+                            System.Diagnostics.Debug.WriteLine("CloudShareProvider: Attempting to load cloud implementation...");
+                            
                             // Load AWS and Twilio assemblies dynamically
                             var awsCorePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AWSSDK.Core.dll");
                             var awsS3Path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AWSSDK.S3.dll");
                             var twilioPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Twilio.dll");
                             
-                            if (File.Exists(awsCorePath) && File.Exists(awsS3Path) && File.Exists(twilioPath))
+                            System.Diagnostics.Debug.WriteLine($"CloudShareProvider: BaseDirectory: {AppDomain.CurrentDomain.BaseDirectory}");
+                            System.Diagnostics.Debug.WriteLine($"CloudShareProvider: AWS Core exists: {File.Exists(awsCorePath)} at {awsCorePath}");
+                            System.Diagnostics.Debug.WriteLine($"CloudShareProvider: AWS S3 exists: {File.Exists(awsS3Path)} at {awsS3Path}");
+                            System.Diagnostics.Debug.WriteLine($"CloudShareProvider: Twilio exists: {File.Exists(twilioPath)} at {twilioPath}");
+                            
+                            if (File.Exists(awsCorePath) && File.Exists(awsS3Path))
                             {
+                                System.Diagnostics.Debug.WriteLine("CloudShareProvider: Loading AWS assemblies...");
                                 Assembly.LoadFrom(awsCorePath);
                                 Assembly.LoadFrom(awsS3Path);
-                                Assembly.LoadFrom(twilioPath);
                                 
-                                // Create full implementation via reflection
-                                var fullImplType = Type.GetType("Photobooth.Services.CloudShareService, Photobooth");
-                                if (fullImplType != null)
+                                // Twilio is optional
+                                if (File.Exists(twilioPath))
                                 {
-                                    _instance = (IShareService)Activator.CreateInstance(fullImplType);
-                                    System.Diagnostics.Debug.WriteLine("Loaded full cloud implementation");
+                                    System.Diagnostics.Debug.WriteLine("CloudShareProvider: Loading Twilio assembly...");
+                                    Assembly.LoadFrom(twilioPath);
                                 }
+                                
+                                // Create runtime implementation directly
+                                System.Diagnostics.Debug.WriteLine("CloudShareProvider: Creating CloudShareServiceRuntime instance...");
+                                
+                                try
+                                {
+                                    _instance = new CloudShareServiceRuntime();
+                                    System.Diagnostics.Debug.WriteLine("CloudShareProvider: Successfully created CloudShareServiceRuntime!");
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"CloudShareProvider: Failed to create CloudShareServiceRuntime: {ex.Message}");
+                                }
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine("CloudShareProvider: Required AWS SDK files not found");
                             }
                         }
                         catch (Exception ex)
                         {
-                            System.Diagnostics.Debug.WriteLine($"Could not load cloud implementation: {ex.Message}");
+                            System.Diagnostics.Debug.WriteLine($"CloudShareProvider: Exception loading cloud implementation: {ex.Message}");
+                            System.Diagnostics.Debug.WriteLine($"CloudShareProvider: Stack trace: {ex.StackTrace}");
                         }
                         
                         // Fall back to stub implementation
                         if (_instance == null)
                         {
                             _instance = new StubShareService();
-                            System.Diagnostics.Debug.WriteLine("Using stub implementation");
+                            System.Diagnostics.Debug.WriteLine("CloudShareProvider: Using stub implementation (cloud features not available)");
                         }
                     }
                 }
             }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"CloudShareProvider: Returning existing instance: {_instance.GetType().Name}");
+            }
             
             return _instance;
+        }
+        
+        /// <summary>
+        /// Reset the provider to force reload (useful after changing settings)
+        /// </summary>
+        public static void Reset()
+        {
+            System.Diagnostics.Debug.WriteLine("CloudShareProvider.Reset: Clearing instance");
+            lock (_lock)
+            {
+                _instance = null;
+            }
         }
     }
 
@@ -96,27 +139,36 @@ namespace Photobooth.Services
         {
             try
             {
-                using (var bitmap = new Bitmap(200, 200))
+                using (var bitmap = new Bitmap(300, 300))
                 {
                     using (var g = Graphics.FromImage(bitmap))
                     {
                         g.Clear(Color.White);
-                        g.DrawRectangle(Pens.Black, 0, 0, 199, 199);
+                        g.DrawRectangle(Pens.Black, 0, 0, 299, 299);
                         
-                        for (int i = 0; i < 10; i++)
+                        // Draw QR-like corner patterns
+                        DrawFinderPattern(g, 10, 10);
+                        DrawFinderPattern(g, 230, 10);
+                        DrawFinderPattern(g, 10, 230);
+                        
+                        // Draw some data patterns
+                        var random = new Random(url.GetHashCode());
+                        for (int x = 90; x < 210; x += 10)
                         {
-                            for (int j = 0; j < 10; j++)
+                            for (int y = 90; y < 210; y += 10)
                             {
-                                if ((i + j) % 2 == 0)
+                                if (random.Next(2) == 1)
                                 {
-                                    g.FillRectangle(Brushes.Black, i * 20, j * 20, 20, 20);
+                                    g.FillRectangle(Brushes.Black, x, y, 8, 8);
                                 }
                             }
                         }
                         
-                        using (var font = new Font("Arial", 8))
+                        // Add URL text at bottom
+                        using (var font = new Font("Arial", 7))
                         {
-                            g.DrawString("QR", font, Brushes.Black, 85, 90);
+                            var shortUrl = url.Length > 40 ? url.Substring(0, 37) + "..." : url;
+                            g.DrawString(shortUrl, font, Brushes.Black, 5, 280);
                         }
                     }
                     
@@ -141,6 +193,14 @@ namespace Photobooth.Services
                 System.Diagnostics.Debug.WriteLine($"Error generating QR code: {ex.Message}");
                 return null;
             }
+        }
+        
+        private void DrawFinderPattern(Graphics g, int x, int y)
+        {
+            // Draw QR code finder pattern
+            g.FillRectangle(Brushes.Black, x, y, 60, 60);
+            g.FillRectangle(Brushes.White, x + 10, y + 10, 40, 40);
+            g.FillRectangle(Brushes.Black, x + 20, y + 20, 20, 20);
         }
 
         private ShareResult CreateLocalShareResult(string sessionId, List<string> photoPaths)

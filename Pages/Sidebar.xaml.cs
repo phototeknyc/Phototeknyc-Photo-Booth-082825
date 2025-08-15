@@ -40,12 +40,7 @@ namespace Photobooth.Pages
             // Force command re-evaluation to ensure button is responsive
             CommandManager.InvalidateRequerySuggested();
             
-            // Ensure the photobooth button is always enabled
-            if (launchPhotoboothButton != null)
-            {
-                launchPhotoboothButton.IsEnabled = true;
-                DebugService.LogDebug($"SideNavbar_Loaded: Photobooth button enabled explicitly");
-            }
+            // Photobooth button moved to toolbar - no longer needed here
             
             // Set initial state of debug checkbox
             if (DebugModeCheckBox != null)
@@ -183,82 +178,12 @@ namespace Photobooth.Pages
             }
         }
 
-        private async void LaunchPhotoboothButton_Click(object sender, RoutedEventArgs e)
+        private void LaunchPhotoboothButton_Click(object sender, RoutedEventArgs e)
         {
-            DebugService.LogDebug("LaunchPhotoboothButton_Click called directly");
-            DebugService.LogDebug($"Button IsEnabled: {(sender as Button)?.IsEnabled}");
-            DebugService.LogDebug($"PhotoboothWindow exists: {PhotoboothService.PhotoboothWindow != null}");
+            DebugService.LogDebug("LaunchPhotoboothButton_Click called - launching PhotoboothTouchModern directly");
             
-            // Clear any stale window reference first
-            if (PhotoboothService.PhotoboothWindow != null)
-            {
-                try
-                {
-                    if (!PhotoboothService.PhotoboothWindow.IsVisible)
-                    {
-                        DebugService.LogDebug("Clearing stale window reference");
-                        PhotoboothService.PhotoboothWindow = null;
-                    }
-                }
-                catch
-                {
-                    PhotoboothService.PhotoboothWindow = null;
-                }
-            }
-            
-            try
-            {
-                // Force refresh DataContext if needed
-                if (DataContext == null)
-                {
-                    DataContext = ViewModel;
-                    DebugService.LogDebug("LaunchPhotoboothButton_Click: DataContext was null, refreshed");
-                }
-                
-                // Try to get the ViewModel
-                var viewModel = DataContext as MVVM.ViewModels.Designer.DesignerVM ?? ViewModel;
-                if (viewModel != null)
-                {
-                    DebugService.LogDebug($"ViewModel found, SelectedEvent: {viewModel.SelectedEvent?.Name ?? "null"}");
-                    
-                    if (viewModel.SelectedEvent != null)
-                    {
-                        // Launch via PhotoboothService
-                        var photoboothService = new Services.PhotoboothService();
-                        await photoboothService.LaunchPhotoboothAsync(viewModel.SelectedEvent.Id);
-                        
-                        // Force command re-evaluation after launch
-                        CommandManager.InvalidateRequerySuggested();
-                    }
-                    else
-                    {
-                        MessageBox.Show("Please select an event first to launch the photobooth.", 
-                            "No Event Selected", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                }
-                else
-                {
-                    DebugService.LogDebug("ViewModel not found, opening photobooth directly");
-                    
-                    // Fallback - open photobooth directly without event
-                    ActionOpenPhotobooth(sender, null);
-                }
-            }
-            catch (Exception ex)
-            {
-                DebugService.LogDebug($"LaunchPhotoboothButton_Click failed: {ex.Message}");
-                MessageBox.Show($"Failed to launch photobooth: {ex.Message}", "Error", 
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            finally
-            {
-                // Always force re-enable the button
-                if (sender is Button button)
-                {
-                    button.IsEnabled = true;
-                    DebugService.LogDebug("Button re-enabled in finally block");
-                }
-            }
+            // Use the proven ActionOpenPhotobooth method that works correctly
+            ActionOpenPhotobooth(sender, null);
         }
         
         private void DebugModeCheckBox_Checked(object sender, RoutedEventArgs e)
@@ -292,6 +217,16 @@ namespace Photobooth.Pages
             {
                 MessageBox.Show($"Failed to load event template: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        private void BackToHome_Click(object sender, RoutedEventArgs e)
+        {
+            // Close the fullscreen template designer window to return to Surface window
+            var window = Window.GetWindow(this);
+            if (window != null)
+            {
+                window.Close();
             }
         }
     }

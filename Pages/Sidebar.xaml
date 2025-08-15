@@ -5,7 +5,7 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
       xmlns:local="clr-namespace:Photobooth.Pages"
       mc:Ignorable="d" 
-      d:DesignHeight="450" d:DesignWidth="240" Background="#2E2E2E"
+      d:DesignHeight="450" d:DesignWidth="240" Background="{StaticResource SurfaceSecondaryBrush}"
       Title="SideNavbar">
 
     <Page.Resources>
@@ -29,7 +29,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#404040"/>
+                                <Setter Property="Background" Value="{StaticResource SurfaceButtonHoverBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -48,6 +48,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="0,8">
+            
             
             <!-- Add Section -->
             <Expander Header="Add" Style="{StaticResource ModernExpander}" IsExpanded="True">
@@ -90,7 +91,7 @@
                     <!-- Rectangle Shape -->
                     <Button Style="{StaticResource ModernButton}" Command="{Binding AddRectangleCmd}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="☐" 
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Rectangle}" 
                                      FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center"/>
                             <TextBlock Text="Rectangle" FontSize="13" Foreground="White" 
                                      Margin="8,0,0,0" VerticalAlignment="Center"/>
@@ -100,7 +101,7 @@
                     <!-- Circle Shape -->
                     <Button Style="{StaticResource ModernButton}" Command="{Binding AddCircleCmd}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="○" FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Circle}" FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                             <TextBlock Text="Circle" FontSize="13" Foreground="White" 
                                      Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -109,7 +110,7 @@
                     <!-- Line Shape -->
                     <Button Style="{StaticResource ModernButton}" Command="{Binding AddLineCmd}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="╱" FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Line}" FontSize="16" Foreground="White" Width="24" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                             <TextBlock Text="Line" FontSize="13" Foreground="White" 
                                      Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -167,7 +168,7 @@
                         <Button Grid.Column="1" Content="↻" FontSize="14" Width="24" Height="20" 
                                 Command="{Binding RefreshEventsCmd}" 
                                 ToolTip="Refresh Events List"
-                                Background="#505050" Foreground="White" BorderThickness="0" Margin="0,2,8,0">
+                                Background="{StaticResource SurfacePanelBrush}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" BorderThickness="0" Margin="0,2,8,0">
                             <Button.Style>
                                 <Style TargetType="Button">
                                     <Setter Property="Template">
@@ -181,7 +182,7 @@
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="#606060"/>
+                                                        <Setter Property="Background" Value="{StaticResource SurfaceButtonHoverBrush}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -228,20 +229,20 @@
                     <!-- Event Templates -->
                     <TextBlock Text="Event Templates:" FontSize="12" Foreground="#CCCCCC" Margin="8,8,8,2"/>
                     <ListBox x:Name="EventTemplatesListBox"
-                             Background="#383838" Foreground="White" BorderBrush="#606060"
+                             Background="{StaticResource SurfacePanelBrush}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}"
                              Height="120" Margin="8,0,8,8"
                              ItemsSource="{Binding EventTemplates}"
                              SelectedItem="{Binding SelectedEventTemplate, Mode=TwoWay}"
                              ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="#404040" Margin="2" Padding="6" CornerRadius="3" 
+                                <Border Background="{StaticResource SurfacePanelBrush}" Margin="2" Padding="6" CornerRadius="3" 
                                         Cursor="Hand" MouseLeftButtonDown="EventTemplate_Click" Tag="{Binding}">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Style.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background" Value="#505050"/>
+                                                    <Setter Property="Background" Value="{StaticResource SurfaceButtonHoverBrush}"/>
                                                 </Trigger>
                                             </Style.Triggers>
                                         </Style>
@@ -306,37 +307,6 @@
                         </StackPanel>
                     </Button>
                     
-                    <!-- Separator -->
-                    <Border Height="1" Background="#444" Margin="8,12,8,8"/>
-                    
-                    <!-- Launch Photobooth -->
-                    <Button Click="LaunchPhotoboothButton_Click" 
-                            x:Name="launchPhotoboothButton"
-                            IsEnabled="True"
-                            Padding="12,10">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource ModernButton}">
-                                <Setter Property="Background" Value="#4CAF50"/>
-                                <Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#66BB6A"/>
-                                    </Trigger>
-                                    <Trigger Property="IsPressed" Value="True">
-                                        <Setter Property="Background" Value="#45A049"/>
-                                    </Trigger>
-                                    <Trigger Property="IsEnabled" Value="False">
-                                        <Setter Property="Background" Value="#757575"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE722;" 
-                                     FontSize="20" Foreground="White" Width="28" VerticalAlignment="Center"/>
-                            <TextBlock Text="Launch Photobooth" FontSize="15" FontWeight="Bold" Foreground="White" 
-                                     Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
                     
                 </StackPanel>
             </Expander>
@@ -399,13 +369,13 @@
                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                             <TextBlock Text="Print Width (px)" FontSize="12" Foreground="#CCCCCC" Margin="0,0,0,4"/>
                             <TextBox Name="CanvasWidthDisplay" Text="{Binding CustomDesignerCanvas.ActualPixelWidth, Mode=OneWay}" 
-                                     Background="#404040" Foreground="White" BorderBrush="#606060" 
+                                     Background="{StaticResource SurfaceInputBrush}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" 
                                      FontSize="13" Height="32" Padding="8" IsReadOnly="True"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Margin="4,0,0,0">
                             <TextBlock Text="Print Height (px)" FontSize="12" Foreground="#CCCCCC" Margin="0,0,0,4"/>
                             <TextBox Name="CanvasHeightDisplay" Text="{Binding CustomDesignerCanvas.ActualPixelHeight, Mode=OneWay}" 
-                                     Background="#404040" Foreground="White" BorderBrush="#606060" 
+                                     Background="{StaticResource SurfaceInputBrush}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" 
                                      FontSize="13" Height="32" Padding="8" IsReadOnly="True"/>
                         </StackPanel>
                     </Grid>

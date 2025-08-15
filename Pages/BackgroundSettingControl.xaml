@@ -7,7 +7,7 @@
              xmlns:s="clr-namespace:Photobooth"
             
              mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="800" Background="#333333">
+             d:DesignHeight="450" d:DesignWidth="800" Background="{StaticResource SurfaceBackgroundBrush}">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
@@ -17,7 +17,7 @@
         </Grid.RowDefinitions>
         <StackPanel Orientation="Vertical" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center"  Width="512" >
 
-            <Border  BorderBrush="#ccc" BorderThickness="1" CornerRadius="20"  HorizontalAlignment="Center"  Width="490"  >
+            <Border  BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" CornerRadius="20"  HorizontalAlignment="Center"  Width="490"  >
                 <StackPanel Orientation="Vertical" HorizontalAlignment="Center" Margin="0,33,0,29" VerticalAlignment="Top" >
                     <Grid Width="431">
                         <Grid.ColumnDefinitions>

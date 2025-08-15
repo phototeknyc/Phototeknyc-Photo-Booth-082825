@@ -306,12 +306,43 @@ namespace Photobooth
         
         private void NavigateToTemplates_Click(object sender, MouseButtonEventArgs e)
         {
-            // Open the PhotoBoothWindow with the template designer
-            var photoBoothWindow = new PhotoBoothWindow(true); // true = open templates
-            photoBoothWindow.Show();
-            
-            // Optionally hide the Surface window
-            this.WindowState = WindowState.Minimized;
+            // Launch template designer in fullscreen mode like PhotoboothTouchModern
+            LaunchTemplateDesignerFullscreen();
+        }
+        
+        private void LaunchTemplateDesignerFullscreen()
+        {
+            try
+            {
+                // Create a new fullscreen window for the template designer exactly like PhotoboothTouchModern
+                var templateWindow = new Window
+                {
+                    Title = "Template Designer",
+                    WindowState = WindowState.Maximized,
+                    WindowStyle = WindowStyle.None, // Fullscreen for touch - same as PhotoboothTouchModern
+                    Content = MainPage.Instance,
+                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Black)
+                };
+                
+                // Handle window closing to return to Surface window
+                templateWindow.Closed += (s, args) =>
+                {
+                    // Show the Surface window again
+                    this.Show();
+                    this.Activate();
+                };
+                
+                // Show the template designer window
+                templateWindow.Show();
+                
+                // Hide the Surface window while template designer is open (just like PhotoboothTouchModern)
+                this.Hide();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to launch template designer: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
         
         private void NavigateToCamera_Click(object sender, MouseButtonEventArgs e)

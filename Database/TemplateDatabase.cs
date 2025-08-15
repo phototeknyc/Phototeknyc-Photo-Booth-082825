@@ -249,6 +249,19 @@ namespace Photobooth.Database
                         FOREIGN KEY (PhotoId) REFERENCES Photos(Id) ON DELETE CASCADE,
                         UNIQUE(ComposedImageId, PhotoId)
                     )";
+
+                // Create SMS log table for tracking sent messages
+                string createSMSLogTable = @"
+                    CREATE TABLE IF NOT EXISTS SMSLog (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        SessionGuid TEXT NOT NULL,
+                        PhoneNumber TEXT NOT NULL,
+                        GalleryUrl TEXT NOT NULL,
+                        SentDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        Success BOOLEAN DEFAULT 0,
+                        ErrorMessage TEXT,
+                        FOREIGN KEY (SessionGuid) REFERENCES PhotoSessions(SessionGuid) ON DELETE CASCADE
+                    )";
                 
                 // Create indexes
                 string createIndexes = @"
@@ -271,6 +284,8 @@ namespace Photobooth.Database
                     CREATE INDEX IF NOT EXISTS idx_composedimages_template ON ComposedImages(TemplateId);
                     CREATE INDEX IF NOT EXISTS idx_composedimagephotos_composed ON ComposedImagePhotos(ComposedImageId);
                     CREATE INDEX IF NOT EXISTS idx_composedimagephotos_photo ON ComposedImagePhotos(PhotoId);
+                    CREATE INDEX IF NOT EXISTS idx_smslog_session ON SMSLog(SessionGuid);
+                    CREATE INDEX IF NOT EXISTS idx_smslog_date ON SMSLog(SentDate);
                 ";
                 
                 using (var command = new SQLiteCommand(createTemplatesTable, connection))
@@ -319,6 +334,11 @@ namespace Photobooth.Database
                 }
                 
                 using (var command = new SQLiteCommand(createComposedImagePhotosTable, connection))
+                {
+                    command.ExecuteNonQuery();
+                }
+                
+                using (var command = new SQLiteCommand(createSMSLogTable, connection))
                 {
                     command.ExecuteNonQuery();
                 }
@@ -467,7 +487,41 @@ namespace Photobooth.Database
                 // Migration 2: Remove BLOB columns if path columns exist (optional cleanup)
                 // Note: SQLite doesn't support DROP COLUMN, so we'll just ignore the old columns
                 
-                System.Diagnostics.Debug.WriteLine($"Database migration check complete. BackgroundImagePath: {hasBackgroundImagePath}, ThumbnailImagePath: {hasThumbnailImagePath}, SessionGuid: {hasSessionGuid}");
+                // Migration 3: Add GalleryUrl column to PhotoSessions table for cloud sharing
+                bool hasGalleryUrl = false;
+                try
+                {
+                    string checkGalleryUrlColumn = "PRAGMA table_info(PhotoSessions)";
+                    using (var command = new SQLiteCommand(checkGalleryUrlColumn, connection))
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            if (reader["name"].ToString() == "GalleryUrl")
+                            {
+                                hasGalleryUrl = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!hasGalleryUrl)
+                    {
+                        string addGalleryUrlColumn = "ALTER TABLE PhotoSessions ADD COLUMN GalleryUrl TEXT";
+                        using (var command = new SQLiteCommand(addGalleryUrlColumn, connection))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        System.Diagnostics.Debug.WriteLine("Added GalleryUrl column to PhotoSessions table");
+                    }
+                }
+                catch (Exception galleryUrlMigrationEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"PhotoSessions GalleryUrl migration failed: {galleryUrlMigrationEx.Message}");
+                    // Continue anyway - table might not exist yet
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"Database migration check complete. BackgroundImagePath: {hasBackgroundImagePath}, ThumbnailImagePath: {hasThumbnailImagePath}, SessionGuid: {hasSessionGuid}, GalleryUrl: {hasGalleryUrl}");
             }
             catch (Exception ex)
             {
@@ -1654,6 +1708,108 @@ namespace Photobooth.Database
                     command.ExecuteNonQuery();
                 }
             }
+        }
+        
+        public void UpdatePhotoSessionGalleryUrl(string sessionGuid, string galleryUrl)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string updateGalleryUrl = @"
+                    UPDATE PhotoSessions 
+                    SET GalleryUrl = @galleryUrl 
+                    WHERE SessionGuid = @sessionGuid";
+                    
+                using (var command = new SQLiteCommand(updateGalleryUrl, connection))
+                {
+                    command.Parameters.AddWithValue("@galleryUrl", galleryUrl);
+                    command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    
+                    int rowsAffected = command.ExecuteNonQuery();
+                    System.Diagnostics.Debug.WriteLine($"Updated GalleryUrl for session {sessionGuid}: {rowsAffected} rows affected");
+                }
+            }
+        }
+        
+        public string GetPhotoSessionGalleryUrl(string sessionGuid)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string selectGalleryUrl = @"
+                    SELECT GalleryUrl 
+                    FROM PhotoSessions 
+                    WHERE SessionGuid = @sessionGuid";
+                    
+                using (var command = new SQLiteCommand(selectGalleryUrl, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    
+                    var result = command.ExecuteScalar();
+                    return result?.ToString();
+                }
+            }
+        }
+        
+        public void LogSMSSend(string sessionGuid, string phoneNumber, string galleryUrl, bool success, string errorMessage = null)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string insertSMSLog = @"
+                    INSERT INTO SMSLog (SessionGuid, PhoneNumber, GalleryUrl, Success, ErrorMessage)
+                    VALUES (@sessionGuid, @phoneNumber, @galleryUrl, @success, @errorMessage)";
+                    
+                using (var command = new SQLiteCommand(insertSMSLog, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    command.Parameters.AddWithValue("@phoneNumber", phoneNumber);
+                    command.Parameters.AddWithValue("@galleryUrl", galleryUrl);
+                    command.Parameters.AddWithValue("@success", success);
+                    command.Parameters.AddWithValue("@errorMessage", errorMessage);
+                    
+                    command.ExecuteNonQuery();
+                    System.Diagnostics.Debug.WriteLine($"Logged SMS send to {phoneNumber} for session {sessionGuid}: {(success ? "Success" : "Failed")}");
+                }
+            }
+        }
+        
+        public List<(string PhoneNumber, DateTime SentDate, bool Success)> GetSMSLogForSession(string sessionGuid)
+        {
+            var smsLog = new List<(string PhoneNumber, DateTime SentDate, bool Success)>();
+            
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string selectSMSLog = @"
+                    SELECT PhoneNumber, SentDate, Success 
+                    FROM SMSLog 
+                    WHERE SessionGuid = @sessionGuid 
+                    ORDER BY SentDate DESC";
+                    
+                using (var command = new SQLiteCommand(selectSMSLog, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            smsLog.Add((
+                                reader["PhoneNumber"].ToString(),
+                                DateTime.Parse(reader["SentDate"].ToString()),
+                                Convert.ToBoolean(reader["Success"])
+                            ));
+                        }
+                    }
+                }
+            }
+            
+            return smsLog;
         }
         
         public void DeletePhotoSession(int sessionId)

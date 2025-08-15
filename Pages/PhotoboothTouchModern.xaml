@@ -165,6 +165,43 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Sharing Button Style -->
+        <Style x:Key="SharingButtonStyle" TargetType="Button" BasedOn="{StaticResource TouchButtonStyle}">
+            <Setter Property="Background" Value="#FF4CAF50"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" 
+                                CornerRadius="15"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#FF388E3C"/>
+                                <Setter TargetName="border" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#FF66BB6A"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#FF757575"/>
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Page.Resources>
 
     <Grid x:Name="mainGrid">
@@ -412,6 +449,68 @@
                                        HorizontalAlignment="Center"
                                        Margin="0,5,0,0"/>
                             
+                            <!-- Cloud Sync Status -->
+                            <Border Background="#1A1A1A" 
+                                    CornerRadius="8" 
+                                    Margin="0,8,0,0"
+                                    Padding="8,5">
+                                <StackPanel>
+                                    <TextBlock Text="SYNC STATUS" 
+                                               FontSize="10" 
+                                               FontWeight="Bold"
+                                               Foreground="#00B4D8" 
+                                               HorizontalAlignment="Center"
+                                               Margin="0,0,0,3"/>
+                                    
+                                    <!-- Sync Status Display -->
+                                    <Grid HorizontalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <!-- Status Icon -->
+                                        <Border x:Name="syncStatusIcon" 
+                                                Grid.Column="0"
+                                                Width="8" 
+                                                Height="8" 
+                                                CornerRadius="4"
+                                                Background="#4CAF50"
+                                                Margin="0,0,5,0"
+                                                VerticalAlignment="Center">
+                                            <Border.ToolTip>
+                                                <ToolTip x:Name="syncStatusTooltip" Content="All uploads current"/>
+                                            </Border.ToolTip>
+                                        </Border>
+                                        
+                                        <!-- Status Text -->
+                                        <TextBlock x:Name="syncStatusText" 
+                                                   Grid.Column="1"
+                                                   Text="Uploads Current" 
+                                                   FontSize="12" 
+                                                   Foreground="#4CAF50"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+                                    
+                                    <!-- Pending Count (hidden by default) -->
+                                    <TextBlock x:Name="syncPendingCount" 
+                                               Text="0 items pending" 
+                                               FontSize="10" 
+                                               Foreground="#FFA726"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,2,0,0"
+                                               Visibility="Collapsed"/>
+                                    
+                                    <!-- Upload Progress (hidden by default) -->
+                                    <ProgressBar x:Name="syncUploadProgress" 
+                                                 Height="3"
+                                                 Margin="0,3,0,0"
+                                                 Foreground="#00B4D8"
+                                                 Background="#333"
+                                                 Visibility="Collapsed"/>
+                                </StackPanel>
+                            </Border>
+                            
                             <!-- Separator -->
                             <Border Height="1" 
                                     Background="#666" 
@@ -489,6 +588,58 @@
                                        TextWrapping="Wrap"
                                        Margin="0,5,0,0"
                                        Visibility="Collapsed"/>
+                            
+                            <!-- Separator for Cloud Status -->
+                            <Border Height="1" 
+                                    Background="#666" 
+                                    Margin="0,10,0,10"/>
+                            
+                            <!-- Cloud Sync Status Header -->
+                            <TextBlock Text="CLOUD SYNC" 
+                                       FontSize="11" 
+                                       FontWeight="Bold"
+                                       Foreground="#00B4D8" 
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,5"/>
+                            
+                            <!-- Cloud Status -->
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock FontFamily="{StaticResource SegoeMDL2}"
+                                           Text="{StaticResource MDL2_Cloud}"
+                                           FontSize="14"
+                                           x:Name="cloudSyncIcon"
+                                           Foreground="#888"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,0"/>
+                                <StackPanel>
+                                    <TextBlock x:Name="cloudSyncStatusText" 
+                                               Text="Not Configured" 
+                                               FontSize="12" 
+                                               Foreground="#FF9800"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="cloudSyncBucketText" 
+                                               Text="Setup in settings" 
+                                               FontSize="10" 
+                                               Foreground="#888"
+                                               Visibility="Visible"/>
+                                </StackPanel>
+                            </StackPanel>
+                            
+                            <!-- Upload Status (shown during uploads) -->
+                            <StackPanel x:Name="cloudUploadStatusPanel" 
+                                        Visibility="Collapsed"
+                                        Margin="0,5,0,0">
+                                <ProgressBar x:Name="cloudUploadProgress" 
+                                             Height="3"
+                                             Margin="0,2"
+                                             Foreground="#4CAF50"
+                                             Background="#333"/>
+                                <TextBlock x:Name="cloudUploadStatusText" 
+                                           Text="Uploading..." 
+                                           FontSize="10" 
+                                           Foreground="#4CAF50"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                     
@@ -553,13 +704,13 @@
                         </StackPanel>
                     </Border>
                     
-                    <!-- Done Button - Above Print Button -->
+                    <!-- Done Button - Top of button column -->
                     <Button x:Name="doneButton" 
                             Width="80" 
                             Height="80"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Bottom"
-                            Margin="0,0,50,300"
+                            Margin="0,0,50,500"
                             Background="#CC4CAF50"
                             BorderThickness="0"
                             FontSize="18"
@@ -730,6 +881,90 @@
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter Property="Background" Value="#FFAB47BC"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <!-- QR Code Sharing Button - Above SMS Button -->
+                    <Button x:Name="qrCodeSharingButton" 
+                            Width="80" 
+                            Height="80"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,50,400"
+                            Background="#FF4CAF50"
+                            BorderThickness="0"
+                            FontSize="28"
+                            FontWeight="Bold"
+                            Foreground="White"
+                            ToolTip="Share via QR Code"
+                            Visibility="Collapsed"
+                            Click="QrCodeSharingButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="40">
+                                    <StackPanel HorizontalAlignment="Center" 
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="📱" 
+                                                   FontSize="32"
+                                                   HorizontalAlignment="Center"/>
+                                        <TextBlock Text="QR CODE" 
+                                                   FontSize="11"
+                                                   Margin="0,2,0,0"
+                                                   HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FF66BB6A"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#FF388E3C"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <!-- SMS Sharing Button - Below Gallery Button -->
+                    <Button x:Name="smsSharingButton" 
+                            Width="80" 
+                            Height="80"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,50,300"
+                            Background="#FF4CAF50"
+                            BorderThickness="0"
+                            FontSize="28"
+                            FontWeight="Bold"
+                            Foreground="White"
+                            ToolTip="Share via SMS"
+                            Visibility="Collapsed"
+                            Click="SmsSharingButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="40">
+                                    <StackPanel HorizontalAlignment="Center" 
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="💬" 
+                                                   FontSize="32"
+                                                   HorizontalAlignment="Center"/>
+                                        <TextBlock Text="SMS" 
+                                                   FontSize="12"
+                                                   Margin="0,2,0,0"
+                                                   HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FF66BB6A"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#FF388E3C"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -2204,14 +2439,14 @@
         <!-- PIN Entry Overlay -->
         <Grid x:Name="pinEntryOverlay" 
               Grid.RowSpan="3" 
-              Background="#40000000" 
+              Background="#80808080" 
               Visibility="Collapsed">
             <Grid.Resources>
                 <!-- Glass Style Round PIN Button -->
                 <Style x:Key="ModernPinButtonStyle" TargetType="Button">
-                    <Setter Property="Background" Value="#10FFFFFF"/>
-                    <Setter Property="Foreground" Value="White"/>
-                    <Setter Property="BorderBrush" Value="#30FFFFFF"/>
+                    <Setter Property="Background" Value="#20000000"/>
+                    <Setter Property="Foreground" Value="#FF333333"/>
+                    <Setter Property="BorderBrush" Value="#40000000"/>
                     <Setter Property="BorderThickness" Value="1"/>
                     <Setter Property="FontWeight" Value="Light"/>
                     <Setter Property="Cursor" Value="Hand"/>
@@ -2228,12 +2463,12 @@
                                 </Grid>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="Fill" Value="#20FFFFFF"/>
-                                        <Setter TargetName="border" Property="Stroke" Value="#50FFFFFF"/>
+                                        <Setter TargetName="border" Property="Fill" Value="#30000000"/>
+                                        <Setter TargetName="border" Property="Stroke" Value="#60000000"/>
                                     </Trigger>
                                     <Trigger Property="IsPressed" Value="True">
-                                        <Setter TargetName="border" Property="Fill" Value="#30FFFFFF"/>
-                                        <Setter TargetName="border" Property="Stroke" Value="#80FFFFFF"/>
+                                        <Setter TargetName="border" Property="Fill" Value="#40000000"/>
+                                        <Setter TargetName="border" Property="Stroke" Value="#80000000"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -2242,13 +2477,13 @@
                 </Style>
             </Grid.Resources>
             
-            <Border Background="#15FFFFFF" 
+            <Border Background="#F0FFFFFF" 
                     CornerRadius="25" 
                     Width="400"
                     Height="580"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    BorderBrush="#20FFFFFF"
+                    BorderBrush="#40FFFFFF"
                     BorderThickness="1">
                 <Border.Effect>
                     <DropShadowEffect Color="#80000000" BlurRadius="30" ShadowDepth="0" Opacity="0.3"/>
@@ -2279,7 +2514,7 @@
                         <TextBlock Text="Enter Security PIN" 
                                    FontSize="20" 
                                    FontWeight="Light"
-                                   Foreground="#E0FFFFFF"
+                                   Foreground="#FF333333"
                                    HorizontalAlignment="Center"/>
                     </StackPanel>
                     
@@ -2288,23 +2523,23 @@
                                 HorizontalAlignment="Center" 
                                 Margin="0,8,0,20">
                         <Border x:Name="pinDot1" Width="12" Height="12" 
-                                Background="#20FFFFFF" CornerRadius="6" Margin="6"
-                                BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                                Background="#20000000" CornerRadius="6" Margin="6"
+                                BorderBrush="#40000000" BorderThickness="1"/>
                         <Border x:Name="pinDot2" Width="12" Height="12" 
-                                Background="#20FFFFFF" CornerRadius="6" Margin="6"
-                                BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                                Background="#20000000" CornerRadius="6" Margin="6"
+                                BorderBrush="#40000000" BorderThickness="1"/>
                         <Border x:Name="pinDot3" Width="12" Height="12" 
-                                Background="#20FFFFFF" CornerRadius="6" Margin="6"
-                                BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                                Background="#20000000" CornerRadius="6" Margin="6"
+                                BorderBrush="#40000000" BorderThickness="1"/>
                         <Border x:Name="pinDot4" Width="12" Height="12" 
-                                Background="#20FFFFFF" CornerRadius="6" Margin="6"
-                                BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                                Background="#20000000" CornerRadius="6" Margin="6"
+                                BorderBrush="#40000000" BorderThickness="1"/>
                         <Border x:Name="pinDot5" Width="12" Height="12" 
-                                Background="#20FFFFFF" CornerRadius="6" Margin="6"
-                                BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                                Background="#20000000" CornerRadius="6" Margin="6"
+                                BorderBrush="#40000000" BorderThickness="1"/>
                         <Border x:Name="pinDot6" Width="12" Height="12" 
-                                Background="#20FFFFFF" CornerRadius="6" Margin="6"
-                                BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                                Background="#20000000" CornerRadius="6" Margin="6"
+                                BorderBrush="#40000000" BorderThickness="1"/>
                     </StackPanel>
                     
                     <!-- Hidden TextBox for PIN storage -->
@@ -2503,9 +2738,9 @@
                                 Height="32"
                                 FontSize="12"
                                 FontWeight="Light"
-                                Foreground="#D0FFFFFF"
-                                Background="#10FFFFFF"
-                                BorderBrush="#20FFFFFF"
+                                Foreground="#FF333333"
+                                Background="#10000000"
+                                BorderBrush="#30000000"
                                 BorderThickness="1"
                                 Cursor="Hand"
                                 Click="PinClearButton_Click">
@@ -2538,9 +2773,9 @@
                                 Height="32"
                                 FontSize="12"
                                 FontWeight="Light"
-                                Foreground="#D0FFFFFF"
-                                Background="#10FFFFFF"
-                                BorderBrush="#20FFFFFF"
+                                Foreground="#FF333333"
+                                Background="#10000000"
+                                BorderBrush="#30000000"
                                 BorderThickness="1"
                                 Cursor="Hand"
                                 Click="PinClearButton_Click">
@@ -2584,10 +2819,331 @@
                                        Margin="0,8,0,16"
                                        Cursor="Hand"
                                        MouseLeftButtonUp="PinCancelButton_Click">
-                                <Run Text="Cancel" Foreground="#80FFFFFF" FontSize="11"/>
+                                <Run Text="Cancel" Foreground="#80333333" FontSize="11"/>
                             </TextBlock>
                         </StackPanel>
                     </Border>
+                </Grid>
+            </Border>
+        </Grid>
+        
+        <!-- SMS Phone Pad Overlay -->
+        <Grid x:Name="smsPhonePadOverlay" 
+              Grid.RowSpan="3" 
+              Background="#40000000" 
+              Visibility="Collapsed">
+            <Grid.Resources>
+                <!-- Glass Style Round SMS Button (copied from PIN overlay) -->
+                <Style x:Key="ModernSmsButtonStyle" TargetType="Button">
+                    <Setter Property="Background" Value="#10FFFFFF"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="BorderBrush" Value="#30FFFFFF"/>
+                    <Setter Property="BorderThickness" Value="1"/>
+                    <Setter Property="FontWeight" Value="Light"/>
+                    <Setter Property="Cursor" Value="Hand"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Button">
+                                <Grid>
+                                    <Ellipse x:Name="border" 
+                                            Stroke="{TemplateBinding BorderBrush}"
+                                            StrokeThickness="1"
+                                            Fill="{TemplateBinding Background}"/>
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center"/>
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border" Property="Fill" Value="#20FFFFFF"/>
+                                        <Setter TargetName="border" Property="Stroke" Value="#50FFFFFF"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="border" Property="Fill" Value="#30FFFFFF"/>
+                                        <Setter TargetName="border" Property="Stroke" Value="#80FFFFFF"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Grid.Resources>
+            <Border Background="#15FFFFFF" 
+                    CornerRadius="25" 
+                    Width="450"
+                    Height="650"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="#20FFFFFF"
+                    BorderThickness="1">
+                <Border.Effect>
+                    <DropShadowEffect Color="#80000000" BlurRadius="30" ShadowDepth="0" Opacity="0.3"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- SMS Icon and Title -->
+                    <StackPanel Grid.Row="0" Margin="0,25,0,10">
+                        <Border Width="60" Height="60" 
+                                Background="#10FFFFFF"
+                                CornerRadius="30"
+                                BorderBrush="#20FFFFFF"
+                                BorderThickness="1"
+                                HorizontalAlignment="Center"
+                                Margin="0,0,0,12">
+                            <TextBlock Text="💬" 
+                                       FontSize="28"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Enter Phone Number" 
+                                   FontSize="20" 
+                                   FontWeight="Light"
+                                   Foreground="#E0FFFFFF"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <!-- Phone Number Display -->
+                    <Border Grid.Row="1" 
+                            Background="#10FFFFFF"
+                            BorderBrush="#30FFFFFF"
+                            BorderThickness="1"
+                            CornerRadius="15"
+                            Width="350"
+                            Height="50"
+                            HorizontalAlignment="Center"
+                            Margin="0,8,0,20">
+                        <TextBox x:Name="smsPhoneNumberDisplay" 
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 FontSize="18"
+                                 FontWeight="Light"
+                                 Foreground="White"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center"
+                                 HorizontalContentAlignment="Center"
+                                 VerticalContentAlignment="Center"
+                                 Text="+1"
+                                 IsReadOnly="True"
+                                 MaxLength="20"/>
+                    </Border>
+                    
+                    <!-- Phone Number Pad -->
+                    <Grid Grid.Row="2" Width="300" HorizontalAlignment="Center">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="75"/>
+                            <RowDefinition Height="75"/>
+                            <RowDefinition Height="75"/>
+                            <RowDefinition Height="75"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- Number buttons with phone labels -->
+                        <Button Grid.Row="0" Grid.Column="0" 
+                                Style="{StaticResource ModernSmsButtonStyle}" 
+                                Width="60" Height="60" Margin="8" 
+                                Click="SmsPhonePadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="1" FontSize="22" HorizontalAlignment="Center" FontWeight="Light"/>
+                                <TextBlock Text="" FontSize="7" HorizontalAlignment="Center" Opacity="0.6"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="0" Grid.Column="1" 
+                                Style="{StaticResource ModernSmsButtonStyle}" 
+                                Width="60" Height="60" Margin="8" 
+                                Click="SmsPhonePadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="2" FontSize="22" HorizontalAlignment="Center" FontWeight="Light"/>
+                                <TextBlock Text="ABC" FontSize="7" HorizontalAlignment="Center" Opacity="0.6"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="0" Grid.Column="2" 
+                                Style="{StaticResource ModernSmsButtonStyle}" 
+                                Width="60" Height="60" Margin="8" 
+                                Click="SmsPhonePadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="3" FontSize="22" HorizontalAlignment="Center" FontWeight="Light"/>
+                                <TextBlock Text="DEF" FontSize="7" HorizontalAlignment="Center" Opacity="0.6"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Grid.Row="1" Grid.Column="0" 
+                                Style="{StaticResource ModernSmsButtonStyle}" 
+                                Width="60" Height="60" Margin="8" 
+                                Click="SmsPhonePadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="4" FontSize="22" HorizontalAlignment="Center" FontWeight="Light"/>
+                                <TextBlock Text="GHI" FontSize="7" HorizontalAlignment="Center" Opacity="0.6"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="1" 
+                                Style="{StaticResource ModernSmsButtonStyle}" 
+                                Width="60" Height="60" Margin="8" 
+                                Click="SmsPhonePadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="5" FontSize="22" HorizontalAlignment="Center" FontWeight="Light"/>
+                                <TextBlock Text="JKL" FontSize="7" HorizontalAlignment="Center" Opacity="0.6"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="2" 
+                                Style="{StaticResource ModernSmsButtonStyle}" 
+                                Width="60" Height="60" Margin="8" 
+                                Click="SmsPhonePadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="6" FontSize="22" HorizontalAlignment="Center" FontWeight="Light"/>
+                                <TextBlock Text="MNO" FontSize="7" HorizontalAlignment="Center" Opacity="0.6"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Grid.Row="2" Grid.Column="0" 
+                                Style="{StaticResource ModernSmsButtonStyle}" 
+                                Width="60" Height="60" Margin="8" 
+                                Click="SmsPhonePadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="7" FontSize="22" HorizontalAlignment="Center" FontWeight="Light"/>
+                                <TextBlock Text="PQRS" FontSize="7" HorizontalAlignment="Center" Opacity="0.6"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="2" Grid.Column="1" 
+                                Style="{StaticResource ModernSmsButtonStyle}" 
+                                Width="60" Height="60" Margin="8" 
+                                Click="SmsPhonePadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="8" FontSize="22" HorizontalAlignment="Center" FontWeight="Light"/>
+                                <TextBlock Text="TUV" FontSize="7" HorizontalAlignment="Center" Opacity="0.6"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Row="2" Grid.Column="2" 
+                                Style="{StaticResource ModernSmsButtonStyle}" 
+                                Width="60" Height="60" Margin="8" 
+                                Click="SmsPhonePadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="9" FontSize="22" HorizontalAlignment="Center" FontWeight="Light"/>
+                                <TextBlock Text="WXYZ" FontSize="7" HorizontalAlignment="Center" Opacity="0.6"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <!-- Bottom row with special buttons -->
+                        <Button Grid.Row="3" Grid.Column="0" Content="←" 
+                                Width="60" Height="45" Margin="8"
+                                FontSize="18" FontWeight="Light"
+                                Background="#15FFFFFF"
+                                Foreground="#E0FFFFFF"
+                                BorderBrush="#30FFFFFF"
+                                BorderThickness="1"
+                                Cursor="Hand"
+                                Click="SmsPhoneBackspace_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" 
+                                            CornerRadius="22"
+                                            Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#25FFFFFF"/>
+                                            <Setter TargetName="border" Property="BorderBrush" Value="#50FFFFFF"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#35FFFFFF"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        
+                        <Button Grid.Row="3" Grid.Column="1" 
+                                Style="{StaticResource ModernSmsButtonStyle}" 
+                                Width="60" Height="60" Margin="8" 
+                                Click="SmsPhonePadButton_Click">
+                            <StackPanel>
+                                <TextBlock Text="0" FontSize="22" HorizontalAlignment="Center" FontWeight="Light"/>
+                                <TextBlock Text="+" FontSize="7" HorizontalAlignment="Center" Opacity="0.6"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Grid.Row="3" Grid.Column="2" Content="✓" 
+                                Width="60" Height="45" Margin="8"
+                                FontSize="20" FontWeight="Light"
+                                Background="#FF4CAF50"
+                                Foreground="White"
+                                BorderBrush="#FF66BB6A"
+                                BorderThickness="1"
+                                Cursor="Hand"
+                                Click="SmsSendButton_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" 
+                                            CornerRadius="22"
+                                            Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#FF66BB6A"/>
+                                            <Setter TargetName="border" Property="BorderBrush" Value="#FF81C784"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#FF43A047"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </Grid>
+                    
+                    <!-- Bottom Cancel Button -->
+                    <Grid Grid.Row="4" Margin="0,12,0,20">
+                        <Button Content="Cancel" 
+                                Width="120"
+                                Height="35"
+                                FontSize="14"
+                                FontWeight="Light"
+                                Foreground="#D0FFFFFF"
+                                Background="#10FFFFFF"
+                                BorderBrush="#20FFFFFF"
+                                BorderThickness="1"
+                                Cursor="Hand"
+                                Click="SmsPhonePadCancel_Click"
+                                HorizontalAlignment="Center">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="17">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#20FFFFFF"/>
+                                            <Setter Property="BorderBrush" Value="#40FFFFFF"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter Property="Background" Value="#30FFFFFF"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>
@@ -2618,6 +3174,44 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
+                    
+                    <!-- Close button (X) in top-right corner -->
+                    <Button Grid.Row="0"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Width="40"
+                            Height="40"
+                            Margin="0,10,10,0"
+                            Background="#30FFFFFF"
+                            Foreground="White"
+                            BorderBrush="#50FFFFFF"
+                            BorderThickness="1"
+                            FontSize="20"
+                            FontFamily="Segoe MDL2 Assets"
+                            Content="&#xE711;"
+                            Click="CloseShareOverlay_Click"
+                            Cursor="Hand"
+                            Panel.ZIndex="10">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="20">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#50FFFFFF"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#70FFFFFF"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
                     
                     <!-- Success Icon and Title -->
                     <StackPanel Grid.Row="0" Margin="0,30,0,20">
@@ -2696,7 +3290,7 @@
                                 Foreground="White"
                                 BorderBrush="#50FFFFFF"
                                 BorderThickness="1"
-                                Click="SendSmsButton_Click"
+                                Click="SendSMS_Click"
                                 Cursor="Hand">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
@@ -2728,15 +3322,16 @@
                     <!-- Close Button -->
                     <Button Grid.Row="6"
                             Content="Done"
-                            Width="120"
-                            Height="40"
+                            Width="140"
+                            Height="45"
                             VerticalAlignment="Bottom"
                             Margin="0,0,0,30"
-                            Background="#20FFFFFF"
+                            Background="#30FFFFFF"
                             Foreground="White"
-                            BorderBrush="#40FFFFFF"
+                            BorderBrush="#60FFFFFF"
                             BorderThickness="1"
-                            FontSize="16"
+                            FontSize="18"
+                            FontWeight="SemiBold"
                             Click="CloseShareOverlay_Click"
                             Cursor="Hand">
                         <Button.Template>

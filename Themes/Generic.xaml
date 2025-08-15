@@ -3,7 +3,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:Photobooth">
 
-
+    <!-- NavButton style temporarily commented out due to build issues -->
+    <!--
     <Style TargetType="{x:Type local:NavButton}">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="White" />
@@ -20,15 +21,9 @@
                             <TextBlock Text="{TemplateBinding Label}" FontSize="10" Foreground="White" VerticalAlignment="Center"  />
                         </StackPanel>
                     </Border>
-                    <!--<ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#333333" />
-
-                        </Trigger>
-                    </ControlTemplate.Triggers>-->
-
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
+    -->
 </ResourceDictionary>

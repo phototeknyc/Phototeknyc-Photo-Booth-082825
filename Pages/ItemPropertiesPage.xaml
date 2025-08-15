@@ -5,7 +5,7 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
       xmlns:local="clr-namespace:Photobooth.Pages"
       mc:Ignorable="d" 
-       d:DesignHeight="450" d:DesignWidth="280" Background="#2E2E2E"
+       d:DesignHeight="450" d:DesignWidth="280" Background="{StaticResource SurfaceSecondaryBrush}"
       Title="Properties">
 
     <Page.Resources>
@@ -30,7 +30,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#404040"/>
+                                <Setter Property="Background" Value="{StaticResource SurfaceButtonHoverBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -48,7 +48,7 @@
         
         <!-- Modern TextBox Style -->
         <Style x:Key="ModernTextBox" TargetType="TextBox">
-            <Setter Property="Background" Value="#404040"/>
+            <Setter Property="Background" Value="{StaticResource SurfacePanelBrush}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderBrush" Value="#606060"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -59,7 +59,7 @@
         
         <!-- Modern ComboBox Style -->
         <Style x:Key="ModernComboBox" TargetType="ComboBox">
-            <Setter Property="Background" Value="#404040"/>
+            <Setter Property="Background" Value="{StaticResource SurfacePanelBrush}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderBrush" Value="#606060"/>
             <Setter Property="FontSize" Value="12"/>
@@ -76,7 +76,7 @@
             <Expander Header="Selected" Style="{StaticResource ModernExpander}" IsExpanded="True">
                 <Expander.HeaderTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -86,12 +86,12 @@
                                 <StackPanel Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Left" Cursor="Hand">
                                     <Image x:Name="image" Source="{Binding SelectedItemsPositionChangeSource}" Width="20" Stretch="UniformToFill" Margin="5,2,5,2" VerticalAlignment="Center" 
                                            MouseLeftButtonDown="ToggleLockPosition_Click"/>
-                                    <TextBlock Text="Position" FontSize="8" Foreground="#CCCCCC" HorizontalAlignment="Center" Margin="0,0,0,2"/>
+                                    <TextBlock Text="Position" FontSize="8" Foreground="{StaticResource SurfaceTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,2"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <TextBlock Text="X:" FontSize="12" Foreground="White" Margin="1,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                     <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="1,5,5,5">
-                                        <TextBox x:Name="tbRatioX" Width="65" Height="22" VerticalAlignment="Center" Background="#242424" 
+                                        <TextBox x:Name="tbRatioX" Width="65" Height="22" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
                                                  Foreground="White" BorderBrush="{x:Null}" HorizontalAlignment="Center"
                                                  Text="{Binding SelectedElementsPositionX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Border>
@@ -99,7 +99,7 @@
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="Y:" FontSize="12" Foreground="White" Margin="1,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                     <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="1,5,5,5">
-                                        <TextBox x:Name="tbRatioY" Width="65" Height="22" VerticalAlignment="Center" Background="#242424" 
+                                        <TextBox x:Name="tbRatioY" Width="65" Height="22" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
                                                  Foreground="White" BorderBrush="{x:Null}" HorizontalAlignment="Center"
                                                  Text="{Binding SelectedElementsPositionY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Border>
@@ -111,12 +111,12 @@
                                 <StackPanel Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Left" Cursor="Hand">
                                     <Image x:Name="image8" Source="{Binding SelectedItemsSizeChangeSource}" Width="20" Stretch="UniformToFill" Margin="5,2,5,2" VerticalAlignment="Center"
                                            MouseLeftButtonDown="ToggleLockSize_Click"/>
-                                    <TextBlock Text="Size" FontSize="8" Foreground="#CCCCCC" HorizontalAlignment="Center" Margin="0,0,0,2"/>
+                                    <TextBlock Text="Size" FontSize="8" Foreground="{StaticResource SurfaceTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,2"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <TextBlock Text="W:" FontSize="12" Foreground="White" Margin="0,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                     <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="0,5,5,5">
-                                        <TextBox x:Name="tbSizeX" Width="65" Height="22" VerticalAlignment="Center" Background="#242424" 
+                                        <TextBox x:Name="tbSizeX" Width="65" Height="22" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
                                                  Foreground="White" BorderBrush="{x:Null}" HorizontalAlignment="Center"
                                                  Text="{Binding SelectedElementsActualPixelWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Border>
@@ -124,7 +124,7 @@
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <TextBlock Text="H:" FontSize="12" Foreground="White" Margin="0,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                     <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="0,5,5,5">
-                                        <TextBox x:Name="tbSizeY" Width="65" Height="22" VerticalAlignment="Center" Background="#242424" 
+                                        <TextBox x:Name="tbSizeY" Width="65" Height="22" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
                                                  Foreground="White" BorderBrush="{x:Null}"
                                                  Text="{Binding SelectedElementsActualPixelHeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Border>
@@ -138,7 +138,7 @@
             <Expander Header="Alignments" Style="{StaticResource ModernExpander}" IsExpanded="True">
                 <Expander.HeaderTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -161,60 +161,60 @@
                                 
                                 <!-- Alignment buttons -->
                                 <Button ToolTip="Align Left Edges" Grid.Row="0" Grid.Column="0" Width="35" Height="30" 
-                                        Background="#404040" BorderBrush="#606060" BorderThickness="1" Cursor="Hand"
+                                        Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignLeftCmd}">
-                                    <Image Source="/images/alignLeft.png" Width="20" Height="20"/>
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignLeft}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
                                 </Button>
                                 <Button ToolTip="Align Horizontal Centers" Grid.Row="0" Grid.Column="1" Width="35" Height="30" 
-                                        Background="#404040" BorderBrush="#606060" BorderThickness="1" Cursor="Hand"
+                                        Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignHCenterCmd}">
-                                    <Image Source="/images/alignCenter.png" Width="20" Height="20"/>
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignCenter}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
                                 </Button>
                                 <Button ToolTip="Align Right Edges" Grid.Row="0" Grid.Column="2" Width="35" Height="30" 
-                                        Background="#404040" BorderBrush="#606060" BorderThickness="1" Cursor="Hand"
+                                        Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignRightCmd}">
-                                    <Image Source="/images/alignRight.png" Width="20" Height="20"/>
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignRight}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
                                 </Button>
                                 
                                 <Button ToolTip="Align Top Edges" Grid.Row="1" Grid.Column="0" Width="35" Height="30" 
-                                        Background="#404040" BorderBrush="#606060" BorderThickness="1" Cursor="Hand"
+                                        Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignTopCmd}">
-                                    <Image Source="/images/alignTop.png" Width="20" Height="20"/>
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignTop}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
                                 </Button>
                                 <Button ToolTip="Align Vertical Centers" Grid.Row="1" Grid.Column="1" Width="35" Height="30" 
-                                        Background="#404040" BorderBrush="#606060" BorderThickness="1" Cursor="Hand"
+                                        Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignVCenterCmd}">
-                                    <Image Source="/images/alignBaseLine.png" Width="20" Height="20"/>
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignMiddle}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
                                 </Button>
                                 <Button ToolTip="Align Bottom Edges" Grid.Row="1" Grid.Column="2" Width="35" Height="30" 
-                                        Background="#404040" BorderBrush="#606060" BorderThickness="1" Cursor="Hand"
+                                        Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignBottomCmd}">
-                                    <Image Source="/images/alignBottom.png" Width="20" Height="20"/>
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignBottom}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
                                 </Button>
                                 
                                 <!-- Distribution buttons -->
                                 <Button ToolTip="Distribute Horizontal Spacing" Grid.Row="0" Grid.Column="4" Width="35" Height="30" 
-                                        Background="#404040" BorderBrush="#606060" BorderThickness="1" Cursor="Hand"
+                                        Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding DistributeHorizontalCmd}">
-                                    <Image Source="/images/alignStretchHorizontal.png" Width="20" Height="20"/>
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignStretchH}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
                                 </Button>
                                 <Button ToolTip="Distribute Vertical Spacing" Grid.Row="0" Grid.Column="5" Width="35" Height="30" 
-                                        Background="#404040" BorderBrush="#606060" BorderThickness="1" Cursor="Hand"
+                                        Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding DistributeVerticalCmd}">
-                                    <Image Source="/images/alignStretchVertical.png" Width="20" Height="20"/>
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignStretchV}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
                                 </Button>
                             </Grid>
                             <!-- Multi-selection hint -->
                             <StackPanel Orientation="Vertical" Margin="10,5,10,5">
-                                <TextBlock Text="Selection Tips:" FontSize="10" Foreground="#AAAAAA" FontWeight="Bold" Margin="0,5,0,2"/>
-                                <TextBlock FontSize="9" Foreground="#999999" TextWrapping="Wrap">
+                                <TextBlock Text="Selection Tips:" FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}" FontWeight="Bold" Margin="0,5,0,2"/>
+                                <TextBlock FontSize="9" Foreground="{StaticResource SurfaceTextTertiaryBrush}" TextWrapping="Wrap">
                                     <Run Text="• Click to select single item"/><LineBreak/>
                                     <Run Text="• Ctrl+Click to add/remove items"/><LineBreak/>
                                     <Run Text="• Shift+Click to select range"/><LineBreak/>
                                     <Run Text="• Select multiple items to align them"/>
                                 </TextBlock>
                                 <TextBlock Text="{Binding SelectedItemsCount, StringFormat='Selected: {0} item(s)'}" 
-                                           FontSize="10" Foreground="#AAAAAA" Margin="0,5,0,0" FontWeight="Bold"/>
+                                           FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Margin="0,5,0,0" FontWeight="Bold"/>
                             </StackPanel>
                         </StackPanel>
                 </StackPanel>
@@ -224,7 +224,7 @@
             <Expander Header="Rotation" Style="{StaticResource ModernExpander}" IsExpanded="True">
                 <Expander.HeaderTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -241,9 +241,9 @@
                             <TextBox x:Name="RotationTextBox" 
                                      Text="{Binding SelectedElementsRotation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
                                      Width="80" Height="28" FontSize="12" 
-                                     Background="#2D2D30" Foreground="White" BorderBrush="#555555"
+                                     Background="{StaticResource SurfaceInputBrush}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}"
                                      HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
-                            <TextBlock Text="°" FontSize="12" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            <TextBlock Text="°" FontSize="12" Foreground="{StaticResource SurfaceTextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                         </StackPanel>
                         
                         <!-- Rotation Slider -->
@@ -254,29 +254,29 @@
                                     TickFrequency="15" TickPlacement="BottomRight"
                                     Width="240" Height="25"/>
                             <TextBlock Text="-180°           0°           180°" 
-                                       FontSize="9" Foreground="#999999" 
+                                       FontSize="9" Foreground="{StaticResource SurfaceTextTertiaryBrush}" 
                                        HorizontalAlignment="Center" Margin="0,2,0,0"/>
                         </StackPanel>
                         
                         <!-- Quick Rotation Buttons -->
                         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="10,0">
                             <Button Content="↺ 90°" Width="52" Height="28" Margin="3" 
-                                    Background="#404040" BorderBrush="#606060" BorderThickness="1" 
+                                    Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
                                     Foreground="White" FontSize="11" Cursor="Hand"
                                     Command="{Binding RotateLeft90Cmd}"
                                     ToolTip="Rotate 90° Counter-clockwise"/>
                             <Button Content="Reset" Width="52" Height="28" Margin="3" 
-                                    Background="#404040" BorderBrush="#606060" BorderThickness="1" 
+                                    Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
                                     Foreground="White" FontSize="11" Cursor="Hand"
                                     Command="{Binding ResetRotationCmd}"
                                     ToolTip="Reset to 0°"/>
                             <Button Content="↻ 90°" Width="52" Height="28" Margin="3" 
-                                    Background="#404040" BorderBrush="#606060" BorderThickness="1" 
+                                    Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
                                     Foreground="White" FontSize="11" Cursor="Hand"
                                     Command="{Binding RotateRight90Cmd}"
                                     ToolTip="Rotate 90° Clockwise"/>
                             <Button Content="↕ Flip" Width="52" Height="28" Margin="3" 
-                                    Background="#404040" BorderBrush="#606060" BorderThickness="1" 
+                                    Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
                                     Foreground="White" FontSize="11" Cursor="Hand"
                                     Command="{Binding FlipVerticalCmd}"
                                     ToolTip="Flip Vertical"/>
@@ -289,7 +289,7 @@
             <Expander Header="Z-Order" Style="{StaticResource ModernExpander}" IsExpanded="True">
                 <Expander.HeaderTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -323,7 +323,7 @@
             <Expander x:Name="AspectRatioPanel" Header="Aspect Ratio" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
                 <Expander.HeaderTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -331,13 +331,13 @@
                             <StackPanel Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Center" Cursor="Hand" Margin="15,0,15,0">
                                 <Image x:Name="imageAspectRatioLock" Source="{Binding SelectedItemsAspectRatioLockSource}" Width="28" Stretch="UniformToFill" Margin="5,5,5,2" VerticalAlignment="Center"
                                        MouseLeftButtonDown="ToggleLockAspectRatio_Click" ToolTip="Lock/Unlock Aspect Ratio"/>
-                                <TextBlock Text="Lock Proportions" FontSize="11" Foreground="#CCCCCC" HorizontalAlignment="Center" Margin="0,0,0,5"/>
+                                <TextBlock Text="Lock Proportions" FontSize="11" Foreground="{StaticResource SurfaceTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,5"/>
                             </StackPanel>
                             <StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="15,0,0,0">
-                                <TextBlock Text="When locked:" FontSize="10" Foreground="#999999" Margin="0,0,0,3"/>
-                                <TextBlock Text="• Maintains width/height ratio" FontSize="9" Foreground="#999999" Margin="0,0,0,1"/>
-                                <TextBlock Text="• Prevents image distortion" FontSize="9" Foreground="#999999" Margin="0,0,0,1"/>
-                                <TextBlock Text="• Keeps original proportions" FontSize="9" Foreground="#999999"/>
+                                <TextBlock Text="When locked:" FontSize="10" Foreground="{StaticResource SurfaceTextTertiaryBrush}" Margin="0,0,0,3"/>
+                                <TextBlock Text="• Maintains width/height ratio" FontSize="9" Foreground="{StaticResource SurfaceTextTertiaryBrush}" Margin="0,0,0,1"/>
+                                <TextBlock Text="• Prevents image distortion" FontSize="9" Foreground="{StaticResource SurfaceTextTertiaryBrush}" Margin="0,0,0,1"/>
+                                <TextBlock Text="• Keeps original proportions" FontSize="9" Foreground="{StaticResource SurfaceTextTertiaryBrush}"/>
                             </StackPanel>
                         </StackPanel>
                 </StackPanel>
@@ -347,7 +347,7 @@
             <Expander x:Name="PlaceholderPanel" Header="Placeholder Settings" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
                 <Expander.HeaderTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -370,7 +370,7 @@
                                     
                                     <!-- Number display -->
                                     <Border Grid.Column="1" BorderBrush="#CCCCCC" BorderThickness="1,1,1,1" 
-                                            Background="#242424" Height="44">
+                                            Background="{StaticResource SurfaceInputBrush}" Height="44">
                                         <TextBox Text="{Binding SelectedPlaceholderItem.PlaceholderNo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
                                                  Background="Transparent" Foreground="White" BorderThickness="0" 
                                                  FontSize="18" FontWeight="Bold"
@@ -386,9 +386,9 @@
                                 </Grid>
                             </StackPanel>
                             <TextBlock Text="This number determines the order in which photos will be inserted" 
-                                       FontSize="9" Foreground="#999999" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                                       FontSize="9" Foreground="{StaticResource SurfaceTextTertiaryBrush}" Margin="0,5,0,0" TextWrapping="Wrap"/>
                             <TextBlock Text="Tip: Use + and - buttons for touch input" 
-                                       FontSize="9" Foreground="#AAAAAA" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                       FontSize="9" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
                 </StackPanel>
             </Expander>
@@ -397,7 +397,7 @@
             <Expander Header="Layers" Style="{StaticResource ModernExpander}" IsExpanded="True">
                 <Expander.HeaderTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -408,25 +408,25 @@
                             </Grid.RowDefinitions>
                             <!-- Top Layer controls -->
                             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,0,10,5">
-                                <Button ToolTip="Move Up" Width="40" Height="28" Background="#444444" BorderBrush="#666666" BorderThickness="1" 
+                                <Button ToolTip="Move Up" Width="40" Height="28" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
                                         Foreground="White" Command="{Binding MoveLayerUpCmd}" Margin="0,0,2,0">
                                     <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Up}" Style="{StaticResource MDL2IconSmall}" Foreground="White"/>
                                 </Button>
-                                <Button ToolTip="Move Down" Width="40" Height="28" Background="#444444" BorderBrush="#666666" BorderThickness="1" 
+                                <Button ToolTip="Move Down" Width="40" Height="28" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
                                         Foreground="White" Command="{Binding MoveLayerDownCmd}" Margin="0,0,2,0">
                                     <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Down}" Style="{StaticResource MDL2IconSmall}" Foreground="White"/>
                                 </Button>
-                                <Button ToolTip="Duplicate Layer" Width="40" Height="28" Background="#444444" BorderBrush="#666666" BorderThickness="1" 
+                                <Button ToolTip="Duplicate Layer" Width="40" Height="28" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
                                         Foreground="White" Command="{Binding DuplicateSelectedCmd}" Margin="0,0,2,0">
                                     <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Copy}" Style="{StaticResource MDL2IconSmall}" Foreground="White"/>
                                 </Button>
-                                <Button ToolTip="Delete Layer" Width="40" Height="28" Background="#662222" BorderBrush="#AA4444" BorderThickness="1" 
+                                <Button ToolTip="Delete Layer" Width="40" Height="28" Background="{StaticResource SurfaceAccentDangerBrush}" BorderBrush="{StaticResource SurfaceAccentDangerBrush}" BorderThickness="1" 
                                         Foreground="White" Command="{Binding DeleteLayerCmd}">
                                     <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Delete}" Style="{StaticResource MDL2IconSmall}" Foreground="White"/>
                                 </Button>
                             </StackPanel>
                             <!-- Layers list -->
-                            <Border Grid.Row="1" BorderBrush="#555555" BorderThickness="1" Background="#2A2A2A" MaxHeight="200">
+                            <Border Grid.Row="1" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Background="{StaticResource SurfacePrimaryBrush}" MaxHeight="200">
                                 <ListBox x:Name="LayersList" ItemsSource="{Binding CanvasLayers}" 
                                          SelectedItem="{Binding SelectedLayer, Mode=TwoWay}"
                                          Background="Transparent" BorderThickness="0"
@@ -450,7 +450,7 @@
                                                     <ColumnDefinition Width="25"/>
                                                 </Grid.ColumnDefinitions>
                                                 <!-- Layer thumbnail/icon -->
-                                                <Border Grid.Column="0" Background="#404040" BorderBrush="#666666" BorderThickness="1" Margin="2">
+                                                <Border Grid.Column="0" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Margin="2">
                                                     <ContentPresenter Content="{Binding}" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                         <ContentPresenter.ContentTemplate>
                                                             <DataTemplate>
@@ -473,7 +473,7 @@
                                                             </Style>
                                                         </TextBlock.Style>
                                                     </TextBlock>
-                                                    <TextBlock Text="{Binding LayerInfo}" FontSize="9" Foreground="#CCCCCC"/>
+                                                    <TextBlock Text="{Binding LayerInfo}" FontSize="9" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
                                                 </StackPanel>
                                                 <!-- Lock toggle -->
                                                 <Button Grid.Column="2" Width="20" Height="20" 
@@ -486,7 +486,7 @@
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
                                                                 <Setter Property="Text" Value="{StaticResource MDL2_Unlock}"/>
-                                                                <Setter Property="Foreground" Value="#666666"/>
+                                                                <Setter Property="Foreground" Value="{StaticResource SurfaceTextTertiaryBrush}"/>
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding IsLocked}" Value="True">
                                                                         <Setter Property="Text" Value="{StaticResource MDL2_Lock}"/>
@@ -511,7 +511,7 @@
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding IsVisible}" Value="False">
                                                                         <Setter Property="Text" Value="{StaticResource MDL2_Hide}"/>
-                                                                        <Setter Property="Foreground" Value="#666666"/>
+                                                                        <Setter Property="Foreground" Value="{StaticResource SurfaceTextTertiaryBrush}"/>
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
@@ -529,7 +529,7 @@
                                             <Setter Property="BorderThickness" Value="0"/>
                                             <Style.Triggers>
                                                 <Trigger Property="IsSelected" Value="True">
-                                                    <Setter Property="Background" Value="#4A90E2"/>
+                                                    <Setter Property="Background" Value="{StaticResource SurfaceAccentCyanBrush}"/>
                                                 </Trigger>
                                                 <Trigger Property="IsMouseOver" Value="True">
                                                     <Setter Property="Background" Value="#555555"/>
@@ -547,7 +547,7 @@
             <Expander x:Name="TextFormattingPanel" Header="Text Formatting" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
                 <Expander.HeaderTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -557,7 +557,7 @@
                                 <TextBlock Text="Text:" FontSize="12" Foreground="White" Margin="0,5,0,2"/>
                                 <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2">
                                     <TextBox Text="{Binding SelectedTextItem.Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                                             Background="#242424" Foreground="White" BorderThickness="0" 
+                                             Background="{StaticResource SurfaceInputBrush}" Foreground="White" BorderThickness="0" 
                                              Padding="5" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="40"/>
                                 </Border>
                             </StackPanel>
@@ -568,7 +568,7 @@
                                 <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2">
                                     <ComboBox ItemsSource="{Binding SystemFonts}" 
                                               SelectedItem="{Binding SelectedTextItem.FontFamily, Mode=TwoWay}" 
-                                              Background="#242424" Foreground="White" BorderThickness="0" 
+                                              Background="{StaticResource SurfaceInputBrush}" Foreground="White" BorderThickness="0" 
                                               MaxDropDownHeight="200"/>
                                 </Border>
                             </StackPanel>
@@ -579,11 +579,11 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="Size:" FontSize="12" Foreground="White" Width="30"/>
                                         <TextBlock Text="{Binding SelectedTextItem.FontSize, StringFormat={}{0:F0}}" 
-                                                   FontSize="12" Foreground="#CCCCCC" Width="40"/>
+                                                   FontSize="12" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Width="40"/>
                                     </StackPanel>
                                     <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2">
                                         <TextBox Text="{Binding SelectedTextItem.FontSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                                                 Background="#242424" Foreground="White" BorderThickness="0" Padding="5"/>
+                                                 Background="{StaticResource SurfaceInputBrush}" Foreground="White" BorderThickness="0" Padding="5"/>
                                     </Border>
                                 </StackPanel>
                                 
@@ -592,7 +592,7 @@
                                     <Slider Value="{Binding SelectedTextItem.FontSize, Mode=TwoWay}" 
                                             Minimum="8" Maximum="500" SmallChange="1" LargeChange="10"
                                             TickFrequency="10" IsSnapToTickEnabled="False"
-                                            Background="#666666" Foreground="#4A90E2"
+                                            Background="#666666" Foreground="{StaticResource SurfaceAccentCyanBrush}"
                                             Height="22" Margin="0,0,0,5"
                                             ToolTip="Drag to adjust font size (8-500pt) or type value directly"/>
                                 </StackPanel>
@@ -608,7 +608,7 @@
                                             <Style TargetType="ToggleButton">
                                                 <Setter Property="Background" Value="#444444"/>
                                                 <Setter Property="Foreground" Value="White"/>
-                                                <Setter Property="BorderBrush" Value="#666666"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource SurfaceTextTertiaryBrush}"/>
                                                 <Setter Property="BorderThickness" Value="1"/>
                                                 <Setter Property="Template">
                                                     <Setter.Value>
@@ -623,7 +623,7 @@
                                                             </Border>
                                                             <ControlTemplate.Triggers>
                                                                 <Trigger Property="IsChecked" Value="True">
-                                                                    <Setter TargetName="border" Property="Background" Value="#4A90E2"/>
+                                                                    <Setter TargetName="border" Property="Background" Value="{StaticResource SurfaceAccentCyanBrush}"/>
                                                                     <Setter TargetName="border" Property="BorderBrush" Value="#6BA5E7"/>
                                                                 </Trigger>
                                                                 <Trigger Property="IsMouseOver" Value="True">
@@ -644,7 +644,7 @@
                                             <Style TargetType="ToggleButton">
                                                 <Setter Property="Background" Value="#444444"/>
                                                 <Setter Property="Foreground" Value="White"/>
-                                                <Setter Property="BorderBrush" Value="#666666"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource SurfaceTextTertiaryBrush}"/>
                                                 <Setter Property="BorderThickness" Value="1"/>
                                                 <Setter Property="Template">
                                                     <Setter.Value>
@@ -659,7 +659,7 @@
                                                             </Border>
                                                             <ControlTemplate.Triggers>
                                                                 <Trigger Property="IsChecked" Value="True">
-                                                                    <Setter TargetName="border" Property="Background" Value="#4A90E2"/>
+                                                                    <Setter TargetName="border" Property="Background" Value="{StaticResource SurfaceAccentCyanBrush}"/>
                                                                     <Setter TargetName="border" Property="BorderBrush" Value="#6BA5E7"/>
                                                                 </Trigger>
                                                                 <Trigger Property="IsMouseOver" Value="True">
@@ -680,7 +680,7 @@
                                             <Style TargetType="ToggleButton">
                                                 <Setter Property="Background" Value="#444444"/>
                                                 <Setter Property="Foreground" Value="White"/>
-                                                <Setter Property="BorderBrush" Value="#666666"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource SurfaceTextTertiaryBrush}"/>
                                                 <Setter Property="BorderThickness" Value="1"/>
                                                 <Setter Property="Template">
                                                     <Setter.Value>
@@ -695,7 +695,7 @@
                                                             </Border>
                                                             <ControlTemplate.Triggers>
                                                                 <Trigger Property="IsChecked" Value="True">
-                                                                    <Setter TargetName="border" Property="Background" Value="#4A90E2"/>
+                                                                    <Setter TargetName="border" Property="Background" Value="{StaticResource SurfaceAccentCyanBrush}"/>
                                                                     <Setter TargetName="border" Property="BorderBrush" Value="#6BA5E7"/>
                                                                 </Trigger>
                                                                 <Trigger Property="IsMouseOver" Value="True">
@@ -716,7 +716,7 @@
                                 <StackPanel Orientation="Horizontal">
                                     <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Width="30" Height="25" 
                                             Background="{Binding SelectedTextItem.Foreground}" Margin="0,0,5,0"/>
-                                    <Button Content="Choose" Width="60" Height="25" Background="#444444" Foreground="White" 
+                                    <Button Content="Choose" Width="60" Height="25" Background="{StaticResource SurfacePanelBrush}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                             BorderBrush="#666666" Click="ChooseTextColor_Click"/>
                                 </StackPanel>
                                 <!-- Quick color palette -->
@@ -736,7 +736,7 @@
                             <StackPanel Orientation="Horizontal" Margin="5,2,5,2">
                                 <TextBlock Text="Align:" FontSize="12" Foreground="White" VerticalAlignment="Center" Width="40"/>
                                 <ComboBox SelectedItem="{Binding SelectedTextItem.TextAlignment, Mode=TwoWay}" 
-                                          Background="#242424" Foreground="White" BorderThickness="0" Width="80">
+                                          Background="{StaticResource SurfaceInputBrush}" Foreground="White" BorderThickness="0" Width="80">
                                     <ComboBox.Items>
                                         <TextAlignment>Left</TextAlignment>
                                         <TextAlignment>Center</TextAlignment>
@@ -758,7 +758,7 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="Offset X:" FontSize="10" Foreground="White" Width="50"/>
                                                 <TextBlock Text="{Binding SelectedTextItem.ShadowOffsetX, StringFormat={}{0:F1}}" 
-                                                           FontSize="10" Foreground="#CCCCCC" Width="30"/>
+                                                           FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Width="30"/>
                                             </StackPanel>
                                             <Slider Value="{Binding SelectedTextItem.ShadowOffsetX, Mode=TwoWay}" 
                                                     Minimum="-20" Maximum="20" SmallChange="0.5" LargeChange="2"
@@ -773,7 +773,7 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="Offset Y:" FontSize="10" Foreground="White" Width="50"/>
                                                 <TextBlock Text="{Binding SelectedTextItem.ShadowOffsetY, StringFormat={}{0:F1}}" 
-                                                           FontSize="10" Foreground="#CCCCCC" Width="30"/>
+                                                           FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Width="30"/>
                                             </StackPanel>
                                             <Slider Value="{Binding SelectedTextItem.ShadowOffsetY, Mode=TwoWay}" 
                                                     Minimum="-20" Maximum="20" SmallChange="0.5" LargeChange="2"
@@ -788,7 +788,7 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="Blur:" FontSize="10" Foreground="White" Width="50"/>
                                                 <TextBlock Text="{Binding SelectedTextItem.ShadowBlurRadius, StringFormat={}{0:F1}}" 
-                                                           FontSize="10" Foreground="#CCCCCC" Width="30"/>
+                                                           FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Width="30"/>
                                             </StackPanel>
                                             <Slider Value="{Binding SelectedTextItem.ShadowBlurRadius, Mode=TwoWay}" 
                                                     Minimum="0" Maximum="50" SmallChange="0.5" LargeChange="5"
@@ -809,7 +809,7 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="Thickness:" FontSize="10" Foreground="White" Width="60"/>
                                                 <TextBlock Text="{Binding SelectedTextItem.OutlineThickness, StringFormat={}{0:F1}}" 
-                                                           FontSize="10" Foreground="#CCCCCC" Width="30"/>
+                                                           FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Width="30"/>
                                             </StackPanel>
                                             <Slider Value="{Binding SelectedTextItem.OutlineThickness, Mode=TwoWay}" 
                                                     Minimum="0" Maximum="10" SmallChange="0.1" LargeChange="1"
@@ -825,7 +825,7 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Width="30" Height="25" 
                                                         Background="{Binding SelectedTextItem.OutlineColor}" Margin="0,0,5,0"/>
-                                                <Button Content="Choose" Width="60" Height="25" Background="#444444" Foreground="White" 
+                                                <Button Content="Choose" Width="60" Height="25" Background="{StaticResource SurfacePanelBrush}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                                         BorderBrush="#666666" Click="ChooseOutlineColor_Click"/>
                                             </StackPanel>
                                             <!-- Quick outline color palette -->
@@ -850,7 +850,7 @@
             <Expander x:Name="ShapePropertiesPanel" Header="Shape Properties" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
                 <Expander.HeaderTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="#CCCCCC"/>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -859,7 +859,7 @@
                         <!-- Shape Type Display -->
                         <StackPanel Orientation="Vertical" Margin="5,2,5,8">
                             <TextBlock Text="Shape Type:" FontSize="12" Foreground="White" Margin="0,5,0,2"/>
-                            <TextBlock Text="{Binding SelectedShapeItem.ShapeType}" FontSize="14" Foreground="#CCCCCC" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding SelectedShapeItem.ShapeType}" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}" FontWeight="Bold"/>
                         </StackPanel>
                         
                         <!-- Fill Color -->
@@ -868,14 +868,14 @@
                             <StackPanel Orientation="Horizontal">
                                 <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Width="30" Height="25" 
                                         Background="{Binding SelectedShapeItem.Fill}" Margin="0,0,5,0"/>
-                                <Button Content="Choose" Width="60" Height="25" Background="#444444" Foreground="White" 
+                                <Button Content="Choose" Width="60" Height="25" Background="{StaticResource SurfacePanelBrush}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                         BorderBrush="#666666" Click="ChooseShapeFillColor_Click"/>
                                 <CheckBox Content="No Fill" IsChecked="{Binding SelectedShapeItem.HasNoFill, Mode=TwoWay}" 
                                           Foreground="White" FontSize="10" Margin="10,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                             <!-- Quick fill color palette -->
                             <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-                                <Button Width="20" Height="20" Background="Transparent" BorderBrush="#666" BorderThickness="1" Margin="1" Click="QuickShapeFillColor_Click" Tag="Transparent" ToolTip="Transparent"/>
+                                <Button Width="20" Height="20" Background="Transparent" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Margin="1" Click="QuickShapeFillColor_Click" Tag="Transparent" ToolTip="Transparent"/>
                                 <Button Width="20" Height="20" Background="Black" Margin="1" Click="QuickShapeFillColor_Click" Tag="Black"/>
                                 <Button Width="20" Height="20" Background="White" Margin="1" Click="QuickShapeFillColor_Click" Tag="White"/>
                                 <Button Width="20" Height="20" Background="Red" Margin="1" Click="QuickShapeFillColor_Click" Tag="Red"/>
@@ -897,7 +897,7 @@
                                 <TextBlock Text="Color:" FontSize="10" Foreground="White" Width="45" VerticalAlignment="Center"/>
                                 <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Width="25" Height="20" 
                                         Background="{Binding SelectedShapeItem.Stroke}" Margin="0,0,5,0"/>
-                                <Button Content="Choose" Width="50" Height="20" Background="#444444" Foreground="White" 
+                                <Button Content="Choose" Width="50" Height="20" Background="{StaticResource SurfacePanelBrush}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                         BorderBrush="#666666" Click="ChooseShapeStrokeColor_Click" FontSize="9"/>
                                 <CheckBox Content="No Stroke" IsChecked="{Binding SelectedShapeItem.HasNoStroke, Mode=TwoWay}" 
                                           Foreground="White" FontSize="9" Margin="8,0,0,0" VerticalAlignment="Center"/>
@@ -905,7 +905,7 @@
                             
                             <!-- Quick stroke color palette -->
                             <StackPanel Orientation="Horizontal" Margin="45,0,0,5">
-                                <Button Width="16" Height="16" Background="Transparent" BorderBrush="#666" BorderThickness="1" Margin="1" Click="QuickShapeStrokeColor_Click" Tag="Transparent" ToolTip="No Stroke"/>
+                                <Button Width="16" Height="16" Background="Transparent" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Margin="1" Click="QuickShapeStrokeColor_Click" Tag="Transparent" ToolTip="No Stroke"/>
                                 <Button Width="16" Height="16" Background="Black" Margin="1" Click="QuickShapeStrokeColor_Click" Tag="Black"/>
                                 <Button Width="16" Height="16" Background="White" Margin="1" Click="QuickShapeStrokeColor_Click" Tag="White"/>
                                 <Button Width="16" Height="16" Background="Red" Margin="1" Click="QuickShapeStrokeColor_Click" Tag="Red"/>
@@ -920,13 +920,13 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Thickness:" FontSize="10" Foreground="White" Width="60"/>
                                     <TextBlock Text="{Binding SelectedShapeItem.StrokeThickness, StringFormat={}{0:F1}}" 
-                                               FontSize="10" Foreground="#CCCCCC" Width="30"/>
+                                               FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Width="30"/>
                                 </StackPanel>
                                 <Slider Value="{Binding SelectedShapeItem.StrokeThickness, Mode=TwoWay}" 
                                         Minimum="0" Maximum="20" SmallChange="0.5" LargeChange="2"
                                         TickFrequency="5" TickPlacement="BottomRight"
                                         Width="180" Height="20" Margin="0,2,0,0"
-                                        Background="#666666" Foreground="#4A90E2"
+                                        Background="#666666" Foreground="{StaticResource SurfaceAccentCyanBrush}"
                                         ToolTip="Adjust stroke thickness (0-20px)"/>
                             </StackPanel>
                         </StackPanel>
@@ -945,7 +945,7 @@
                                             <SolidColorBrush Color="{Binding SelectedShapeItem.ShadowColor}"/>
                                         </Border.Background>
                                     </Border>
-                                    <Button Content="Choose" Width="50" Height="20" Background="#444444" Foreground="White" 
+                                    <Button Content="Choose" Width="50" Height="20" Background="{StaticResource SurfacePanelBrush}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                             BorderBrush="#666666" Click="ChooseShapeShadowColor_Click" FontSize="9"/>
                                 </StackPanel>
                                 
@@ -962,13 +962,13 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="Offset X:" FontSize="10" Foreground="White" Width="50"/>
                                         <TextBlock Text="{Binding SelectedShapeItem.ShadowOffsetX, StringFormat={}{0:F1}}" 
-                                                   FontSize="10" Foreground="#CCCCCC" Width="30"/>
+                                                   FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Width="30"/>
                                     </StackPanel>
                                     <Slider Value="{Binding SelectedShapeItem.ShadowOffsetX, Mode=TwoWay}" 
                                             Minimum="-20" Maximum="20" SmallChange="0.5" LargeChange="2"
                                             TickFrequency="5" TickPlacement="BottomRight"
                                             Width="140" Height="20" Margin="0,2,0,0"
-                                            Background="#666666" Foreground="#4A90E2"
+                                            Background="#666666" Foreground="{StaticResource SurfaceAccentCyanBrush}"
                                             ToolTip="Adjust horizontal shadow offset"/>
                                 </StackPanel>
                                 
@@ -977,13 +977,13 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="Offset Y:" FontSize="10" Foreground="White" Width="50"/>
                                         <TextBlock Text="{Binding SelectedShapeItem.ShadowOffsetY, StringFormat={}{0:F1}}" 
-                                                   FontSize="10" Foreground="#CCCCCC" Width="30"/>
+                                                   FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Width="30"/>
                                     </StackPanel>
                                     <Slider Value="{Binding SelectedShapeItem.ShadowOffsetY, Mode=TwoWay}" 
                                             Minimum="-20" Maximum="20" SmallChange="0.5" LargeChange="2"
                                             TickFrequency="5" TickPlacement="BottomRight"
                                             Width="140" Height="20" Margin="0,2,0,0"
-                                            Background="#666666" Foreground="#4A90E2"
+                                            Background="#666666" Foreground="{StaticResource SurfaceAccentCyanBrush}"
                                             ToolTip="Adjust vertical shadow offset"/>
                                 </StackPanel>
                                 
@@ -992,13 +992,13 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="Blur:" FontSize="10" Foreground="White" Width="50"/>
                                         <TextBlock Text="{Binding SelectedShapeItem.ShadowBlurRadius, StringFormat={}{0:F1}}" 
-                                                   FontSize="10" Foreground="#CCCCCC" Width="30"/>
+                                                   FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Width="30"/>
                                     </StackPanel>
                                     <Slider Value="{Binding SelectedShapeItem.ShadowBlurRadius, Mode=TwoWay}" 
                                             Minimum="0" Maximum="50" SmallChange="0.5" LargeChange="5"
                                             TickFrequency="10" TickPlacement="BottomRight"
                                             Width="140" Height="20" Margin="0,2,0,0"
-                                            Background="#666666" Foreground="#4A90E2"
+                                            Background="#666666" Foreground="{StaticResource SurfaceAccentCyanBrush}"
                                             ToolTip="Adjust shadow blur radius"/>
                                 </StackPanel>
                             </StackPanel>

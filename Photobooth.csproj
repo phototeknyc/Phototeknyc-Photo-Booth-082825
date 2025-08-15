@@ -234,9 +234,6 @@
     <Compile Include="Resources\Designer\Primitives\ResizeThumb.cs" />
     <Compile Include="Resources\Designer\Primitives\RotateThumb.cs" />
     <Compile Include="Resources\Designer\Primitives\RubberbandAdorner.cs" />
-    <Compile Include="WelcomeWindow.xaml.cs">
-      <DependentUpon>WelcomeWindow.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Windows\TemplateBrowserWindow.xaml.cs">
       <DependentUpon>TemplateBrowserWindow.xaml</DependentUpon>
     </Compile>
@@ -259,10 +256,6 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="MainWindow.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
     <Compile Include="Adorners\ResizeRotateAdorner.cs" />
     <Compile Include="Adorners\ResizeRotateChrome.cs" />
     <Compile Include="Adorners\SizeAdorner.cs" />
@@ -277,10 +270,6 @@
     </Compile>
     <Compile Include="Design\Canvas\CanvasContainer.xaml.cs">
       <DependentUpon>CanvasContainer.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="MainWindow.xaml.cs">
-      <DependentUpon>MainWindow.xaml</DependentUpon>
-      <SubType>Code</SubType>
     </Compile>
     <Page Include="Pages\BackgroundSettingControl.xaml">
       <Generator>MSBuild:Compile</Generator>
@@ -410,11 +399,11 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Controls\PixiEditorColorPickerDialog.xaml">
+    <Page Include="Resources\UnifiedTheme.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="WelcomeWindow.xaml">
+    <Page Include="Controls\PixiEditorColorPickerDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -485,6 +474,7 @@
     <Compile Include="Services\UILayoutService.cs" />
     <Compile Include="Services\CloudService.cs" />
     <Compile Include="Services\CloudShareProvider.cs" />
+    <Compile Include="Services\CloudShareServiceRuntime.cs" />
     <Compile Include="Pages\EventSelectionPage.xaml.cs">
       <DependentUpon>EventSelectionPage.xaml</DependentUpon>
     </Compile>

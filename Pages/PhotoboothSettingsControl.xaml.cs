@@ -3074,11 +3074,19 @@ namespace Photobooth.Pages
                 testTwilioButton.IsEnabled = false;
                 testTwilioButton.Content = "📤 Sending...";
 
-                // Save Twilio credentials temporarily
-                Environment.SetEnvironmentVariable("TWILIO_ACCOUNT_SID", twilioSidBox.Text);
-                Environment.SetEnvironmentVariable("TWILIO_AUTH_TOKEN", twilioAuthTokenBox.Password);
-                Environment.SetEnvironmentVariable("TWILIO_PHONE_NUMBER", twilioPhoneBox.Text);
+                // Save Twilio credentials temporarily - use User level to match SendSMSAsync
+                Environment.SetEnvironmentVariable("TWILIO_ACCOUNT_SID", twilioSidBox.Text, EnvironmentVariableTarget.User);
+                Environment.SetEnvironmentVariable("TWILIO_AUTH_TOKEN", twilioAuthTokenBox.Password, EnvironmentVariableTarget.User);
+                Environment.SetEnvironmentVariable("TWILIO_PHONE_NUMBER", twilioPhoneBox.Text, EnvironmentVariableTarget.User);
 
+                // Reset the provider to reload with new credentials
+                Services.CloudShareProvider.Reset();
+                
+                // Debug logging
+                System.Diagnostics.Debug.WriteLine($"Test SMS: Account SID = {twilioSidBox.Text}");
+                System.Diagnostics.Debug.WriteLine($"Test SMS: From Number = {twilioPhoneBox.Text}");
+                System.Diagnostics.Debug.WriteLine($"Test SMS: To Number = {testPhoneNumberBox.Text}");
+                
                 // Test SMS
                 var shareService = Services.CloudShareProvider.GetShareService();
                 var testMessage = $"🎉 Photobooth Test SMS\n\nThis is a test message from your photobooth app.\nTime: {DateTime.Now:g}\n\nTwilio integration is working!";
@@ -3127,6 +3135,10 @@ namespace Photobooth.Pages
                     Environment.SetEnvironmentVariable("TWILIO_AUTH_TOKEN", twilioAuthTokenBox.Password);
                     Environment.SetEnvironmentVariable("TWILIO_PHONE_NUMBER", twilioPhoneBox.Text);
                 }
+
+                // Reset the provider to force reload with new credentials
+                Services.CloudShareProvider.Reset();
+                System.Diagnostics.Debug.WriteLine("TestCloudConnection: Reset CloudShareProvider before testing");
 
                 // Test connection
                 var shareService = Services.CloudShareProvider.GetShareService();
@@ -3186,6 +3198,10 @@ namespace Photobooth.Pages
                 }
                 
                 Environment.SetEnvironmentVariable("CLOUD_SHARING_ENABLED", enableCloudSharingCheckBox.IsChecked.ToString(), EnvironmentVariableTarget.User);
+                
+                // Reset the cloud share provider to force reload with new settings
+                Services.CloudShareProvider.Reset();
+                System.Diagnostics.Debug.WriteLine("SaveCloudSettings: Reset CloudShareProvider to reload with new settings");
             }
             catch (Exception ex)
             {

@@ -84,7 +84,27 @@ namespace Photobooth.Services
         {
             try
             {
-                DebugService.LogDebug($"NavigateToPhotobooth: Checking existing window - PhotoboothWindow is null: {PhotoboothWindow == null}");
+                DebugService.LogDebug("NavigateToPhotobooth: Starting navigation within Surface window");
+                
+                // Find the Surface window
+                var surfaceWindow = Application.Current.Windows.OfType<SurfacePhotoBoothWindow>().FirstOrDefault();
+                if (surfaceWindow != null)
+                {
+                    DebugService.LogDebug("NavigateToPhotobooth: Found Surface window, navigating to PhotoboothTouchModern");
+                    
+                    // Create the PhotoboothTouchModern page with event and template data
+                    var photoboothPage = new Pages.PhotoboothTouchModern();
+                    
+                    // Navigate within the Surface window
+                    surfaceWindow.NavigateToPage(photoboothPage, "Photo Booth");
+                    surfaceWindow.Activate();
+                    
+                    DebugService.LogDebug("NavigateToPhotobooth: Navigation completed within Surface window");
+                    return;
+                }
+                
+                // Fallback: If no Surface window found (shouldn't happen normally)
+                DebugService.LogDebug("NavigateToPhotobooth: No Surface window found, creating standalone window as fallback");
                 
                 // Check if window is already open
                 if (PhotoboothWindow != null)
@@ -127,8 +147,8 @@ namespace Photobooth.Services
                 DebugService.LogDebug("NavigateToPhotobooth: Creating PhotoboothTouchModern page");
                 
                 // Create the PhotoboothTouchModern page with event and template data
-                var photoboothPage = new Pages.PhotoboothTouchModern();
-                PhotoboothWindow.Content = photoboothPage;
+                var photoboothTouchPage = new Pages.PhotoboothTouchModern();
+                PhotoboothWindow.Content = photoboothTouchPage;
                 
                 // Clean up reference when window is closed
                 PhotoboothWindow.Closed += (s, args) => 

@@ -181,5 +181,74 @@ namespace Photobooth.Pages
         {
             ViewModel?.ChangeCanvasOrientationCmd.Execute(null);
         }
+
+        private void BackToHome_Click(object sender, RoutedEventArgs e)
+        {
+            // Close the fullscreen template designer window to return to Surface window
+            var window = Window.GetWindow(this);
+            if (window != null)
+            {
+                window.Close();
+            }
+        }
+
+        private void LaunchPhotobooth_Click(object sender, RoutedEventArgs e)
+        {
+            DebugService.LogDebug("LaunchPhotobooth_Click called from toolbar - launching PhotoboothTouchModern directly");
+            
+            try
+            {
+                // Check if window is already open using shared PhotoboothService window
+                if (PhotoboothService.PhotoboothWindow != null)
+                {
+                    try
+                    {
+                        if (PhotoboothService.PhotoboothWindow.IsVisible)
+                        {
+                            // Bring existing window to front
+                            PhotoboothService.PhotoboothWindow.Activate();
+                            PhotoboothService.PhotoboothWindow.WindowState = WindowState.Maximized;
+                            return;
+                        }
+                    }
+                    catch
+                    {
+                        // Window was closed, clear the reference
+                        PhotoboothService.PhotoboothWindow = null;
+                    }
+                }
+                
+                // Create a new window for the modern photobooth touch interface
+                PhotoboothService.PhotoboothWindow = new Window
+                {
+                    Title = "Photobooth Touch Interface",
+                    WindowState = WindowState.Maximized,
+                    WindowStyle = WindowStyle.None, // Fullscreen for touch
+                    Content = new PhotoboothTouchModern(),
+                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Black)
+                };
+                
+                // Clean up reference when window is closed
+                PhotoboothService.PhotoboothWindow.Closed += (s, args) => 
+                {
+                    DebugService.LogDebug("PhotoboothWindow closed from toolbar, clearing reference");
+                    PhotoboothService.PhotoboothWindow = null;
+                    
+                    // Force command re-evaluation on the main thread
+                    Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        CommandManager.InvalidateRequerySuggested();
+                    }));
+                };
+                
+                PhotoboothService.PhotoboothWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                PhotoboothService.PhotoboothWindow = null; // Clear reference on error
+                MessageBox.Show($"Failed to open photobooth interface: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
     }
 }

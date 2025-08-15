@@ -5,26 +5,26 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
       xmlns:local="clr-namespace:Photobooth.Pages"
       mc:Ignorable="d" 
-      Background="#333333"
+      Background="{StaticResource SurfaceBackgroundBrush}"
       Title="Camera Settings">
 
     <Page.Resources>
         <!-- Modern Card Style -->
         <Style x:Key="SettingsCardStyle" TargetType="Border">
-            <Setter Property="Background" Value="#444444"/>
+            <Setter Property="Background" Value="{StaticResource SurfaceSecondaryBrush}"/>
             <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="Padding" Value="20"/>
             <Setter Property="Margin" Value="10"/>
-            <Setter Property="BorderBrush" Value="#666666"/>
+            <Setter Property="BorderBrush" Value="{StaticResource SurfaceBorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
 
         <!-- Setting Button Style -->
         <Style x:Key="SettingButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#555555"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{StaticResource SurfacePanelBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource SurfaceTextPrimaryBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#777777"/>
+            <Setter Property="BorderBrush" Value="{StaticResource SurfaceBorderBrush}"/>
             <Setter Property="Padding" Value="15,8"/>
             <Setter Property="Margin" Value="5"/>
             <Setter Property="FontSize" Value="14"/>
@@ -40,10 +40,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#666666"/>
+                                <Setter Property="Background" Value="{StaticResource SurfaceButtonHoverBrush}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#333333"/>
+                                <Setter Property="Background" Value="{StaticResource SurfacePrimaryBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -53,9 +53,9 @@
 
         <!-- ComboBox Style -->
         <Style x:Key="SettingComboBoxStyle" TargetType="ComboBox">
-            <Setter Property="Background" Value="#555555"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#777777"/>
+            <Setter Property="Background" Value="{StaticResource SurfacePanelBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource SurfaceTextPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource SurfaceBorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="10,5"/>
             <Setter Property="FontSize" Value="14"/>
@@ -64,7 +64,7 @@
         <!-- Prominent Test Capture Button Style -->
         <Style x:Key="TestCaptureButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="#FF4CAF50"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Foreground" Value="{StaticResource SurfaceTextPrimaryBrush}"/>
             <Setter Property="BorderThickness" Value="2"/>
             <Setter Property="BorderBrush" Value="#FF45A049"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -123,12 +123,12 @@
                         <TextBlock Text="Camera Settings" 
                                    FontSize="24" 
                                    FontWeight="Bold" 
-                                   Foreground="White" 
+                                   Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                    HorizontalAlignment="Center"/>
                         <TextBlock x:Name="cameraStatusText" 
                                    Text="Connecting to camera..." 
                                    FontSize="14" 
-                                   Foreground="#CCCCCC" 
+                                   Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
                                    HorizontalAlignment="Center" 
                                    TextWrapping="Wrap"
                                    Margin="0,10,0,0"/>
@@ -150,7 +150,7 @@
                         <TextBlock x:Name="testStatusText" 
                                    Text="Click to test current settings" 
                                    FontSize="14" 
-                                   Foreground="#CCCCCC" 
+                                   Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
                                    TextWrapping="Wrap"
                                    TextAlignment="Center"
                                    Margin="0,10,0,0"/>
@@ -158,10 +158,10 @@
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
                             <CheckBox x:Name="autoPreviewCheckBox" 
                                       IsChecked="False" 
-                                      Foreground="White"
+                                      Foreground="{StaticResource SurfaceTextPrimaryBrush}"
                                       Margin="0,0,8,0"/>
                             <TextBlock Text="Auto Preview (capture when settings change)" 
-                                       Foreground="White" 
+                                       Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                        VerticalAlignment="Center" 
                                        FontSize="12"/>
                         </StackPanel>
@@ -174,65 +174,65 @@
                         <TextBlock Text="Basic Settings" 
                                    FontSize="18" 
                                    FontWeight="Bold" 
-                                   Foreground="White" 
+                                   Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                    Margin="0,0,0,10"/>
                         
                         <!-- ISO -->
                         <StackPanel Margin="0,0,0,10">
-                            <TextBlock Text="ISO" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <TextBlock Text="ISO" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <Button x:Name="isoPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="IsoPrev_Click"/>
-                                <TextBlock x:Name="isoValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <TextBlock x:Name="isoValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
                                 <Button x:Name="isoNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="IsoNext_Click"/>
                             </StackPanel>
                         </StackPanel>
 
                         <!-- Aperture -->
                         <StackPanel Margin="0,0,0,10">
-                            <TextBlock Text="Aperture (f/)" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <TextBlock Text="Aperture (f/)" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <Button x:Name="aperturePrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="AperturePrev_Click"/>
-                                <TextBlock x:Name="apertureValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <TextBlock x:Name="apertureValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
                                 <Button x:Name="apertureNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="ApertureNext_Click"/>
                             </StackPanel>
                         </StackPanel>
 
                         <!-- Shutter Speed -->
                         <StackPanel Margin="0,0,0,10">
-                            <TextBlock Text="Shutter Speed" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <TextBlock Text="Shutter Speed" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <Button x:Name="shutterPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="ShutterPrev_Click"/>
-                                <TextBlock x:Name="shutterValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <TextBlock x:Name="shutterValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
                                 <Button x:Name="shutterNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="ShutterNext_Click"/>
                             </StackPanel>
                         </StackPanel>
 
                         <!-- White Balance -->
                         <StackPanel Margin="0,0,0,10">
-                            <TextBlock Text="White Balance" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <TextBlock Text="White Balance" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <Button x:Name="wbPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="WhiteBalancePrev_Click"/>
-                                <TextBlock x:Name="wbValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <TextBlock x:Name="wbValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
                                 <Button x:Name="wbNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="WhiteBalanceNext_Click"/>
                             </StackPanel>
                         </StackPanel>
 
                         <!-- Focus Mode -->
                         <StackPanel Margin="0,0,0,10">
-                            <TextBlock Text="Focus Mode" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <TextBlock Text="Focus Mode" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <Button x:Name="focusPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="FocusPrev_Click"/>
-                                <TextBlock x:Name="focusValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <TextBlock x:Name="focusValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
                                 <Button x:Name="focusNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="FocusNext_Click"/>
                             </StackPanel>
                         </StackPanel>
 
                         <!-- Exposure Compensation -->
                         <StackPanel Margin="0,0,0,0">
-                            <TextBlock Text="Exposure Compensation" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <TextBlock Text="Exposure Compensation" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <Button x:Name="exposurePrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="ExposurePrev_Click"/>
-                                <TextBlock x:Name="exposureValueText" Text="0" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <TextBlock x:Name="exposureValueText" Text="0" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
                                 <Button x:Name="exposureNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="ExposureNext_Click"/>
                             </StackPanel>
                         </StackPanel>
@@ -245,25 +245,25 @@
                         <TextBlock Text="Advanced Settings" 
                                    FontSize="18" 
                                    FontWeight="Bold" 
-                                   Foreground="White" 
+                                   Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                    Margin="0,0,0,10"/>
                         
                         <!-- Camera Mode -->
                         <StackPanel Margin="0,0,0,10">
-                            <TextBlock Text="Camera Mode" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <TextBlock Text="Camera Mode" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <Button x:Name="modePrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="ModePrev_Click"/>
-                                <TextBlock x:Name="modeValueText" Text="Auto" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <TextBlock x:Name="modeValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
                                 <Button x:Name="modeNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="ModeNext_Click"/>
                             </StackPanel>
                         </StackPanel>
 
                         <!-- Image Quality -->
                         <StackPanel Margin="0,0,0,0">
-                            <TextBlock Text="Image Quality" Foreground="White" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <TextBlock Text="Image Quality" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <Button x:Name="qualityPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" Click="QualityPrev_Click"/>
-                                <TextBlock x:Name="qualityValueText" Text="RAW+JPEG" Foreground="White" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                <TextBlock x:Name="qualityValueText" Text="RAW+JPEG" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
                                 <Button x:Name="qualityNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="QualityNext_Click"/>
                             </StackPanel>
                         </StackPanel>
@@ -299,13 +299,13 @@
                 <TextBlock Text="Live Preview" 
                            FontSize="24" 
                            FontWeight="Bold" 
-                           Foreground="White" 
+                           Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                            HorizontalAlignment="Center"
                            VerticalAlignment="Top"
                            Margin="0,0,0,20"/>
 
                 <!-- Preview Area -->
-                <Border Background="#222222" 
+                <Border Background="{StaticResource SurfacePrimaryBrush}" 
                         CornerRadius="10" 
                         Margin="0,50,0,0">
                     <Grid>
@@ -315,16 +315,16 @@
                                     HorizontalAlignment="Center">
                             <TextBlock Text="📷" 
                                        FontSize="120" 
-                                       Foreground="#666666" 
+                                       Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
                                        HorizontalAlignment="Center"/>
                             <TextBlock Text="Test image will appear here" 
                                        FontSize="20" 
-                                       Foreground="#666666" 
+                                       Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
                                        HorizontalAlignment="Center"
                                        Margin="0,20,0,0"/>
                             <TextBlock Text="Click 'Test Capture' to see results with current settings" 
                                        FontSize="14" 
-                                       Foreground="#888888" 
+                                       Foreground="{StaticResource SurfaceTextTertiaryBrush}" 
                                        HorizontalAlignment="Center"
                                        TextWrapping="Wrap"
                                        TextAlignment="Center"
@@ -349,17 +349,17 @@
                             <StackPanel>
                                 <TextBlock x:Name="captureTimeText" 
                                            Text="" 
-                                           Foreground="White" 
+                                           Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                            FontSize="14"
                                            FontWeight="Bold"/>
                                 <TextBlock x:Name="imageSettingsText" 
                                            Text="" 
-                                           Foreground="White" 
+                                           Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                            FontSize="13"
                                            Margin="0,5,0,0"/>
                                 <TextBlock x:Name="imageSizeText" 
                                            Text="" 
-                                           Foreground="White" 
+                                           Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
                                            FontSize="12"
                                            Margin="0,3,0,0"/>
                             </StackPanel>

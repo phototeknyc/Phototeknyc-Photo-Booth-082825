@@ -5,7 +5,7 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
       xmlns:local="clr-namespace:Photobooth.Pages"
       mc:Ignorable="d" 
-       d:DesignHeight="450" d:DesignWidth="200" Background="#333333"
+       d:DesignHeight="450" d:DesignWidth="200" Background="{StaticResource SurfaceBackgroundBrush}"
       Title="Properties">
 
     <Grid>
@@ -18,24 +18,24 @@
         <ScrollViewer Grid.Row="0" Grid.Column="0"  VerticalScrollBarVisibility="Auto" >
             <StackPanel Orientation="Vertical">
                 <StackPanel  Orientation="Vertical" Margin="0,2,0,2">
-                    <TextBlock Text="Selected" FontSize="16" Margin="10,5,0,5" FontWeight="Bold" Foreground="White" />
-                    <Border BorderThickness="0,0.5,0,0.5" BorderBrush="#CCCCCC" Padding="0,5,0,6">
+                    <TextBlock Text="Selected" FontSize="16" Margin="10,5,0,5" FontWeight="Bold" Foreground="{StaticResource SurfaceTextPrimaryBrush}" />
+                    <Border BorderThickness="0,0.5,0,0.5" BorderBrush="{StaticResource SurfaceBorderBrush}" Padding="0,5,0,6">
                         <StackPanel Orientation="Vertical">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" >
 
                                 <StackPanel Orientation="Vertical" VerticalAlignment="Bottom" HorizontalAlignment="Left" Cursor="Hand" MouseLeftButtonDown="StackPanel_MouseLeftButtonDown" >
-                                    <Image  x:Name="image" Source="/images/Padlock.png" Width="20" Stretch="UniformToFill" Margin="5,5,5,5"  VerticalAlignment="Center"  />
+                                    <TextBlock x:Name="lockIcon1" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Lock}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Margin="5,5,5,5" VerticalAlignment="Center" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="X:" FontSize="12" Foreground="White" Margin="1,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"  />
-                                    <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="1,5,5,5">
-                                        <TextBox x:Name="tbLocationX"  Width="50" Height="20"  VerticalAlignment="Center" Background="#242424"   Foreground="White" Text="2" BorderBrush="{x:Null}" HorizontalAlignment="Center" TextChanged="tbLocationX_TextChanged" />
+                                    <TextBlock Text="X:" FontSize="12" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Margin="1,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"  />
+                                    <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" CornerRadius="2" Margin="1,5,5,5">
+                                        <TextBox x:Name="tbLocationX"  Width="50" Height="20"  VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}"   Foreground="{StaticResource SurfaceTextPrimaryBrush}" Text="2" BorderBrush="{x:Null}" HorizontalAlignment="Center" TextChanged="tbLocationX_TextChanged" />
                                     </Border>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" >
-                                    <TextBlock Text="Y:" FontSize="12" Foreground="White" Margin="1,5,5,5" VerticalAlignment="Center"  HorizontalAlignment="Center"/>
-                                    <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="1,5,5,5">
-                                        <TextBox x:Name="tbLocationY" Width="50" Height="20"  VerticalAlignment="Center" Background="#242424"   Foreground="White" Text="6" BorderBrush="{x:Null}" TextChanged="tbLocationY_TextChanged" />
+                                    <TextBlock Text="Y:" FontSize="12" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Margin="1,5,5,5" VerticalAlignment="Center"  HorizontalAlignment="Center"/>
+                                    <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" CornerRadius="2" Margin="1,5,5,5">
+                                        <TextBox x:Name="tbLocationY" Width="50" Height="20"  VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}"   Foreground="{StaticResource SurfaceTextPrimaryBrush}" Text="6" BorderBrush="{x:Null}" TextChanged="tbLocationY_TextChanged" />
                                     </Border>
 
                                 </StackPanel>
@@ -43,18 +43,18 @@
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,4,0,0" >
 
                                 <StackPanel Orientation="Vertical" VerticalAlignment="Bottom" HorizontalAlignment="Left" Cursor="Hand" MouseLeftButtonDown="StackPanel_MouseLeftButtonDown_1" >
-                                    <Image  x:Name="image8" Source="/images/Padlock.png" Width="20" Stretch="UniformToFill" Margin="5,5,5,5" VerticalAlignment="Center"  />
+                                    <TextBlock x:Name="lockIcon2" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Lock}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Margin="5,5,5,5" VerticalAlignment="Center" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="W:" FontSize="12" Foreground="White" Margin="0,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"  />
-                                    <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="0,5,5,5">
-                                        <TextBox x:Name="tbSizeW" Width="50" Height="20"  VerticalAlignment="Center" Background="#242424"   Foreground="White" Text="300" BorderBrush="{x:Null}" HorizontalAlignment="Center" TextChanged="tbSizeW_TextChanged" />
+                                    <TextBlock Text="W:" FontSize="12" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Margin="0,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"  />
+                                    <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" CornerRadius="2" Margin="0,5,5,5">
+                                        <TextBox x:Name="tbSizeW" Width="50" Height="20"  VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}"   Foreground="{StaticResource SurfaceTextPrimaryBrush}" Text="300" BorderBrush="{x:Null}" HorizontalAlignment="Center" TextChanged="tbSizeW_TextChanged" />
                                     </Border>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="H:" FontSize="12" Foreground="White" Margin="0,5,5,5" VerticalAlignment="Center"  HorizontalAlignment="Center"/>
-                                    <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="0,5,5,5">
-                                        <TextBox x:Name="tbSizeH" Width="50" Height="20"  VerticalAlignment="Center" Background="#242424"   Foreground="White" Text="300" BorderBrush="{x:Null}" TextChanged="tbSizeH_TextChanged" />
+                                    <TextBlock Text="H:" FontSize="12" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Margin="0,5,5,5" VerticalAlignment="Center"  HorizontalAlignment="Center"/>
+                                    <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" CornerRadius="2" Margin="0,5,5,5">
+                                        <TextBox x:Name="tbSizeH" Width="50" Height="20"  VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}"   Foreground="{StaticResource SurfaceTextPrimaryBrush}" Text="300" BorderBrush="{x:Null}" TextChanged="tbSizeH_TextChanged" />
                                     </Border>
 
                                 </StackPanel>
@@ -63,8 +63,8 @@
                     </Border>
                 </StackPanel>
                 <StackPanel  Orientation="Vertical" Margin="0,2,0,2">
-                    <TextBlock Text="Alignments" FontSize="16" Margin="10,5,0,5" FontWeight="Bold" Foreground="White" />
-                    <Border BorderThickness="0,0.5,0,0.5" BorderBrush="#CCCCCC" Padding="0,5,0,6">
+                    <TextBlock Text="Alignments" FontSize="16" Margin="10,5,0,5" FontWeight="Bold" Foreground="{StaticResource SurfaceTextPrimaryBrush}" />
+                    <Border BorderThickness="0,0.5,0,0.5" BorderBrush="{StaticResource SurfaceBorderBrush}" Padding="0,5,0,6">
                         <Grid Width="200" VerticalAlignment="Center" HorizontalAlignment="Left" >
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
@@ -76,22 +76,22 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Image ToolTip="Left" Grid.Row="0" Cursor="Hand" Grid.Column="0" Source="\images\alignLeft.png" Width="25" Height="40" Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_2" />
+                            <TextBlock ToolTip="Left" Grid.Row="0" Cursor="Hand" Grid.Column="0" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignLeft}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_2" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                            <Image ToolTip="Center" Grid.Row="0" Cursor="Hand" Grid.Column="1" Source="\images\alignCenter.png" Width="25" Height="40"  Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_5"   />
-                            <Image ToolTip="Right" Grid.Row="0" Cursor="Hand" Grid.Column="2" Source="\images\alignRight.png" Width="25" Height="40"  Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_3" />
-                            <Image ToolTip="Top" Grid.Row="1" Cursor="Hand" Grid.Column="0" Source="\images\alignTop.png" Width="25" Height="40"  Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_4"  />
-                            <Image ToolTip="Baseline" Grid.Row="1" Cursor="Hand" Grid.Column="1" Source="\images\alignBaseLine.png" Width="25" Height="40"  Margin="5,5,5,5" />
-                            <Image ToolTip="Bottom" Grid.Row="1" Cursor="Hand" Grid.Column="2" Source="\images\alignBottom.png" Width="25" Height="40"  Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_7" />
-                            <Image ToolTip="Stretch Horizontal" Grid.Row="0" Cursor="Hand" Grid.Column="3" Source="\images\alignStretchHorizontal.png" Width="25" Height="40"  Margin="5,5,5,5" />
-                            <Image ToolTip="Stretch Vertical" Grid.Row="1" Cursor="Hand" Grid.Column="3" Source="\images\alignStretchVertical.png" Width="25" Height="40"  Margin="5,5,5,5" />
+                            <TextBlock ToolTip="Center" Grid.Row="0" Cursor="Hand" Grid.Column="1" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignCenter}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock ToolTip="Right" Grid.Row="0" Cursor="Hand" Grid.Column="2" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignRight}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_3" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock ToolTip="Top" Grid.Row="1" Cursor="Hand" Grid.Column="0" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignTop}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock ToolTip="Baseline" Grid.Row="1" Cursor="Hand" Grid.Column="1" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignMiddle}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" Margin="5,5,5,5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock ToolTip="Bottom" Grid.Row="1" Cursor="Hand" Grid.Column="2" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignBottom}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" Margin="5,5,5,5" MouseLeftButtonDown="Image_MouseLeftButtonDown_7" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock ToolTip="Stretch Horizontal" Grid.Row="0" Cursor="Hand" Grid.Column="3" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignStretchH}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" Margin="5,5,5,5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock ToolTip="Stretch Vertical" Grid.Row="1" Cursor="Hand" Grid.Column="3" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignStretchV}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" Margin="5,5,5,5" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
                         </Grid>
                     </Border>
                 </StackPanel>
                 <StackPanel  Orientation="Vertical" Margin="0,2,0,2">
-                    <TextBlock Text="Z-Order" FontSize="16" Margin="10,5,0,5" FontWeight="Bold" Foreground="White" />
-                    <Border BorderThickness="0,0.5,0,0.5" BorderBrush="#CCCCCC" Padding="0,5,0,6">
+                    <TextBlock Text="Z-Order" FontSize="16" Margin="10,5,0,5" FontWeight="Bold" Foreground="{StaticResource SurfaceTextPrimaryBrush}" />
+                    <Border BorderThickness="0,0.5,0,0.5" BorderBrush="{StaticResource SurfaceBorderBrush}" Padding="0,5,0,6">
                         <Grid Width="100" VerticalAlignment="Center" HorizontalAlignment="Left" >
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
@@ -101,9 +101,9 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Image ToolTip="Bring To Front" Grid.Row="0" Cursor="Hand" Grid.Column="0" Source="\images\bringToFront.png" Width="25" Height="40" MouseLeftButtonDown="Image_MouseLeftButtonDown" />
-                            <Image ToolTip="Send To Back" Grid.Row="0" Cursor="Hand" Grid.Column="1" Source="\images\sendToBack.png" Width="25" Height="40" MouseLeftButtonDown="Image_MouseLeftButtonDown_1"   />
-                            <Image ToolTip="Duplicate" Grid.Row="0" Cursor="Hand" Grid.Column="2" Source="\images\duplicate.png" Width="25" Height="40" MouseLeftButtonDown="Image_MouseLeftButtonDown_6"   />
+                            <TextBlock ToolTip="Bring To Front" Grid.Row="0" Cursor="Hand" Grid.Column="0" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Forward}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" MouseLeftButtonDown="Image_MouseLeftButtonDown" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock ToolTip="Send To Back" Grid.Row="0" Cursor="Hand" Grid.Column="1" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Back}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" MouseLeftButtonDown="Image_MouseLeftButtonDown_1" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock ToolTip="Duplicate" Grid.Row="0" Cursor="Hand" Grid.Column="2" FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Copy}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}" Width="25" Height="40" MouseLeftButtonDown="Image_MouseLeftButtonDown_6" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
                         </Grid>
                     </Border>
