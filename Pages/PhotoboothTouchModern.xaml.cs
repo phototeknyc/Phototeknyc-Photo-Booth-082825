@@ -436,6 +436,20 @@ namespace Photobooth.Pages
             }
         }
         
+        private void UpdateCountdownStatusText(string message)
+        {
+            // Only show countdown status text if ShowCountdown setting is enabled
+            if (Properties.Settings.Default.ShowCountdown)
+            {
+                statusText.Text = message;
+            }
+            else
+            {
+                // Don't show countdown text, but still allow other status messages
+                statusText.Text = "";
+            }
+        }
+        
         private void LoadEventTemplateWorkflow()
         {
             DebugService.LogDebug("PhotoboothTouch_Loaded called");
@@ -851,18 +865,14 @@ namespace Photobooth.Pages
             Log.Debug($"StartCountdown: Timer started, currentCountdown={currentCountdown}, overlay visible={countdownOverlay.Visibility}");
             Log.Debug($"StartCountdown: Timer IsEnabled after start={countdownTimer.IsEnabled}");
             
-            // Only update initial status text countdown if ShowCountdown is enabled
-            if (showCountdown)
+            // Update initial countdown status text
+            if (currentEvent != null && totalPhotosNeeded > 1)
             {
-                // Update countdown message based on event workflow
-                if (currentEvent != null && totalPhotosNeeded > 1)
-                {
-                    UpdateStatusText($"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Get ready! {currentCountdown}");
-                }
-                else
-                {
-                    UpdateStatusText($"Get ready! {currentCountdown}");
-                }
+                UpdateCountdownStatusText($"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Get ready! {currentCountdown}");
+            }
+            else
+            {
+                UpdateCountdownStatusText($"Get ready! {currentCountdown}");
             }
         }
 
@@ -875,19 +885,14 @@ namespace Photobooth.Pages
             {
                 countdownText.Text = currentCountdown.ToString();
                 
-                // Only update status text countdown if ShowCountdown is enabled
-                bool showCountdown = Properties.Settings.Default.ShowCountdown;
-                if (showCountdown)
+                // Update countdown status text
+                if (currentEvent != null && totalPhotosNeeded > 1)
                 {
-                    // Update countdown message based on event workflow
-                    if (currentEvent != null && totalPhotosNeeded > 1)
-                    {
-                        UpdateStatusText($"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Get ready! {currentCountdown}");
-                    }
-                    else
-                    {
-                        UpdateStatusText($"Get ready! {currentCountdown}");
-                    }
+                    UpdateCountdownStatusText($"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Get ready! {currentCountdown}");
+                }
+                else
+                {
+                    UpdateCountdownStatusText($"Get ready! {currentCountdown}");
                 }
             }
             else
@@ -899,7 +904,7 @@ namespace Photobooth.Pages
                 
                 if (currentEvent != null && totalPhotosNeeded > 1)
                 {
-                    statusText.Text = $"Taking photo {currentPhotoIndex + 1} of {totalPhotosNeeded}...";
+                    UpdateStatusText($"Taking photo {currentPhotoIndex + 1} of {totalPhotosNeeded}...");
                 }
                 else
                 {
@@ -921,7 +926,7 @@ namespace Photobooth.Pages
 
         private void CapturePhoto()
         {
-            statusText.Text = "Taking photo...";
+            UpdateStatusText("Taking photo...");
             Log.Debug($"=== CAPTURE DEBUG START - Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} ===");
             Log.Debug($"PhotoboothTouch: CapturePhoto called, camera type: {DeviceManager.SelectedCameraDevice?.GetType().Name}");
             Log.Debug($"PhotoboothTouch: Camera IsBusy: {DeviceManager.SelectedCameraDevice?.IsBusy}");
