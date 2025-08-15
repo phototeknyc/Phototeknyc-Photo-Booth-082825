@@ -1884,6 +1884,322 @@
                 </StackPanel>
             </Border>
             
+            <!-- Cloud Sharing Settings Section -->
+            <Border CornerRadius="10" Padding="20" Margin="0,15,0,0">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#1A1F3A" Offset="0"/>
+                        <GradientStop Color="#252B4A" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.BorderBrush>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#3A4060" Offset="0"/>
+                        <GradientStop Color="#4A5080" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.BorderThickness>1</Border.BorderThickness>
+                <StackPanel>
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="☁️ Cloud Sharing Settings" 
+                                   FontSize="18" FontWeight="Bold" Foreground="White"/>
+                        <CheckBox Grid.Column="1" x:Name="enableCloudSharingCheckBox"
+                                  Content="Enable Cloud Sharing" 
+                                  HorizontalAlignment="Right"
+                                  FontSize="14" Foreground="#BBB"
+                                  VerticalAlignment="Center"
+                                  IsChecked="False"
+                                  Checked="EnableCloudSharing_Changed"
+                                  Unchecked="EnableCloudSharing_Changed"/>
+                    </Grid>
+
+                    <!-- AWS S3 Settings -->
+                    <StackPanel x:Name="cloudSettingsPanel" IsEnabled="False">
+                        <TextBlock Text="Amazon S3 Configuration" FontWeight="Bold" FontSize="14" Foreground="#DDD" Margin="0,10,0,10"/>
+                        
+                        <TextBlock Text="AWS Access Key ID:" Style="{StaticResource SettingsTextStyle}"/>
+                        <TextBox x:Name="awsAccessKeyBox" 
+                                 Width="400" HorizontalAlignment="Left"
+                                 FontSize="14" Padding="8"
+                                 Background="#0F1320" Foreground="White" BorderBrush="#3A4060"
+                                 Margin="0,5,0,10"/>
+                        
+                        <TextBlock Text="AWS Secret Access Key:" Style="{StaticResource SettingsTextStyle}"/>
+                        <PasswordBox x:Name="awsSecretKeyBox" 
+                                     Width="400" HorizontalAlignment="Left"
+                                     FontSize="14" Padding="8"
+                                     Background="#0F1320" Foreground="White" BorderBrush="#3A4060"
+                                     Margin="0,5,0,10"/>
+                        
+                        <TextBlock Text="S3 Bucket Name:" Style="{StaticResource SettingsTextStyle}"/>
+                        <TextBox x:Name="s3BucketNameBox" 
+                                 Width="400" HorizontalAlignment="Left"
+                                 FontSize="14" Padding="8"
+                                 Background="#0F1320" Foreground="White" BorderBrush="#3A4060"
+                                 Text="photobooth-shares"
+                                 Margin="0,5,0,10"/>
+                        
+                        <TextBlock Text="Gallery Base URL:" Style="{StaticResource SettingsTextStyle}"/>
+                        <TextBox x:Name="galleryBaseUrlBox" 
+                                 Width="400" HorizontalAlignment="Left"
+                                 FontSize="14" Padding="8"
+                                 Background="#0F1320" Foreground="White" BorderBrush="#3A4060"
+                                 Text="https://photos.yourapp.com"
+                                 Margin="0,5,0,15"/>
+                        
+                        <!-- Twilio SMS Settings -->
+                        <TextBlock Text="Twilio SMS Configuration" FontWeight="Bold" FontSize="14" Foreground="#DDD" Margin="0,10,0,10"/>
+                        
+                        <CheckBox x:Name="enableSmsCheckBox"
+                                  Content="Enable SMS Sharing" 
+                                  FontSize="14" Foreground="#BBB"
+                                  IsChecked="False"
+                                  Checked="EnableSms_Changed"
+                                  Unchecked="EnableSms_Changed"
+                                  Margin="0,0,0,10"/>
+                        
+                        <StackPanel x:Name="smsSettingsPanel" IsEnabled="False">
+                            <TextBlock Text="Twilio Account SID:" Style="{StaticResource SettingsTextStyle}"/>
+                            <TextBox x:Name="twilioSidBox" 
+                                     Width="400" HorizontalAlignment="Left"
+                                     FontSize="14" Padding="8"
+                                     Background="#0F1320" Foreground="White" BorderBrush="#3A4060"
+                                     Margin="0,5,0,10"/>
+                            
+                            <TextBlock Text="Twilio Auth Token:" Style="{StaticResource SettingsTextStyle}"/>
+                            <PasswordBox x:Name="twilioAuthTokenBox" 
+                                         Width="400" HorizontalAlignment="Left"
+                                         FontSize="14" Padding="8"
+                                         Background="#0F1320" Foreground="White" BorderBrush="#3A4060"
+                                         Margin="0,5,0,10"/>
+                            
+                            <TextBlock Text="Twilio Phone Number (from):" Style="{StaticResource SettingsTextStyle}"/>
+                            <TextBox x:Name="twilioPhoneBox" 
+                                     Width="400" HorizontalAlignment="Left"
+                                     FontSize="14" Padding="8"
+                                     Background="#0F1320" Foreground="White" BorderBrush="#3A4060"
+                                     Margin="0,5,0,10"/>
+                            
+                            <Separator Margin="0,10,0,10" Background="#3A4060"/>
+                            
+                            <TextBlock Text="Test Phone Number (to send test SMS):" Style="{StaticResource SettingsTextStyle}"/>
+                            <Grid Margin="0,5,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="250"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="testPhoneNumberBox" 
+                                         Grid.Column="0"
+                                         FontSize="14" 
+                                         Padding="8"
+                                         Background="#0F1320" 
+                                         Foreground="White" 
+                                         BorderBrush="#3A4060"
+                                         ToolTip="Enter phone number to receive test SMS (e.g., +1234567890)"/>
+                                <TextBlock Grid.Column="1" 
+                                           Text="📝 Include country code" 
+                                           FontSize="11"
+                                           Foreground="#888"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0,0,0"/>
+                            </Grid>
+                        </StackPanel>
+                        
+                        <!-- Sharing Options -->
+                        <TextBlock Text="Sharing Options" FontWeight="Bold" FontSize="14" Foreground="#DDD" Margin="0,15,0,10"/>
+                        
+                        <CheckBox x:Name="autoShareCheckBox"
+                                  Content="Automatically share after session complete" 
+                                  FontSize="14" Foreground="#BBB"
+                                  IsChecked="False"
+                                  Margin="0,5,0,5"/>
+                        
+                        <CheckBox x:Name="optimizePhotosCheckBox"
+                                  Content="Optimize photos for web (reduce size)" 
+                                  FontSize="14" Foreground="#BBB"
+                                  IsChecked="True"
+                                  Margin="0,5,0,5"/>
+                        
+                        <CheckBox x:Name="cleanupAfterShareCheckBox"
+                                  Content="Delete local photos after successful upload" 
+                                  FontSize="14" Foreground="#BBB"
+                                  IsChecked="False"
+                                  Margin="0,5,0,10"/>
+                        
+                        <!-- Test Connection Buttons -->
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <Button x:Name="testCloudConnectionButton"
+                                    Content="☁️ Test AWS Connection" 
+                                    Width="180"
+                                    Height="40"
+                                    Margin="0,0,10,0"
+                                    Padding="15,8"
+                                    FontSize="14"
+                                    FontWeight="SemiBold"
+                                    Foreground="White"
+                                    Click="TestCloudConnection_Click">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background">
+                                            <Setter.Value>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#4299E1" Offset="0"/>
+                                                    <GradientStop Color="#3182CE" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="BorderBrush" Value="Transparent"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="border" 
+                                                            Background="{TemplateBinding Background}"
+                                                            CornerRadius="8"
+                                                            RenderTransformOrigin="0.5,0.5">
+                                                        <Border.RenderTransform>
+                                                            <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                                        </Border.RenderTransform>
+                                                        <Border.Effect>
+                                                            <DropShadowEffect Color="#3182CE" 
+                                                                            BlurRadius="15" 
+                                                                            ShadowDepth="0" 
+                                                                            Opacity="0.3"/>
+                                                        </Border.Effect>
+                                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                                        VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="border" Property="Background">
+                                                                <Setter.Value>
+                                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                        <GradientStop Color="#63B3ED" Offset="0"/>
+                                                                        <GradientStop Color="#4299E1" Offset="1"/>
+                                                                    </LinearGradientBrush>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Setter TargetName="border" Property="Effect">
+                                                                <Setter.Value>
+                                                                    <DropShadowEffect Color="#4299E1" 
+                                                                                    BlurRadius="20" 
+                                                                                    ShadowDepth="0" 
+                                                                                    Opacity="0.5"/>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </Trigger>
+                                                        <Trigger Property="IsPressed" Value="True">
+                                                            <Setter TargetName="border" Property="RenderTransform">
+                                                                <Setter.Value>
+                                                                    <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </Trigger>
+                                                        <Trigger Property="IsEnabled" Value="False">
+                                                            <Setter TargetName="border" Property="Background">
+                                                                <Setter.Value>
+                                                                    <SolidColorBrush Color="#4A5568"/>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Setter Property="Foreground" Value="#718096"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            
+                            <Button x:Name="testTwilioButton"
+                                    Content="📱 Test SMS" 
+                                    Width="140"
+                                    Height="40"
+                                    Padding="15,8"
+                                    FontSize="14"
+                                    FontWeight="SemiBold"
+                                    Foreground="White"
+                                    Click="TestTwilio_Click"
+                                    IsEnabled="{Binding ElementName=smsSettingsPanel, Path=IsEnabled}">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background">
+                                            <Setter.Value>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#9F7AEA" Offset="0"/>
+                                                    <GradientStop Color="#805AD5" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="BorderBrush" Value="Transparent"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="border" 
+                                                            Background="{TemplateBinding Background}"
+                                                            CornerRadius="8"
+                                                            RenderTransformOrigin="0.5,0.5">
+                                                        <Border.RenderTransform>
+                                                            <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                                        </Border.RenderTransform>
+                                                        <Border.Effect>
+                                                            <DropShadowEffect Color="#805AD5" 
+                                                                            BlurRadius="15" 
+                                                                            ShadowDepth="0" 
+                                                                            Opacity="0.3"/>
+                                                        </Border.Effect>
+                                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                                        VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="border" Property="Background">
+                                                                <Setter.Value>
+                                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                        <GradientStop Color="#B794F4" Offset="0"/>
+                                                                        <GradientStop Color="#9F7AEA" Offset="1"/>
+                                                                    </LinearGradientBrush>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Setter TargetName="border" Property="Effect">
+                                                                <Setter.Value>
+                                                                    <DropShadowEffect Color="#9F7AEA" 
+                                                                                    BlurRadius="20" 
+                                                                                    ShadowDepth="0" 
+                                                                                    Opacity="0.5"/>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </Trigger>
+                                                        <Trigger Property="IsPressed" Value="True">
+                                                            <Setter TargetName="border" Property="RenderTransform">
+                                                                <Setter.Value>
+                                                                    <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </Trigger>
+                                                        <Trigger Property="IsEnabled" Value="False">
+                                                            <Setter TargetName="border" Property="Background">
+                                                                <Setter.Value>
+                                                                    <SolidColorBrush Color="#4A5568"/>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Setter Property="Foreground" Value="#718096"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
             <!-- Action Buttons -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,40,0,40">
                 <Button Content="💾 Save Settings" 

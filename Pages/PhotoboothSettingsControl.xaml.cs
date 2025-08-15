@@ -174,6 +174,9 @@ namespace Photobooth.Pages
                 
                 // Update display texts
                 UpdateSliderTexts();
+                
+                // Load cloud settings
+                LoadCloudSettings();
             }
             catch (Exception)
             {
@@ -266,6 +269,7 @@ namespace Photobooth.Pages
             try
             {
                 SaveSettingsInternal();
+                SaveCloudSettings(); // Save cloud settings too
                 MessageBox.Show("Settings saved successfully!", "Photobooth Settings", 
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -3035,6 +3039,193 @@ namespace Photobooth.Pages
             }
         }
         
+        #endregion
+
+        #region Cloud Settings Event Handlers
+
+        private void EnableCloudSharing_Changed(object sender, RoutedEventArgs e)
+        {
+            if (cloudSettingsPanel != null)
+            {
+                cloudSettingsPanel.IsEnabled = enableCloudSharingCheckBox.IsChecked == true;
+            }
+        }
+
+        private void EnableSms_Changed(object sender, RoutedEventArgs e)
+        {
+            if (smsSettingsPanel != null)
+            {
+                smsSettingsPanel.IsEnabled = enableSmsCheckBox.IsChecked == true;
+            }
+        }
+
+        private async void TestTwilio_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Validate phone number
+                if (string.IsNullOrWhiteSpace(testPhoneNumberBox.Text))
+                {
+                    MessageBox.Show("Please enter a phone number to send the test SMS to.", 
+                        "Phone Number Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                testTwilioButton.IsEnabled = false;
+                testTwilioButton.Content = "📤 Sending...";
+
+                // Save Twilio credentials temporarily
+                Environment.SetEnvironmentVariable("TWILIO_ACCOUNT_SID", twilioSidBox.Text);
+                Environment.SetEnvironmentVariable("TWILIO_AUTH_TOKEN", twilioAuthTokenBox.Password);
+                Environment.SetEnvironmentVariable("TWILIO_PHONE_NUMBER", twilioPhoneBox.Text);
+
+                // Test SMS
+                var shareService = Services.CloudShareProvider.GetShareService();
+                var testMessage = $"🎉 Photobooth Test SMS\n\nThis is a test message from your photobooth app.\nTime: {DateTime.Now:g}\n\nTwilio integration is working!";
+                
+                bool sent = await shareService.SendSMSAsync(testPhoneNumberBox.Text, testMessage);
+
+                if (sent)
+                {
+                    MessageBox.Show($"✅ Test SMS sent successfully to {testPhoneNumberBox.Text}!\n\nCheck your phone for the message.", 
+                        "SMS Test Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show("⚠️ SMS test failed.\n\nPlease check:\n• Account SID is correct\n• Auth Token is correct\n• Phone number format (+1234567890)\n• Twilio account has SMS credits", 
+                        "SMS Test Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"❌ SMS test error:\n\n{ex.Message}", 
+                    "SMS Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                testTwilioButton.IsEnabled = true;
+                testTwilioButton.Content = "📱 Test SMS";
+            }
+        }
+
+        private async void TestCloudConnection_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                testCloudConnectionButton.IsEnabled = false;
+                testCloudConnectionButton.Content = "⏳ Testing...";
+
+                // Save credentials to environment variables temporarily for testing
+                Environment.SetEnvironmentVariable("AWS_ACCESS_KEY_ID", awsAccessKeyBox.Text);
+                Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", awsSecretKeyBox.Password);
+                Environment.SetEnvironmentVariable("S3_BUCKET_NAME", s3BucketNameBox.Text);
+                Environment.SetEnvironmentVariable("GALLERY_BASE_URL", galleryBaseUrlBox.Text);
+                
+                if (enableSmsCheckBox.IsChecked == true)
+                {
+                    Environment.SetEnvironmentVariable("TWILIO_ACCOUNT_SID", twilioSidBox.Text);
+                    Environment.SetEnvironmentVariable("TWILIO_AUTH_TOKEN", twilioAuthTokenBox.Password);
+                    Environment.SetEnvironmentVariable("TWILIO_PHONE_NUMBER", twilioPhoneBox.Text);
+                }
+
+                // Test connection
+                var shareService = Services.CloudShareProvider.GetShareService();
+                
+                // Try to create a test session
+                var testResult = await shareService.CreateShareableGalleryAsync(
+                    "test-" + Guid.NewGuid().ToString().Substring(0, 8),
+                    new List<string>());
+
+                if (testResult != null)
+                {
+                    MessageBox.Show("✅ Cloud connection successful!\n\nYour AWS credentials are valid.", 
+                        "Connection Test", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show("⚠️ Connection test failed.\n\nPlease check your credentials.", 
+                        "Connection Test", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"❌ Connection test failed:\n\n{ex.Message}", 
+                    "Connection Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                testCloudConnectionButton.IsEnabled = true;
+                testCloudConnectionButton.Content = "☁️ Test AWS Connection";
+            }
+        }
+
+        private void SaveCloudSettings()
+        {
+            // Save cloud settings to app settings or registry
+            try
+            {
+                // You could save to Properties.Settings.Default or registry
+                // For now, we'll use environment variables
+                if (enableCloudSharingCheckBox.IsChecked == true)
+                {
+                    Environment.SetEnvironmentVariable("AWS_ACCESS_KEY_ID", awsAccessKeyBox.Text, EnvironmentVariableTarget.User);
+                    Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", awsSecretKeyBox.Password, EnvironmentVariableTarget.User);
+                    Environment.SetEnvironmentVariable("S3_BUCKET_NAME", s3BucketNameBox.Text, EnvironmentVariableTarget.User);
+                    Environment.SetEnvironmentVariable("GALLERY_BASE_URL", galleryBaseUrlBox.Text, EnvironmentVariableTarget.User);
+                    
+                    if (enableSmsCheckBox.IsChecked == true)
+                    {
+                        Environment.SetEnvironmentVariable("TWILIO_ACCOUNT_SID", twilioSidBox.Text, EnvironmentVariableTarget.User);
+                        Environment.SetEnvironmentVariable("TWILIO_AUTH_TOKEN", twilioAuthTokenBox.Password, EnvironmentVariableTarget.User);
+                        Environment.SetEnvironmentVariable("TWILIO_PHONE_NUMBER", twilioPhoneBox.Text, EnvironmentVariableTarget.User);
+                    }
+                    
+                    Environment.SetEnvironmentVariable("CLOUD_AUTO_SHARE", autoShareCheckBox.IsChecked.ToString(), EnvironmentVariableTarget.User);
+                    Environment.SetEnvironmentVariable("CLOUD_OPTIMIZE_PHOTOS", optimizePhotosCheckBox.IsChecked.ToString(), EnvironmentVariableTarget.User);
+                    Environment.SetEnvironmentVariable("CLOUD_CLEANUP_AFTER", cleanupAfterShareCheckBox.IsChecked.ToString(), EnvironmentVariableTarget.User);
+                }
+                
+                Environment.SetEnvironmentVariable("CLOUD_SHARING_ENABLED", enableCloudSharingCheckBox.IsChecked.ToString(), EnvironmentVariableTarget.User);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error saving cloud settings: {ex.Message}");
+            }
+        }
+
+        private void LoadCloudSettings()
+        {
+            try
+            {
+                // Load cloud settings from environment variables
+                var cloudEnabled = Environment.GetEnvironmentVariable("CLOUD_SHARING_ENABLED", EnvironmentVariableTarget.User);
+                enableCloudSharingCheckBox.IsChecked = cloudEnabled == "True";
+                
+                awsAccessKeyBox.Text = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID", EnvironmentVariableTarget.User) ?? "";
+                awsSecretKeyBox.Password = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", EnvironmentVariableTarget.User) ?? "";
+                s3BucketNameBox.Text = Environment.GetEnvironmentVariable("S3_BUCKET_NAME", EnvironmentVariableTarget.User) ?? "photobooth-shares";
+                galleryBaseUrlBox.Text = Environment.GetEnvironmentVariable("GALLERY_BASE_URL", EnvironmentVariableTarget.User) ?? "https://photos.yourapp.com";
+                
+                twilioSidBox.Text = Environment.GetEnvironmentVariable("TWILIO_ACCOUNT_SID", EnvironmentVariableTarget.User) ?? "";
+                twilioAuthTokenBox.Password = Environment.GetEnvironmentVariable("TWILIO_AUTH_TOKEN", EnvironmentVariableTarget.User) ?? "";
+                twilioPhoneBox.Text = Environment.GetEnvironmentVariable("TWILIO_PHONE_NUMBER", EnvironmentVariableTarget.User) ?? "";
+                
+                enableSmsCheckBox.IsChecked = !string.IsNullOrEmpty(twilioSidBox.Text);
+                
+                autoShareCheckBox.IsChecked = Environment.GetEnvironmentVariable("CLOUD_AUTO_SHARE", EnvironmentVariableTarget.User) == "True";
+                optimizePhotosCheckBox.IsChecked = Environment.GetEnvironmentVariable("CLOUD_OPTIMIZE_PHOTOS", EnvironmentVariableTarget.User) != "False";
+                cleanupAfterShareCheckBox.IsChecked = Environment.GetEnvironmentVariable("CLOUD_CLEANUP_AFTER", EnvironmentVariableTarget.User) == "True";
+                
+                // Update UI state
+                EnableCloudSharing_Changed(null, null);
+                EnableSms_Changed(null, null);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading cloud settings: {ex.Message}");
+            }
+        }
+
         #endregion
     }
 }
