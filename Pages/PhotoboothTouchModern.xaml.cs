@@ -95,12 +95,16 @@ namespace Photobooth.Pages
         private string currentSessionGuid = null;
         private List<int> currentSessionPhotoIds = new List<int>();
         
+        // SMS phone pad tracking
+        private string _smsPhoneNumber = "+1";
+        
         // Cloud sharing services
         private SessionManager sessionManager;
         private SimpleShareService shareService;
         private Photobooth.Models.PhotoSession currentPhotoSession;
         private DispatcherTimer shareOverlayTimer;
         private int shareOverlayCountdown;
+        private OfflineQueueService _cachedOfflineQueueService;
         
         // UI Layout Service
         private UILayoutService uiLayoutService;
@@ -343,6 +347,12 @@ namespace Photobooth.Pages
             isCapturing = false;
             countdownOverlay.Visibility = Visibility.Collapsed;
             
+            // Update sharing buttons visibility
+            UpdateSharingButtonsVisibility();
+            
+            // Start sync status monitoring
+            StartSyncStatusMonitoring();
+            
             // Show start button initially only if we have a template selected
             if (startButtonOverlay != null)
             {
@@ -401,6 +411,9 @@ namespace Photobooth.Pages
                 
                 Log.Debug("PhotoboothTouch_Loaded: Interface started in locked state");
             }
+            
+            // Initialize cloud sync status
+            UpdateCloudSyncStatus();
             
             // Use exact same synchronous approach as working Camera.xaml.cs
             try
@@ -750,6 +763,9 @@ namespace Photobooth.Pages
                 lastProcessedImagePathForPrinting = null;
                 lastProcessedWas2x6Template = false;
                 
+                // Clear sharing state
+                currentShareResult = null;
+                
                 // Hide print button when starting a new session
                 HidePrintButton();
                 
@@ -762,6 +778,9 @@ namespace Photobooth.Pages
             try
             {
                 isCapturing = true;
+                
+                // Hide sharing buttons during capture
+                UpdateSharingButtonsVisibility();
                 
                 // Show stop button when starting sequence
                 if (stopSessionButton != null)
@@ -1142,6 +1161,9 @@ namespace Photobooth.Pages
         {
             isCapturing = false;
             countdownTimer.Stop();
+            
+            // Show sharing buttons again when capture stops
+            UpdateSharingButtonsVisibility();
             liveViewTimer.Stop();
             countdownOverlay.Visibility = Visibility.Collapsed;
             
@@ -2123,7 +2145,7 @@ namespace Photobooth.Pages
                 }
                 
                 string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                string outputPath = Path.Combine(outputDir, $"{currentEvent.Name}_{currentTemplate.Name}_{timestamp}.jpg");
+                string outputPath = Path.Combine(outputDir, $"{currentEvent.Name}_{timestamp}.jpg");
                 
                 // Save as high-quality JPEG
                 var jpegEncoder = ImageCodecInfo.GetImageEncoders()
@@ -2138,6 +2160,9 @@ namespace Photobooth.Pages
                 
                 // Store the display path
                 lastProcessedImagePath = outputPath;
+                
+                // Update sharing buttons visibility now that we have a processed image
+                UpdateSharingButtonsVisibility();
                 
                 // Save composed image to database
                 string outputFormat = is2x6Template ? "2x6" : "4x6";
@@ -2155,7 +2180,7 @@ namespace Photobooth.Pages
                     
                     using (var duplicatedBitmap = Create4x6From2x6(finalBitmap))
                     {
-                        string printPath = Path.Combine(outputDir, $"{currentEvent.Name}_{currentTemplate.Name}_{timestamp}_4x6_print.jpg");
+                        string printPath = Path.Combine(outputDir, $"{currentEvent.Name}_{timestamp}_4x6_print.jpg");
                         duplicatedBitmap.Save(printPath, jpegEncoder, encoderParams);
                         lastProcessedImagePathForPrinting = printPath;
                         Log.Debug($"ComposeTemplateWithPhotos: Saved 4x6 print version to {printPath}");
@@ -4551,6 +4576,14 @@ namespace Photobooth.Pages
         private string _enteredPin = "";
         private Action _pendingActionAfterUnlock = null;
         
+        // PIN pad modes
+        private enum PinPadMode
+        {
+            Unlock,
+            PhoneNumber
+        }
+        private PinPadMode _currentPinMode = PinPadMode.Unlock;
+        
         private void LockButton_Click(object sender, RoutedEventArgs e)
         {
             if (!_isLocked)
@@ -4626,7 +4659,10 @@ namespace Photobooth.Pages
         
         private void PinPadButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button button && _enteredPin.Length < 6)
+            // Different limits based on mode
+            int maxLength = _currentPinMode == PinPadMode.PhoneNumber ? 15 : 6;
+            
+            if (sender is Button button && _enteredPin.Length < maxLength)
             {
                 // Extract the number from the button content
                 string digit = "";
@@ -4645,8 +4681,138 @@ namespace Photobooth.Pages
                 if (!string.IsNullOrEmpty(digit))
                 {
                     _enteredPin += digit;
-                    pinDisplayBox.Text = new string('●', _enteredPin.Length);
+                    
+                    // Display differently based on mode
+                    if (_currentPinMode == PinPadMode.PhoneNumber)
+                    {
+                        // Show actual phone number
+                        pinDisplayBox.Text = FormatPhoneNumber(_enteredPin);
+                    }
+                    else
+                    {
+                        // Show dots for PIN
+                        pinDisplayBox.Text = new string('●', _enteredPin.Length);
+                    }
+                    
                     UpdatePinDots();
+                    
+                    // Handle phone number completion (10+ digits)
+                    if (_currentPinMode == PinPadMode.PhoneNumber && _enteredPin.Length >= 10)
+                    {
+                        // Auto-proceed with SMS after entering phone number
+                        Task.Delay(500).ContinueWith(_ => 
+                        {
+                            Dispatcher.Invoke(async () => await HandlePhoneNumberComplete());
+                        });
+                    }
+                }
+            }
+        }
+
+        private string FormatPhoneNumber(string phoneNumber)
+        {
+            // Basic phone number formatting
+            if (phoneNumber.Length >= 10)
+            {
+                return $"({phoneNumber.Substring(0, 3)}) {phoneNumber.Substring(3, 3)}-{phoneNumber.Substring(6)}";
+            }
+            else if (phoneNumber.Length >= 6)
+            {
+                return $"({phoneNumber.Substring(0, 3)}) {phoneNumber.Substring(3)}-";
+            }
+            else if (phoneNumber.Length >= 3)
+            {
+                return $"({phoneNumber.Substring(0, 3)}) {phoneNumber.Substring(3)}";
+            }
+            else
+            {
+                return phoneNumber;
+            }
+        }
+
+        private async Task HandlePhoneNumberComplete()
+        {
+            try
+            {
+                // Hide PIN pad
+                pinEntryOverlay.Visibility = Visibility.Collapsed;
+                _currentPinMode = PinPadMode.Unlock; // Reset mode
+                
+                // Send SMS with photos
+                await SendSMSWithPhotos(_enteredPin);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"HandlePhoneNumberComplete: Error sending SMS: {ex.Message}");
+                ShowSimpleMessage($"Failed to send SMS: {ex.Message}");
+            }
+        }
+
+        private async Task SendSMSWithPhotos(string phoneNumber)
+        {
+            string sessionGuid = currentSessionGuid;
+            try
+            {
+                var cloudService = CloudShareProvider.GetShareService();
+                
+                // Use current share result (should already be uploaded at this point)
+                if (currentShareResult != null && !string.IsNullOrEmpty(currentShareResult.GalleryUrl))
+                {
+                    // Send SMS
+                    bool smsSuccess = await cloudService.SendSMSAsync(phoneNumber, currentShareResult.GalleryUrl);
+                    
+                    // Log SMS send result in database
+                    try
+                    {
+                        var db = new Database.TemplateDatabase();
+                        db.LogSMSSend(sessionGuid, phoneNumber, currentShareResult.GalleryUrl, smsSuccess, 
+                                     smsSuccess ? null : "SMS sending failed");
+                        Log.Debug($"Logged SMS send result to database for session {sessionGuid}");
+                    }
+                    catch (Exception dbEx)
+                    {
+                        Log.Error($"Failed to log SMS send to database: {dbEx.Message}");
+                    }
+                    
+                    if (smsSuccess)
+                    {
+                        ShowSimpleMessage("SMS sent successfully!");
+                    }
+                    else
+                    {
+                        ShowSimpleMessage("Failed to send SMS. Please check phone number and try again.");
+                    }
+                }
+                else
+                {
+                    ShowSimpleMessage("No uploaded photos available for SMS sharing.");
+                    
+                    // Log failed attempt
+                    try
+                    {
+                        var db = new Database.TemplateDatabase();
+                        db.LogSMSSend(sessionGuid, phoneNumber, "", false, "No uploaded photos available");
+                    }
+                    catch (Exception dbEx)
+                    {
+                        Log.Error($"Failed to log SMS failure to database: {dbEx.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SendSMSWithPhotos: Error: {ex.Message}");
+                ShowSimpleMessage($"SMS sending failed: {ex.Message}");
+                
+                // Log exception
+                try
+                {
+                    var db = new Database.TemplateDatabase();
+                    db.LogSMSSend(sessionGuid, phoneNumber, currentShareResult?.GalleryUrl ?? "", false, ex.Message);
+                }
+                catch (Exception dbEx)
+                {
+                    Log.Error($"Failed to log SMS exception to database: {dbEx.Message}");
                 }
             }
         }
@@ -4725,6 +4891,7 @@ namespace Photobooth.Pages
             pinEntryOverlay.Visibility = Visibility.Collapsed;
             _enteredPin = "";
             pinDisplayBox.Text = "";
+            _currentPinMode = PinPadMode.Unlock; // Reset to default mode
         }
         
         #endregion
@@ -4777,6 +4944,360 @@ namespace Photobooth.Pages
             }
         }
         
+        private void UpdateCloudSyncStatus()
+        {
+            try
+            {
+                // Check if cloud sync is configured - read from User environment variables
+                string bucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME", EnvironmentVariableTarget.User);
+                string accessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID", EnvironmentVariableTarget.User);
+                string secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", EnvironmentVariableTarget.User);
+                
+                if (!string.IsNullOrEmpty(bucketName) && !string.IsNullOrEmpty(accessKey) && !string.IsNullOrEmpty(secretKey))
+                {
+                    // Cloud sync is configured
+                    cloudSyncStatusText.Text = "☁️ Connected";
+                    cloudSyncStatusText.Foreground = new SolidColorBrush(Colors.LimeGreen);
+                    cloudSyncBucketText.Text = bucketName;
+                    cloudSyncBucketText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(136, 136, 136));
+                    Log.Debug($"UpdateCloudSyncStatus: Cloud sync configured with bucket {bucketName}");
+                }
+                else
+                {
+                    // Cloud sync not configured
+                    cloudSyncStatusText.Text = "☁️ Not Configured";
+                    cloudSyncStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 152, 0)); // Orange
+                    cloudSyncBucketText.Text = "Setup in settings";
+                    cloudSyncBucketText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(136, 136, 136));
+                    Log.Debug("UpdateCloudSyncStatus: Cloud sync not configured");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"UpdateCloudSyncStatus: Error checking cloud sync status: {ex.Message}");
+                cloudSyncStatusText.Text = "☁️ Error";
+                cloudSyncStatusText.Foreground = new SolidColorBrush(Colors.Red);
+                cloudSyncBucketText.Text = "Check settings";
+                cloudSyncBucketText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(136, 136, 136));
+            }
+        }
+        
+        private void ShowUploadProgress(bool show, string statusMessage = null, double progress = 0)
+        {
+            try
+            {
+                if (show)
+                {
+                    cloudUploadStatusPanel.Visibility = Visibility.Visible;
+                    cloudUploadProgress.Value = progress;
+                    if (!string.IsNullOrEmpty(statusMessage))
+                    {
+                        cloudUploadStatusText.Text = statusMessage;
+                    }
+                }
+                else
+                {
+                    cloudUploadStatusPanel.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShowUploadProgress: Error updating upload progress: {ex.Message}");
+            }
+        }
+        
+        private async void TriggerCloudSharing()
+        {
+            try
+            {
+                Log.Debug("TriggerCloudSharing: Starting cloud sharing process");
+                
+                // Check if cloud sharing is enabled
+                string cloudEnabled = Environment.GetEnvironmentVariable("CLOUD_SHARING_ENABLED", EnvironmentVariableTarget.User);
+                Log.Debug($"TriggerCloudSharing: CLOUD_SHARING_ENABLED = '{cloudEnabled}'");
+                
+                if (cloudEnabled != "True")
+                {
+                    Log.Debug("TriggerCloudSharing: Cloud sharing is not enabled, skipping");
+                    return;
+                }
+                
+                // Check if we have photos to share
+                if (capturedPhotoPaths == null || capturedPhotoPaths.Count == 0)
+                {
+                    Log.Debug("TriggerCloudSharing: No photos to share");
+                    return;
+                }
+                
+                Log.Debug($"TriggerCloudSharing: Have {capturedPhotoPaths.Count} captured photos to upload");
+                
+                // Also include the composed image if available
+                var photosToUpload = new List<string>(capturedPhotoPaths);
+                if (!string.IsNullOrEmpty(lastProcessedImagePath) && File.Exists(lastProcessedImagePath))
+                {
+                    photosToUpload.Add(lastProcessedImagePath);
+                    Log.Debug($"TriggerCloudSharing: Added composed image, total photos: {photosToUpload.Count}");
+                }
+                
+                // Generate session ID
+                string sessionId = currentSessionGuid ?? Guid.NewGuid().ToString();
+                Log.Debug($"TriggerCloudSharing: Using session ID: {sessionId}");
+                
+                // Show upload progress
+                ShowUploadProgress(true, "Uploading photos...", 0);
+                
+                // Get the share service
+                var cloudShareService = Services.CloudShareProvider.GetShareService();
+                Log.Debug($"TriggerCloudSharing: Got share service: {cloudShareService?.GetType().Name}");
+                
+                // Check if we're using stub service
+                if (cloudShareService is StubShareService)
+                {
+                    Log.Debug("WARNING: TriggerCloudSharing: Using StubShareService - cloud features not available!");
+                }
+                
+                // Upload photos and create gallery
+                Log.Debug("TriggerCloudSharing: Calling CreateShareableGalleryAsync...");
+                var shareResult = await cloudShareService.CreateShareableGalleryAsync(sessionId, photosToUpload);
+                
+                Log.Debug($"TriggerCloudSharing: Upload result - Success: {shareResult.Success}, " +
+                         $"GalleryUrl: {shareResult.GalleryUrl}, " +
+                         $"UploadedPhotos: {shareResult.UploadedPhotos?.Count ?? 0}, " +
+                         $"Error: {shareResult.ErrorMessage}");
+                
+                if (shareResult.Success)
+                {
+                    ShowUploadProgress(true, "Upload complete!", 100);
+                    Log.Debug($"TriggerCloudSharing: Successfully uploaded {shareResult.UploadedPhotos.Count} photos");
+                    
+                    // Wait a moment then hide progress
+                    await Task.Delay(2000);
+                    ShowUploadProgress(false);
+                    
+                    // Check if this is a local URL (stub service result)
+                    if (shareResult.GalleryUrl?.StartsWith("file:///") == true)
+                    {
+                        Log.Debug("WARNING: TriggerCloudSharing: Got local file URL - stub service is being used");
+                        // Still show the overlay but indicate it's local
+                    }
+                    
+                    // Show sharing overlay with QR code
+                    ShowSharingOverlay(shareResult);
+                }
+                else
+                {
+                    ShowUploadProgress(true, "Upload failed", 0);
+                    Log.Error($"TriggerCloudSharing: Upload failed - {shareResult.ErrorMessage}");
+                    
+                    // Hide progress after showing error
+                    await Task.Delay(2000);
+                    ShowUploadProgress(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TriggerCloudSharing: Exception during cloud sharing: {ex}", ex);
+                ShowUploadProgress(false);
+            }
+        }
+        
+        private ShareResult currentShareResult;
+        
+        private void ShowSharingOverlay(ShareResult shareResult)
+        {
+            try
+            {
+                Log.Debug($"ShowSharingOverlay: Starting - GalleryUrl: {shareResult?.GalleryUrl}");
+                currentShareResult = shareResult;
+                
+                // Show the QR code if available
+                if (shareResult.QRCodeImage != null)
+                {
+                    Log.Debug("ShowSharingOverlay: QR code image available");
+                    if (qrCodeImage != null)
+                    {
+                        qrCodeImage.Source = shareResult.QRCodeImage;
+                        Log.Debug("ShowSharingOverlay: QR code set to image control");
+                    }
+                    else
+                    {
+                        Log.Debug("WARNING: ShowSharingOverlay: qrCodeImage control is null!");
+                    }
+                }
+                else
+                {
+                    Log.Debug("WARNING: ShowSharingOverlay: No QR code image in share result");
+                }
+                
+                // Show the gallery URL
+                if (galleryUrlText != null && !string.IsNullOrEmpty(shareResult.GalleryUrl))
+                {
+                    var urlToDisplay = shareResult.ShortUrl ?? shareResult.GalleryUrl;
+                    Log.Debug($"ShowSharingOverlay: URL to display - ShortUrl: '{shareResult.ShortUrl}', GalleryUrl: '{shareResult.GalleryUrl}'");
+                    Log.Debug($"ShowSharingOverlay: Setting text to: '{urlToDisplay}'");
+                    Log.Debug($"ShowSharingOverlay: URL char by char: {string.Join(" ", urlToDisplay.Select(c => $"{c}({(int)c})"))}");
+                    galleryUrlText.Text = urlToDisplay;
+                    Log.Debug($"ShowSharingOverlay: Gallery URL text set to: {galleryUrlText.Text}");
+                }
+                else
+                {
+                    Log.Debug($"WARNING: ShowSharingOverlay: galleryUrlText is {(galleryUrlText == null ? "null" : "not null")}, GalleryUrl: {shareResult?.GalleryUrl}");
+                }
+                
+                // Show the sharing overlay
+                if (sharingOverlay != null)
+                {
+                    Log.Debug("ShowSharingOverlay: Making overlay visible");
+                    sharingOverlay.Visibility = Visibility.Visible;
+                    
+                    // Make sure it's on top
+                    Panel.SetZIndex(sharingOverlay, 999);
+                    
+                    // Animate overlay appearance
+                    var fadeIn = new DoubleAnimation
+                    {
+                        From = 0,
+                        To = 1,
+                        Duration = TimeSpan.FromMilliseconds(300)
+                    };
+                    sharingOverlay.BeginAnimation(OpacityProperty, fadeIn);
+                    Log.Debug("ShowSharingOverlay: Animation started");
+                }
+                else
+                {
+                    Log.Error("ShowSharingOverlay: sharingOverlay is null!");
+                }
+                
+                Log.Debug("ShowSharingOverlay: Sharing overlay displayed successfully");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShowSharingOverlay: Exception occurred: {ex.Message}", ex);
+            }
+        }
+        
+        private async void SendSMS_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // SMS now works with or without uploaded photos (using offline queue)
+                
+                // Get phone number from input
+                if (phoneNumberTextBox == null || string.IsNullOrEmpty(phoneNumberTextBox.Text))
+                {
+                    Log.Debug("SendSMS_Click: No phone number entered");
+                    ShowSimpleMessage("Please enter a phone number");
+                    return;
+                }
+                
+                string phoneNumber = phoneNumberTextBox.Text.Trim();
+                
+                // Validate phone number format (basic validation)
+                if (!phoneNumber.StartsWith("+"))
+                {
+                    // Assume US number if no country code
+                    phoneNumber = "+1" + phoneNumber.Replace("-", "").Replace(" ", "").Replace("(", "").Replace(")", "");
+                }
+                
+                // Show queueing status
+                if (sendSmsButton != null)
+                {
+                    sendSmsButton.IsEnabled = false;
+                    sendSmsButton.Content = "Queueing...";
+                }
+                
+                // Get gallery URL from current share result or use pending URL
+                string galleryUrl = currentShareResult?.GalleryUrl;
+                string sessionId = currentSessionGuid ?? Guid.NewGuid().ToString();
+                
+                // If no gallery URL, this means photos are pending upload
+                if (string.IsNullOrEmpty(galleryUrl))
+                {
+                    galleryUrl = $"https://photos.app/pending/{sessionId}";
+                    Log.Debug($"SendSMS_Click: Using pending URL: {galleryUrl}");
+                }
+                
+                // Use cached offline queue service for SMS (works offline)
+                var queueService = GetOrCreateOfflineQueueService();
+                var queueResult = await queueService.QueueSMS(phoneNumber, galleryUrl, sessionId);
+                
+                if (queueResult.Success)
+                {
+                    Log.Debug($"SendSMS_Click: SMS queued successfully for {phoneNumber}");
+                    
+                    // Log SMS in the database as well
+                    try
+                    {
+                        var db = new Database.TemplateDatabase();
+                        db.LogSMSSend(sessionId, phoneNumber, galleryUrl, queueResult.Immediate, 
+                                     queueResult.Immediate ? null : "Queued for sending when online");
+                        Log.Debug($"Logged SMS queue result to database for session {sessionId}");
+                    }
+                    catch (Exception dbEx)
+                    {
+                        Log.Error($"Failed to log SMS to database: {dbEx.Message}");
+                    }
+                    
+                    // Show success status on button
+                    if (sendSmsButton != null)
+                    {
+                        if (queueResult.Immediate)
+                        {
+                            sendSmsButton.Content = "Sent ✓";
+                            ShowSimpleMessage("SMS sent successfully!");
+                        }
+                        else
+                        {
+                            sendSmsButton.Content = "Queued ✓";
+                            ShowSimpleMessage("SMS queued for sending when online");
+                        }
+                    }
+                    
+                    // Clear phone number after successful queue
+                    await Task.Delay(2000);
+                    if (phoneNumberTextBox != null)
+                    {
+                        phoneNumberTextBox.Text = "";
+                    }
+                    if (sendSmsButton != null)
+                    {
+                        sendSmsButton.Content = "Send";
+                        sendSmsButton.IsEnabled = true;
+                    }
+                }
+                else
+                {
+                    Log.Error($"SendSMS_Click: Failed to queue SMS: {queueResult.Message}");
+                    
+                    if (sendSmsButton != null)
+                    {
+                        sendSmsButton.Content = "Failed";
+                    }
+                    ShowSimpleMessage($"Failed to queue SMS: {queueResult.Message}");
+                    
+                    // Reset button after showing error
+                    await Task.Delay(2000);
+                    if (sendSmsButton != null)
+                    {
+                        sendSmsButton.Content = "Send";
+                        sendSmsButton.IsEnabled = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SendSMS_Click: Error queueing SMS: {ex.Message}");
+                ShowSimpleMessage($"SMS queueing failed: {ex.Message}");
+                
+                // Reset button
+                if (sendSmsButton != null)
+                {
+                    sendSmsButton.Content = "Send";
+                    sendSmsButton.IsEnabled = true;
+                }
+            }
+        }
+        
         private void ShowPrintButton()
         {
             Log.Debug("ShowPrintButton: Called - attempting to show print button");
@@ -4811,6 +5332,9 @@ namespace Photobooth.Pages
             {
                 Log.Error("ShowPrintButton: Print button is null!");
             }
+            
+            // Note: Cloud sharing is now handled by separate sharing buttons
+            // No automatic popup - users control sharing via QR code and SMS buttons
         }
         
         private void HidePrintButton()
@@ -5191,6 +5715,8 @@ namespace Photobooth.Pages
                 // Set current session data
                 currentEvent = database.GetEvent(sessionData.EventId);
                 currentTemplate = database.GetTemplate(sessionData.TemplateId);
+                currentDatabaseSessionId = sessionData.Id;
+                currentSessionGuid = sessionData.SessionGuid;
                 
                 if (currentEvent == null || currentTemplate == null)
                 {
@@ -5260,6 +5786,9 @@ namespace Photobooth.Pages
                     StartAutoClearTimer();
                 }
                 
+                // Check for existing gallery URL and update sharing buttons accordingly
+                CheckAndLoadGalleryUrl(sessionData.SessionGuid);
+                
                 Log.Debug($"LoadSessionData: Session '{sessionData.SessionName}' loaded successfully");
             }
             catch (Exception ex)
@@ -5267,6 +5796,53 @@ namespace Photobooth.Pages
                 Log.Error($"LoadSessionData: Error loading session data: {ex.Message}");
                 statusText.Text = $"Error loading session: {ex.Message}";
                 throw;
+            }
+        }
+        
+        private void CheckAndLoadGalleryUrl(string sessionGuid)
+        {
+            try
+            {
+                Log.Debug($"CheckAndLoadGalleryUrl: Checking for existing gallery URL for session {sessionGuid}");
+                
+                // Check database for existing gallery URL
+                var galleryUrl = database.GetPhotoSessionGalleryUrl(sessionGuid);
+                
+                if (!string.IsNullOrEmpty(galleryUrl))
+                {
+                    Log.Debug($"CheckAndLoadGalleryUrl: Found existing gallery URL: {galleryUrl}");
+                    
+                    // Create a ShareResult object from the existing data
+                    var shareService = Services.CloudShareProvider.GetShareService();
+                    var qrCodeImage = shareService?.GenerateQRCode(galleryUrl);
+                    
+                    currentShareResult = new ShareResult
+                    {
+                        Success = true,
+                        GalleryUrl = galleryUrl,
+                        QRCodeImage = qrCodeImage,
+                        UploadedPhotos = new List<UploadedPhoto>() // We don't need the photo paths for existing shares
+                    };
+                    
+                    // Update sharing button visibility - QR should be visible since it's already uploaded
+                    UpdateSharingButtonsVisibility();
+                    
+                    Log.Debug("CheckAndLoadGalleryUrl: Gallery URL loaded successfully, sharing buttons updated");
+                }
+                else
+                {
+                    Log.Debug("CheckAndLoadGalleryUrl: No existing gallery URL found");
+                    
+                    // No existing URL, but we have photos, so show SMS button only
+                    UpdateSharingButtonsVisibility();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"CheckAndLoadGalleryUrl: Error checking gallery URL: {ex.Message}");
+                
+                // On error, assume not uploaded and show SMS only
+                UpdateSharingButtonsVisibility();
             }
         }
         
@@ -6747,17 +7323,49 @@ namespace Photobooth.Pages
             // Stub for phone textbox lost focus
         }
 
-        private void SendSmsButton_Click(object sender, RoutedEventArgs e)
-        {
-            // Stub for send SMS button
-            ShowSimpleMessage("SMS not available in this build");
-        }
-
         private void CloseShareOverlay_Click(object sender, RoutedEventArgs e)
         {
-            // Stub for close share overlay
-            if (sharingOverlay != null)
-                sharingOverlay.Visibility = Visibility.Collapsed;
+            Log.Debug("CloseShareOverlay_Click: Closing share overlay");
+            
+            try
+            {
+                // Close share overlay
+                if (sharingOverlay != null)
+                {
+                    // Stop any animations first
+                    sharingOverlay.BeginAnimation(OpacityProperty, null);
+                    sharingOverlay.Opacity = 1;
+                    
+                    // Hide the overlay
+                    sharingOverlay.Visibility = Visibility.Collapsed;
+                    Log.Debug("CloseShareOverlay_Click: Overlay hidden");
+                }
+                else
+                {
+                    Log.Debug("WARNING: CloseShareOverlay_Click: sharingOverlay is null");
+                }
+                
+                // Clear the share result
+                currentShareResult = null;
+                
+                // Clear the QR code image
+                if (qrCodeImage != null)
+                {
+                    qrCodeImage.Source = null;
+                }
+                
+                // Clear the phone number if entered
+                if (phoneNumberTextBox != null)
+                {
+                    phoneNumberTextBox.Text = "";
+                }
+                
+                Log.Debug("CloseShareOverlay_Click: Cleanup complete");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"CloseShareOverlay_Click: Error closing overlay: {ex.Message}", ex);
+            }
         }
 
         private void ShowSimpleMessage(string message)
@@ -6851,6 +7459,713 @@ namespace Photobooth.Pages
             get { return uiLayoutService?.IsCustomLayoutActive ?? false; }
         }
         
+        #endregion
+
+        #region Sharing Button Event Handlers
+
+        private void QrCodeSharingButton_Click(object sender, RoutedEventArgs e)
+        {
+            Log.Debug("QrCodeSharingButton_Click: Starting QR code sharing");
+            
+            try
+            {
+                // Check if we have a cached gallery URL first (instant)
+                if (currentShareResult != null && !string.IsNullOrEmpty(currentShareResult.GalleryUrl))
+                {
+                    // Show QR code immediately with cached data
+                    ShowQRCodeOverlay(currentShareResult.GalleryUrl);
+                    return;
+                }
+                
+                // Check database in background for existing URL
+                if (!string.IsNullOrEmpty(currentSessionGuid))
+                {
+                    // Show QR overlay immediately with loading state
+                    ShowQRCodeOverlay("Loading...");
+                    
+                    // Load data in background
+                    Task.Run(() => 
+                    {
+                        try
+                        {
+                            var db = new Database.TemplateDatabase();
+                            var galleryUrl = db.GetPhotoSessionGalleryUrl(currentSessionGuid);
+                            
+                            if (!string.IsNullOrEmpty(galleryUrl))
+                            {
+                                Log.Debug($"QrCodeSharingButton_Click: Found gallery URL in database: {galleryUrl}");
+                                
+                                // Generate QR code
+                                var cloudService = CloudShareProvider.GetShareService();
+                                var qrCodeImage = cloudService?.GenerateQRCode(galleryUrl);
+                                
+                                // Cache for future use
+                                currentShareResult = new ShareResult
+                                {
+                                    Success = true,
+                                    GalleryUrl = galleryUrl,
+                                    QRCodeImage = qrCodeImage,
+                                    UploadedPhotos = new List<UploadedPhoto>()
+                                };
+                                
+                                // Update QR overlay on UI thread
+                                Dispatcher.Invoke(() => 
+                                {
+                                    if (qrCodeImage != null && currentShareResult != null)
+                                    {
+                                        ShowQRCodeOverlay(galleryUrl);
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                // No URL found, close overlay and show message
+                                Dispatcher.Invoke(() => 
+                                {
+                                    sharingOverlay.Visibility = Visibility.Collapsed;
+                                    ShowSimpleMessage("Photos need to be uploaded first before sharing QR code.");
+                                });
+                            }
+                        }
+                        catch (Exception dbEx)
+                        {
+                            Log.Error($"QrCodeSharingButton_Click: Error checking database: {dbEx.Message}");
+                            Dispatcher.Invoke(() => 
+                            {
+                                sharingOverlay.Visibility = Visibility.Collapsed;
+                                ShowSimpleMessage("Failed to load QR code.");
+                            });
+                        }
+                    });
+                }
+                else
+                {
+                    ShowSimpleMessage("Photos need to be uploaded first before sharing QR code.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"QrCodeSharingButton_Click: Error showing QR code: {ex.Message}");
+                ShowSimpleMessage($"QR code display failed: {ex.Message}");
+            }
+        }
+
+        private void SmsSharingButton_Click(object sender, RoutedEventArgs e)
+        {
+            Log.Debug("SmsSharingButton_Click: Starting SMS sharing (offline-capable)");
+            
+            try
+            {
+                if (lastProcessedImagePath == null)
+                {
+                    ShowSimpleMessage("No photos available for sharing");
+                    return;
+                }
+
+                // Show SMS phone pad immediately - no waiting
+                ShowSmsPhonePadOverlay();
+                
+                // Queue upload in background if needed (non-blocking)
+                Task.Run(async () => 
+                {
+                    try
+                    {
+                        // Only queue for upload if not already uploaded
+                        if (currentShareResult == null || string.IsNullOrEmpty(currentShareResult.GalleryUrl))
+                        {
+                            // Prepare photos for upload/queue
+                            var photosToShare = new List<string>();
+                            if (capturedPhotoPaths != null && capturedPhotoPaths.Count > 0)
+                            {
+                                photosToShare.AddRange(capturedPhotoPaths);
+                            }
+                            if (!string.IsNullOrEmpty(lastProcessedImagePath) && File.Exists(lastProcessedImagePath))
+                            {
+                                photosToShare.Add(lastProcessedImagePath);
+                            }
+
+                            string sessionId = currentSessionGuid ?? Guid.NewGuid().ToString();
+                            
+                            // Check database first for existing gallery URL
+                            var db = new Database.TemplateDatabase();
+                            var existingUrl = db.GetPhotoSessionGalleryUrl(sessionId);
+                            
+                            if (!string.IsNullOrEmpty(existingUrl))
+                            {
+                                // Found existing URL, use it
+                                var cloudService = CloudShareProvider.GetShareService();
+                                currentShareResult = new ShareResult
+                                {
+                                    Success = true,
+                                    GalleryUrl = existingUrl,
+                                    QRCodeImage = cloudService?.GenerateQRCode(existingUrl),
+                                    UploadedPhotos = new List<UploadedPhoto>()
+                                };
+                            }
+                            else
+                            {
+                                // Queue for upload
+                                var queueService = GetOrCreateOfflineQueueService();
+                                var uploadResult = await queueService.QueuePhotosForUpload(sessionId, photosToShare);
+                                
+                                if (uploadResult.Success)
+                                {
+                                    currentShareResult = new ShareResult
+                                    {
+                                        Success = true,
+                                        GalleryUrl = uploadResult.GalleryUrl,
+                                        QRCodeImage = uploadResult.QRCodeImage,
+                                        UploadedPhotos = new List<UploadedPhoto>()
+                                    };
+                                    
+                                    // Store gallery URL if immediate upload
+                                    if (uploadResult.Immediate && !string.IsNullOrEmpty(uploadResult.GalleryUrl))
+                                    {
+                                        db.UpdatePhotoSessionGalleryUrl(sessionId, uploadResult.GalleryUrl);
+                                    }
+                                }
+                            }
+                            
+                            // Update UI on main thread
+                            Dispatcher.Invoke(() => UpdateSharingButtonsVisibility());
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"SmsSharingButton_Click: Background upload error: {ex.Message}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SmsSharingButton_Click: Error starting SMS sharing: {ex.Message}");
+                ShowSimpleMessage($"SMS sharing failed: {ex.Message}");
+            }
+        }
+
+        private OfflineQueueService GetOrCreateOfflineQueueService()
+        {
+            if (_cachedOfflineQueueService == null)
+            {
+                _cachedOfflineQueueService = new OfflineQueueService();
+            }
+            return _cachedOfflineQueueService;
+        }
+        
+        private void ShowQRCodeOverlay(string galleryUrl)
+        {
+            try
+            {
+                // Show overlay immediately
+                sharingOverlay.Visibility = Visibility.Visible;
+                
+                if (string.IsNullOrEmpty(galleryUrl) || galleryUrl == "Loading...")
+                {
+                    // Show loading state
+                    qrCodeImage.Source = null;
+                    if (galleryUrlText != null)
+                        galleryUrlText.Text = "Loading...";
+                    return;
+                }
+                
+                var cloudService = CloudShareProvider.GetShareService();
+                var qrCodeBitmap = cloudService.GenerateQRCode(galleryUrl);
+                
+                if (qrCodeBitmap != null)
+                {
+                    // Show a simple QR code display using the existing QR code overlay infrastructure
+                    // but without the SMS components - just show the QR code and URL
+                    
+                    if (qrCodeImage != null)
+                    {
+                        qrCodeImage.Source = qrCodeBitmap;
+                    }
+                    
+                    // Update gallery URL text
+                    if (galleryUrlText != null)
+                    {
+                        galleryUrlText.Text = galleryUrl;
+                    }
+                    
+                    // Hide SMS-related elements (phone number textbox and send button)
+                    if (phoneNumberTextBox != null)
+                    {
+                        phoneNumberTextBox.Visibility = Visibility.Collapsed;
+                    }
+                    if (sendSmsButton != null)
+                    {
+                        sendSmsButton.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    Log.Debug($"ShowQRCodeOverlay: QR code displayed for URL: {galleryUrl}");
+                }
+                else
+                {
+                    ShowSimpleMessage("Failed to generate QR code");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShowQRCodeOverlay: Error showing QR code: {ex.Message}");
+                ShowSimpleMessage("Failed to display QR code");
+            }
+        }
+
+        private void HideSMSElementsInOverlay()
+        {
+            try
+            {
+                // Hide SMS-related elements from the sharing overlay when showing QR only
+                var smsElements = new string[] 
+                {
+                    "phoneNumberTextBox",
+                    "sendSmsButton"
+                };
+                
+                foreach (var elementName in smsElements)
+                {
+                    var element = sharingOverlay?.FindName(elementName) as FrameworkElement;
+                    if (element != null)
+                    {
+                        element.Visibility = Visibility.Collapsed;
+                        Log.Debug($"HideSMSElementsInOverlay: Hidden element {elementName}");
+                    }
+                }
+                
+                // Also try to hide the SMS option StackPanel (Grid.Row="4")
+                var grid = sharingOverlay?.FindName("sharingGrid") as Grid;
+                if (grid != null && grid.Children.Count > 4)
+                {
+                    var smsStackPanel = grid.Children[4] as StackPanel;
+                    if (smsStackPanel != null)
+                    {
+                        smsStackPanel.Visibility = Visibility.Collapsed;
+                        Log.Debug("HideSMSElementsInOverlay: Hidden SMS StackPanel");
+                    }
+                }
+                
+                Log.Debug("HideSMSElementsInOverlay: SMS elements hidden from sharing overlay");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"HideSMSElementsInOverlay: Error hiding SMS elements: {ex.Message}");
+            }
+        }
+
+        private void ShowSharingOverlayForSMS()
+        {
+            try
+            {
+                Log.Debug("ShowSharingOverlayForSMS: Showing sharing overlay for SMS input");
+                
+                // Prepare the sharing overlay for SMS focus
+                if (sharingOverlay != null)
+                {
+                    // Set QR code if available
+                    if (currentShareResult != null && currentShareResult.QRCodeImage != null && qrCodeImage != null)
+                    {
+                        qrCodeImage.Source = currentShareResult.QRCodeImage;
+                        Log.Debug("ShowSharingOverlayForSMS: QR code set");
+                    }
+                    
+                    // Set gallery URL display if available
+                    if (currentShareResult != null && !string.IsNullOrEmpty(currentShareResult.GalleryUrl))
+                    {
+                        // Look for a text element to display the URL
+                        // This may need adjustment based on the actual XAML structure
+                        Log.Debug($"ShowSharingOverlayForSMS: Gallery URL available: {currentShareResult.GalleryUrl}");
+                    }
+                    
+                    // Clear and focus phone number input
+                    if (phoneNumberTextBox != null)
+                    {
+                        phoneNumberTextBox.Text = "";
+                        phoneNumberTextBox.Focus();
+                        Log.Debug("ShowSharingOverlayForSMS: Phone number textbox focused");
+                    }
+                    
+                    // Show the overlay
+                    sharingOverlay.Visibility = Visibility.Visible;
+                    Log.Debug("ShowSharingOverlayForSMS: Sharing overlay shown");
+                }
+                else
+                {
+                    Log.Error("ShowSharingOverlayForSMS: sharingOverlay is null");
+                    ShowSimpleMessage("Sharing overlay not available");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShowSharingOverlayForSMS: Error showing SMS sharing overlay: {ex.Message}");
+                ShowSimpleMessage("Failed to show SMS sharing interface");
+            }
+        }
+        
+        private void ShowSMSInputDialog()
+        {
+            try
+            {
+                // Set PIN pad to phone number mode
+                _currentPinMode = PinPadMode.PhoneNumber;
+                
+                // Show PIN pad overlay for phone number input
+                pinEntryOverlay.Visibility = Visibility.Visible;
+                pinDisplayBox.Text = "Enter Phone Number (+1234567890)";
+                _enteredPin = "";
+                
+                // Update PIN dots display
+                UpdatePinDots();
+                
+                Log.Debug("ShowSMSInputDialog: SMS input dialog shown");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShowSMSInputDialog: Error showing SMS input: {ex.Message}");
+                ShowSimpleMessage("Failed to show SMS input");
+            }
+        }
+
+        /// <summary>
+        /// Show or hide sharing buttons based on conditions
+        /// </summary>
+        private void UpdateSharingButtonsVisibility()
+        {
+            try
+            {
+                // Basic conditions for showing sharing buttons
+                bool hasPhotos = !isCapturing && 
+                               (lastProcessedImagePath != null || 
+                                (capturedPhotoPaths != null && capturedPhotoPaths.Count > 0));
+
+                // Check if photos are already uploaded (from currentShareResult or database)
+                bool photosUploaded = false;
+                
+                // First check currentShareResult
+                if (currentShareResult != null && !string.IsNullOrEmpty(currentShareResult.GalleryUrl))
+                {
+                    photosUploaded = true;
+                }
+                // If not in currentShareResult, check database for existing gallery URL
+                else if (!string.IsNullOrEmpty(currentSessionGuid))
+                {
+                    try
+                    {
+                        var db = new Database.TemplateDatabase();
+                        string galleryUrl = db.GetPhotoSessionGalleryUrl(currentSessionGuid);
+                        photosUploaded = !string.IsNullOrEmpty(galleryUrl);
+                        
+                        // If we found a URL in database but currentShareResult is null, create it
+                        if (photosUploaded && currentShareResult == null && !string.IsNullOrEmpty(galleryUrl))
+                        {
+                            var cloudService = CloudShareProvider.GetShareService();
+                            var qrCodeImage = cloudService?.GenerateQRCode(galleryUrl);
+                            currentShareResult = new ShareResult
+                            {
+                                Success = true,
+                                GalleryUrl = galleryUrl,
+                                QRCodeImage = qrCodeImage,
+                                UploadedPhotos = new List<UploadedPhoto>()
+                            };
+                        }
+                    }
+                    catch (Exception dbEx)
+                    {
+                        Log.Error($"UpdateSharingButtonsVisibility: Error checking database for gallery URL: {dbEx.Message}");
+                    }
+                }
+
+                // QR Code button: Only show if photos are already uploaded
+                var qrVisibility = hasPhotos && photosUploaded ? Visibility.Visible : Visibility.Collapsed;
+                
+                // SMS button: Always show if we have photos (works offline with queue)
+                var smsVisibility = hasPhotos ? Visibility.Visible : Visibility.Collapsed;
+                
+                if (qrCodeSharingButton != null)
+                {
+                    qrCodeSharingButton.Visibility = qrVisibility;
+                }
+                
+                if (smsSharingButton != null)
+                {
+                    smsSharingButton.Visibility = smsVisibility;
+                }
+                
+                Log.Debug($"UpdateSharingButtonsVisibility: QR={qrVisibility}, SMS={smsVisibility}, Photos uploaded={photosUploaded}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"UpdateSharingButtonsVisibility: Error updating visibility: {ex.Message}");
+            }
+        }
+        
+        #region Sync Status Methods
+        
+        private void UpdateSyncStatus()
+        {
+            try
+            {
+                // Get queue status from cached offline queue service
+                var queueService = GetOrCreateOfflineQueueService();
+                var status = queueService.GetQueueStatus();
+                
+                Dispatcher.Invoke(() =>
+                {
+                    if (status.PendingUploads > 0 || status.PendingSMS > 0)
+                    {
+                        // Items pending
+                        syncStatusIcon.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 167, 38)); // Orange
+                        syncStatusText.Text = "Uploads Pending";
+                        syncStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 167, 38));
+                        
+                        // Show pending count
+                        int totalPending = status.PendingUploads + status.PendingSMS;
+                        syncPendingCount.Text = $"{totalPending} item{(totalPending != 1 ? "s" : "")} pending";
+                        syncPendingCount.Visibility = Visibility.Visible;
+                        
+                        // Hide progress bar for now (can be enhanced later)
+                        syncUploadProgress.Visibility = Visibility.Collapsed;
+                    }
+                    else if (!status.IsOnline)
+                    {
+                        // Offline mode
+                        syncStatusIcon.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(158, 158, 158)); // Gray
+                        syncStatusText.Text = "Offline Mode";
+                        syncStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(158, 158, 158));
+                        syncPendingCount.Visibility = Visibility.Collapsed;
+                        syncUploadProgress.Visibility = Visibility.Collapsed;
+                    }
+                    else
+                    {
+                        // All uploads current
+                        syncStatusIcon.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 175, 80)); // Green
+                        syncStatusText.Text = "Uploads Current";
+                        syncStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 175, 80));
+                        syncPendingCount.Visibility = Visibility.Collapsed;
+                        syncUploadProgress.Visibility = Visibility.Collapsed;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"UpdateSyncStatus: Error updating sync status: {ex.Message}");
+            }
+        }
+        
+        private void StartSyncStatusMonitoring()
+        {
+            try
+            {
+                // Create a timer to update sync status every 5 seconds
+                var syncStatusTimer = new System.Windows.Threading.DispatcherTimer();
+                syncStatusTimer.Interval = TimeSpan.FromSeconds(5);
+                syncStatusTimer.Tick += (s, e) => UpdateSyncStatus();
+                syncStatusTimer.Start();
+                
+                // Initial update
+                UpdateSyncStatus();
+                
+                Log.Debug("StartSyncStatusMonitoring: Sync status monitoring started");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"StartSyncStatusMonitoring: Error starting sync status monitoring: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #region SMS Phone Pad Event Handlers
+        
+        private void SmsPhonePadButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var button = sender as Button;
+                if (button?.Content is StackPanel stackPanel)
+                {
+                    var textBlock = stackPanel.Children.OfType<TextBlock>().FirstOrDefault();
+                    if (textBlock != null)
+                    {
+                        string digit = textBlock.Text;
+                        
+                        // Add digit to phone number
+                        if (_smsPhoneNumber.Length < 20) // Max phone number length
+                        {
+                            _smsPhoneNumber += digit;
+                            UpdateSmsPhoneDisplay();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SmsPhonePadButton_Click: Error adding digit: {ex.Message}");
+            }
+        }
+        
+        private void SmsPhoneBackspace_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Remove last digit, but keep "+1" as minimum
+                if (_smsPhoneNumber.Length > 2)
+                {
+                    _smsPhoneNumber = _smsPhoneNumber.Substring(0, _smsPhoneNumber.Length - 1);
+                    UpdateSmsPhoneDisplay();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SmsPhoneBackspace_Click: Error removing digit: {ex.Message}");
+            }
+        }
+        
+        private async void SmsSendButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Validate phone number
+                if (_smsPhoneNumber.Length < 5) // Minimum phone number length
+                {
+                    ShowSimpleMessage("Please enter a valid phone number");
+                    return;
+                }
+                
+                // Use the phone number from our dedicated phone pad
+                string phoneNumber = _smsPhoneNumber;
+                
+                // Get gallery URL from current share result or use pending URL
+                string galleryUrl = currentShareResult?.GalleryUrl;
+                string sessionId = currentSessionGuid ?? Guid.NewGuid().ToString();
+                
+                // If no gallery URL, this means photos are pending upload
+                if (string.IsNullOrEmpty(galleryUrl))
+                {
+                    galleryUrl = $"https://photos.app/pending/{sessionId}";
+                    Log.Debug($"SmsSendButton_Click: Using pending URL: {galleryUrl}");
+                }
+                
+                // Use cached offline queue service for SMS (works offline)
+                var queueService = GetOrCreateOfflineQueueService();
+                var queueResult = await queueService.QueueSMS(phoneNumber, galleryUrl, sessionId);
+                
+                if (queueResult.Success)
+                {
+                    Log.Debug($"SmsSendButton_Click: SMS queued successfully for {phoneNumber}");
+                    
+                    // Log SMS in the database as well
+                    try
+                    {
+                        var db = new Database.TemplateDatabase();
+                        db.LogSMSSend(sessionId, phoneNumber, galleryUrl, queueResult.Immediate, 
+                                     queueResult.Immediate ? null : "Queued for sending when online");
+                        Log.Debug($"Logged SMS queue result to database for session {sessionId}");
+                    }
+                    catch (Exception dbEx)
+                    {
+                        Log.Error($"Failed to log SMS to database: {dbEx.Message}");
+                    }
+                    
+                    // Show success message and close overlay
+                    if (queueResult.Immediate)
+                    {
+                        ShowSimpleMessage("SMS sent successfully!");
+                    }
+                    else
+                    {
+                        ShowSimpleMessage("SMS queued for sending when online");
+                    }
+                    
+                    // Close SMS phone pad overlay
+                    CloseSmsPhonePadOverlay();
+                }
+                else
+                {
+                    Log.Error($"SmsSendButton_Click: Failed to queue SMS: {queueResult.Message}");
+                    ShowSimpleMessage($"Failed to queue SMS: {queueResult.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SmsSendButton_Click: Error queueing SMS: {ex.Message}");
+                ShowSimpleMessage($"SMS queueing failed: {ex.Message}");
+            }
+        }
+        
+        private void SmsPhonePadCancel_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                CloseSmsPhonePadOverlay();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SmsPhonePadCancel_Click: Error closing SMS phone pad: {ex.Message}");
+            }
+        }
+        
+        private void UpdateSmsPhoneDisplay()
+        {
+            try
+            {
+                if (smsPhoneNumberDisplay != null)
+                {
+                    smsPhoneNumberDisplay.Text = _smsPhoneNumber;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"UpdateSmsPhoneDisplay: Error updating display: {ex.Message}");
+            }
+        }
+        
+        private void ShowSmsPhonePadOverlay()
+        {
+            try
+            {
+                Log.Debug("ShowSmsPhonePadOverlay: Showing dedicated SMS phone pad");
+                
+                // Reset phone number to default
+                _smsPhoneNumber = "+1";
+                UpdateSmsPhoneDisplay();
+                
+                // Show the overlay
+                if (smsPhonePadOverlay != null)
+                {
+                    smsPhonePadOverlay.Visibility = Visibility.Visible;
+                    Log.Debug("ShowSmsPhonePadOverlay: SMS phone pad overlay shown");
+                }
+                else
+                {
+                    Log.Error("ShowSmsPhonePadOverlay: smsPhonePadOverlay is null");
+                    ShowSimpleMessage("SMS phone pad not available");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShowSmsPhonePadOverlay: Error showing SMS phone pad: {ex.Message}");
+                ShowSimpleMessage("Failed to show SMS phone pad");
+            }
+        }
+        
+        private void CloseSmsPhonePadOverlay()
+        {
+            try
+            {
+                if (smsPhonePadOverlay != null)
+                {
+                    smsPhonePadOverlay.Visibility = Visibility.Collapsed;
+                    Log.Debug("CloseSmsPhonePadOverlay: SMS phone pad overlay closed");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"CloseSmsPhonePadOverlay: Error closing SMS phone pad: {ex.Message}");
+            }
+        }
+        
+        #endregion
+
         #endregion
     }
 }
