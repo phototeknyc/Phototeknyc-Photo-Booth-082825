@@ -76,6 +76,7 @@ namespace Photobooth.Pages
             // Save-on-close functionality removed (auto-save not implemented yet)
         }
         
+        
         private void UpdateCanvasScale()
         {
             DebugService.LogDebug($"UpdateCanvasScale called - canvasScale:{canvasScale != null} canvas:{ViewModel?.CustomDesignerCanvas != null}");

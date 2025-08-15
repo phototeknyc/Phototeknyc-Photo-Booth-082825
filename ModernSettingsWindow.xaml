@@ -159,6 +159,60 @@
                             </Button.Template>
                         </Button>
                         
+                        <!-- UI Customize Button -->
+                        <Button x:Name="LaunchUICustomizeBtn" 
+                                Width="140" Height="45" 
+                                Margin="5,0"
+                                Cursor="Hand"
+                                Click="LaunchUICustomize_Click"
+                                ToolTip="Customize UI Layout">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" CornerRadius="22" 
+                                          Background="#4ECDC4"
+                                          RenderTransformOrigin="0.5,0.5">
+                                        <Border.RenderTransform>
+                                            <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                        </Border.RenderTransform>
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#4ECDC4" 
+                                                            BlurRadius="20" 
+                                                            ShadowDepth="0" 
+                                                            Opacity="0.3"/>
+                                        </Border.Effect>
+                                        <StackPanel Orientation="Horizontal" 
+                                                  HorizontalAlignment="Center" 
+                                                  VerticalAlignment="Center">
+                                            <TextBlock Text="✨" FontSize="18" Margin="0,0,8,0"/>
+                                            <TextBlock Text="UI CUSTOMIZE" 
+                                                     FontSize="13" 
+                                                     FontWeight="SemiBold" 
+                                                     Foreground="White"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background">
+                                                <Setter.Value>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#5EDDD4" Offset="0"/>
+                                                        <GradientStop Color="#6EFDF4" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="border" Property="RenderTransform">
+                                                <Setter.Value>
+                                                    <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        
                         <!-- Launch Photobooth Button -->
                         <Button x:Name="LaunchPhotoboothBtn" 
                                 Width="140" Height="45" 

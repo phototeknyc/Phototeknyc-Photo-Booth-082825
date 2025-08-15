@@ -1434,9 +1434,20 @@ namespace DesignerCanvas.Controls
             //swap the width and height according to positon
             if (postion == "Portrait")
             {
+                // Swap display dimensions
                 var temp = Width;
                 Width = Height;
                 Height = temp;
+                
+                // Also swap the actual pixel dimensions
+                var tempPixel = ActualPixelWidth;
+                ActualPixelWidth = ActualPixelHeight;
+                ActualPixelHeight = tempPixel;
+                
+                // Swap the ratio values
+                var tempRatio = RatioX;
+                RatioX = RatioY;
+                RatioY = tempRatio;
             }
         }
 
@@ -1639,12 +1650,12 @@ namespace DesignerCanvas.Controls
         #endregion
 
 
-        public int RatioX { get; private set; } = 4;
-        public int RatioY { get; private set; } = 4;
+        public int RatioX { get; internal set; } = 4;
+        public int RatioY { get; internal set; } = 4;
         
         // Actual pixel dimensions for export at 300 DPI
-        public int ActualPixelWidth { get; private set; } = 1200; // Default 4x6 at 300 DPI
-        public int ActualPixelHeight { get; private set; } = 1800;
+        public int ActualPixelWidth { get; internal set; } = 1200; // Default 4x6 at 300 DPI
+        public int ActualPixelHeight { get; internal set; } = 1800;
 
         public void SetRatio(int RatioX, int RatioY)
         {

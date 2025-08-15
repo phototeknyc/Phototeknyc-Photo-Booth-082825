@@ -31,6 +31,25 @@ namespace Photobooth
         private bool _isSidebarExpanded = true;
         private DispatcherTimer _timeUpdateTimer;
         
+        // Windows API for removing window chrome
+        [DllImport("user32.dll")]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        
+        [DllImport("user32.dll")]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+        
+        private const int GWL_STYLE = -16;
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_SYSMENU = 0x80000;
+        private const int WS_CAPTION = 0xC00000;
+        private const int WS_THICKFRAME = 0x40000;
+        private const int WS_MINIMIZE = 0x20000000;
+        private const int WS_MAXIMIZE = 0x1000000;
+        private const int WS_EX_DLGMODALFRAME = 0x0001;
+        private const int WS_EX_WINDOWEDGE = 0x0100;
+        private const int WS_EX_CLIENTEDGE = 0x0200;
+        private const int WS_EX_STATICEDGE = 0x20000;
+        
         static PhotoBoothWindow()
         {
             // Force WPF to use the best rendering settings at the type level
@@ -43,8 +62,17 @@ namespace Photobooth
                 new FrameworkPropertyMetadata(BitmapScalingMode.HighQuality));
         }
         
-        public PhotoBoothWindow()
+        public PhotoBoothWindow() : this(false)
         {
+        }
+        
+        public PhotoBoothWindow(bool openTemplates)
+        {
+            // Force window style before anything else
+            this.WindowStyle = WindowStyle.None;
+            this.ResizeMode = ResizeMode.NoResize;
+            this.WindowState = WindowState.Maximized;
+            
             // Set DPI awareness and rendering options BEFORE InitializeComponent
             SetupHighQualityRendering();
             
@@ -56,8 +84,35 @@ namespace Photobooth
             // Initialize components
             InitializeModernInterface();
             
+            // Remove window chrome as soon as handle is available
+            this.SourceInitialized += OnSourceInitialized;
+            
             // Apply DPI scaling after window is loaded
             this.Loaded += OnWindowLoaded;
+            
+            // Navigate to MainPage if opening for templates
+            if (openTemplates)
+            {
+                this.Loaded += (s, e) =>
+                {
+                    if (frame != null)
+                    {
+                        frame.Navigate(MainPage.Instance);
+                        UpdateBreadcrumb("📋 Templates");
+                    }
+                };
+            }
+        }
+        
+        private void OnSourceInitialized(object sender, EventArgs e)
+        {
+            // Remove window chrome immediately when handle is available
+            RemoveWindowChrome();
+            
+            // Hide from Alt+Tab if needed
+            var helper = new WindowInteropHelper(this);
+            SetWindowLong(helper.Handle, GWL_EXSTYLE, 
+                GetWindowLong(helper.Handle, GWL_EXSTYLE) | 0x00000080); // WS_EX_TOOLWINDOW
         }
         
         private void SetupHighQualityRendering()
@@ -82,6 +137,51 @@ namespace Photobooth
             // Apply DPI scaling adjustments after window is loaded
             ApplyDpiScaling();
         }
+        
+        private void RemoveWindowChrome()
+        {
+            // Get the window handle
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                // Get current window style
+                int currentStyle = GetWindowLong(hwnd, GWL_STYLE);
+                
+                // Remove all window chrome elements
+                currentStyle &= ~WS_CAPTION;
+                currentStyle &= ~WS_SYSMENU;
+                currentStyle &= ~WS_THICKFRAME;
+                currentStyle &= ~WS_MINIMIZE;
+                currentStyle &= ~WS_MAXIMIZE;
+                
+                SetWindowLong(hwnd, GWL_STYLE, currentStyle);
+                
+                // Also modify extended window styles
+                int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                extendedStyle &= ~WS_EX_DLGMODALFRAME;
+                extendedStyle &= ~WS_EX_WINDOWEDGE;
+                extendedStyle &= ~WS_EX_CLIENTEDGE;
+                extendedStyle &= ~WS_EX_STATICEDGE;
+                
+                SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle);
+                
+                // Force window to redraw
+                SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, 
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+                
+                // Force maximize state
+                this.WindowState = WindowState.Maximized;
+            }
+        }
+        
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, 
+            int X, int Y, int cx, int cy, uint uFlags);
+        
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_FRAMECHANGED = 0x0020;
         
         private void ApplyDpiScaling()
         {
@@ -472,6 +572,13 @@ namespace Photobooth
             }
 
             MainPage.Instance.dcvs.PrintImage();
+        }
+        
+        private void OpenTemplateDesigner_Click(object sender, RoutedEventArgs e)
+        {
+            // Open the template designer in a new window
+            var templateWindow = new MainWindow();
+            templateWindow.Show();
         }
         
         #region Modern Interface Event Handlers

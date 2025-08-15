@@ -346,6 +346,36 @@ namespace Photobooth
             }
         }
         
+        private void LaunchUICustomize_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                SaveSettings();
+                
+                // Open UI Customization Window
+                var customizeWindow = new Window
+                {
+                    Title = "UI Layout Customization",
+                    WindowState = WindowState.Maximized,
+                    WindowStyle = WindowStyle.None,
+                    Background = new SolidColorBrush(Color.FromRgb(26, 26, 46))
+                };
+                
+                // Add the Modern UI Customization Canvas
+                var customizationCanvas = new Controls.ModernUICustomizationCanvas();
+                customizeWindow.Content = customizationCanvas;
+                
+                customizeWindow.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error launching UI Customization: {ex.Message}", 
+                               "Error", 
+                               MessageBoxButton.OK, 
+                               MessageBoxImage.Error);
+            }
+        }
+        
         private void LaunchPhotobooth_Click(object sender, RoutedEventArgs e)
         {
             try

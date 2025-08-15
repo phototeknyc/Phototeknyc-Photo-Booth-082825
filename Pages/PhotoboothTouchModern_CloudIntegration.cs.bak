@@ -1,0 +1,500 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
+using Photobooth.Models;
+using Photobooth.Services;
+
+namespace Photobooth.Pages
+{
+    // Partial class extending PhotoboothTouchModern with cloud sharing functionality
+    public partial class PhotoboothTouchModern : Page
+    {
+        #region Cloud Sharing Methods
+
+        /// <summary>
+        /// Initialize cloud sharing when page loads
+        /// </summary>
+        private void InitializeCloudSharing()
+        {
+            // Check if cloud sharing is enabled
+            if (Properties.Settings.Default.CloudSharingEnabled)
+            {
+                // Show cloud status indicator
+                UpdateCloudStatus(true);
+            }
+
+            // Subscribe to session manager events
+            if (sessionManager != null)
+            {
+                sessionManager.SessionStarted += OnSessionStarted;
+                sessionManager.SessionCompleted += OnSessionCompleted;
+                sessionManager.PhotoAdded += OnPhotoAddedToSession;
+                sessionManager.SessionShared += OnSessionShared;
+            }
+        }
+
+        /// <summary>
+        /// Start a new cloud session when photos begin
+        /// </summary>
+        private void StartCloudSession()
+        {
+            if (!Properties.Settings.Default.CloudSharingEnabled)
+                return;
+
+            // Start new session in session manager
+            currentPhotoSession = sessionManager.StartNewSession(
+                currentEvent?.Name,
+                currentTemplate?.Name);
+
+            // Show share buttons after first photo
+            UpdateShareButtonsVisibility(false);
+        }
+
+        /// <summary>
+        /// Add photo to current cloud session
+        /// </summary>
+        private void AddPhotoToCloudSession(string photoPath)
+        {
+            if (currentPhotoSession == null || !Properties.Settings.Default.CloudSharingEnabled)
+                return;
+
+            try
+            {
+                sessionManager.AddPhotoToSession(photoPath);
+                
+                // Show share buttons after first photo
+                if (currentPhotoSession.Photos.Count == 1)
+                {
+                    UpdateShareButtonsVisibility(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error adding photo to session: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Complete the current cloud session
+        /// </summary>
+        private void CompleteCloudSession()
+        {
+            if (currentPhotoSession == null)
+                return;
+
+            sessionManager.CompleteSession();
+            
+            // Auto-share if enabled
+            if (Properties.Settings.Default.AutoShareOnComplete)
+            {
+                _ = ShareSessionViaQRCode();
+            }
+        }
+
+        /// <summary>
+        /// Handle QR Code share button click
+        /// </summary>
+        private async void QRShareButton_Click(object sender, RoutedEventArgs e)
+        {
+            await ShareSessionViaQRCode();
+        }
+
+        /// <summary>
+        /// Share current session via QR code
+        /// </summary>
+        private async Task ShareSessionViaQRCode()
+        {
+            if (currentPhotoSession == null || currentPhotoSession.Photos.Count == 0)
+            {
+                ShowMessage("No photos to share");
+                return;
+            }
+
+            try
+            {
+                // Show upload progress
+                ShowUploadProgress();
+
+                // Share the session
+                var result = await sessionManager.ShareSessionAsync(currentPhotoSession);
+
+                if (result.Success)
+                {
+                    // Hide upload progress
+                    HideUploadProgress();
+
+                    // Show QR code overlay
+                    ShowQRCodeOverlay(result);
+                }
+                else
+                {
+                    HideUploadProgress();
+                    ShowMessage($"Sharing failed: {result.ErrorMessage}");
+                }
+            }
+            catch (Exception ex)
+            {
+                HideUploadProgress();
+                ShowMessage($"Error sharing photos: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handle SMS share button click
+        /// </summary>
+        private async void SMSShareButton_Click(object sender, RoutedEventArgs e)
+        {
+            await ShareSessionViaSMS();
+        }
+
+        /// <summary>
+        /// Share current session via SMS
+        /// </summary>
+        private async Task ShareSessionViaSMS()
+        {
+            if (currentPhotoSession == null || currentPhotoSession.Photos.Count == 0)
+            {
+                ShowMessage("No photos to share");
+                return;
+            }
+
+            // Show phone number input dialog
+            var phoneNumber = await ShowPhoneNumberDialog();
+            
+            if (string.IsNullOrEmpty(phoneNumber))
+                return;
+
+            try
+            {
+                // Show upload progress
+                ShowUploadProgress();
+
+                // Share the session with SMS
+                var result = await sessionManager.ShareSessionAsync(currentPhotoSession, phoneNumber);
+
+                if (result.Success)
+                {
+                    HideUploadProgress();
+                    
+                    if (result.SMSSent)
+                    {
+                        ShowMessage($"Photos sent to {phoneNumber}");
+                    }
+                    else
+                    {
+                        ShowMessage("Photos uploaded but SMS failed");
+                        ShowQRCodeOverlay(result);
+                    }
+                }
+                else
+                {
+                    HideUploadProgress();
+                    ShowMessage($"Sharing failed: {result.ErrorMessage}");
+                }
+            }
+            catch (Exception ex)
+            {
+                HideUploadProgress();
+                ShowMessage($"Error sharing photos: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Show QR code overlay with share link
+        /// </summary>
+        private void ShowQRCodeOverlay(SessionShareResult result)
+        {
+            // Set QR code image
+            if (result.QRCodeImage != null)
+            {
+                qrCodeImage.Source = result.QRCodeImage;
+            }
+
+            // Set gallery URL
+            galleryUrlText.Text = result.ShortUrl ?? result.GalleryUrl;
+
+            // Clear phone number field
+            phoneNumberTextBox.Text = "";
+            phoneNumberTextBox.Tag = "Phone number (optional)";
+
+            // Show overlay
+            sharingOverlay.Visibility = Visibility.Visible;
+
+            // Start auto-close timer (30 seconds)
+            StartShareOverlayTimer();
+        }
+
+        /// <summary>
+        /// Start timer to auto-close share overlay
+        /// </summary>
+        private void StartShareOverlayTimer()
+        {
+            shareOverlayCountdown = 30;
+            
+            if (shareOverlayTimer != null)
+            {
+                shareOverlayTimer.Stop();
+            }
+
+            shareOverlayTimer = new DispatcherTimer();
+            shareOverlayTimer.Interval = TimeSpan.FromSeconds(1);
+            shareOverlayTimer.Tick += (s, e) =>
+            {
+                shareOverlayCountdown--;
+                autoCloseText.Text = $"Closing in {shareOverlayCountdown}s";
+
+                if (shareOverlayCountdown <= 0)
+                {
+                    shareOverlayTimer.Stop();
+                    CloseShareOverlay();
+                }
+            };
+            shareOverlayTimer.Start();
+        }
+
+        /// <summary>
+        /// Close share overlay
+        /// </summary>
+        private void CloseShareOverlay()
+        {
+            if (shareOverlayTimer != null)
+            {
+                shareOverlayTimer.Stop();
+            }
+
+            // Fade out animation
+            var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(300));
+            fadeOut.Completed += (s, e) =>
+            {
+                sharingOverlay.Visibility = Visibility.Collapsed;
+            };
+            sharingOverlay.BeginAnimation(OpacityProperty, fadeOut);
+        }
+
+        /// <summary>
+        /// Handle close button click on share overlay
+        /// </summary>
+        private void CloseShareOverlay_Click(object sender, RoutedEventArgs e)
+        {
+            CloseShareOverlay();
+        }
+
+        /// <summary>
+        /// Send SMS from the share overlay
+        /// </summary>
+        private async void SendSmsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var phoneNumber = phoneNumberTextBox.Text;
+            
+            if (string.IsNullOrWhiteSpace(phoneNumber) || phoneNumber == "Phone number (optional)")
+            {
+                shareStatusText.Text = "Please enter a phone number";
+                return;
+            }
+
+            if (currentPhotoSession?.ShareInfo == null)
+            {
+                shareStatusText.Text = "No share link available";
+                return;
+            }
+
+            try
+            {
+                sendSmsButton.IsEnabled = false;
+                shareStatusText.Text = "Sending SMS...";
+
+                var sent = await shareService.SendSMSAsync(
+                    phoneNumber, 
+                    currentPhotoSession.ShareInfo.ShortUrl ?? currentPhotoSession.ShareInfo.GalleryUrl);
+
+                if (sent)
+                {
+                    shareStatusText.Text = $"✓ SMS sent to {phoneNumber}";
+                    phoneNumberTextBox.Text = "";
+                }
+                else
+                {
+                    shareStatusText.Text = "SMS failed. Please try again.";
+                }
+            }
+            catch (Exception ex)
+            {
+                shareStatusText.Text = "SMS error occurred";
+                System.Diagnostics.Debug.WriteLine($"SMS error: {ex.Message}");
+            }
+            finally
+            {
+                sendSmsButton.IsEnabled = true;
+            }
+        }
+
+        /// <summary>
+        /// Show upload progress overlay
+        /// </summary>
+        private void ShowUploadProgress()
+        {
+            uploadProgressBar.Value = 0;
+            uploadProgressText.Text = "0 of 0 photos";
+            uploadStatusText.Text = "Optimizing photos for sharing...";
+            uploadProgressOverlay.Visibility = Visibility.Visible;
+
+            // Update progress during upload (this would be connected to actual upload events)
+            Task.Run(async () =>
+            {
+                for (int i = 0; i <= 100; i += 10)
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        uploadProgressBar.Value = i;
+                        uploadProgressText.Text = $"{i}% complete";
+                        
+                        if (i < 30)
+                            uploadStatusText.Text = "Optimizing photos...";
+                        else if (i < 80)
+                            uploadStatusText.Text = "Uploading to cloud...";
+                        else
+                            uploadStatusText.Text = "Generating share link...";
+                    });
+                    
+                    await Task.Delay(100);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Hide upload progress overlay
+        /// </summary>
+        private void HideUploadProgress()
+        {
+            uploadProgressOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        /// <summary>
+        /// Show phone number input dialog
+        /// </summary>
+        private async Task<string> ShowPhoneNumberDialog()
+        {
+            // For now, we'll use the phone field in the share overlay
+            // In a real implementation, this could be a proper dialog
+            phoneNumberTextBox.Focus();
+            return await Task.FromResult<string>(null);
+        }
+
+        /// <summary>
+        /// Update visibility of share buttons
+        /// </summary>
+        private void UpdateShareButtonsVisibility(bool show)
+        {
+            var visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            
+            Dispatcher.InvokeAsync(() =>
+            {
+                qrShareButton.Visibility = visibility;
+                smsShareButton.Visibility = visibility;
+            });
+        }
+
+        /// <summary>
+        /// Update cloud status indicator
+        /// </summary>
+        private void UpdateCloudStatus(bool connected)
+        {
+            // This would update a cloud status indicator in the UI
+            // For example, changing the cloud button color or icon
+        }
+
+        /// <summary>
+        /// Handle cloud settings button click
+        /// </summary>
+        private void CloudSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Open cloud settings dialog
+            // This would show AWS credentials, Twilio settings, etc.
+            ShowMessage("Cloud settings dialog would open here");
+        }
+
+        /// <summary>
+        /// Phone textbox focus handlers
+        /// </summary>
+        private void PhoneTextBox_GotFocus(object sender, RoutedEventArgs e)
+        {
+            var textBox = sender as TextBox;
+            if (textBox?.Text == "Phone number (optional)")
+            {
+                textBox.Text = "";
+            }
+        }
+
+        private void PhoneTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            var textBox = sender as TextBox;
+            if (string.IsNullOrWhiteSpace(textBox?.Text))
+            {
+                textBox.Text = "Phone number (optional)";
+            }
+        }
+
+        /// <summary>
+        /// Show a message to the user
+        /// </summary>
+        private void ShowMessage(string message)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                // Update status text or show a toast notification
+                if (shareStatusText != null)
+                {
+                    shareStatusText.Text = message;
+                }
+                else
+                {
+                    statusText.Text = message;
+                }
+            });
+        }
+
+        #endregion
+
+        #region Session Manager Event Handlers
+
+        private void OnSessionStarted(object sender, PhotoSession session)
+        {
+            System.Diagnostics.Debug.WriteLine($"Session started: {session.SessionId}");
+        }
+
+        private void OnSessionCompleted(object sender, PhotoSession session)
+        {
+            System.Diagnostics.Debug.WriteLine($"Session completed: {session.SessionId} with {session.Photos.Count} photos");
+            
+            // Show share buttons if not already visible
+            UpdateShareButtonsVisibility(true);
+        }
+
+        private void OnPhotoAddedToSession(object sender, SessionPhoto photo)
+        {
+            System.Diagnostics.Debug.WriteLine($"Photo added to session: {photo.FileName}");
+        }
+
+        private void OnSessionShared(object sender, PhotoSession session)
+        {
+            System.Diagnostics.Debug.WriteLine($"Session shared: {session.SessionId}");
+            
+            // Clean up old database entries only after successful share
+            if (Properties.Settings.Default.CleanupAfterShare)
+            {
+                // Mark database session as synced
+                if (currentDatabaseSessionId.HasValue)
+                {
+                    database.MarkSessionAsSynced(currentDatabaseSessionId.Value);
+                }
+            }
+        }
+
+        #endregion
+    }
+}

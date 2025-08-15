@@ -24,9 +24,9 @@ using System.Drawing;
 using System.Windows.Interop;
 using Photobooth.Services;
 using Photobooth.Database;
-using System.Linq;
 using Photobooth.Controls;
 using System.ComponentModel;
+using Photobooth.Models;
 
 namespace Photobooth.Pages
 {
@@ -94,6 +94,16 @@ namespace Photobooth.Pages
         private int? currentDatabaseSessionId = null;
         private string currentSessionGuid = null;
         private List<int> currentSessionPhotoIds = new List<int>();
+        
+        // Cloud sharing services
+        private SessionManager sessionManager;
+        private SimpleShareService shareService;
+        private Photobooth.Models.PhotoSession currentPhotoSession;
+        private DispatcherTimer shareOverlayTimer;
+        private int shareOverlayCountdown;
+        
+        // UI Layout Service
+        private UILayoutService uiLayoutService;
 
         public PhotoboothTouchModern()
         {
@@ -108,6 +118,13 @@ namespace Photobooth.Pages
             database = new TemplateDatabase();
             // Use hybrid filter service for best performance with Magick.NET + GDI+ fallback
             filterService = new PhotoFilterServiceHybrid();
+            
+            // Initialize cloud sharing services
+            sessionManager = new SessionManager();
+            shareService = new SimpleShareService();
+            
+            // Initialize UI Layout Service
+            uiLayoutService = new UILayoutService();
             
             // Run database cleanup for sessions older than 24 hours
             database.RunPeriodicCleanup();
@@ -294,6 +311,18 @@ namespace Photobooth.Pages
         private void PhotoboothTouchModern_Loaded(object sender, RoutedEventArgs e)
         {
             Log.Debug("PhotoboothTouch_Loaded: Page loaded, initializing camera");
+            
+            // Apply custom UI layout if available (non-destructive - overlays on top)
+            try
+            {
+                uiLayoutService.ApplyLayoutToPage(this, mainGrid);
+                Log.Debug($"PhotoboothTouch_Loaded: Custom layout applied: {uiLayoutService.IsCustomLayoutActive}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PhotoboothTouch_Loaded: Error applying custom layout: {ex.Message}");
+                // Continue with default UI
+            }
             
             // Subscribe to camera events (will be unsubscribed in Unloaded)
             DeviceManager.CameraSelected += DeviceManager_CameraSelected;
@@ -6686,6 +6715,142 @@ namespace Photobooth.Pages
             ProcessTemplateWithPhotosInternal(FilterType.None);
         }
 
+        #endregion
+
+        #region Cloud Sharing Event Handlers (Stubs)
+
+        private void QRShareButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Stub for QR share button
+            ShowSimpleMessage("QR code sharing not available in this build");
+        }
+
+        private void SMSShareButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Stub for SMS share button
+            ShowSimpleMessage("SMS sharing not available in this build");
+        }
+
+        private void CloudSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Stub for cloud settings button
+            ShowSimpleMessage("Cloud settings not available in this build");
+        }
+
+        private void PhoneTextBox_GotFocus(object sender, RoutedEventArgs e)
+        {
+            // Stub for phone textbox focus
+        }
+
+        private void PhoneTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            // Stub for phone textbox lost focus
+        }
+
+        private void SendSmsButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Stub for send SMS button
+            ShowSimpleMessage("SMS not available in this build");
+        }
+
+        private void CloseShareOverlay_Click(object sender, RoutedEventArgs e)
+        {
+            // Stub for close share overlay
+            if (sharingOverlay != null)
+                sharingOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void ShowSimpleMessage(string message)
+        {
+            MessageBox.Show(message, "Feature Not Available", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        #endregion
+        
+        #region Public Methods for Custom UI Integration
+        
+        /// <summary>
+        /// Public method for custom UI buttons to start photo session
+        /// </summary>
+        public void StartPhotoSession()
+        {
+            // Call the existing start button logic
+            StartButton_Click(null, null);
+        }
+        
+        /// <summary>
+        /// Public method for custom UI to open settings
+        /// </summary>
+        public void OpenSettings()
+        {
+            // Call the existing settings button logic
+            ModernSettingsButton_Click(null, null);
+        }
+        
+        /// <summary>
+        /// Public method for custom UI to open gallery
+        /// </summary>
+        public void OpenGallery()
+        {
+            // Navigate to gallery or show gallery overlay
+            ShowSimpleMessage("Gallery feature coming soon");
+        }
+        
+        /// <summary>
+        /// Public method for custom UI to return home
+        /// </summary>
+        public void ReturnHome()
+        {
+            // Call the existing home button logic
+            HomeButton_Click(null, null);
+        }
+        
+        /// <summary>
+        /// Public method for custom UI to stop capture
+        /// </summary>
+        public void StopCapture()
+        {
+            // Call the existing stop button logic
+            StopButton_Click(null, null);
+        }
+        
+        /// <summary>
+        /// Public method for custom UI to open camera settings
+        /// </summary>
+        public void OpenCameraSettings()
+        {
+            // Call the existing camera settings button logic
+            CameraSettingsButton_Click(null, null);
+        }
+        
+        /// <summary>
+        /// Public method for custom UI to open event selection
+        /// </summary>
+        public void OpenEventSelection()
+        {
+            // Call the existing event settings button logic
+            EventSettingsButton_Click(null, null);
+        }
+        
+        /// <summary>
+        /// Refresh the UI layout (e.g., after changing orientation)
+        /// </summary>
+        public void RefreshCustomLayout()
+        {
+            if (uiLayoutService != null && mainGrid != null)
+            {
+                uiLayoutService.RefreshLayout(this, mainGrid);
+            }
+        }
+        
+        /// <summary>
+        /// Check if custom layout is active
+        /// </summary>
+        public bool IsCustomLayoutActive
+        {
+            get { return uiLayoutService?.IsCustomLayoutActive ?? false; }
+        }
+        
         #endregion
     }
 }

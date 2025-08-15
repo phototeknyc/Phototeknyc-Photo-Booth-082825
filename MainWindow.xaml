@@ -7,9 +7,12 @@
         xmlns:canvas="clr-namespace:Photobooth.Design.Canvas"
         mc:Ignorable="d"
         WindowStartupLocation="CenterScreen"
-        Title="WPF Diagram Designer"
+        Title="Template Designer"
         Background="#303030"
-        Height="700" Width="1080" Initialized="Window_Initialized"
+        WindowState="Maximized"
+        WindowStyle="None"
+        AllowsTransparency="False"
+        Initialized="Window_Initialized"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
         RenderOptions.BitmapScalingMode="HighQuality"
@@ -39,6 +42,93 @@
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
+        
+        <!-- Navigation buttons overlay for touch devices -->
+        <StackPanel Grid.Column="1" 
+                    Grid.Row="0"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="10"
+                    Panel.ZIndex="1000">
+            
+            <!-- Back to Home button -->
+            <Button x:Name="btnBackToHome" 
+                    Content="🏠 Home" 
+                    FontSize="16"
+                    FontWeight="Bold"
+                    Width="100" 
+                    Height="50"
+                    Margin="0,0,10,0"
+                    Background="#3498DB"
+                    Foreground="White"
+                    BorderThickness="0"
+                    Cursor="Hand"
+                    Click="btnBackToHome_Click">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" 
+                                            Background="{TemplateBinding Background}"
+                                            CornerRadius="25">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#2980B9"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#21618C"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Button.Style>
+            </Button>
+            
+            <!-- Close button -->
+            <Button x:Name="btnClose" 
+                Content="✕" 
+                FontSize="24"
+                FontWeight="Bold"
+                Width="50" 
+                Height="50"
+                Background="#E74C3C"
+                Foreground="White"
+                BorderThickness="0"
+                Cursor="Hand"
+                Click="btnClose_Click">
+            <Button.Style>
+                <Style TargetType="Button">
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="border" 
+                                        Background="{TemplateBinding Background}"
+                                        CornerRadius="25">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border" Property="Background" Value="#C0392B"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="border" Property="Background" Value="#A93226"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Button.Style>
+        </Button>
+        </StackPanel>
         
         <Border Grid.Column="0" Background="LightGray">
             <!-- Add your buttons and controls here -->

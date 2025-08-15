@@ -21,6 +21,71 @@ namespace Photobooth
 		{
 			InitializeComponent();
 			dcvs_container.CanvasRatio = 4.0 / 6.0;
+			
+			// Add keyboard shortcuts
+			this.PreviewKeyDown += MainWindow_PreviewKeyDown;
+		}
+		
+		private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+		{
+			// ESC key to exit fullscreen
+			if (e.Key == Key.Escape)
+			{
+				ConfirmAndClose();
+			}
+			// F11 to toggle fullscreen
+			else if (e.Key == Key.F11)
+			{
+				if (this.WindowState == WindowState.Maximized)
+				{
+					this.WindowState = WindowState.Normal;
+					this.WindowStyle = WindowStyle.SingleBorderWindow;
+				}
+				else
+				{
+					this.WindowState = WindowState.Maximized;
+					this.WindowStyle = WindowStyle.None;
+				}
+			}
+		}
+		
+		private void btnClose_Click(object sender, RoutedEventArgs e)
+		{
+			ConfirmAndClose();
+		}
+		
+		private void btnBackToHome_Click(object sender, RoutedEventArgs e)
+		{
+			// Show the Surface window again
+			foreach (Window window in Application.Current.Windows)
+			{
+				if (window is SurfacePhotoBoothWindow)
+				{
+					window.Show();
+					break;
+				}
+			}
+			this.Close();
+		}
+		
+		private void ConfirmAndClose()
+		{
+			// Ask for confirmation before closing
+			var result = MessageBox.Show("Exit Template Designer?", "Confirm Exit", 
+				MessageBoxButton.YesNo, MessageBoxImage.Question);
+			if (result == MessageBoxResult.Yes)
+			{
+				// Show the Surface window again
+				foreach (Window window in Application.Current.Windows)
+				{
+					if (window is SurfacePhotoBoothWindow)
+					{
+						window.Show();
+						break;
+					}
+				}
+				this.Close();
+			}
 		}
 
 		private void dcvs_MouseDown(object sender, MouseButtonEventArgs e)

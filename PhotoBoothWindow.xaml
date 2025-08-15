@@ -12,6 +12,7 @@
         WindowStartupLocation="CenterScreen"
         AllowsTransparency="False"
         WindowStyle="None"
+        ResizeMode="NoResize"
         Topmost="False"
         Background="#0D1117"
         UseLayoutRounding="True"
@@ -488,6 +489,11 @@
                                 <MenuItem Header="Save As" />
                                 <MenuItem Header="Print" Click="MenuItem_Click_3" />
                                 <MenuItem Header="Export" Click="MenuItem_Click_2" />
+                            </MenuItem>
+                            <MenuItem Header="🎨 Templates" Style="{StaticResource ModernMenuItemStyle}">
+                                <MenuItem Header="Template Designer" Click="OpenTemplateDesigner_Click" />
+                                <MenuItem Header="Load Template" />
+                                <MenuItem Header="Save Template" />
                             </MenuItem>
                             <MenuItem Header="❓ Help" Style="{StaticResource ModernMenuItemStyle}">
                                 <MenuItem Header="Check for updates" />

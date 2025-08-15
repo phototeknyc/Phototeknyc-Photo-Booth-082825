@@ -13,7 +13,12 @@ if [ ! -f "$MSBUILD_PATH" ]; then
     exit 1
 fi
 
+# Restore NuGet packages
+echo "Restoring NuGet packages..."
+"$MSBUILD_PATH" Photobooth.sln /t:Restore /p:Configuration=Debug /v:minimal
+
 # Build the solution
+echo "Building solution..."
 "$MSBUILD_PATH" Photobooth.sln /p:Configuration=Debug /v:minimal
 
 # Check if build succeeded

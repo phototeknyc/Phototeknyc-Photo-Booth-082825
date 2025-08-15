@@ -306,7 +306,12 @@ namespace Photobooth
         
         private void NavigateToTemplates_Click(object sender, MouseButtonEventArgs e)
         {
-            NavigateToPage(MainPage.Instance, "Templates");
+            // Open the PhotoBoothWindow with the template designer
+            var photoBoothWindow = new PhotoBoothWindow(true); // true = open templates
+            photoBoothWindow.Show();
+            
+            // Optionally hide the Surface window
+            this.WindowState = WindowState.Minimized;
         }
         
         private void NavigateToCamera_Click(object sender, MouseButtonEventArgs e)
@@ -324,6 +329,33 @@ namespace Photobooth
         {
             // Navigate to Photobooth Settings page
             NavigateToPage(new Pages.PhotoboothSettingsPage(), "Photobooth Settings");
+        }
+        
+        private void NavigateToUICustomize_Click(object sender, MouseButtonEventArgs e)
+        {
+            // Open UI Customization Canvas in a new window
+            var customizeWindow = new Window
+            {
+                Title = "UI Layout Customization",
+                WindowState = WindowState.Maximized,
+                WindowStyle = WindowStyle.None,
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(26, 26, 46))
+            };
+            
+            // Add the Modern UI Customization Canvas
+            var customizationCanvas = new Controls.ModernUICustomizationCanvas();
+            customizeWindow.Content = customizationCanvas;
+            
+            // Add close functionality (ESC key)
+            customizeWindow.PreviewKeyDown += (s, args) =>
+            {
+                if (args.Key == System.Windows.Input.Key.Escape)
+                {
+                    customizeWindow.Close();
+                }
+            };
+            
+            customizeWindow.ShowDialog();
         }
         
         private void NavigateToEvents_Click(object sender, MouseButtonEventArgs e)

@@ -543,7 +543,12 @@ namespace Photobooth.MVVM.ViewModels.Designer
 			DistributeHorizontalCmd = new RelayCommand(_ => DistributeHorizontally(), _ => CanDistribute());
 			DistributeVerticalCmd = new RelayCommand(_ => DistributeVertically(), _ => CanDistribute());
 			BringToFrontCmd = new RelayCommand(_ => CustomDesignerCanvas.BringToFront());
-			ChangeCanvasOrientationCmd = new RelayCommand(_ => CustomDesignerCanvas.ChangeCanvasOrientation("Portrait"));
+			ChangeCanvasOrientationCmd = new RelayCommand(_ => 
+			{
+				CustomDesignerCanvas.ChangeCanvasOrientation("Portrait");
+				// Update the selected ratio to reflect the new orientation
+				UpdateSelectedRatioAfterOrientationChange();
+			});
 			ChangeSelectedOrientationCmd = new RelayCommand(_ => CustomDesignerCanvas.ChangeOrientationOfSelectedItems(true));
 			ClearCanvasCmd = new RelayCommand(_ => { CustomDesignerCanvas.ClearCanvas(); _currentTemplate = null; });
 			DuplicateSelectedCmd = new RelayCommand(_ => CustomDesignerCanvas.DuplicateSelected());
@@ -1011,6 +1016,35 @@ namespace Photobooth.MVVM.ViewModels.Designer
 				
 				// Raise canvas size changed event
 				CanvasSizeChanged?.Invoke(this, EventArgs.Empty);
+			}
+		}
+		
+		private void UpdateSelectedRatioAfterOrientationChange()
+		{
+			// After orientation change, update the selected ratio to match the new dimensions
+			// This ensures the UI shows the correct paper size after rotation
+			var currentWidth = CustomDesignerCanvas.RatioX;
+			var currentHeight = CustomDesignerCanvas.RatioY;
+			
+			// Find matching paper size from list
+			var newRatio = $"{currentWidth}x{currentHeight}";
+			if (ListOfRatios.Contains(newRatio))
+			{
+				// Update without triggering SetCanvasRatio again
+				_selectedRatio = newRatio;
+				OnPropertyChanged(nameof(SelectedRatio));
+			}
+			else
+			{
+				// Try to find the reversed ratio (e.g., 6x4 doesn't exist but 4x6 does)
+				var reversedRatio = $"{currentHeight}x{currentWidth}";
+				if (ListOfRatios.Contains(reversedRatio))
+				{
+					// For non-standard orientations, keep the current dimensions
+					// but update the display to show closest match
+					_selectedRatio = reversedRatio;
+					OnPropertyChanged(nameof(SelectedRatio));
+				}
 			}
 		}
 		

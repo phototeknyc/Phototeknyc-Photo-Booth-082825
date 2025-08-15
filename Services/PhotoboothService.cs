@@ -124,10 +124,10 @@ namespace Photobooth.Services
                     Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Black)
                 };
                 
-                DebugService.LogDebug("NavigateToPhotobooth: Creating PhotoboothTouch page");
+                DebugService.LogDebug("NavigateToPhotobooth: Creating PhotoboothTouchModern page");
                 
-                // Create the PhotoboothTouch page with event and template data
-                var photoboothPage = new Pages.PhotoboothTouch();
+                // Create the PhotoboothTouchModern page with event and template data
+                var photoboothPage = new Pages.PhotoboothTouchModern();
                 PhotoboothWindow.Content = photoboothPage;
                 
                 // Clean up reference when window is closed

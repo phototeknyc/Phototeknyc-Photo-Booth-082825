@@ -45,15 +45,16 @@ namespace Photobooth
         {
             // Go to PhotoBoothWindow
             PhotoBoothWindow photoBoothWindow = new PhotoBoothWindow();
+            
+            // Handle window closing to show welcome window again
+            photoBoothWindow.Closed += (s, args) =>
+            {
+                this.Show();
+            };
+            
+            // Show as non-modal window for true fullscreen
+            photoBoothWindow.Show();
             this.Hide();
-            if((bool)photoBoothWindow.ShowDialog())
-            {
-				this.Show();
-			}
-            else
-            {
-                this.Close();
-            }
         }
     }
 }

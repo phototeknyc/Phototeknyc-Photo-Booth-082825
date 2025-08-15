@@ -169,6 +169,9 @@
     <Compile Include="Threading\BackgroundWorker.cs" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="AWSSDK.Core">
+      <Version>4.0.0.22</Version>
+    </PackageReference>
     <PackageReference Include="FontAwesome">
       <Version>4.7.0</Version>
     </PackageReference>
@@ -186,6 +189,9 @@
     </PackageReference>
     <PackageReference Include="System.Drawing.Common">
       <Version>9.0.8</Version>
+    </PackageReference>
+    <PackageReference Include="Twilio">
+      <Version>7.12.0</Version>
     </PackageReference>
     <PackageReference Include="WriteableBitmapEx">
       <Version>1.6.8</Version>

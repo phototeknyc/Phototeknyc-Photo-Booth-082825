@@ -167,7 +167,7 @@
         </Style>
     </Page.Resources>
 
-    <Grid>
+    <Grid x:Name="mainGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -587,6 +587,116 @@
                         </Button.Template>
                     </Button>
                     
+                    <!-- QR Code Share Button -->
+                    <Button x:Name="qrShareButton" 
+                            Width="80" 
+                            Height="80"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,50,400"
+                            Background="#FF00BCD4"
+                            BorderThickness="0"
+                            FontSize="28"
+                            FontWeight="Bold"
+                            Foreground="White"
+                            ToolTip="Share via QR Code"
+                            Visibility="Collapsed"
+                            Click="QRShareButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="40">
+                                    <StackPanel HorizontalAlignment="Center" 
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="📲" 
+                                                   FontSize="32"
+                                                   HorizontalAlignment="Center"/>
+                                        <TextBlock Text="QR CODE" 
+                                                   FontSize="11"
+                                                   Margin="0,2,0,0"
+                                                   HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FF26C6DA"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <!-- SMS Share Button -->
+                    <Button x:Name="smsShareButton" 
+                            Width="80" 
+                            Height="80"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,50,300"
+                            Background="#FF4CAF50"
+                            BorderThickness="0"
+                            FontSize="28"
+                            FontWeight="Bold"
+                            Foreground="White"
+                            ToolTip="Send via SMS"
+                            Visibility="Collapsed"
+                            Click="SMSShareButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="40">
+                                    <StackPanel HorizontalAlignment="Center" 
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="💬" 
+                                                   FontSize="32"
+                                                   HorizontalAlignment="Center"/>
+                                        <TextBlock Text="SMS" 
+                                                   FontSize="12"
+                                                   Margin="0,2,0,0"
+                                                   HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FF66BB6A"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <!-- Print Button - Positioned to the right of preview screen -->
+                    <Button x:Name="printButton" 
+                            Width="80" 
+                            Height="80"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,50,200"
+                            Background="#FF2196F3"
+                            BorderThickness="0"
+                            Content="🖨️"
+                            FontSize="32"
+                            Foreground="White"
+                            FontWeight="Bold"
+                            ToolTip="Print Photo"
+                            Visibility="Collapsed"
+                            Click="PrintButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="10">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FF42A5F5"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
                     <!-- Gallery Button - Below Print Button -->
                     <Button x:Name="galleryButton" 
                             Width="80" 
@@ -617,48 +727,44 @@
                                                    HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FFAB47BC"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </Button.Template>
                     </Button>
                     
-                    <!-- Print Button - Positioned to the right of preview screen -->
-                    <Button x:Name="printButton" 
-                            Width="80" 
-                            Height="80"
+                    <!-- Cloud Settings Button -->
+                    <Button x:Name="cloudSettingsButton" 
+                            Width="60" 
+                            Height="60"
                             HorizontalAlignment="Right"
-                            VerticalAlignment="Bottom"
-                            Margin="0,0,50,200"
-                            Background="#FF2196F3"
-                            BorderThickness="0"
-                            Content="🖨️"
-                            FontSize="32"
+                            VerticalAlignment="Top"
+                            Margin="0,20,20,0"
+                            Background="#20FFFFFF"
+                            BorderBrush="#40FFFFFF"
+                            BorderThickness="1"
+                            FontSize="24"
                             Foreground="White"
-                            FontWeight="Bold"
-                            ToolTip="Print Photo"
-                            Visibility="Collapsed"
-                            Click="PrintButton_Click">
+                            ToolTip="Cloud Settings"
+                            Visibility="Visible"
+                            Click="CloudSettingsButton_Click">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border Background="{TemplateBinding Background}" 
-                                        CornerRadius="10">
-                                    <ContentPresenter HorizontalAlignment="Center" 
-                                                      VerticalAlignment="Center"/>
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="30">
+                                    <TextBlock Text="☁️" 
+                                               FontSize="24"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#FF1976D2"/>
-                                        <Setter Property="RenderTransform">
-                                            <Setter.Value>
-                                                <ScaleTransform ScaleX="1.05" ScaleY="1.05"/>
-                                            </Setter.Value>
-                                        </Setter>
-                                    </Trigger>
-                                    <Trigger Property="IsPressed" Value="True">
-                                        <Setter Property="RenderTransform">
-                                            <Setter.Value>
-                                                <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
-                                            </Setter.Value>
-                                        </Setter>
+                                        <Setter Property="Background" Value="#30FFFFFF"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -2483,6 +2589,229 @@
                         </StackPanel>
                     </Border>
                 </Grid>
+            </Border>
+        </Grid>
+        
+        <!-- Photo Sharing Overlay with QR Code -->
+        <Grid x:Name="sharingOverlay" 
+              Grid.RowSpan="3" 
+              Background="#E0000000" 
+              Visibility="Collapsed">
+            <Border Background="#15FFFFFF" 
+                    CornerRadius="25" 
+                    Width="500"
+                    Height="650"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="#30FFFFFF"
+                    BorderThickness="1">
+                <Border.Effect>
+                    <DropShadowEffect Color="#80000000" BlurRadius="30" ShadowDepth="0" Opacity="0.5"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Success Icon and Title -->
+                    <StackPanel Grid.Row="0" Margin="0,30,0,20">
+                        <TextBlock Text="✨" 
+                                   FontSize="48"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,10"/>
+                        <TextBlock Text="Your Photos Are Ready!" 
+                                   FontSize="26" 
+                                   FontWeight="Light"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <!-- QR Code -->
+                    <Border Grid.Row="1" 
+                            Background="White" 
+                            CornerRadius="15"
+                            Width="280" 
+                            Height="280"
+                            Margin="0,10,0,20"
+                            Padding="15">
+                        <Image x:Name="qrCodeImage" 
+                               Stretch="Uniform"/>
+                    </Border>
+                    
+                    <!-- Scan instruction -->
+                    <TextBlock Grid.Row="2"
+                               Text="Scan with your phone camera" 
+                               FontSize="16"
+                               HorizontalAlignment="Center"
+                               Foreground="#E0FFFFFF"
+                               Margin="0,0,0,15"/>
+                    
+                    <!-- Gallery URL -->
+                    <Border Grid.Row="3"
+                            Background="#10FFFFFF"
+                            CornerRadius="20"
+                            Padding="15,8"
+                            HorizontalAlignment="Center"
+                            Margin="0,0,0,20">
+                        <TextBlock x:Name="galleryUrlText" 
+                                   Text="photos.app/abc123" 
+                                   FontSize="14"
+                                   Foreground="#B0FFFFFF"
+                                   FontFamily="Consolas"/>
+                    </Border>
+                    
+                    <!-- SMS Option -->
+                    <StackPanel Grid.Row="4" 
+                                Orientation="Horizontal" 
+                                HorizontalAlignment="Center"
+                                Margin="0,0,0,15">
+                        <TextBlock Text="📱" 
+                                   FontSize="20"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0"/>
+                        <TextBox x:Name="phoneNumberTextBox" 
+                                 Width="200"
+                                 Height="35"
+                                 FontSize="16"
+                                 VerticalContentAlignment="Center"
+                                 Background="#20FFFFFF"
+                                 Foreground="White"
+                                 BorderBrush="#40FFFFFF"
+                                 BorderThickness="1"
+                                 Tag="Phone number (optional)"
+                                 GotFocus="PhoneTextBox_GotFocus"
+                                 LostFocus="PhoneTextBox_LostFocus"/>
+                        <Button x:Name="sendSmsButton"
+                                Content="Send"
+                                Width="70"
+                                Height="35"
+                                Margin="10,0,0,0"
+                                Background="#30FFFFFF"
+                                Foreground="White"
+                                BorderBrush="#50FFFFFF"
+                                BorderThickness="1"
+                                Click="SendSmsButton_Click"
+                                Cursor="Hand">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="5">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#40FFFFFF"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+                    
+                    <!-- Status Messages -->
+                    <TextBlock Grid.Row="5"
+                               x:Name="shareStatusText"
+                               FontSize="13"
+                               HorizontalAlignment="Center"
+                               Foreground="#80FFFFFF"
+                               Margin="0,0,0,10"/>
+                    
+                    <!-- Close Button -->
+                    <Button Grid.Row="6"
+                            Content="Done"
+                            Width="120"
+                            Height="40"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,0,30"
+                            Background="#20FFFFFF"
+                            Foreground="White"
+                            BorderBrush="#40FFFFFF"
+                            BorderThickness="1"
+                            FontSize="16"
+                            Click="CloseShareOverlay_Click"
+                            Cursor="Hand">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="20">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#30FFFFFF"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </Grid>
+            </Border>
+            
+            <!-- Auto-close timer display -->
+            <TextBlock x:Name="autoCloseText"
+                       Text="Closing in 30s"
+                       FontSize="12"
+                       Foreground="#80FFFFFF"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Bottom"
+                       Margin="0,0,0,100"/>
+        </Grid>
+        
+        <!-- Upload Progress Overlay -->
+        <Grid x:Name="uploadProgressOverlay" 
+              Grid.RowSpan="3" 
+              Background="#CC000000" 
+              Visibility="Collapsed">
+            <Border Background="#20FFFFFF" 
+                    CornerRadius="20" 
+                    Width="400"
+                    Height="200"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="#40FFFFFF"
+                    BorderThickness="1">
+                <StackPanel VerticalAlignment="Center" Margin="30">
+                    <TextBlock Text="Uploading Photos..." 
+                               FontSize="20" 
+                               FontWeight="Light"
+                               Foreground="White"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,20"/>
+                    
+                    <ProgressBar x:Name="uploadProgressBar"
+                                 Height="8"
+                                 Maximum="100"
+                                 Value="0"
+                                 Foreground="#FF00D9FF"
+                                 Background="#20FFFFFF"
+                                 BorderThickness="0"/>
+                    
+                    <TextBlock x:Name="uploadProgressText"
+                               Text="0 of 0 photos"
+                               FontSize="14"
+                               Foreground="#B0FFFFFF"
+                               HorizontalAlignment="Center"
+                               Margin="0,15,0,0"/>
+                    
+                    <TextBlock x:Name="uploadStatusText"
+                               Text="Optimizing photos for sharing..."
+                               FontSize="12"
+                               Foreground="#80FFFFFF"
+                               HorizontalAlignment="Center"
+                               Margin="0,10,0,0"/>
+                </StackPanel>
             </Border>
         </Grid>
         

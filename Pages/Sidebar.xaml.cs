@@ -138,13 +138,13 @@ namespace Photobooth.Pages
                     }
                 }
                 
-                // Create a new window for the photobooth touch interface
+                // Create a new window for the modern photobooth touch interface
                 PhotoboothService.PhotoboothWindow = new Window
                 {
                     Title = "Photobooth Touch Interface",
                     WindowState = WindowState.Maximized,
                     WindowStyle = WindowStyle.None, // Fullscreen for touch
-                    Content = new PhotoboothTouch(),
+                    Content = new PhotoboothTouchModern(),
                     Background = new SolidColorBrush(Colors.Black)
                 };
                 

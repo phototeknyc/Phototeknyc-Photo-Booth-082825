@@ -51,7 +51,7 @@
             </Grid.RowDefinitions>
             
             <!-- Modern Toolbar - Compact for more canvas space -->
-            <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3C3C3C" BorderThickness="0,0,0,1">
+            <Border x:Name="ToolbarBorder" Grid.Row="0" Background="#2D2D30" BorderBrush="#3C3C3C" BorderThickness="0,0,0,1">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="15,6">
                     
                     <!-- New Template -->
