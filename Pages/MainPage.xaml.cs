@@ -30,6 +30,9 @@ namespace Photobooth.Pages
 
         public DesignerVM ViewModel { get; private set; }
 
+        private bool _isSidebarCollapsed = false;
+        private bool _isRightSidebarCollapsed = false;
+        
         public MainPage()
         {
             DebugService.LogDebug("MainPage constructor called");
@@ -249,6 +252,64 @@ namespace Photobooth.Pages
                 MessageBox.Show($"Failed to open photobooth interface: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+        
+        public void ToggleSidebar()
+        {
+            if (_isSidebarCollapsed)
+            {
+                // Expand sidebar
+                SidebarColumn.Width = new GridLength(350);
+                SidebarBorder.Visibility = Visibility.Visible;
+                ExpandButton.Visibility = Visibility.Collapsed;
+                _isSidebarCollapsed = false;
+            }
+            else
+            {
+                // Collapse sidebar
+                SidebarColumn.Width = new GridLength(40);
+                SidebarBorder.Visibility = Visibility.Collapsed;
+                ExpandButton.Visibility = Visibility.Visible;
+                _isSidebarCollapsed = true;
+            }
+            
+            // Update canvas scale after layout change
+            Dispatcher.BeginInvoke(new Action(() => UpdateCanvasScale()), 
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+        
+        private void ExpandButton_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleSidebar();
+        }
+        
+        public void ToggleRightSidebar()
+        {
+            if (_isRightSidebarCollapsed)
+            {
+                // Expand right sidebar
+                RightSidebarColumn.Width = new GridLength(350);
+                RightSidebarBorder.Visibility = Visibility.Visible;
+                RightExpandButton.Visibility = Visibility.Collapsed;
+                _isRightSidebarCollapsed = false;
+            }
+            else
+            {
+                // Collapse right sidebar
+                RightSidebarColumn.Width = new GridLength(40);
+                RightSidebarBorder.Visibility = Visibility.Collapsed;
+                RightExpandButton.Visibility = Visibility.Visible;
+                _isRightSidebarCollapsed = true;
+            }
+            
+            // Update canvas scale after layout change
+            Dispatcher.BeginInvoke(new Action(() => UpdateCanvasScale()), 
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+        
+        private void RightExpandButton_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleRightSidebar();
         }
     }
 }

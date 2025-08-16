@@ -47,6 +47,12 @@ namespace Photobooth.Pages
             {
                 DebugModeCheckBox.IsChecked = DebugService.Instance.IsDebugEnabled;
             }
+        }
+        
+        private void CollapseButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Notify MainPage to toggle sidebar visibility
+            MainPage.Instance?.ToggleSidebar();
             
             DebugService.LogDebug($"SideNavbar_Loaded: DataContext set, ViewModel exists: {ViewModel != null}");
         }

@@ -143,6 +143,12 @@ namespace Photobooth.Pages
 			}
 		}
 
+		private void CollapseButton_Click(object sender, RoutedEventArgs e)
+		{
+			// Notify MainPage to toggle the right sidebar visibility
+			MainPage.Instance?.ToggleRightSidebar();
+		}
+		
 		private void ToggleLockPosition_Click(object sender, MouseButtonEventArgs e)
 		{
 			ViewModel?.ToggleLockPositionCmd.Execute(null);

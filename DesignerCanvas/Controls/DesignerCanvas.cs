@@ -1454,6 +1454,7 @@ namespace DesignerCanvas.Controls
         public void DuplicateSelected()
         {
             int selectedCount = _SelectedItems.Count;
+            var newItems = new List<ICanvasItem>();
 
             for (int i = 0; i < selectedCount; i++)
             {
@@ -1462,6 +1463,13 @@ namespace DesignerCanvas.Controls
                 newItem.Left += 10;
                 newItem.Top += 10;
                 _Items.Add(newItem);
+                newItems.Add(newItem);
+            }
+
+            // Clear current selection and only select the new duplicated items
+            _SelectedItems.Clear();
+            foreach (var newItem in newItems)
+            {
                 _SelectedItems.Add(newItem);
             }
         }

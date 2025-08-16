@@ -34,14 +34,35 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition x:Name="SidebarColumn" Width="350"/>
             <ColumnDefinition Width="*" MinWidth="500"/>
-            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition x:Name="RightSidebarColumn" Width="350"/>
         </Grid.ColumnDefinitions>
         
-        <Border Grid.Column="0"  Grid.Row="0" BorderBrush="#CCCCCC" BorderThickness="0,0,0.5,0" >
-            <Frame Source="Sidebar.xaml"/>
-        </Border>
+        <!-- Sidebar Container -->
+        <Grid Grid.Column="0" Grid.Row="0">
+            <Border x:Name="SidebarBorder" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="0,0,1,0" Background="{StaticResource SurfaceSecondaryBrush}">
+                <Frame x:Name="SidebarFrame" Source="Sidebar.xaml"/>
+            </Border>
+            
+            <!-- Expand button when sidebar is collapsed -->
+            <Button x:Name="ExpandButton" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                    Width="32" Height="32" Margin="8" 
+                    Background="{StaticResource SurfaceSecondaryBrush}" BorderThickness="0" 
+                    Click="ExpandButton_Click" Cursor="Hand"
+                    ToolTip="Expand Sidebar" Visibility="Collapsed">
+                <Path Width="12" Height="12" Fill="#CCCCCC" Stretch="Uniform">
+                    <Path.Data>
+                        <PathGeometry>
+                            <PathFigure StartPoint="0,0">
+                                <LineSegment Point="8,6"/>
+                                <LineSegment Point="0,12"/>
+                            </PathFigure>
+                        </PathGeometry>
+                    </Path.Data>
+                </Path>
+            </Button>
+        </Grid>
         <Grid Grid.Column="1" Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/> 
@@ -214,8 +235,29 @@
             </Grid>
         </Grid>
         <!--<Frame  Grid.Column="1" Grid.Row="0" Background="WhiteSmoke" Margin="0,10" x:Name="frame"  MinWidth="500" MinHeight="300" NavigationUIVisibility="Hidden" />-->
-        <Border Grid.Column="2" Grid.Row="0"  Grid.ColumnSpan="3"  BorderBrush="#CCCCCC" Width="280" BorderThickness="0.5,0,0,0">
-            <Frame x:Name="PropertiesPanel" Source="ItemPropertiesPage.xaml"/>
-        </Border>
+        <!-- Right Sidebar Container -->
+        <Grid Grid.Column="2" Grid.Row="0">
+            <Border x:Name="RightSidebarBorder" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1,0,0,0" Background="{StaticResource SurfaceSecondaryBrush}">
+                <Frame x:Name="PropertiesPanel" Source="ItemPropertiesPage.xaml"/>
+            </Border>
+            
+            <!-- Expand button when right sidebar is collapsed -->
+            <Button x:Name="RightExpandButton" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Width="32" Height="32" Margin="8" 
+                    Background="{StaticResource SurfaceSecondaryBrush}" BorderThickness="0" 
+                    Click="RightExpandButton_Click" Cursor="Hand"
+                    ToolTip="Expand Properties Panel" Visibility="Collapsed">
+                <Path Width="12" Height="12" Fill="#CCCCCC" Stretch="Uniform">
+                    <Path.Data>
+                        <PathGeometry>
+                            <PathFigure StartPoint="8,0">
+                                <LineSegment Point="0,6"/>
+                                <LineSegment Point="8,12"/>
+                            </PathFigure>
+                        </PathGeometry>
+                    </Path.Data>
+                </Path>
+            </Button>
+        </Grid>
     </Grid>
 </Page>

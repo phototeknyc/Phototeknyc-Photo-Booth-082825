@@ -5,16 +5,17 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
       xmlns:local="clr-namespace:Photobooth.Pages"
       mc:Ignorable="d" 
-       d:DesignHeight="450" d:DesignWidth="280" Background="{StaticResource SurfaceSecondaryBrush}"
+       d:DesignHeight="450" d:DesignWidth="350" Background="{StaticResource SurfaceSecondaryBrush}"
       Title="Properties">
 
     <Page.Resources>
-        <!-- Modern Button Style -->
+        <!-- Modern Button Style with larger rows -->
         <Style x:Key="ModernButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="8,6"/>
-            <Setter Property="Margin" Value="0,1"/>
+            <Setter Property="Padding" Value="20,16"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Height" Value="56"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -43,7 +44,7 @@
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Margin" Value="0,4"/>
+            <Setter Property="Margin" Value="0,2"/>
         </Style>
         
         <!-- Modern TextBox Style -->
@@ -53,8 +54,8 @@
             <Setter Property="BorderBrush" Value="#606060"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="8,6"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Height" Value="28"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Height" Value="36"/>
         </Style>
         
         <!-- Modern ComboBox Style -->
@@ -62,23 +63,48 @@
             <Setter Property="Background" Value="{StaticResource SurfacePanelBrush}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderBrush" Value="#606060"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Height" Value="28"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Height" Value="36"/>
         </Style>
         
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
     </Page.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="5,0">
-        <StackPanel Margin="5,8,5,8">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Collapse Button on the left -->
+        <Button x:Name="CollapseButton" Grid.Row="0" HorizontalAlignment="Left" 
+                Width="32" Height="32" Margin="8" 
+                Background="Transparent" BorderThickness="0" 
+                Click="CollapseButton_Click" Cursor="Hand"
+                ToolTip="Collapse Properties Panel">
+            <Path Width="12" Height="12" Fill="#CCCCCC" Stretch="Uniform">
+                <Path.Data>
+                    <PathGeometry>
+                        <PathFigure StartPoint="0,0">
+                            <LineSegment Point="8,6"/>
+                            <LineSegment Point="0,12"/>
+                        </PathFigure>
+                    </PathGeometry>
+                </Path.Data>
+            </Path>
+        </Button>
+        
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
             
             <!-- Selected Section -->
-            <Expander Header="Selected" Style="{StaticResource ModernExpander}" IsExpanded="True">
-                <Expander.HeaderTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
-                    </DataTemplate>
-                </Expander.HeaderTemplate>
+            <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="0,0,0,1">
+                <Expander Header="Selected" Style="{StaticResource ModernExpander}" IsExpanded="True">
+                    <Expander.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="15" Foreground="#CCCCCC" Margin="0,12,0,8"/>
+                        </DataTemplate>
+                    </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
                     <StackPanel Orientation="Vertical">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" >
@@ -89,17 +115,17 @@
                                     <TextBlock Text="Position" FontSize="8" Foreground="{StaticResource SurfaceTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,2"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="X:" FontSize="12" Foreground="White" Margin="1,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="X:" FontSize="14" Foreground="White" Margin="1,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                     <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="1,5,5,5">
-                                        <TextBox x:Name="tbRatioX" Width="65" Height="22" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
+                                        <TextBox x:Name="tbRatioX" Width="75" Height="28" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
                                                  Foreground="White" BorderBrush="{x:Null}" HorizontalAlignment="Center"
                                                  Text="{Binding SelectedElementsPositionX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Border>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="Y:" FontSize="12" Foreground="White" Margin="1,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Y:" FontSize="14" Foreground="White" Margin="1,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                     <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="1,5,5,5">
-                                        <TextBox x:Name="tbRatioY" Width="65" Height="22" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
+                                        <TextBox x:Name="tbRatioY" Width="75" Height="28" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
                                                  Foreground="White" BorderBrush="{x:Null}" HorizontalAlignment="Center"
                                                  Text="{Binding SelectedElementsPositionY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Border>
@@ -114,17 +140,17 @@
                                     <TextBlock Text="Size" FontSize="8" Foreground="{StaticResource SurfaceTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,2"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="W:" FontSize="12" Foreground="White" Margin="0,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="W:" FontSize="14" Foreground="White" Margin="0,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                     <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="0,5,5,5">
-                                        <TextBox x:Name="tbSizeX" Width="65" Height="22" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
+                                        <TextBox x:Name="tbSizeX" Width="75" Height="28" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
                                                  Foreground="White" BorderBrush="{x:Null}" HorizontalAlignment="Center"
                                                  Text="{Binding SelectedElementsActualPixelWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Border>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="H:" FontSize="12" Foreground="White" Margin="0,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="H:" FontSize="14" Foreground="White" Margin="0,5,5,5" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                     <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="2" Margin="0,5,5,5">
-                                        <TextBox x:Name="tbSizeY" Width="65" Height="22" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
+                                        <TextBox x:Name="tbSizeY" Width="75" Height="28" VerticalAlignment="Center" Background="{StaticResource SurfaceInputBrush}" 
                                                  Foreground="White" BorderBrush="{x:Null}"
                                                  Text="{Binding SelectedElementsActualPixelHeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Border>
@@ -132,15 +158,17 @@
                             </StackPanel>
                         </StackPanel>
                 </StackPanel>
-            </Expander>
+                </Expander>
+            </Border>
             
             <!-- Alignments Section -->
-            <Expander Header="Alignments" Style="{StaticResource ModernExpander}" IsExpanded="True">
-                <Expander.HeaderTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
-                    </DataTemplate>
-                </Expander.HeaderTemplate>
+            <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="0,0,0,1">
+                <Expander Header="Alignments" Style="{StaticResource ModernExpander}" IsExpanded="True">
+                    <Expander.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="15" Foreground="#CCCCCC" Margin="0,12,0,8"/>
+                        </DataTemplate>
+                    </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
                     <StackPanel>
                             <!-- Photoshop-style alignment layout -->
@@ -159,49 +187,179 @@
                                     <ColumnDefinition Width="40"/>
                                 </Grid.ColumnDefinitions>
                                 
-                                <!-- Alignment buttons -->
+                                <!-- Alignment buttons with modern SVG icons -->
+                                <!-- Align Left -->
                                 <Button ToolTip="Align Left Edges" Grid.Row="0" Grid.Column="0" Width="35" Height="30" 
                                         Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignLeftCmd}">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignLeft}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                        <Path.Data>
+                                            <GeometryGroup>
+                                                <RectangleGeometry Rect="0,2,2,14"/>
+                                                <RectangleGeometry Rect="4,3,8,4"/>
+                                                <RectangleGeometry Rect="4,10,6,4"/>
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
                                 </Button>
+                                
+                                <!-- Align Center Horizontal -->
                                 <Button ToolTip="Align Horizontal Centers" Grid.Row="0" Grid.Column="1" Width="35" Height="30" 
                                         Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignHCenterCmd}">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignCenter}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                        <Path.Data>
+                                            <GeometryGroup>
+                                                <RectangleGeometry Rect="7,0,2,16"/>
+                                                <RectangleGeometry Rect="2,3,12,4"/>
+                                                <RectangleGeometry Rect="4,10,8,4"/>
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
                                 </Button>
+                                
+                                <!-- Align Right -->
                                 <Button ToolTip="Align Right Edges" Grid.Row="0" Grid.Column="2" Width="35" Height="30" 
                                         Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignRightCmd}">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignRight}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                        <Path.Data>
+                                            <GeometryGroup>
+                                                <RectangleGeometry Rect="14,2,2,14"/>
+                                                <RectangleGeometry Rect="4,3,8,4"/>
+                                                <RectangleGeometry Rect="6,10,6,4"/>
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
                                 </Button>
                                 
+                                <!-- Align Top -->
                                 <Button ToolTip="Align Top Edges" Grid.Row="1" Grid.Column="0" Width="35" Height="30" 
                                         Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignTopCmd}">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignTop}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                        <Path.Data>
+                                            <GeometryGroup>
+                                                <RectangleGeometry Rect="2,0,14,2"/>
+                                                <RectangleGeometry Rect="3,4,4,8"/>
+                                                <RectangleGeometry Rect="10,4,4,6"/>
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
                                 </Button>
+                                
+                                <!-- Align Center Vertical -->
                                 <Button ToolTip="Align Vertical Centers" Grid.Row="1" Grid.Column="1" Width="35" Height="30" 
                                         Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignVCenterCmd}">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignMiddle}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                        <Path.Data>
+                                            <GeometryGroup>
+                                                <RectangleGeometry Rect="0,7,16,2"/>
+                                                <RectangleGeometry Rect="3,2,4,12"/>
+                                                <RectangleGeometry Rect="10,4,4,8"/>
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
                                 </Button>
+                                
+                                <!-- Align Bottom -->
                                 <Button ToolTip="Align Bottom Edges" Grid.Row="1" Grid.Column="2" Width="35" Height="30" 
                                         Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding AlignBottomCmd}">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignBottom}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                        <Path.Data>
+                                            <GeometryGroup>
+                                                <RectangleGeometry Rect="2,14,14,2"/>
+                                                <RectangleGeometry Rect="3,4,4,8"/>
+                                                <RectangleGeometry Rect="10,6,4,6"/>
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
                                 </Button>
                                 
                                 <!-- Distribution buttons -->
+                                <!-- Distribute Horizontal -->
                                 <Button ToolTip="Distribute Horizontal Spacing" Grid.Row="0" Grid.Column="4" Width="35" Height="30" 
                                         Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding DistributeHorizontalCmd}">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignStretchH}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                        <Path.Data>
+                                            <GeometryGroup>
+                                                <RectangleGeometry Rect="0,2,2,12"/>
+                                                <RectangleGeometry Rect="5,4,2,8"/>
+                                                <RectangleGeometry Rect="9,4,2,8"/>
+                                                <RectangleGeometry Rect="14,2,2,12"/>
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
                                 </Button>
+                                
+                                <!-- Distribute Vertical -->
                                 <Button ToolTip="Distribute Vertical Spacing" Grid.Row="0" Grid.Column="5" Width="35" Height="30" 
                                         Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
                                         Command="{Binding DistributeVerticalCmd}">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_AlignStretchV}" Style="{StaticResource MDL2Icon}" Foreground="{StaticResource SurfaceTextPrimaryBrush}"/>
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                        <Path.Data>
+                                            <GeometryGroup>
+                                                <RectangleGeometry Rect="2,0,12,2"/>
+                                                <RectangleGeometry Rect="4,5,8,2"/>
+                                                <RectangleGeometry Rect="4,9,8,2"/>
+                                                <RectangleGeometry Rect="2,14,12,2"/>
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
+                                </Button>
+                                
+                                <!-- Center in Canvas -->
+                                <Button ToolTip="Center in Canvas" Grid.Row="1" Grid.Column="4" Width="35" Height="30" 
+                                        Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
+                                        Command="{Binding CenterInCanvasCmd}">
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                        <Path.Data>
+                                            <GeometryGroup>
+                                                <PathGeometry>
+                                                    <PathFigure StartPoint="0,0">
+                                                        <LineSegment Point="16,0"/>
+                                                        <LineSegment Point="16,16"/>
+                                                        <LineSegment Point="0,16"/>
+                                                        <LineSegment Point="0,0"/>
+                                                    </PathFigure>
+                                                </PathGeometry>
+                                                <RectangleGeometry Rect="5,5,6,6"/>
+                                                <LineGeometry StartPoint="8,0" EndPoint="8,5"/>
+                                                <LineGeometry StartPoint="8,11" EndPoint="8,16"/>
+                                                <LineGeometry StartPoint="0,8" EndPoint="5,8"/>
+                                                <LineGeometry StartPoint="11,8" EndPoint="16,8"/>
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
+                                </Button>
+                                
+                                <!-- Match Size -->
+                                <Button ToolTip="Match Size" Grid.Row="1" Grid.Column="5" Width="35" Height="30" 
+                                        Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Cursor="Hand"
+                                        Command="{Binding MatchSizeCmd}">
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                        <Path.Data>
+                                            <GeometryGroup>
+                                                <RectangleGeometry Rect="1,1,6,6"/>
+                                                <RectangleGeometry Rect="9,9,6,6"/>
+                                                <PathGeometry>
+                                                    <PathGeometry.Figures>
+                                                        <PathFigure StartPoint="7,4">
+                                                            <LineSegment Point="9,4"/>
+                                                            <LineSegment Point="9,2"/>
+                                                            <LineSegment Point="12,5"/>
+                                                            <LineSegment Point="9,8"/>
+                                                            <LineSegment Point="9,6"/>
+                                                            <LineSegment Point="7,6"/>
+                                                        </PathFigure>
+                                                    </PathGeometry.Figures>
+                                                </PathGeometry>
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
                                 </Button>
                             </Grid>
                             <!-- Multi-selection hint -->
@@ -218,13 +376,15 @@
                             </StackPanel>
                         </StackPanel>
                 </StackPanel>
-            </Expander>
+                </Expander>
+            </Border>
             
             <!-- Rotation Section -->
-            <Expander Header="Rotation" Style="{StaticResource ModernExpander}" IsExpanded="True">
-                <Expander.HeaderTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
+            <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="0,0,0,1">
+                <Expander Header="Rotation" Style="{StaticResource ModernExpander}" IsExpanded="True">
+                    <Expander.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="15" Foreground="#CCCCCC" Margin="0,12,0,8"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -283,13 +443,15 @@
                         </StackPanel>
                     </Grid>
                 </StackPanel>
-            </Expander>
+                </Expander>
+            </Border>
             
             <!-- Z-Order Section -->
-            <Expander Header="Z-Order" Style="{StaticResource ModernExpander}" IsExpanded="True">
-                <Expander.HeaderTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
+            <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="0,0,0,1">
+                <Expander Header="Z-Order" Style="{StaticResource ModernExpander}" IsExpanded="True">
+                    <Expander.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="15" Foreground="#CCCCCC" Margin="0,12,0,8"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -302,28 +464,60 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Button ToolTip="Bring To Front" Grid.Row="0" Grid.Column="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
-                                    Command="{Binding BringToFrontCmd}">
-                                <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Forward}" Style="{StaticResource MDL2Icon}" Foreground="White"/>
+                            <Button ToolTip="Bring To Front" Grid.Row="0" Grid.Column="0" Width="48" Height="36" 
+                                    Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1"
+                                    Command="{Binding BringToFrontCmd}" Cursor="Hand">
+                                <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                    <Path.Data>
+                                        <GeometryGroup>
+                                            <!-- Base rectangle -->
+                                            <RectangleGeometry Rect="2,6,12,8" />
+                                            <!-- Front rectangle -->
+                                            <RectangleGeometry Rect="4,2,12,8" />
+                                        </GeometryGroup>
+                                    </Path.Data>
+                                </Path>
                             </Button>
-                            <Button ToolTip="Send To Back" Grid.Row="0" Grid.Column="1" Background="Transparent" BorderThickness="0" Cursor="Hand"
-                                    Command="{Binding SendToBackCmd}">
-                                <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Back}" Style="{StaticResource MDL2Icon}" Foreground="White"/>
+                            <Button ToolTip="Send To Back" Grid.Row="0" Grid.Column="1" Width="48" Height="36" 
+                                    Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1"
+                                    Command="{Binding SendToBackCmd}" Cursor="Hand">
+                                <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                    <Path.Data>
+                                        <GeometryGroup>
+                                            <!-- Front rectangle -->
+                                            <RectangleGeometry Rect="4,2,12,8" />
+                                            <!-- Back rectangle -->
+                                            <RectangleGeometry Rect="2,6,12,8" />
+                                        </GeometryGroup>
+                                    </Path.Data>
+                                </Path>
                             </Button>
-                            <Button ToolTip="Duplicate" Grid.Row="0" Grid.Column="2" Background="Transparent" BorderThickness="0" Cursor="Hand"
-                                    Command="{Binding DuplicateSelectedCmd}">
-                                <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Copy}" Style="{StaticResource MDL2Icon}" Foreground="White"/>
+                            <Button ToolTip="Duplicate" Grid.Row="0" Grid.Column="2" Width="48" Height="36" 
+                                    Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1"
+                                    Command="{Binding DuplicateSelectedCmd}" Cursor="Hand">
+                                <Path Width="16" Height="16" Stretch="Uniform" Fill="White">
+                                    <Path.Data>
+                                        <GeometryGroup>
+                                            <!-- Original rectangle -->
+                                            <RectangleGeometry Rect="2,2,10,10" />
+                                            <!-- Duplicate rectangle offset -->
+                                            <RectangleGeometry Rect="6,6,10,10" />
+                                        </GeometryGroup>
+                                    </Path.Data>
+                                </Path>
                             </Button>
 
                         </Grid>
                 </StackPanel>
-            </Expander>
+                </Expander>
+            </Border>
             
             <!-- Aspect Ratio Section - Only visible for images and placeholders -->
-            <Expander x:Name="AspectRatioPanel" Header="Aspect Ratio" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
-                <Expander.HeaderTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
+            <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="0,0,0,1">
+                <Expander x:Name="AspectRatioPanel" Header="Aspect Ratio" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
+                    <Expander.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="15" Foreground="#CCCCCC" Margin="0,12,0,8"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -341,13 +535,15 @@
                             </StackPanel>
                         </StackPanel>
                 </StackPanel>
-            </Expander>
+                </Expander>
+            </Border>
             
             <!-- Placeholder Settings Section - Only visible for placeholders -->
-            <Expander x:Name="PlaceholderPanel" Header="Placeholder Settings" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
-                <Expander.HeaderTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
+            <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="0,0,0,1">
+                <Expander x:Name="PlaceholderPanel" Header="Placeholder Settings" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
+                    <Expander.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="15" Foreground="#CCCCCC" Margin="0,12,0,8"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -391,13 +587,15 @@
                                        FontSize="9" Foreground="{StaticResource SurfaceTextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
                 </StackPanel>
-            </Expander>
+                </Expander>
+            </Border>
             
             <!-- Layers Section -->
-            <Expander Header="Layers" Style="{StaticResource ModernExpander}" IsExpanded="True">
-                <Expander.HeaderTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
+            <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="0,0,0,1">
+                <Expander Header="Layers" Style="{StaticResource ModernExpander}" IsExpanded="True">
+                    <Expander.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="15" Foreground="#CCCCCC" Margin="0,12,0,8"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -408,32 +606,33 @@
                             </Grid.RowDefinitions>
                             <!-- Top Layer controls -->
                             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,0,10,5">
-                                <Button ToolTip="Move Up" Width="40" Height="28" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
-                                        Foreground="White" Command="{Binding MoveLayerUpCmd}" Margin="0,0,2,0">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Up}" Style="{StaticResource MDL2IconSmall}" Foreground="White"/>
+                                <Button ToolTip="Move Up" Width="48" Height="36" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
+                                        Foreground="#CCCCCC" Command="{Binding MoveLayerUpCmd}" Margin="0,0,2,0">
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Up}" Style="{StaticResource MDL2IconSmall}" Foreground="#CCCCCC"/>
                                 </Button>
-                                <Button ToolTip="Move Down" Width="40" Height="28" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
-                                        Foreground="White" Command="{Binding MoveLayerDownCmd}" Margin="0,0,2,0">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Down}" Style="{StaticResource MDL2IconSmall}" Foreground="White"/>
+                                <Button ToolTip="Move Down" Width="48" Height="36" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
+                                        Foreground="#CCCCCC" Command="{Binding MoveLayerDownCmd}" Margin="0,0,2,0">
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Down}" Style="{StaticResource MDL2IconSmall}" Foreground="#CCCCCC"/>
                                 </Button>
-                                <Button ToolTip="Duplicate Layer" Width="40" Height="28" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
-                                        Foreground="White" Command="{Binding DuplicateSelectedCmd}" Margin="0,0,2,0">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Copy}" Style="{StaticResource MDL2IconSmall}" Foreground="White"/>
+                                <Button ToolTip="Duplicate Layer" Width="48" Height="36" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" 
+                                        Foreground="#CCCCCC" Command="{Binding DuplicateSelectedCmd}" Margin="0,0,2,0">
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Copy}" Style="{StaticResource MDL2IconSmall}" Foreground="#CCCCCC"/>
                                 </Button>
-                                <Button ToolTip="Delete Layer" Width="40" Height="28" Background="{StaticResource SurfaceAccentDangerBrush}" BorderBrush="{StaticResource SurfaceAccentDangerBrush}" BorderThickness="1" 
-                                        Foreground="White" Command="{Binding DeleteLayerCmd}">
-                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Delete}" Style="{StaticResource MDL2IconSmall}" Foreground="White"/>
+                                <Button ToolTip="Delete Layer" Width="48" Height="36" Background="{StaticResource SurfaceAccentDangerBrush}" BorderBrush="{StaticResource SurfaceAccentDangerBrush}" BorderThickness="1" 
+                                        Foreground="#CCCCCC" Command="{Binding DeleteLayerCmd}">
+                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" Text="{StaticResource MDL2_Delete}" Style="{StaticResource MDL2IconSmall}" Foreground="#CCCCCC"/>
                                 </Button>
                             </StackPanel>
                             <!-- Layers list -->
-                            <Border Grid.Row="1" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Background="{StaticResource SurfacePrimaryBrush}" MaxHeight="200">
+                            <Border Grid.Row="1" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Background="{StaticResource SurfacePrimaryBrush}">
                                 <ListBox x:Name="LayersList" ItemsSource="{Binding CanvasLayers}" 
                                          SelectedItem="{Binding SelectedLayer, Mode=TwoWay}"
                                          Background="Transparent" BorderThickness="0"
-                                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         ScrollViewer.CanContentScroll="True">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                            <Grid Background="Transparent" Height="35" Margin="2">
+                                            <Grid Background="Transparent" Height="48" Margin="2" HorizontalAlignment="Stretch">
                                                 <Grid.Style>
                                                     <Style TargetType="Grid">
                                                         <Style.Triggers>
@@ -444,10 +643,8 @@
                                                     </Style>
                                                 </Grid.Style>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="30"/>
+                                                    <ColumnDefinition Width="36"/>
                                                     <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="25"/>
-                                                    <ColumnDefinition Width="25"/>
                                                 </Grid.ColumnDefinitions>
                                                 <!-- Layer thumbnail/icon -->
                                                 <Border Grid.Column="0" Background="{StaticResource SurfacePanelBrush}" BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="1" Margin="2">
@@ -460,64 +657,68 @@
                                                         </ContentPresenter.ContentTemplate>
                                                     </ContentPresenter>
                                                 </Border>
-                                                <!-- Layer name and info -->
-                                                <StackPanel Grid.Column="1" Margin="5,2,2,2" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding LayerName}" FontSize="11" Foreground="White" FontWeight="Bold">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsVisible}" Value="False">
-                                                                        <Setter Property="TextDecorations" Value="Strikethrough"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                    <TextBlock Text="{Binding LayerInfo}" FontSize="9" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
-                                                </StackPanel>
-                                                <!-- Lock toggle -->
-                                                <Button Grid.Column="2" Width="20" Height="20" 
-                                                        Background="Transparent" BorderThickness="0" Cursor="Hand"
-                                                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                        Command="{Binding DataContext.ToggleLayerLockCmd, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        CommandParameter="{Binding}"
-                                                        ToolTip="Toggle Layer Lock">
-                                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" FontSize="12" Foreground="White">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="Text" Value="{StaticResource MDL2_Unlock}"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource SurfaceTextTertiaryBrush}"/>
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsLocked}" Value="True">
-                                                                        <Setter Property="Text" Value="{StaticResource MDL2_Lock}"/>
-                                                                        <Setter Property="Foreground" Value="#FFAA44"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                </Button>
-                                                <!-- Visibility toggle with eye icon -->
-                                                <Button Grid.Column="3" Width="20" Height="20" 
-                                                        Background="Transparent" BorderThickness="0" Cursor="Hand"
-                                                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                        Command="{Binding DataContext.ToggleLayerVisibilityCmd, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        CommandParameter="{Binding}"
-                                                        ToolTip="Toggle Visibility">
-                                                    <TextBlock FontFamily="{StaticResource SegoeMDL2}" FontSize="14" Foreground="White">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="Text" Value="{StaticResource MDL2_View}"/>
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsVisible}" Value="False">
-                                                                        <Setter Property="Text" Value="{StaticResource MDL2_Hide}"/>
+                                                <!-- Content area with text and icons -->
+                                                <Grid Grid.Column="1">
+                                                    <!-- Layer name and info -->
+                                                    <StackPanel HorizontalAlignment="Left" Margin="5,2,70,2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding LayerName}" FontSize="13" Foreground="White" FontWeight="Bold">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsVisible}" Value="False">
+                                                                            <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding LayerInfo}" FontSize="10" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
+                                                    </StackPanel>
+                                                    <!-- Icons positioned on the right -->
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,5,0">
+                                                        <!-- Lock toggle -->
+                                                        <Button Width="24" Height="24" Margin="2,0" 
+                                                                Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                                                Command="{Binding DataContext.ToggleLayerLockCmd, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                CommandParameter="{Binding}"
+                                                                ToolTip="Toggle Layer Lock">
+                                                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" FontSize="14" Foreground="White">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Text" Value="{StaticResource MDL2_Unlock}"/>
                                                                         <Setter Property="Foreground" Value="{StaticResource SurfaceTextTertiaryBrush}"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                </Button>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsLocked}" Value="True">
+                                                                                <Setter Property="Text" Value="{StaticResource MDL2_Lock}"/>
+                                                                                <Setter Property="Foreground" Value="#FFAA44"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Button>
+                                                        <!-- Visibility toggle with eye icon -->
+                                                        <Button Width="24" Height="24" Margin="2,0" 
+                                                                Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                                                Command="{Binding DataContext.ToggleLayerVisibilityCmd, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                CommandParameter="{Binding}"
+                                                                ToolTip="Toggle Visibility">
+                                                            <TextBlock FontFamily="{StaticResource SegoeMDL2}" FontSize="16" Foreground="White">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Text" Value="{StaticResource MDL2_View}"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsVisible}" Value="False">
+                                                                                <Setter Property="Text" Value="{StaticResource MDL2_Hide}"/>
+                                                                                <Setter Property="Foreground" Value="{StaticResource SurfaceTextTertiaryBrush}"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
                                             </Grid>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
@@ -541,13 +742,15 @@
                             </Border>
                         </Grid>
                 </StackPanel>
-            </Expander>
+                </Expander>
+            </Border>
             
             <!-- Text Formatting Section - Only visible when text item is selected -->
-            <Expander x:Name="TextFormattingPanel" Header="Text Formatting" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
-                <Expander.HeaderTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
+            <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="0,0,0,1">
+                <Expander x:Name="TextFormattingPanel" Header="Text Formatting" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
+                    <Expander.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="15" Foreground="#CCCCCC" Margin="0,12,0,8"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -844,13 +1047,15 @@
                             </Expander>
                         </StackPanel>
                 </StackPanel>
-            </Expander>
+                </Expander>
+            </Border>
             
             <!-- Shape Properties Section - Only visible when shape item is selected -->
-            <Expander x:Name="ShapePropertiesPanel" Header="Shape Properties" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
-                <Expander.HeaderTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource SurfaceTextSecondaryBrush}"/>
+            <Border BorderBrush="{StaticResource SurfaceBorderBrush}" BorderThickness="0,0,0,1">
+                <Expander x:Name="ShapePropertiesPanel" Header="Shape Properties" Style="{StaticResource ModernExpander}" IsExpanded="True" Visibility="Collapsed">
+                    <Expander.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="15" Foreground="#CCCCCC" Margin="0,12,0,8"/>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="0,4,0,8">
@@ -1006,8 +1211,10 @@
                         
                     </StackPanel>
                 </StackPanel>
-            </Expander>
+                </Expander>
+            </Border>
             
-        </StackPanel>
-    </ScrollViewer>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </Page>
