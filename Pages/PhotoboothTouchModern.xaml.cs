@@ -75,25 +75,18 @@ namespace Photobooth.Pages
         private System.Collections.ObjectModel.ObservableCollection<RetakePhotoItem> retakePhotos = 
             new System.Collections.ObjectModel.ObservableCollection<RetakePhotoItem>();
         
-        // Event selection properties
-        private EventService eventService;
-        private TemplateDatabase database;
-        private List<EventData> availableEvents;
-        private List<TemplateData> availableTemplates;
-        private EventData selectedEventForOverlay;
-        private TemplateData selectedTemplateForOverlay;
-        private bool isSelectingTemplateForSession = false;
+        // Event/Template service
+        private EventTemplateService eventTemplateService;
+        private TemplateDatabase database; // Still needed for some operations
         
         // Filter service - using hybrid Magick.NET/GDI+ service for best performance
         private PhotoFilterServiceHybrid filterService;
         
-        // Printer monitoring
-        private PrinterMonitorService printerMonitor;
+        // Printing service
+        private PrintingService printingService;
         
-        // Database session tracking
-        private int? currentDatabaseSessionId = null;
-        private string currentSessionGuid = null;
-        private List<int> currentSessionPhotoIds = new List<int>();
+        // Database operations service
+        private DatabaseOperations databaseOperations;
         
         // SMS phone pad tracking
         private string _smsPhoneNumber = "+1";
@@ -101,10 +94,14 @@ namespace Photobooth.Pages
         // Cloud sharing services
         private SessionManager sessionManager;
         private SimpleShareService shareService;
-        private Photobooth.Models.PhotoSession currentPhotoSession;
-        private DispatcherTimer shareOverlayTimer;
-        private int shareOverlayCountdown;
-        private OfflineQueueService _cachedOfflineQueueService;
+        // Removed unused fields - now managed by services
+        
+        // Refactored services
+        private SharingOperations sharingOperations;
+        private CameraOperations cameraOperations;
+        private PhotoProcessingOperations photoProcessingOperations;
+        private PinLockService pinLockService;
+        private PhotoCaptureService photoCaptureService;
         
         // UI Layout Service
         private UILayoutService uiLayoutService;
@@ -118,23 +115,27 @@ namespace Photobooth.Pages
 
             // Initialize services
             photoboothService = new PhotoboothService();
-            eventService = new EventService();
             database = new TemplateDatabase();
-            // Use hybrid filter service for best performance with Magick.NET + GDI+ fallback
             filterService = new PhotoFilterServiceHybrid();
             
             // Initialize cloud sharing services
             sessionManager = new SessionManager();
             shareService = new SimpleShareService();
             
+            // Initialize refactored services
+            databaseOperations = new DatabaseOperations();
+            eventTemplateService = new EventTemplateService();
+            photoCaptureService = new PhotoCaptureService(databaseOperations);
+            printingService = new PrintingService();
+            sharingOperations = new SharingOperations(this);
+            cameraOperations = new CameraOperations(this);
+            photoProcessingOperations = new PhotoProcessingOperations(this);
+            pinLockService = new PinLockService(this);
+            
             // Initialize UI Layout Service
             uiLayoutService = new UILayoutService();
             
-            // Run database cleanup for sessions older than 24 hours
-            database.RunPeriodicCleanup();
-            
-            // Initialize printer monitoring
-            printerMonitor = PrinterMonitorService.Instance;
+            // Printer monitoring now handled by PrintingService
 
             // Set up photo folder for photobooth
             FolderForPhotos = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Photobooth");
@@ -171,59 +172,35 @@ namespace Photobooth.Pages
 
         private void CloseAllOverlays()
         {
-            // Close all overlays
-            if (cameraSettingsOverlay != null && cameraSettingsOverlay.Visibility == Visibility.Visible)
+            CloseOverlay(cameraSettingsOverlay, "camera settings");
+            CloseOverlay(eventSelectionOverlay, "event selection");
+            CloseOverlay(retakeReviewOverlay, "retake review");
+            CloseOverlay(filterSelectionOverlay, "filter selection");
+            CloseOverlay(galleryOverlay, "gallery");
+            CloseOverlay(postSessionFilterOverlay, "post session filter");
+            CloseOverlay(pinEntryOverlay, "PIN entry");
+            CloseOverlay(videoPlayerOverlay, "video player");
+            CloseOverlay(modernSettingsOverlay, "modern settings");
+        }
+        
+        private void CloseOverlay(FrameworkElement overlay, string overlayName)
+        {
+            if (overlay != null && overlay.Visibility == Visibility.Visible)
             {
-                cameraSettingsOverlay.Visibility = Visibility.Collapsed;
-                Log.Debug("CloseAllOverlays: Closed camera settings overlay");
+                overlay.Visibility = Visibility.Collapsed;
+                Log.Debug($"CloseAllOverlays: Closed {overlayName} overlay");
             }
-            
-            if (eventSelectionOverlay != null && eventSelectionOverlay.Visibility == Visibility.Visible)
+        }
+        
+        private void ShowOverlay(FrameworkElement overlay, string overlayName = null)
+        {
+            if (overlay != null)
             {
-                eventSelectionOverlay.Visibility = Visibility.Collapsed;
-                Log.Debug("CloseAllOverlays: Closed event selection overlay");
-            }
-            
-            if (retakeReviewOverlay != null && retakeReviewOverlay.Visibility == Visibility.Visible)
-            {
-                retakeReviewOverlay.Visibility = Visibility.Collapsed;
-                Log.Debug("CloseAllOverlays: Closed retake review overlay");
-            }
-            
-            if (filterSelectionOverlay != null && filterSelectionOverlay.Visibility == Visibility.Visible)
-            {
-                filterSelectionOverlay.Visibility = Visibility.Collapsed;
-                Log.Debug("CloseAllOverlays: Closed filter selection overlay");
-            }
-            
-            if (galleryOverlay != null && galleryOverlay.Visibility == Visibility.Visible)
-            {
-                galleryOverlay.Visibility = Visibility.Collapsed;
-                Log.Debug("CloseAllOverlays: Closed gallery overlay");
-            }
-            
-            if (postSessionFilterOverlay != null && postSessionFilterOverlay.Visibility == Visibility.Visible)
-            {
-                postSessionFilterOverlay.Visibility = Visibility.Collapsed;
-                Log.Debug("CloseAllOverlays: Closed post session filter overlay");
-            }
-            
-            if (pinEntryOverlay != null && pinEntryOverlay.Visibility == Visibility.Visible)
-            {
-                pinEntryOverlay.Visibility = Visibility.Collapsed;
-                Log.Debug("CloseAllOverlays: Closed PIN entry overlay");
-            }
-            
-            if (videoPlayerOverlay != null && videoPlayerOverlay.Visibility == Visibility.Visible)
-            {
-                videoPlayerOverlay.Visibility = Visibility.Collapsed;
-                Log.Debug("CloseAllOverlays: Closed video player overlay");
-            }
-            
-            if (modernSettingsOverlay != null && modernSettingsOverlay.Visibility == Visibility.Visible)
-            {
-                modernSettingsOverlay.Visibility = Visibility.Collapsed;
-                Log.Debug("CloseAllOverlays: Closed modern settings overlay");
+                overlay.Visibility = Visibility.Visible;
+                if (!string.IsNullOrEmpty(overlayName))
+                {
+                    Log.Debug($"ShowOverlay: Showing {overlayName} overlay");
+                }
             }
         }
         
@@ -244,8 +221,7 @@ namespace Photobooth.Pages
                 Log.Debug("PhotoboothTouch_Unloaded: Unsubscribed from camera events");
                 
                 // Stop printer monitoring
-                printerMonitor.PrinterStatusChanged -= OnPrinterStatusChanged;
-                printerMonitor.StopMonitoring();
+                printingService.StopMonitoring();
                 Log.Debug("PhotoboothTouch_Unloaded: Stopped printer monitoring");
                 
                 // Stop any ongoing photo sequence
@@ -255,23 +231,9 @@ namespace Photobooth.Pages
                 CameraSessionManager.Instance.CleanupCameraForScreenChange();
                 
                 // Clean up timers
-                if (liveViewTimer != null)
-                {
-                    liveViewTimer.Stop();
-                    liveViewTimer.Tick -= LiveViewTimer_Tick;
-                }
-                
-                if (countdownTimer != null)
-                {
-                    countdownTimer.Stop();
-                    countdownTimer.Tick -= CountdownTimer_Tick;
-                }
-                
-                if (retakeReviewTimer != null)
-                {
-                    retakeReviewTimer.Stop();
-                    retakeReviewTimer.Tick -= RetakeReviewTimer_Tick;
-                }
+                CleanupTimer(liveViewTimer, LiveViewTimer_Tick);
+                CleanupTimer(countdownTimer, CountdownTimer_Tick);
+                CleanupTimer(retakeReviewTimer, RetakeReviewTimer_Tick);
                 
                 // Cancel any ongoing operations
                 if (currentCaptureToken != null)
@@ -292,24 +254,57 @@ namespace Photobooth.Pages
         private void InitializeTimers()
         {
             // Live view timer (30 FPS)
-            liveViewTimer = new DispatcherTimer();
-            liveViewTimer.Tick += LiveViewTimer_Tick;
-            liveViewTimer.Interval = new TimeSpan(0, 0, 0, 0, 1000 / 30);
+            liveViewTimer = CreateTimer(LiveViewTimer_Tick, TimeSpan.FromMilliseconds(1000 / 30));
 
             // Countdown timer (1 second intervals)
-            countdownTimer = new DispatcherTimer();
-            countdownTimer.Tick += CountdownTimer_Tick;
-            countdownTimer.Interval = new TimeSpan(0, 0, 1);
+            countdownTimer = CreateTimer(CountdownTimer_Tick, TimeSpan.FromSeconds(1));
             
             // Retake review timer (1 second intervals)
-            retakeReviewTimer = new DispatcherTimer();
-            retakeReviewTimer.Tick += RetakeReviewTimer_Tick;
-            retakeReviewTimer.Interval = new TimeSpan(0, 0, 1);
+            retakeReviewTimer = CreateTimer(RetakeReviewTimer_Tick, TimeSpan.FromSeconds(1));
             
             // Auto-clear timer (1 second intervals)
-            autoClearTimer = new DispatcherTimer();
-            autoClearTimer.Tick += AutoClearTimer_Tick;
-            autoClearTimer.Interval = new TimeSpan(0, 0, 1);
+            autoClearTimer = CreateTimer(AutoClearTimer_Tick, TimeSpan.FromSeconds(1));
+        }
+        
+        private DispatcherTimer CreateTimer(EventHandler tickHandler, TimeSpan interval)
+        {
+            var timer = new DispatcherTimer();
+            timer.Tick += tickHandler;
+            timer.Interval = interval;
+            return timer;
+        }
+        
+        private void CleanupTimer(DispatcherTimer timer, EventHandler tickHandler)
+        {
+            if (timer != null)
+            {
+                timer.Stop();
+                timer.Tick -= tickHandler;
+            }
+        }
+        
+        private BitmapImage CreateBitmapFromStream(MemoryStream stream)
+        {
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+        
+        private BitmapImage CreateBitmapFromUri(string path, int? decodePixelWidth = null)
+        {
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.UriSource = new Uri(path);
+            if (decodePixelWidth.HasValue)
+                bitmap.DecodePixelWidth = decodePixelWidth.Value;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
         }
 
         private void PhotoboothTouchModern_Loaded(object sender, RoutedEventArgs e)
@@ -336,8 +331,7 @@ namespace Photobooth.Pages
             Log.Debug("PhotoboothTouch_Loaded: Subscribed to camera events");
             
             // Subscribe to printer status events
-            printerMonitor.PrinterStatusChanged += OnPrinterStatusChanged;
-            printerMonitor.StartMonitoring();
+            printingService.StartMonitoring();
             Log.Debug("PhotoboothTouch_Loaded: Started printer monitoring");
             
             // Prepare camera for use using singleton manager
@@ -345,7 +339,7 @@ namespace Photobooth.Pages
             
             // Reset state when page loads
             isCapturing = false;
-            countdownOverlay.Visibility = Visibility.Collapsed;
+            CloseOverlay(countdownOverlay, "countdown");
             
             // Update sharing buttons visibility
             UpdateSharingButtonsVisibility();
@@ -353,11 +347,17 @@ namespace Photobooth.Pages
             // Start sync status monitoring
             StartSyncStatusMonitoring();
             
-            // Show start button initially only if we have a template selected
+            // Show start button initially if we have a template selected OR if we have an event with templates
             if (startButtonOverlay != null)
             {
-                // Show the start button if a template is already selected (for first use)
-                startButtonOverlay.Visibility = (currentTemplate != null) ? Visibility.Visible : Visibility.Collapsed;
+                // Show START button if:
+                // 1. Template is already selected, OR
+                // 2. Event is selected with available templates (for template selection)
+                bool shouldShowStartButton = (currentTemplate != null) || 
+                    (currentEvent != null && eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 0);
+                
+                startButtonOverlay.Visibility = shouldShowStartButton ? Visibility.Visible : Visibility.Collapsed;
+                Log.Debug($"START BUTTON VISIBILITY: shouldShow={shouldShowStartButton}, currentTemplate={currentTemplate?.Name}, currentEvent={currentEvent?.Name}, templateCount={eventTemplateService.AvailableTemplates?.Count ?? 0}");
             }
             if (stopSessionButton != null)
                 stopSessionButton.Visibility = Visibility.Collapsed;
@@ -396,8 +396,7 @@ namespace Photobooth.Pages
                     lockButton.ToolTip = "Unlock Interface";
                 }
                 
-                // Disable critical controls
-                DisableCriticalControls();
+                // Critical controls disabled by PinLockService
                 
                 // Ensure navbar is hidden
                 if (bottomControlBar != null)
@@ -530,12 +529,14 @@ namespace Photobooth.Pages
             {
                 // Event selected but no template - load templates
                 DebugService.LogDebug($"Event selected but no template, loading templates for: {currentEvent.Name}");
-                availableTemplates = eventService.GetEventTemplates(currentEvent.Id);
+                eventTemplateService.LoadAvailableTemplates(currentEvent.Id);
                 
-                if (availableTemplates != null && availableTemplates.Count == 1)
+                Log.Debug($"TEMPLATE DEBUG: Loaded {eventTemplateService.AvailableTemplates?.Count ?? 0} templates for event {currentEvent.Name}");
+                
+                if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count == 1)
                 {
                     // Only one template - auto-select it
-                    currentTemplate = availableTemplates[0];
+                    currentTemplate = eventTemplateService.AvailableTemplates[0];
                     totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
                     currentPhotoIndex = 0;
                     UpdatePhotoStripPlaceholders();
@@ -552,7 +553,7 @@ namespace Photobooth.Pages
                     
                     Log.Debug($"Auto-selected single template: {currentTemplate.Name}");
                 }
-                else if (availableTemplates != null && availableTemplates.Count > 1)
+                else if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 1)
                 {
                     // Multiple templates - user will select when pressing START
                     UpdateStatusText($"Event: {currentEvent.Name} - Touch START to select template");
@@ -566,7 +567,7 @@ namespace Photobooth.Pages
                     }
                     FolderForPhotos = eventFolder;
                     
-                    Log.Debug($"Event has {availableTemplates.Count} templates available");
+                    Log.Debug($"Event has {eventTemplateService.AvailableTemplates.Count} templates available");
                 }
                 else
                 {
@@ -644,7 +645,7 @@ namespace Photobooth.Pages
             // Hide the centered start button
             if (startButtonOverlay != null)
             {
-                startButtonOverlay.Visibility = Visibility.Collapsed;
+                CloseOverlay(startButtonOverlay, "start button");
             }
             
             // Show the stop button in top-right
@@ -680,17 +681,20 @@ namespace Photobooth.Pages
                 // Check if we need to select a template
                 if (currentTemplate == null)
                 {
+                    Log.Debug($"START BUTTON DEBUG: No template selected, checking available templates. Count: {eventTemplateService.AvailableTemplates?.Count ?? 0}");
+                    
                     // No template selected yet - check if we need to show selection
-                    if (availableTemplates != null && availableTemplates.Count > 1)
+                    if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 1)
                     {
+                        Log.Debug("START BUTTON DEBUG: Multiple templates available - showing selection");
                         // Multiple templates available - show selection
                         ShowTemplateSelectionForSession();
                         return;
                     }
-                    else if (availableTemplates != null && availableTemplates.Count == 1)
+                    else if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count == 1)
                     {
                         // Single template - use it automatically
-                        currentTemplate = availableTemplates[0];
+                        currentTemplate = eventTemplateService.AvailableTemplates[0];
                         totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
                         UpdatePhotoStripPlaceholders();
                     }
@@ -718,7 +722,7 @@ namespace Photobooth.Pages
             
             // Stop the countdown timer
             countdownTimer.Stop();
-            countdownOverlay.Visibility = Visibility.Collapsed;
+            CloseOverlay(countdownOverlay, "countdown");
             
             // Cancel any pending capture
             currentCaptureToken?.Cancel();
@@ -754,7 +758,7 @@ namespace Photobooth.Pages
             // If this is the first photo in a sequence, clear the captured photos list and strip
             if (currentPhotoIndex == 0)
             {
-                capturedPhotoPaths.Clear();
+                photoCaptureService.ResetSession();
                 photoStripImages.Clear();
                 photoStripItems.Clear();
                 
@@ -772,6 +776,9 @@ namespace Photobooth.Pages
                 // Add placeholder boxes for all photos needed
                 UpdatePhotoStripPlaceholders();
                 
+                // CRITICAL: Create database session at start of photo sequence
+                CreateDatabaseSession();
+                
                 Log.Debug($"StartPhotoSequence: Cleared capturedPhotoPaths list and photo strip (starting new sequence)");
             }
             
@@ -787,6 +794,13 @@ namespace Photobooth.Pages
                 {
                     stopSessionButton.Visibility = Visibility.Visible;
                     Log.Debug("StartPhotoSequence: Showing stop button");
+                }
+                
+                // Hide start button during session
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = Visibility.Collapsed;
+                    Log.Debug("StartPhotoSequence: Hiding start button");
                 }
                 
                 // Hide session loaded indicator and navigation when starting new capture
@@ -1165,7 +1179,7 @@ namespace Photobooth.Pages
             // Show sharing buttons again when capture stops
             UpdateSharingButtonsVisibility();
             liveViewTimer.Stop();
-            countdownOverlay.Visibility = Visibility.Collapsed;
+            CloseOverlay(countdownOverlay, "countdown");
             
             // Cancel any pending capture timeouts
             currentCaptureToken?.Cancel();
@@ -1334,32 +1348,55 @@ namespace Photobooth.Pages
 
         private void LiveViewTimer_Tick(object sender, EventArgs e)
         {
-            if (DeviceManager.SelectedCameraDevice == null)
-                return;
-
+            // We keep this simple implementation here instead of using CameraOperations service
+            // because the capture flow in PhotoboothTouchModern needs direct control over the timer
+            // for starting/stopping during capture sequences
             try
             {
-                LiveViewData liveViewData = DeviceManager.SelectedCameraDevice.GetLiveViewImage();
+                var device = DeviceManager.SelectedCameraDevice;
                 
-                if (liveViewData?.ImageData != null)
+                if (device == null || !device.GetCapability(CapabilityEnum.LiveView))
+                    return;
+
+                LiveViewData liveViewData = null;
+                
+                try
                 {
-                    var bitmap = new Bitmap(new MemoryStream(
-                        liveViewData.ImageData,
-                        liveViewData.ImageDataPosition,
-                        liveViewData.ImageData.Length - liveViewData.ImageDataPosition));
-                    
-                    var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap(
-                        bitmap.GetHbitmap(),
-                        IntPtr.Zero,
-                        Int32Rect.Empty,
-                        BitmapSizeOptions.FromEmptyOptions());
-                    
-                    liveViewImage.Source = bitmapSource;
+                    liveViewData = device.GetLiveViewImage();
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"Error getting live view image: {ex.Message}");
+                    return;
+                }
+
+                if (liveViewData != null && liveViewData.ImageData != null)
+                {
+                    try
+                    {
+                        using (var memoryStream = new MemoryStream(liveViewData.ImageData))
+                        {
+                            var bitmap = CreateBitmapFromStream(memoryStream);
+                            
+                            // Update UI on main thread
+                            Dispatcher.BeginInvoke(new Action(() =>
+                            {
+                                if (liveViewImage != null)
+                                {
+                                    liveViewImage.Source = bitmap;
+                                }
+                            }));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"Error processing live view image: {ex.Message}");
+                    }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore live view errors
+                Log.Error($"LiveViewTimer_Tick error: {ex.Message}");
             }
         }
 
@@ -1402,7 +1439,7 @@ namespace Photobooth.Pages
                         bottomControlBar.Visibility = Visibility.Visible;
                         bottomBarToggleChevron.Text = "⌄"; // Down chevron
                     };
-                    ShowPinEntryDialog();
+                    pinLockService.ShowPinEntryDialog();
                     return;
                 }
                 
@@ -1429,8 +1466,10 @@ namespace Photobooth.Pages
                 {
                     try
                     {
+                        // Don't use cameraOperations.StartLiveView() as it starts its own timer
+                        // We need direct control of the timer in PhotoboothTouchModern
+                        DeviceManager.SelectedCameraDevice.StartLiveView();
                         liveViewTimer.Start();
-                        DeviceManager.SelectedCameraDevice?.StartLiveView();
                         Log.Debug("DeviceManager_CameraConnected: Started idle live view");
                     }
                     catch (Exception ex)
@@ -1512,104 +1551,44 @@ namespace Photobooth.Pages
                 return;
             }
             
-            Log.Debug($"PhotoCaptured: Processing at {DateTime.Now:HH:mm:ss.fff}");
-            Log.Debug($"PhotoCaptured: Device={eventArgs.CameraDevice?.GetType().Name}, FileName={eventArgs.FileName}, Handle={eventArgs.Handle?.GetType().Name}");
-            Log.Debug($"PhotoCaptured: Camera IsBusy before processing: {eventArgs.CameraDevice?.IsBusy}");
-            Log.Debug($"PhotoCaptured: Current photo index before increment: {currentPhotoIndex}");
-            
             try
             {
-                string fileName = Path.Combine(FolderForPhotos, Path.GetFileName(eventArgs.FileName));
-                Log.Debug($"PhotoCaptured: Target file path={fileName}");
-                
-                // if file exist try to generate a new filename to prevent file lost. 
-                // This useful when camera is set to record in ram the the all file names are same.
-                if (File.Exists(fileName))
-                {
-                    fileName = StaticHelper.GetUniqueFilename(
-                        Path.GetDirectoryName(fileName) + "\\" + Path.GetFileNameWithoutExtension(fileName) + "_", 0,
-                        Path.GetExtension(fileName));
-                    Log.Debug($"PhotoCaptured: Using unique filename={fileName}");
-                }
-
-                // check the folder of filename, if not found create it
-                if (!Directory.Exists(Path.GetDirectoryName(fileName)))
-                {
-                    Log.Debug($"PhotoCaptured: Creating directory={Path.GetDirectoryName(fileName)}");
-                    Directory.CreateDirectory(Path.GetDirectoryName(fileName));
-                }
-                
-                Log.Debug("PhotoCaptured: Starting TransferFile");
-                eventArgs.CameraDevice.TransferFile(eventArgs.Handle, fileName);
-                Log.Debug("PhotoCaptured: TransferFile completed");
-                
-                // CRITICAL: Release the camera resource after file transfer
-                // This is required by ICameraDevice interface to free camera for next capture
-                try
-                {
-                    eventArgs.CameraDevice.ReleaseResurce(eventArgs.Handle);
-                    Log.Debug("PhotoCaptured: ReleaseResurce completed");
-                }
-                catch (Exception releaseEx)
-                {
-                    Log.Error("PhotoCaptured: Failed to release camera resource", releaseEx);
-                }
+                // Use PhotoCaptureService to process the photo
+                string fileName = photoCaptureService.ProcessCapturedPhoto(eventArgs);
                 
                 if (File.Exists(fileName))
                 {
                     // Marshal UI update to UI thread
                     Dispatcher.Invoke(() => 
                     {
-                        photoCount++;
-                        currentPhotoIndex++;
+                        // Update UI counters
+                        photoCount = photoCaptureService.PhotoCount;
+                        currentPhotoIndex = photoCaptureService.CurrentPhotoIndex;
                         photoCountText.Text = $"Photos: {photoCount}";
                         
-                        // Handle retake or normal capture
-                        if (isRetakingPhoto && photoIndexToRetake >= 0)
-                        {
-                            // Replace the specific photo for retake
-                            if (photoIndexToRetake < capturedPhotoPaths.Count)
-                            {
-                                capturedPhotoPaths[photoIndexToRetake] = fileName;
-                                Log.Debug($"PhotoCaptured: Replaced photo {photoIndexToRetake + 1} with retake: {fileName}");
-                                
-                                // Don't increment currentPhotoIndex for retakes
-                                currentPhotoIndex--; // Cancel the increment that happened above
-                            }
-                        }
-                        else
-                        {
-                            // Add captured photo to list for template composition
-                            capturedPhotoPaths.Add(fileName);
-                            Log.Debug($"PhotoCaptured: Added photo {currentPhotoIndex} to list: {fileName}");
-                            
-                            // Save photo to database
-                            SavePhotoToDatabase(fileName, currentPhotoIndex, "Original");
-                        }
+                        // Update local tracking from service
+                        capturedPhotoPaths = photoCaptureService.CapturedPhotoPaths;
+                        isRetakingPhoto = photoCaptureService.IsRetakingPhoto;
+                        photoIndexToRetake = photoCaptureService.PhotoIndexToRetake;
                         
                         // Add to photo strip
                         try
                         {
-                            var bitmap = new BitmapImage();
-                            bitmap.BeginInit();
-                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                            bitmap.UriSource = new Uri(fileName);
-                            bitmap.DecodePixelWidth = 240; // Thumbnail size for performance
-                            bitmap.EndInit();
-                            bitmap.Freeze(); // Make it thread-safe
+                            var bitmap = photoCaptureService.CreatePhotoThumbnail(fileName, 240);
                             
                             // Handle retake or normal capture for photo strip
-                            if (isRetakingPhoto && photoIndexToRetake >= 0)
+                            if (photoCaptureService.IsRetakingPhoto && photoCaptureService.PhotoIndexToRetake >= 0)
                             {
                                 // Replace the photo in the strip for retake
-                                if (photoIndexToRetake < photoStripImages.Count)
+                                int retakeIndex = photoCaptureService.PhotoIndexToRetake;
+                                if (retakeIndex < photoStripImages.Count)
                                 {
-                                    photoStripImages[photoIndexToRetake] = bitmap;
+                                    photoStripImages[retakeIndex] = bitmap;
                                 }
-                                if (photoIndexToRetake < photoStripItems.Count)
+                                if (retakeIndex < photoStripItems.Count)
                                 {
-                                    photoStripItems[photoIndexToRetake].Image = bitmap;
-                                    photoStripItems[photoIndexToRetake].IsPlaceholder = false;
+                                    photoStripItems[retakeIndex].Image = bitmap;
+                                    photoStripItems[retakeIndex].IsPlaceholder = false;
                                 }
                             }
                             else
@@ -1638,15 +1617,11 @@ namespace Photobooth.Pages
                         liveViewImage.Source = (new ImageSourceConverter()).ConvertFromString(fileName) as ImageSource;
                         
                         // Ensure countdown overlay is hidden
-                        countdownOverlay.Visibility = Visibility.Collapsed;
+                        CloseOverlay(countdownOverlay, "countdown");
                         
                         // Handle retake completion or normal sequence
-                        if (isRetakingPhoto)
+                        if (photoCaptureService.IsRetakingPhoto)
                         {
-                            // Reset retake flags
-                            isRetakingPhoto = false;
-                            photoIndexToRetake = -1;
-                            
                             // Show review again with updated photo
                             ShowRetakeReview();
                         }
@@ -1731,600 +1706,16 @@ namespace Photobooth.Pages
 
         private async Task<string> ComposeTemplateWithPhotos()
         {
-            try
-            {
-                if (currentTemplate == null || capturedPhotoPaths.Count == 0)
-                {
-                    Log.Error("ComposeTemplateWithPhotos: No template or photos available");
-                    return null;
-                }
-                
-                Log.Debug($"ComposeTemplateWithPhotos: Starting composition with {capturedPhotoPaths.Count} photos");
-                Log.Debug($"ComposeTemplateWithPhotos: Template ID={currentTemplate.Id}, Name={currentTemplate.Name}");
-                
-                // Load template data and canvas items from database
-                var canvasItems = database.GetCanvasItems(currentTemplate.Id);
-                if (canvasItems == null || canvasItems.Count == 0)
-                {
-                    Log.Error($"ComposeTemplateWithPhotos: No canvas items found for template {currentTemplate.Id}");
-                    return null;
-                }
-                
-                // Use template dimensions from database
-                int templateWidth = (int)currentTemplate.CanvasWidth;
-                int templateHeight = (int)currentTemplate.CanvasHeight;
-                
-                // Create a new bitmap for the final composition
-                var finalBitmap = new System.Drawing.Bitmap(templateWidth, templateHeight);
-                using (var graphics = Graphics.FromImage(finalBitmap))
-                {
-                    graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    graphics.SmoothingMode = SmoothingMode.HighQuality;
-                    graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                    
-                    // CRITICAL: Set text rendering hints for smooth, non-jagged text
-                    // Use ClearType for the best text quality
-                    graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-                    graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
-                    graphics.TextContrast = 0; // Use default ClearType contrast
-                    
-                    // Set background color
-                    if (!string.IsNullOrEmpty(currentTemplate.BackgroundColor))
-                    {
-                        try
-                        {
-                            var bgColor = ColorTranslator.FromHtml(currentTemplate.BackgroundColor);
-                            graphics.Clear(bgColor);
-                        }
-                        catch
-                        {
-                            graphics.Clear(System.Drawing.Color.White);
-                        }
-                    }
-                    else
-                    {
-                        graphics.Clear(System.Drawing.Color.White);
-                    }
-                    
-                    // Process canvas items in Z-order  
-                    var sortedItems = canvasItems.OrderBy(item => item.ZIndex).ToList();
-                    
-                    Log.Debug($"ComposeTemplateWithPhotos: Processing {sortedItems.Count} canvas items");
-                    
-                    foreach (var item in sortedItems)
-                    {
-                        var destRect = new Rectangle(
-                            (int)item.X,
-                            (int)item.Y,
-                            (int)item.Width,
-                            (int)item.Height);
-                        
-                        Log.Debug($"ComposeTemplateWithPhotos: Processing item - Type={item.ItemType}, Name={item.Name}, ZIndex={item.ZIndex}, Rotation={item.Rotation}, PlaceholderNo={item.PlaceholderNumber}, ImagePath={item.ImagePath}");
-                        
-                        // Additional debug logging for placeholders
-                        if (item.ItemType == "PlaceholderCanvasItem" || item.ItemType == "Placeholder")
-                        {
-                            Log.Debug($"ComposeTemplateWithPhotos: Found placeholder - PlaceholderNumber={item.PlaceholderNumber}, capturedPhotoPaths.Count={capturedPhotoPaths.Count}");
-                            for (int i = 0; i < capturedPhotoPaths.Count; i++)
-                            {
-                                Log.Debug($"ComposeTemplateWithPhotos: capturedPhotoPaths[{i}] = {capturedPhotoPaths[i]}");
-                            }
-                        }
-                        
-                        // Save graphics state before applying rotation
-                        var savedState = graphics.Save();
-                        
-                        // Apply rotation if needed
-                        if (Math.Abs(item.Rotation) > 0.01) // Only rotate if rotation is significant
-                        {
-                            // Calculate center point of the item
-                            float centerX = destRect.X + destRect.Width / 2f;
-                            float centerY = destRect.Y + destRect.Height / 2f;
-                            
-                            // Translate to center, rotate, then translate back
-                            graphics.TranslateTransform(centerX, centerY);
-                            graphics.RotateTransform((float)item.Rotation);
-                            graphics.TranslateTransform(-centerX, -centerY);
-                        }
-                        
-                        if (item.ItemType == "PlaceholderCanvasItem" || item.ItemType == "Placeholder")
-                        {
-                            // This is a photo placeholder - insert captured photo
-                            // Match photo to placeholder by PlaceholderNumber
-                            int placeholderIndex = (item.PlaceholderNumber ?? 1) - 1; // PlaceholderNumber is 1-based
-                            Log.Debug($"ComposeTemplateWithPhotos: Placeholder check - PlaceholderNumber={item.PlaceholderNumber}, placeholderIndex={placeholderIndex}, capturedPhotoPaths.Count={capturedPhotoPaths.Count}");
-                            
-                            if (placeholderIndex >= 0 && placeholderIndex < capturedPhotoPaths.Count)
-                            {
-                                var photoPath = capturedPhotoPaths[placeholderIndex];
-                                Log.Debug($"ComposeTemplateWithPhotos: Inserting photo into placeholder {item.PlaceholderNumber} from {photoPath}");
-                                
-                                if (File.Exists(photoPath))
-                                {
-                                    using (var photo = System.Drawing.Image.FromFile(photoPath))
-                                    {
-                                        // Apply border/outline if specified
-                                        if (item.HasOutline && item.OutlineThickness > 0 && !string.IsNullOrEmpty(item.OutlineColor))
-                                        {
-                                            try
-                                            {
-                                                var borderColor = ColorTranslator.FromHtml(item.OutlineColor);
-                                                using (var pen = new System.Drawing.Pen(borderColor, (float)item.OutlineThickness))
-                                                {
-                                                    graphics.DrawRectangle(pen, destRect);
-                                                }
-                                            }
-                                            catch { }
-                                        }
-                                        
-                                        // Draw the photo - preserve aspect ratio to fill placeholder
-                                        var sourceAspect = (float)photo.Width / photo.Height;
-                                        var destAspect = (float)destRect.Width / destRect.Height;
-                                        
-                                        Rectangle sourceRect;
-                                        if (sourceAspect > destAspect)
-                                        {
-                                            // Photo is wider - crop sides
-                                            int cropWidth = (int)(photo.Height * destAspect);
-                                            int xOffset = (photo.Width - cropWidth) / 2;
-                                            sourceRect = new Rectangle(xOffset, 0, cropWidth, photo.Height);
-                                        }
-                                        else
-                                        {
-                                            // Photo is taller - crop top/bottom
-                                            int cropHeight = (int)(photo.Width / destAspect);
-                                            int yOffset = (photo.Height - cropHeight) / 2;
-                                            sourceRect = new Rectangle(0, yOffset, photo.Width, cropHeight);
-                                        }
-                                        
-                                        graphics.DrawImage(photo, destRect, sourceRect, GraphicsUnit.Pixel);
-                                        Log.Debug($"ComposeTemplateWithPhotos: Successfully drew photo into placeholder {item.PlaceholderNumber}");
-                                    }
-                                }
-                                else
-                                {
-                                    Log.Error($"ComposeTemplateWithPhotos: Photo file not found: {photoPath}");
-                                }
-                            }
-                            else
-                            {
-                                Log.Debug($"ComposeTemplateWithPhotos: Skipping placeholder {item.PlaceholderNumber} - no photo available (placeholderIndex={placeholderIndex}, capturedPhotoPaths.Count={capturedPhotoPaths.Count})");
-                            }
-                        }
-                        else if ((item.ItemType == "ImageCanvasItem" || item.ItemType == "Image") && !string.IsNullOrEmpty(item.ImagePath))
-                        {
-                            // Load image from organized asset folder
-                            try
-                            {
-                                // Convert URI to local file path if needed
-                                string imagePath = item.ImagePath;
-                                if (imagePath.StartsWith("file:///"))
-                                {
-                                    imagePath = new Uri(imagePath).LocalPath;
-                                }
-                                else if (imagePath.StartsWith("file://"))
-                                {
-                                    imagePath = imagePath.Substring(7);
-                                }
-                                
-                                Log.Debug($"ComposeTemplateWithPhotos: Checking image path: {imagePath}");
-                                
-                                if (File.Exists(imagePath))
-                                {
-                                    using (var img = System.Drawing.Image.FromFile(imagePath))
-                                    {
-                                        var originalComposite = graphics.CompositingMode;
-                                        graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
-                                        graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
-                                        
-                                        graphics.DrawImage(img, destRect);
-                                        Log.Debug($"ComposeTemplateWithPhotos: Drew image from path {imagePath}");
-                                        
-                                        graphics.CompositingMode = originalComposite;
-                                    }
-                                }
-                                else
-                                {
-                                    Log.Debug($"ComposeTemplateWithPhotos: Image file not found: {imagePath}");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.Debug($"ComposeTemplateWithPhotos: Failed to draw image from path: {ex.Message}");
-                            }
-                        }
-                        else if (item.ItemType == "Text")
-                        {
-                            // Render text item
-                            try
-                            {
-                                if (!string.IsNullOrEmpty(item.Text))
-                                {
-                                    // Parse font style
-                                    var fontStyle = System.Drawing.FontStyle.Regular;
-                                    if (item.IsBold) fontStyle |= System.Drawing.FontStyle.Bold;
-                                    if (item.IsItalic) fontStyle |= System.Drawing.FontStyle.Italic;
-                                    if (item.IsUnderlined) fontStyle |= System.Drawing.FontStyle.Underline;
-                                    
-                                    // Create font
-                                    // WPF font sizes are in points (typography standard)
-                                    // GDI+ also uses points, so we can use the value directly
-                                    // However, we need to scale down to match visual appearance
-                                    var wpfFontSize = (float)(item.FontSize ?? 12);
-                                    var fontFamily = item.FontFamily ?? "Arial";
-                                    
-                                    // Apply scaling factor to match WPF's visual rendering
-                                    // This factor accounts for the difference in how WPF and GDI+ render fonts
-                                    var scaledFontSize = wpfFontSize * 0.65f;
-                                    
-                                    using (var font = new System.Drawing.Font(fontFamily, scaledFontSize, fontStyle, GraphicsUnit.Point))
-                                    {
-                                        // Parse text color
-                                        var textColor = System.Drawing.Color.Black;
-                                        if (!string.IsNullOrEmpty(item.TextColor))
-                                        {
-                                            try
-                                            {
-                                                textColor = ColorTranslator.FromHtml(item.TextColor);
-                                            }
-                                            catch
-                                            {
-                                                textColor = System.Drawing.Color.Black;
-                                            }
-                                        }
-                                        
-                                        using (var brush = new SolidBrush(textColor))
-                                        {
-                                            // Draw shadow if enabled
-                                            if (item.HasShadow && !string.IsNullOrEmpty(item.ShadowColor))
-                                            {
-                                                try
-                                                {
-                                                    var shadowColor = ColorTranslator.FromHtml(item.ShadowColor);
-                                                    using (var shadowBrush = new SolidBrush(System.Drawing.Color.FromArgb(128, shadowColor)))
-                                                    {
-                                                        var shadowRect = new RectangleF(
-                                                            destRect.X + (float)item.ShadowOffsetX,
-                                                            destRect.Y + (float)item.ShadowOffsetY,
-                                                            destRect.Width,
-                                                            destRect.Height);
-                                                        graphics.DrawString(item.Text, font, shadowBrush, shadowRect);
-                                                    }
-                                                }
-                                                catch { }
-                                            }
-                                            
-                                            // Draw outline if enabled
-                                            if (item.HasOutline && item.OutlineThickness > 0 && !string.IsNullOrEmpty(item.OutlineColor))
-                                            {
-                                                try
-                                                {
-                                                    var outlineColor = ColorTranslator.FromHtml(item.OutlineColor);
-                                                    using (var outlinePen = new System.Drawing.Pen(outlineColor, (float)item.OutlineThickness))
-                                                    using (var path = new System.Drawing.Drawing2D.GraphicsPath())
-                                                    {
-                                                        // Set pen properties for smooth outlines
-                                                        outlinePen.LineJoin = System.Drawing.Drawing2D.LineJoin.Round;
-                                                        outlinePen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
-                                                        outlinePen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
-                                                        
-                                                        // Use EmSize in world units (convert points to pixels for the graphics context)
-                                                        var emSize = scaledFontSize * graphics.DpiY / 72f;
-                                                        
-                                                        // Create format with NoWrap to match the main text rendering
-                                                        var outlineFormat = new StringFormat();
-                                                        if (item.TextAlignment == "Center")
-                                                            outlineFormat.Alignment = StringAlignment.Center;
-                                                        else if (item.TextAlignment == "Right")
-                                                            outlineFormat.Alignment = StringAlignment.Far;
-                                                        else
-                                                            outlineFormat.Alignment = StringAlignment.Near;
-                                                        outlineFormat.FormatFlags = StringFormatFlags.NoWrap;
-                                                        outlineFormat.LineAlignment = StringAlignment.Near;
-                                                        
-                                                        // Use the exact destRect for consistent positioning
-                                                        path.AddString(item.Text, font.FontFamily, (int)font.Style, 
-                                                            emSize, destRect, outlineFormat);
-                                                        graphics.DrawPath(outlinePen, path);
-                                                    }
-                                                }
-                                                catch { }
-                                            }
-                                            
-                                            // Draw the text
-                                            var format = new StringFormat();
-                                            if (item.TextAlignment == "Center")
-                                                format.Alignment = StringAlignment.Center;
-                                            else if (item.TextAlignment == "Right")
-                                                format.Alignment = StringAlignment.Far;
-                                            else
-                                                format.Alignment = StringAlignment.Near;
-                                            
-                                            // Disable wrapping
-                                            format.FormatFlags = StringFormatFlags.NoWrap;
-                                            format.LineAlignment = StringAlignment.Near;
-                                            
-                                            // Draw text at the exact position stored in the template
-                                            graphics.DrawString(item.Text, font, brush, destRect, format);
-                                        }
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.Debug($"ComposeTemplateWithPhotos: Failed to draw text: {ex.Message}");
-                            }
-                        }
-                        else if (item.ItemType == "Shape")
-                        {
-                            // Render shape item
-                            try
-                            {
-                                // Parse fill color
-                                System.Drawing.Brush fillBrush = null;
-                                if (!item.HasNoFill && !string.IsNullOrEmpty(item.FillColor))
-                                {
-                                    try
-                                    {
-                                        var fillColor = ColorTranslator.FromHtml(item.FillColor);
-                                        fillBrush = new SolidBrush(fillColor);
-                                    }
-                                    catch
-                                    {
-                                        fillBrush = new SolidBrush(System.Drawing.Color.Gray);
-                                    }
-                                }
-                                
-                                // Parse stroke color and thickness
-                                System.Drawing.Pen strokePen = null;
-                                if (!item.HasNoStroke && !string.IsNullOrEmpty(item.StrokeColor))
-                                {
-                                    try
-                                    {
-                                        var strokeColor = ColorTranslator.FromHtml(item.StrokeColor);
-                                        strokePen = new System.Drawing.Pen(strokeColor, (float)(item.StrokeThickness > 0 ? item.StrokeThickness : 1));
-                                    }
-                                    catch
-                                    {
-                                        strokePen = new System.Drawing.Pen(System.Drawing.Color.Black, 1);
-                                    }
-                                }
-                                
-                                // Draw based on shape type
-                                if (item.ShapeType == "Rectangle")
-                                {
-                                    if (fillBrush != null)
-                                        graphics.FillRectangle(fillBrush, destRect);
-                                    if (strokePen != null)
-                                        graphics.DrawRectangle(strokePen, destRect);
-                                }
-                                else if (item.ShapeType == "Ellipse" || item.ShapeType == "Circle")
-                                {
-                                    if (fillBrush != null)
-                                        graphics.FillEllipse(fillBrush, destRect);
-                                    if (strokePen != null)
-                                        graphics.DrawEllipse(strokePen, destRect);
-                                }
-                                else if (item.ShapeType == "Line")
-                                {
-                                    if (strokePen != null)
-                                    {
-                                        graphics.DrawLine(strokePen, 
-                                            destRect.X, destRect.Y, 
-                                            destRect.X + destRect.Width, destRect.Y + destRect.Height);
-                                    }
-                                }
-                                
-                                // Cleanup
-                                fillBrush?.Dispose();
-                                strokePen?.Dispose();
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.Debug($"ComposeTemplateWithPhotos: Failed to draw shape: {ex.Message}");
-                            }
-                        }
-                        
-                        // Restore graphics state after drawing each item (resets rotation)
-                        graphics.Restore(savedState);
-                    }
-                }
-                
-                // Check if this is a 2x6 template and needs duplication for 4x6 printing
-                bool is2x6Template = Is2x6Template(templateWidth, templateHeight);
-                lastProcessedWas2x6Template = is2x6Template; // Store for printer routing
-                
-                // Check setting for 2x6 duplication behavior
-                bool duplicate2x6To4x6 = Properties.Settings.Default.Duplicate2x6To4x6;
-                
-                // Save the final composed image
-                string outputDir = Path.Combine(FolderForPhotos, "Composed");
-                if (!Directory.Exists(outputDir))
-                {
-                    Directory.CreateDirectory(outputDir);
-                }
-                
-                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                string outputPath = Path.Combine(outputDir, $"{currentEvent.Name}_{timestamp}.jpg");
-                
-                // Save as high-quality JPEG
-                var jpegEncoder = ImageCodecInfo.GetImageEncoders()
-                    .First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-                var encoderParams = new EncoderParameters(1);
-                encoderParams.Param[0] = new EncoderParameter(
-                    Encoder.Quality, 95L);
-                
-                // Always save the original composed image for display
-                finalBitmap.Save(outputPath, jpegEncoder, encoderParams);
-                Log.Debug($"ComposeTemplateWithPhotos: Saved original composed image to {outputPath}");
-                
-                // Store the display path
-                lastProcessedImagePath = outputPath;
-                
-                // Update sharing buttons visibility now that we have a processed image
-                UpdateSharingButtonsVisibility();
-                
-                // Save composed image to database
-                string outputFormat = is2x6Template ? "2x6" : "4x6";
-                SaveComposedImageToDatabase(outputPath, outputFormat);
-                
-                // Add composed image to photo strip (must be on UI thread) - use BeginInvoke to avoid deadlock
-                Dispatcher.BeginInvoke(new Action(() => AddComposedImageToPhotoStrip(outputPath)));
-                
-                Log.Debug("ComposeTemplateWithPhotos: After Dispatcher.BeginInvoke call");
-                
-                // If it's a 2x6 template and duplication is enabled, create a 4x6 version for printing only
-                if (is2x6Template && duplicate2x6To4x6)
-                {
-                    Log.Debug($"ComposeTemplateWithPhotos: Detected 2x6 template ({templateWidth}x{templateHeight}), creating hidden 4x6 version for printing");
-                    
-                    using (var duplicatedBitmap = Create4x6From2x6(finalBitmap))
-                    {
-                        string printPath = Path.Combine(outputDir, $"{currentEvent.Name}_{timestamp}_4x6_print.jpg");
-                        duplicatedBitmap.Save(printPath, jpegEncoder, encoderParams);
-                        lastProcessedImagePathForPrinting = printPath;
-                        Log.Debug($"ComposeTemplateWithPhotos: Saved 4x6 print version to {printPath}");
-                    }
-                }
-                else
-                {
-                    // For non-2x6 templates or when duplication is disabled, use the same image for printing
-                    lastProcessedImagePathForPrinting = outputPath;
-                    if (is2x6Template)
-                    {
-                        Log.Debug($"ComposeTemplateWithPhotos: Detected 2x6 template, keeping as single 2x6 for printing (duplication disabled)");
-                    }
-                }
-                
-                finalBitmap.Dispose();
-                
-                Log.Debug($"ComposeTemplateWithPhotos: About to return outputPath: '{outputPath}'");
-                Log.Debug($"ComposeTemplateWithPhotos: File exists at return: {File.Exists(outputPath)}");
-                
-                return outputPath; // Return the original for display
-            }
-            catch (Exception ex)
-            {
-                Log.Error("ComposeTemplateWithPhotos: Failed to compose template", ex);
-                return null;
-            }
+            Log.Debug($"★★★ COMPOSE WRAPPER DEBUG: About to call PhotoProcessingOperations.ComposeTemplateWithPhotos ★★★");
+            Log.Debug($"★★★ COMPOSE WRAPPER DEBUG: currentTemplate={currentTemplate?.Name}, capturedPhotoPaths.Count={capturedPhotoPaths?.Count} ★★★");
+            
+            // Delegate to photo processing service
+            return await photoProcessingOperations.ComposeTemplateWithPhotos(
+                currentTemplate, capturedPhotoPaths, currentEvent, database);
         }
+        // Removed old ComposeTemplateWithPhotos implementation - now in PhotoProcessingOperations
         
-        private bool Is2x6Template(int width, int height)
-        {
-            // Check if dimensions match 2x6 at common DPI (300 DPI)
-            // 2x6 inches at 300 DPI = 600x1800 pixels
-            // Allow some tolerance for different DPI settings
-            
-            float aspectRatio = (float)width / height;
-            float expectedRatio = 2.0f / 6.0f; // 0.333
-            
-            // Check if aspect ratio matches 2:6 (with 5% tolerance)
-            bool ratioMatches = Math.Abs(aspectRatio - expectedRatio) < 0.02f;
-            
-            // Also check for common 2x6 pixel dimensions at various DPI
-            bool dimensionsMatch = 
-                (width >= 590 && width <= 610 && height >= 1790 && height <= 1810) || // 300 DPI
-                (width >= 295 && width <= 305 && height >= 895 && height <= 905) ||   // 150 DPI
-                (width >= 196 && width <= 204 && height >= 596 && height <= 604);     // 100 DPI
-            
-            Log.Debug($"Is2x6Template: Width={width}, Height={height}, Ratio={aspectRatio:F3}, RatioMatches={ratioMatches}, DimensionsMatch={dimensionsMatch}");
-            
-            return ratioMatches || dimensionsMatch;
-        }
         
-        private System.Drawing.Bitmap Create4x6From2x6(System.Drawing.Bitmap source2x6)
-        {
-            try
-            {
-                // Check if we should keep portrait orientation for strip printers
-                bool keepPortraitForStrips = Properties.Settings.Default.AutoRoutePrinter && 
-                                           !string.IsNullOrEmpty(Properties.Settings.Default.Printer2x6Name);
-                
-                if (keepPortraitForStrips)
-                {
-                    // Keep portrait orientation: place two 2x6 strips side by side vertically (still 2" wide x 6" tall, but with both strips)
-                    // This creates a 4x6 in portrait orientation (1200x1800 at 300 DPI)
-                    int outputWidth = source2x6.Width * 2;  // Double the width (2" becomes 4")
-                    int outputHeight = source2x6.Height;    // Keep same height (6")
-                    
-                    Log.Debug($"Create4x6From2x6: Creating portrait {outputWidth}x{outputHeight} from {source2x6.Width}x{source2x6.Height}");
-                    
-                    var output4x6 = new System.Drawing.Bitmap(outputWidth, outputHeight);
-                    output4x6.SetResolution(source2x6.HorizontalResolution, source2x6.VerticalResolution);
-                    
-                    using (var graphics = Graphics.FromImage(output4x6))
-                    {
-                        // Set high quality rendering
-                        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                        graphics.SmoothingMode = SmoothingMode.HighQuality;
-                        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                        graphics.CompositingQuality = CompositingQuality.HighQuality;
-                        
-                        // Fill background (usually white for photo prints)
-                        graphics.Clear(System.Drawing.Color.White);
-                        
-                        // Place two strips side by side (no rotation needed)
-                        // First strip on the left
-                        graphics.DrawImage(source2x6, 0, 0, source2x6.Width, source2x6.Height);
-                        
-                        // Second strip on the right
-                        graphics.DrawImage(source2x6, source2x6.Width, 0, source2x6.Width, source2x6.Height);
-                        
-                        Log.Debug($"Create4x6From2x6: Successfully created 4x6 portrait composite with duplicated 2x6 strips");
-                    }
-                    
-                    return output4x6;
-                }
-                else
-                {
-                    // Original landscape orientation for standard 4x6 printers
-                    // Rotate and place side by side horizontally (creates 1800x1200 at 300 DPI)
-                    int outputWidth = source2x6.Height;  // 6 inches becomes width
-                    int outputHeight = source2x6.Width * 2; // 2 inches doubled to 4 inches
-                    
-                    Log.Debug($"Create4x6From2x6: Creating landscape {outputWidth}x{outputHeight} from {source2x6.Width}x{source2x6.Height}");
-                    
-                    var output4x6 = new System.Drawing.Bitmap(outputWidth, outputHeight);
-                    output4x6.SetResolution(source2x6.HorizontalResolution, source2x6.VerticalResolution);
-                    
-                    using (var graphics = Graphics.FromImage(output4x6))
-                    {
-                        // Set high quality rendering
-                        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                        graphics.SmoothingMode = SmoothingMode.HighQuality;
-                        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                        graphics.CompositingQuality = CompositingQuality.HighQuality;
-                        
-                        // Fill background (usually white for photo prints)
-                        graphics.Clear(System.Drawing.Color.White);
-                        
-                        // Rotate 90 degrees and place side by side
-                        // First strip (top half) - rotate 90 degrees clockwise
-                        graphics.TranslateTransform(0, source2x6.Width);
-                        graphics.RotateTransform(-90);
-                        graphics.DrawImage(source2x6, 0, 0, source2x6.Width, source2x6.Height);
-                        graphics.ResetTransform();
-                        
-                        // Second strip (bottom half) - rotate 90 degrees clockwise
-                        graphics.TranslateTransform(0, source2x6.Width * 2);
-                        graphics.RotateTransform(-90);
-                        graphics.DrawImage(source2x6, 0, 0, source2x6.Width, source2x6.Height);
-                        graphics.ResetTransform();
-                        
-                        Log.Debug($"Create4x6From2x6: Successfully created 4x6 landscape composite with duplicated 2x6 strips");
-                    }
-                    
-                    return output4x6;
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Create4x6From2x6: Failed to create 4x6 from 2x6: {ex.Message}");
-                // Return original if conversion fails
-                return source2x6;
-            }
-        }
         
         private void HomeButton_Click(object sender, RoutedEventArgs e)
         {
@@ -2381,9 +1772,8 @@ namespace Photobooth.Pages
             currentTemplate = null;
             currentPhotoIndex = 0;
             totalPhotosNeeded = 0;
-            capturedPhotoPaths.Clear();
-            availableEvents = null;
-            availableTemplates = null;
+            photoCaptureService.ResetSession();
+            eventTemplateService.ClearSelections();
             
             // Clear static references
             PhotoboothService.CurrentEvent = null;
@@ -2584,11 +1974,11 @@ namespace Photobooth.Pages
                     currentTemplate = null;
                     currentPhotoIndex = 0;
                     totalPhotosNeeded = 0;
-                    capturedPhotoPaths.Clear();
+                    photoCaptureService.ResetSession();
                     
                     ShowEventSelectionOverlay();
                 };
-                ShowPinEntryDialog();
+                pinLockService.ShowPinEntryDialog();
                 return;
             }
             
@@ -2597,7 +1987,7 @@ namespace Photobooth.Pages
             currentTemplate = null;
             currentPhotoIndex = 0;
             totalPhotosNeeded = 0;
-            capturedPhotoPaths.Clear();
+            photoCaptureService.ResetSession();
             
             ShowEventSelectionOverlay();
         }
@@ -2613,7 +2003,7 @@ namespace Photobooth.Pages
                     Log.Debug("ModernSettingsButton_Click: Opening modern settings overlay in fullscreen");
                     modernSettingsOverlay.Visibility = Visibility.Visible;
                 };
-                ShowPinEntryDialog();
+                pinLockService.ShowPinEntryDialog();
                 return;
             }
             
@@ -2633,7 +2023,7 @@ namespace Photobooth.Pages
         {
             LoadAvailableEvents();
             eventSelectionOverlay.Visibility = Visibility.Visible;
-            isSelectingTemplateForSession = false;
+            // Template selection workflow completed
             
             // Reset the title back to event selection
             if (overlayTitleText != null)
@@ -2659,11 +2049,11 @@ namespace Photobooth.Pages
             if (currentEvent == null) return;
             
             // Load templates for the current event
-            availableTemplates = eventService.GetEventTemplates(currentEvent.Id);
+            eventTemplateService.LoadAvailableTemplates(currentEvent.Id);
             
             // Update UI to show only templates (hide events)
             eventsListControl.Visibility = Visibility.Collapsed;
-            templatesListControl.ItemsSource = availableTemplates;
+            templatesListControl.ItemsSource = eventTemplateService.AvailableTemplates;
             templatesListControl.Visibility = Visibility.Visible;
             
             // Update the title to show template selection
@@ -2678,22 +2068,30 @@ namespace Photobooth.Pages
             // Show the overlay with templates only
             eventSelectionOverlay.Visibility = Visibility.Visible;
             
-            // Set flag to know we're in template selection mode
-            isSelectingTemplateForSession = true;
+            // Hide start button during template selection
+            if (startButtonOverlay != null)
+            {
+                startButtonOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("ShowTemplateSelectionForSession: Hiding start button");
+            }
+            
+            // CRITICAL FIX: Set flag so template clicks will start session immediately
+            eventTemplateService.SelectedEventForOverlay = currentEvent;
+            Log.Debug($"★★★ TEMPLATE SESSION MODE: Set SelectedEventForOverlay = {currentEvent?.Name}");
         }
         
         private void LoadAvailableEvents()
         {
             try
             {
-                availableEvents = eventService.GetAllEvents();
-                eventsListControl.ItemsSource = availableEvents;
+                eventTemplateService.LoadAvailableEvents();
+                eventsListControl.ItemsSource = eventTemplateService.AvailableEvents;
                 
                 // Clear template selection when events change
-                availableTemplates = new List<TemplateData>();
-                templatesListControl.ItemsSource = availableTemplates;
-                selectedEventForOverlay = null;
-                selectedTemplateForOverlay = null;
+                // Templates managed by service
+                templatesListControl.ItemsSource = eventTemplateService.AvailableTemplates;
+                eventTemplateService.SelectedEventForOverlay = null;
+                eventTemplateService.SelectedTemplateForOverlay = null;
                 UpdateConfirmButtonState();
             }
             catch (Exception ex)
@@ -2705,22 +2103,37 @@ namespace Photobooth.Pages
         
         private void SelectEvent(EventData eventData)
         {
-            selectedEventForOverlay = eventData;
+            eventTemplateService.SelectEvent(eventData);
             currentEvent = eventData;
             
             // Load templates for selected event
-            LoadAvailableTemplates(eventData.Id);
+            eventTemplateService.LoadAvailableTemplates(eventData.Id);
+            
+            Log.Debug($"EVENT SELECT DEBUG: Selected '{eventData.Name}', loaded {eventTemplateService.AvailableTemplates?.Count ?? 0} templates");
+            
+            // CRITICAL: Force START button visibility check after event selection
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                bool shouldShowStartButton = (currentTemplate != null) || 
+                    (currentEvent != null && eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 0);
+                
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = shouldShowStartButton ? Visibility.Visible : Visibility.Collapsed;
+                    Log.Debug($"★★★ FORCED START BUTTON: shouldShow={shouldShowStartButton}, visible={startButtonOverlay.Visibility}");
+                }
+            }));
             
             // Go straight to photobooth screen with this event
             // Templates will be selected on the photobooth screen itself
             eventSelectionOverlay.Visibility = Visibility.Collapsed;
             
-            if (availableTemplates != null && availableTemplates.Count > 0)
+            if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 0)
             {
-                if (availableTemplates.Count == 1)
+                if (eventTemplateService.AvailableTemplates.Count == 1)
                 {
                     // Only one template - auto-select it
-                    currentTemplate = availableTemplates[0];
+                    currentTemplate = eventTemplateService.AvailableTemplates[0];
                     totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
                     currentPhotoIndex = 0;
                     
@@ -2734,8 +2147,12 @@ namespace Photobooth.Pages
                 else
                 {
                     // Multiple templates - will show template selection on photobooth screen
+                    // CRITICAL: Show the START button so user can begin template selection
+                    if (startButtonOverlay != null)
+                        startButtonOverlay.Visibility = Visibility.Visible;
+                    
                     UpdateStatusText($"Event: {currentEvent.Name} - Touch START to select template");
-                    Log.Debug($"Event has {availableTemplates.Count} templates - will show selection on START");
+                    Log.Debug($"Event has {eventTemplateService.AvailableTemplates.Count} templates - will show selection on START");
                 }
             }
             else
@@ -2749,11 +2166,11 @@ namespace Photobooth.Pages
         {
             try
             {
-                availableTemplates = eventService.GetEventTemplates(eventId);
-                templatesListControl.ItemsSource = availableTemplates;
+                eventTemplateService.LoadAvailableTemplates(eventId);
+                templatesListControl.ItemsSource = eventTemplateService.AvailableTemplates;
                 
                 // Clear template selection
-                selectedTemplateForOverlay = null;
+                eventTemplateService.SelectedTemplateForOverlay = null;
                 UpdateConfirmButtonState();
             }
             catch (Exception ex)
@@ -2765,7 +2182,7 @@ namespace Photobooth.Pages
         
         private void SelectTemplate(TemplateData templateData)
         {
-            selectedTemplateForOverlay = templateData;
+            eventTemplateService.SelectedTemplateForOverlay = templateData;
             
             // Update UI to show selection
             HighlightSelectedTemplate(templateData);
@@ -2792,12 +2209,12 @@ namespace Photobooth.Pages
         
         private void ConfirmSelectionButton_Click(object sender, RoutedEventArgs e)
         {
-            if (isSelectingTemplateForSession)
+            if (eventTemplateService.SelectedTemplateForOverlay != null)
             {
                 // Template-only selection for session
-                if (selectedTemplateForOverlay != null)
+                if (eventTemplateService.SelectedTemplateForOverlay != null)
                 {
-                    currentTemplate = selectedTemplateForOverlay;
+                    currentTemplate = eventTemplateService.SelectedTemplateForOverlay;
                     
                     // Get photo count from template
                     totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
@@ -2815,8 +2232,8 @@ namespace Photobooth.Pages
                     eventsListControl.Visibility = Visibility.Visible;
                     
                     // Clear flags and selections
-                    isSelectingTemplateForSession = false;
-                    selectedTemplateForOverlay = null;
+                    // Template selection workflow completed
+                    eventTemplateService.SelectedTemplateForOverlay = null;
                     
                     statusText.Text = $"Template: {currentTemplate.Name} selected - Starting capture...";
                     
@@ -2824,11 +2241,11 @@ namespace Photobooth.Pages
                     StartPhotoSequence();
                 }
             }
-            else if (selectedEventForOverlay != null && selectedTemplateForOverlay != null)
+            else if (eventTemplateService.SelectedEventForOverlay != null && eventTemplateService.SelectedTemplateForOverlay != null)
             {
                 // Full event and template selection
-                currentEvent = selectedEventForOverlay;
-                currentTemplate = selectedTemplateForOverlay;
+                currentEvent = eventTemplateService.SelectedEventForOverlay;
+                currentTemplate = eventTemplateService.SelectedTemplateForOverlay;
                 
                 // Don't create database session yet - wait until first photo is captured
                 // CreateDatabaseSession(); // Moved to first photo capture
@@ -2865,11 +2282,11 @@ namespace Photobooth.Pages
         
         private void CancelSelectionButton_Click(object sender, RoutedEventArgs e)
         {
-            if (isSelectingTemplateForSession)
+            if (eventTemplateService.SelectedTemplateForOverlay != null)
             {
                 // We're in template selection mode - just hide the overlay
                 eventSelectionOverlay.Visibility = Visibility.Collapsed;
-                isSelectingTemplateForSession = false;
+                // Template selection workflow completed
                 
                 // Restore UI for next time
                 eventsListControl.Visibility = Visibility.Visible;
@@ -2883,8 +2300,7 @@ namespace Photobooth.Pages
             }
             
             // Clear temporary selections
-            selectedEventForOverlay = null;
-            selectedTemplateForOverlay = null;
+            eventTemplateService.ClearSelections();
         }
         
         // Handle event selection from overlay
@@ -2901,47 +2317,68 @@ namespace Photobooth.Pages
         // Handle template selection from overlay  
         private void OnTemplateSelected(object sender, MouseButtonEventArgs e)
         {
-            var border = sender as Border;
-            var templateData = border?.Tag as TemplateData;
-            if (templateData != null)
+            try
             {
-                // When in template selection mode for a session
-                if (isSelectingTemplateForSession)
+                System.Diagnostics.Debug.WriteLine("★★★ OnTemplateSelected METHOD CALLED ★★★");
+                Log.Debug($"★★★ TEMPLATE SELECTION: OnTemplateSelected called");
+                
+                var border = sender as Border;
+                var templateData = border?.Tag as TemplateData;
+                
+                Log.Debug($"★★★ TEMPLATE SELECTION: border={border != null}, templateData={templateData?.Name}");
+                
+                if (templateData != null)
                 {
-                    // Direct selection - start immediately
-                    currentTemplate = templateData;
-                    
-                    // Get photo count from template
-                    totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
-                    currentPhotoIndex = 0;
-                    UpdatePhotoStripPlaceholders();
-                    
-                    // Hide overlay
-                    eventSelectionOverlay.Visibility = Visibility.Collapsed;
-                    
-                    // Show start button when template is selected
-                    if (startButtonOverlay != null)
-                        startButtonOverlay.Visibility = Visibility.Visible;
-                    
-                    // Restore UI for next time
-                    eventsListControl.Visibility = Visibility.Visible;
-                    // confirmSelectionButton.Visibility = Visibility.Visible; // Button removed from UI
-                    cancelSelectionButton.Content = "✕ Close";
-                    
-                    // Clear flags
-                    isSelectingTemplateForSession = false;
-                    selectedTemplateForOverlay = null;
-                    
-                    statusText.Text = $"Template: {currentTemplate.Name} selected - Starting capture...";
-                    
-                    // Start the photo sequence immediately
-                    StartPhotoSequence();
+                    Log.Debug($"★★★ TEMPLATE SELECTION: Selected template '{templateData.Name}'");
+                    Log.Debug($"★★★ TEMPLATE SELECTION: SelectedEventForOverlay = {eventTemplateService.SelectedEventForOverlay?.Name ?? "NULL"}");
+                    // When in template selection mode for a session
+                    if (eventTemplateService.SelectedEventForOverlay != null)
+                    {
+                        Log.Debug($"★★★ TEMPLATE SELECTION: Taking DIRECT START path - starting photo sequence immediately");
+                        // CRITICAL: Set currentEvent for database session creation
+                        currentEvent = eventTemplateService.SelectedEventForOverlay;
+                        currentTemplate = templateData;
+                        
+                        Log.Debug($"★★★ MULTI-TEMPLATE SESSION: Set currentEvent={currentEvent?.Name}, currentTemplate={currentTemplate?.Name}");
+                        
+                        // Get photo count from template
+                        totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
+                        currentPhotoIndex = 0;
+                        UpdatePhotoStripPlaceholders();
+                        
+                        // Hide overlay
+                        eventSelectionOverlay.Visibility = Visibility.Collapsed;
+                        
+                        // Hide start button since session is starting
+                        if (startButtonOverlay != null)
+                            startButtonOverlay.Visibility = Visibility.Collapsed;
+                        
+                        // Restore UI for next time
+                        eventsListControl.Visibility = Visibility.Visible;
+                        // confirmSelectionButton.Visibility = Visibility.Visible; // Button removed from UI
+                        cancelSelectionButton.Content = "✕ Close";
+                        
+                        // Clear flags
+                        // Template selection workflow completed
+                        eventTemplateService.SelectedTemplateForOverlay = null;
+                        
+                        statusText.Text = $"Template: {currentTemplate.Name} selected - Starting capture...";
+                        
+                        // Start the photo sequence immediately
+                        StartPhotoSequence();
+                    }
+                    else
+                    {
+                        Log.Debug($"★★★ TEMPLATE SELECTION: Taking NORMAL SELECTION path - just selecting template");
+                        // Normal selection mode - just select the template
+                        SelectTemplate(templateData);
+                    }
                 }
-                else
-                {
-                    // Normal selection mode - just select the template
-                    SelectTemplate(templateData);
-                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"★★★ OnTemplateSelected EXCEPTION: {ex.Message}");
+                Log.Error($"OnTemplateSelected failed: {ex.Message}", ex);
             }
         }
         
@@ -2966,7 +2403,7 @@ namespace Photobooth.Pages
                     // Show the overlay
                     cameraSettingsOverlay.Visibility = Visibility.Visible;
                 };
-                ShowPinEntryDialog();
+                pinLockService.ShowPinEntryDialog();
                 return;
             }
             
@@ -3299,13 +2736,7 @@ namespace Photobooth.Pages
                     _lastTestPhotoPath = fileName;
                     
                     // Load and display the image
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.UriSource = new Uri(fileName);
-                    bitmap.EndInit();
-                    
-                    testPhotoImage.Source = bitmap;
+                    testPhotoImage.Source = CreateBitmapFromUri(fileName);
                     testPhotoImage.Visibility = Visibility.Visible;
                     testPhotoPlaceholderText.Visibility = Visibility.Collapsed;
                 }
@@ -3374,19 +2805,12 @@ namespace Photobooth.Pages
             retakePhotos.Clear();
             for (int i = 0; i < capturedPhotoPaths.Count; i++)
             {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.UriSource = new Uri(capturedPhotoPaths[i]);
-                bitmap.EndInit();
-                bitmap.Freeze();
-                
                 retakePhotos.Add(new RetakePhotoItem
                 {
-                    Image = bitmap,
+                    Image = CreateBitmapFromUri(photoCaptureService.CapturedPhotoPaths[i]),
                     Label = $"Photo {i + 1}",
                     PhotoIndex = i,
-                    FilePath = capturedPhotoPaths[i]
+                    FilePath = photoCaptureService.CapturedPhotoPaths[i]
                 });
             }
             
@@ -3433,8 +2857,7 @@ namespace Photobooth.Pages
                 retakeReviewOverlay.Visibility = Visibility.Collapsed;
                 
                 // Set up for retake
-                photoIndexToRetake = photoIndex;
-                isRetakingPhoto = true;
+                photoCaptureService.StartRetake(photoIndex);
                 
                 // Update UI
                 statusText.Text = $"Retaking photo {photoIndex + 1} of {totalPhotosNeeded}";
@@ -3455,7 +2878,7 @@ namespace Photobooth.Pages
                 
                 // Hide start button, show stop button for retake
                 if (startButtonOverlay != null)
-                    startButtonOverlay.Visibility = Visibility.Collapsed;
+                    CloseOverlay(startButtonOverlay, "start button");
                 if (stopSessionButton != null)
                     stopSessionButton.Visibility = Visibility.Visible;
                 
@@ -3515,8 +2938,7 @@ namespace Photobooth.Pages
                 Log.Error("PrepareForRetake: Failed to prepare for retake", ex);
                 
                 // Reset retake state
-                isRetakingPhoto = false;
-                photoIndexToRetake = -1;
+                // Retake flags managed by service
                 
                 // Show error and return to review
                 UpdateStatusText("Camera error - Unable to retake photo");
@@ -3560,7 +2982,7 @@ namespace Photobooth.Pages
                 {
                     await Dispatcher.InvokeAsync(async () =>
                     {
-                        await filterSelectionControl.SetSourceImage(capturedPhotoPaths[0]);
+                        await filterSelectionControl.SetSourceImage(photoCaptureService.CapturedPhotoPaths[0]);
                     });
                 });
             }
@@ -3632,7 +3054,7 @@ namespace Photobooth.Pages
                             List<string> filteredPaths = new List<string>();
                             for (int i = 0; i < capturedPhotoPaths.Count; i++)
                             {
-                                string filteredPath = await ApplyFilterToPhoto(capturedPhotoPaths[i], selectedFilter, false);
+                                string filteredPath = await photoProcessingOperations.ApplyFilterToPhoto(photoCaptureService.CapturedPhotoPaths[i], selectedFilter, false);
                                 filteredPaths.Add(filteredPath);
                             }
                             
@@ -3740,8 +3162,8 @@ namespace Photobooth.Pages
                     // Generate filter previews directly on UI thread with proper async handling
                     try
                     {
-                        Log.Debug($"ShowPostSessionFilterOverlay: Generating previews for photo: {capturedPhotoPaths[0]}");
-                        await GenerateFilterPreviews(capturedPhotoPaths[0]);
+                        Log.Debug($"ShowPostSessionFilterOverlay: Generating previews for photo: {photoCaptureService.CapturedPhotoPaths[0]}");
+                        await GenerateFilterPreviews(photoCaptureService.CapturedPhotoPaths[0]);
                         UpdateStatusText("Select a filter to preview");
                         Log.Debug("ShowPostSessionFilterOverlay: Filter previews generated successfully");
                         
@@ -3848,7 +3270,7 @@ namespace Photobooth.Pages
                         Log.Debug($"GenerateFilterPreviews: Starting {filterType}");
                         
                         // Reduced timeout for faster response
-                        var filterTask = ApplyFilterToPhoto(samplePhotoPath, filterType, true);
+                        var filterTask = photoProcessingOperations.ApplyFilterToPhoto(samplePhotoPath, filterType, true);
                         var timeoutTask = Task.Delay(2000); // Reduced to 2 seconds
                         
                         var completedTask = await Task.WhenAny(filterTask, timeoutTask);
@@ -4019,7 +3441,7 @@ namespace Photobooth.Pages
                         {
                             Log.Debug($"LoadAdditionalFilters: Starting {filterType}");
                             
-                            var filterTask = ApplyFilterToPhoto(samplePhotoPath, filterType, true);
+                            var filterTask = photoProcessingOperations.ApplyFilterToPhoto(samplePhotoPath, filterType, true);
                             var timeoutTask = Task.Delay(3000); // 3 second timeout for background loading
                             var completedTask = await Task.WhenAny(filterTask, timeoutTask);
                             
@@ -4192,7 +3614,7 @@ namespace Photobooth.Pages
                         List<string> filteredPaths = new List<string>();
                         for (int i = 0; i < capturedPhotoPaths.Count; i++)
                         {
-                            string filteredPath = await ApplyFilterToPhoto(capturedPhotoPaths[i], selectedFilter);
+                            string filteredPath = await photoProcessingOperations.ApplyFilterToPhoto(photoCaptureService.CapturedPhotoPaths[i], selectedFilter);
                             filteredPaths.Add(filteredPath);
                         }
                         
@@ -4290,15 +3712,15 @@ namespace Photobooth.Pages
                                             totalPhotosNeeded = 0;
                                             
                                             // Check if event has multiple templates
-                                            if (currentEvent != null && availableTemplates != null && availableTemplates.Count > 1)
+                                            if (currentEvent != null && eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 1)
                                             {
                                                 // Show template selection for same event
                                                 statusText.Text = $"Event: {currentEvent.Name} - Touch START to select another template";
                                             }
-                                            else if (currentEvent != null && availableTemplates != null && availableTemplates.Count == 1)
+                                            else if (currentEvent != null && eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count == 1)
                                             {
                                                 // Single template - ready to start again
-                                                currentTemplate = availableTemplates[0];
+                                                currentTemplate = eventTemplateService.AvailableTemplates[0];
                                                 totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
                                                 currentPhotoIndex = 0;
                                                 UpdatePhotoStripPlaceholders(true); // Preserve existing photos
@@ -4354,7 +3776,7 @@ namespace Photobooth.Pages
                     {
                         await Dispatcher.InvokeAsync(async () =>
                         {
-                            await filterSelectionControl.SetSourceImage(capturedPhotoPaths[0]);
+                            await filterSelectionControl.SetSourceImage(photoCaptureService.CapturedPhotoPaths[0]);
                         });
                     });
                 }
@@ -4370,51 +3792,6 @@ namespace Photobooth.Pages
             }
         }
         
-        private async Task<string> ApplyFilterToPhoto(string inputPath, FilterType filterType, bool isPreview = false)
-        {
-            try
-            {
-                if (filterType == FilterType.None)
-                    return inputPath;
-                
-                if (!File.Exists(inputPath))
-                {
-                    Log.Error($"ApplyFilterToPhoto: Input file not found: {inputPath}");
-                    return inputPath;
-                }
-                
-                string outputPath = Path.Combine(
-                    Path.GetDirectoryName(inputPath),
-                    isPreview 
-                        ? $"{Path.GetFileNameWithoutExtension(inputPath)}_preview_{filterType}{Path.GetExtension(inputPath)}"
-                        : $"{Path.GetFileNameWithoutExtension(inputPath)}_filtered{Path.GetExtension(inputPath)}"
-                );
-                
-                // Check if preview already exists to save time
-                if (isPreview && File.Exists(outputPath))
-                {
-                    Log.Debug($"ApplyFilterToPhoto: Using cached preview for {filterType}");
-                    return outputPath;
-                }
-                
-                float intensity = Properties.Settings.Default.FilterIntensity / 100f;
-                
-                if (filterService == null)
-                {
-                    Log.Error("ApplyFilterToPhoto: Filter service is not initialized");
-                    return inputPath;
-                }
-                
-                // Run filter processing on thread pool for non-blocking operation
-                return await Task.Run(() => 
-                    filterService.ApplyFilterToFile(inputPath, outputPath, filterType, intensity));
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"ApplyFilterToPhoto: Failed to apply filter {filterType} to {inputPath}: {ex.Message}");
-                return inputPath; // Return original if filter fails
-            }
-        }
         
         #endregion
         
@@ -4522,14 +3899,15 @@ namespace Photobooth.Pages
                 FolderForPhotos = eventFolder;
                 
                 // Load templates for this event
-                availableTemplates = eventService.GetEventTemplates(eventData.Id);
+                eventTemplateService.LoadAvailableTemplates(eventData.Id);
+                // Templates loaded into service
                 
-                if (availableTemplates != null && availableTemplates.Count == 1)
+                if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count == 1)
                 {
                     // Auto-select single template
-                    SetTemplate(availableTemplates[0]);
+                    SetTemplate(eventTemplateService.AvailableTemplates[0]);
                 }
-                else if (availableTemplates != null && availableTemplates.Count > 0)
+                else if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 0)
                 {
                     // Multiple templates - will be selected when START is pressed
                     statusText.Text = $"Event: {eventData.Name} - Touch START to select template";
@@ -4539,7 +3917,7 @@ namespace Photobooth.Pages
                     statusText.Text = $"Event: {eventData.Name} - No templates available";
                 }
                 
-                Log.Debug($"SetEvent: Event '{eventData.Name}' loaded with {availableTemplates?.Count ?? 0} templates");
+                Log.Debug($"SetEvent: Event '{eventData.Name}' loaded with {eventTemplateService.AvailableTemplates?.Count ?? 0} templates");
             }
         }
         
@@ -4552,7 +3930,7 @@ namespace Photobooth.Pages
             {
                 totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(templateData);
                 currentPhotoIndex = 0;
-                capturedPhotoPaths.Clear();
+                photoCaptureService.ResetSession();
                 UpdatePhotoStripPlaceholders();
                 
                 if (currentEvent != null)
@@ -4573,7 +3951,7 @@ namespace Photobooth.Pages
         #region Lock/Unlock Features
         
         private bool _isLocked = false;
-        private string _enteredPin = "";
+        // PIN entry now managed by PinLockService
         private Action _pendingActionAfterUnlock = null;
         
         // PIN pad modes
@@ -4582,131 +3960,32 @@ namespace Photobooth.Pages
             Unlock,
             PhoneNumber
         }
-        private PinPadMode _currentPinMode = PinPadMode.Unlock;
+        // PIN mode now managed by PinLockService
         
         private void LockButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!_isLocked)
-            {
-                // Lock the interface
-                _isLocked = true;
-                lockButton.Content = "🔒";
-                lockButton.ToolTip = "Unlock Interface";
-                
-                // Disable critical controls
-                DisableCriticalControls();
-                
-                // Hide the bottom navbar if it's visible and PIN is enabled
-                if (Properties.Settings.Default.EnableLockFeature && bottomControlBar != null && bottomControlBar.Visibility == Visibility.Visible)
-                {
-                    bottomControlBar.Visibility = Visibility.Collapsed;
-                    if (bottomBarToggleChevron != null)
-                    {
-                        bottomBarToggleChevron.Text = "⌃"; // Up chevron
-                    }
-                }
-                
-                // Show locked status
-                UpdateStatusText("Interface Locked - Click lock icon to unlock");
-            }
-            else
-            {
-                // Show PIN entry dialog
-                ShowPinEntryDialog();
-            }
+            pinLockService.ToggleLock();
         }
         
-        private void DisableCriticalControls()
-        {
-            // Disable buttons that could change settings or exit
-            exitButton.IsEnabled = false;
-            homeButton.IsEnabled = false; // Disable home button when locked
-            printButton.IsEnabled = false; // Disable print button when locked
-            resetCameraButton.IsEnabled = false;
-            cameraSettingsButton.IsEnabled = false;
-            
-            // Hide start button when locked
-            if (startButtonOverlay != null)
-                startButtonOverlay.Visibility = Visibility.Collapsed;
-            galleryButton.IsEnabled = false;
-            eventSettingsButton.IsEnabled = false;
-        }
-        
-        private void EnableCriticalControls()
-        {
-            // Re-enable all controls
-            exitButton.IsEnabled = true;
-            homeButton.IsEnabled = true; // Re-enable home button when unlocked
-            printButton.IsEnabled = true; // Re-enable print button when unlocked
-            resetCameraButton.IsEnabled = true;
-            cameraSettingsButton.IsEnabled = true;
-            
-            // Show start button when unlocked
-            if (startButtonOverlay != null)
-                startButtonOverlay.Visibility = Visibility.Visible;
-            galleryButton.IsEnabled = true;
-            eventSettingsButton.IsEnabled = true;
-        }
-        
-        private void ShowPinEntryDialog()
-        {
-            _enteredPin = "";
-            pinDisplayBox.Text = "";
-            pinErrorText.Visibility = Visibility.Collapsed;
-            pinEntryOverlay.Visibility = Visibility.Visible;
-            UpdatePinDots();
-        }
+        // PIN/Lock functionality moved to PinLockService
         
         private void PinPadButton_Click(object sender, RoutedEventArgs e)
         {
-            // Different limits based on mode
-            int maxLength = _currentPinMode == PinPadMode.PhoneNumber ? 15 : 6;
-            
-            if (sender is Button button && _enteredPin.Length < maxLength)
+            // Extract digit from button
+            string digit = "";
+            if (sender is Button button)
             {
-                // Extract the number from the button content
-                string digit = "";
                 if (button.Content is StackPanel stackPanel && stackPanel.Children.Count > 0)
                 {
                     if (stackPanel.Children[0] is TextBlock textBlock)
-                    {
                         digit = textBlock.Text;
-                    }
                 }
                 else if (button.Content != null)
-                {
                     digit = button.Content.ToString();
-                }
-                
-                if (!string.IsNullOrEmpty(digit))
-                {
-                    _enteredPin += digit;
-                    
-                    // Display differently based on mode
-                    if (_currentPinMode == PinPadMode.PhoneNumber)
-                    {
-                        // Show actual phone number
-                        pinDisplayBox.Text = FormatPhoneNumber(_enteredPin);
-                    }
-                    else
-                    {
-                        // Show dots for PIN
-                        pinDisplayBox.Text = new string('●', _enteredPin.Length);
-                    }
-                    
-                    UpdatePinDots();
-                    
-                    // Handle phone number completion (10+ digits)
-                    if (_currentPinMode == PinPadMode.PhoneNumber && _enteredPin.Length >= 10)
-                    {
-                        // Auto-proceed with SMS after entering phone number
-                        Task.Delay(500).ContinueWith(_ => 
-                        {
-                            Dispatcher.Invoke(async () => await HandlePhoneNumberComplete());
-                        });
-                    }
-                }
             }
+            
+            if (!string.IsNullOrEmpty(digit))
+                pinLockService.HandlePinPadButton(digit);
         }
 
         private string FormatPhoneNumber(string phoneNumber)
@@ -4736,10 +4015,10 @@ namespace Photobooth.Pages
             {
                 // Hide PIN pad
                 pinEntryOverlay.Visibility = Visibility.Collapsed;
-                _currentPinMode = PinPadMode.Unlock; // Reset mode
+                // PIN mode reset handled by PinLockService
                 
                 // Send SMS with photos
-                await SendSMSWithPhotos(_enteredPin);
+                await SendSMSWithPhotos(pinLockService.EnteredPin);
             }
             catch (Exception ex)
             {
@@ -4750,7 +4029,7 @@ namespace Photobooth.Pages
 
         private async Task SendSMSWithPhotos(string phoneNumber)
         {
-            string sessionGuid = currentSessionGuid;
+            string sessionGuid = databaseOperations.CurrentSessionGuid;
             try
             {
                 var cloudService = CloudShareProvider.GetShareService();
@@ -4817,81 +4096,19 @@ namespace Photobooth.Pages
             }
         }
         
-        private void UpdatePinDots()
-        {
-            // Update visual PIN dots based on entered length - white when filled, dark gray when empty
-            pinDot1.Background = _enteredPin.Length >= 1 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
-            pinDot2.Background = _enteredPin.Length >= 2 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
-            pinDot3.Background = _enteredPin.Length >= 3 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
-            pinDot4.Background = _enteredPin.Length >= 4 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
-            pinDot5.Background = _enteredPin.Length >= 5 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
-            pinDot6.Background = _enteredPin.Length >= 6 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)) : new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 76, 76));
-        }
-        
         private void PinClearButton_Click(object sender, RoutedEventArgs e)
         {
-            _enteredPin = "";
-            pinDisplayBox.Text = "";
-            pinErrorText.Visibility = Visibility.Collapsed;
-            UpdatePinDots();
+            pinLockService.ClearPin();
         }
         
         private void PinSubmitButton_Click(object sender, RoutedEventArgs e)
         {
-            // Get the parent window to validate PIN
-            var parentWindow = Window.GetWindow(this);
-            bool isValid = false;
-            
-            if (parentWindow is SurfacePhotoBoothWindow surfaceWindow)
-            {
-                isValid = surfaceWindow.ValidatePin(_enteredPin);
-            }
-            else
-            {
-                // Use PIN from settings
-                string settingsPin = Properties.Settings.Default.LockPin;
-                isValid = _enteredPin == settingsPin;
-            }
-            
-            if (isValid)
-            {
-                // Unlock successful
-                _isLocked = false;
-                lockButton.Content = "🔓";
-                lockButton.ToolTip = "Lock Interface";
-                
-                // Re-enable controls
-                EnableCriticalControls();
-                
-                // Hide PIN dialog
-                pinEntryOverlay.Visibility = Visibility.Collapsed;
-                
-                // Update status
-                UpdateStatusText("Interface Unlocked");
-                
-                // Execute pending action if any
-                if (_pendingActionAfterUnlock != null)
-                {
-                    var action = _pendingActionAfterUnlock;
-                    _pendingActionAfterUnlock = null;
-                    action.Invoke();
-                }
-            }
-            else
-            {
-                // Show error
-                pinErrorText.Visibility = Visibility.Visible;
-                _enteredPin = "";
-                pinDisplayBox.Text = "";
-            }
+            pinLockService.SubmitPin();
         }
         
         private void PinCancelButton_Click(object sender, RoutedEventArgs e)
         {
-            pinEntryOverlay.Visibility = Visibility.Collapsed;
-            _enteredPin = "";
-            pinDisplayBox.Text = "";
-            _currentPinMode = PinPadMode.Unlock; // Reset to default mode
+            pinLockService.CancelPinEntry();
         }
         
         #endregion
@@ -5040,7 +4257,7 @@ namespace Photobooth.Pages
                 }
                 
                 // Generate session ID
-                string sessionId = currentSessionGuid ?? Guid.NewGuid().ToString();
+                string sessionId = databaseOperations.CurrentSessionGuid ?? Guid.NewGuid().ToString();
                 Log.Debug($"TriggerCloudSharing: Using session ID: {sessionId}");
                 
                 // Show upload progress
@@ -5208,7 +4425,7 @@ namespace Photobooth.Pages
                 
                 // Get gallery URL from current share result or use pending URL
                 string galleryUrl = currentShareResult?.GalleryUrl;
-                string sessionId = currentSessionGuid ?? Guid.NewGuid().ToString();
+                string sessionId = databaseOperations.CurrentSessionGuid ?? Guid.NewGuid().ToString();
                 
                 // If no gallery URL, this means photos are pending upload
                 if (string.IsNullOrEmpty(galleryUrl))
@@ -5218,7 +4435,7 @@ namespace Photobooth.Pages
                 }
                 
                 // Use cached offline queue service for SMS (works offline)
-                var queueService = GetOrCreateOfflineQueueService();
+                var queueService = sharingOperations.GetOrCreateOfflineQueueService();
                 var queueResult = await queueService.QueueSMS(phoneNumber, galleryUrl, sessionId);
                 
                 if (queueResult.Success)
@@ -5413,7 +4630,9 @@ namespace Photobooth.Pages
                     var photoPaths = new List<string> { imageToPrint };
                     
                     // Print using the service - pass the original format information for proper routing
+                    Log.Debug($"PrintButton_Click: About to call PrintService.PrintPhotos with lastProcessedWas2x6Template={lastProcessedWas2x6Template}");
                     var result = printService.PrintPhotos(photoPaths, sessionId, copies, lastProcessedWas2x6Template);
+                    Log.Debug($"PrintButton_Click: PrintService.PrintPhotos returned - Success={result.Success}, Message='{result.Message}'");
                     
                     if (result.Success)
                     {
@@ -5538,15 +4757,14 @@ namespace Photobooth.Pages
             retakeReviewTimer.Stop();
             
             // Clear photo collections
-            capturedPhotoPaths.Clear();
+            photoCaptureService.ResetSession();
             photoStripItems.Clear();
             retakePhotos.Clear();
             
             // Reset counters
             currentPhotoIndex = 0;
             photoCount = 0;
-            photoIndexToRetake = -1;
-            isRetakingPhoto = false;
+            photoCaptureService.ResetSession();
             
             // Clear processed image paths
             lastProcessedImagePath = null;
@@ -5554,9 +4772,8 @@ namespace Photobooth.Pages
             lastProcessedWas2x6Template = false;
             
             // Reset database session tracking
-            currentDatabaseSessionId = null;
-            currentSessionGuid = null;
-            currentSessionPhotoIds.Clear();
+            databaseOperations.EndSession();
+            // Photo IDs cleared by DatabaseOperations
             
             // Clear UI
             liveViewImage.Source = null;
@@ -5577,10 +4794,21 @@ namespace Photobooth.Pages
                 stopSessionButton.Visibility = Visibility.Collapsed;
             }
             
-            // Show start button
-            if (startButtonOverlay != null)
+            // Check if this is a multi-template event - if so, return to template selection
+            if (currentEvent != null && eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 1)
             {
-                startButtonOverlay.Visibility = Visibility.Visible;
+                Log.Debug("ClearSession: Multi-template event detected - returning to template selection");
+                // Reset template selection but keep the event
+                currentTemplate = null;
+                ShowTemplateSelectionForSession();
+            }
+            else
+            {
+                // Show start button for single template or no event selected
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = Visibility.Visible;
+                }
             }
             
             // Hide any overlays
@@ -5590,7 +4818,7 @@ namespace Photobooth.Pages
             }
             if (countdownOverlay != null)
             {
-                countdownOverlay.Visibility = Visibility.Collapsed;
+                CloseOverlay(countdownOverlay, "countdown");
             }
             if (postSessionFilterOverlay != null)
             {
@@ -5715,8 +4943,8 @@ namespace Photobooth.Pages
                 // Set current session data
                 currentEvent = database.GetEvent(sessionData.EventId);
                 currentTemplate = database.GetTemplate(sessionData.TemplateId);
-                currentDatabaseSessionId = sessionData.Id;
-                currentSessionGuid = sessionData.SessionGuid;
+                // Restore session to database operations
+                // Note: Need to add method to restore session in DatabaseOperations
                 
                 if (currentEvent == null || currentTemplate == null)
                 {
@@ -5746,6 +4974,8 @@ namespace Photobooth.Pages
                     lastProcessedImagePath = latestComposed.FilePath;
                     lastProcessedWas2x6Template = latestComposed.OutputFormat == "2x6";
                     
+                    Log.Debug($"★★★ LATEST COMPOSED DEBUG: OutputFormat='{latestComposed.OutputFormat}', lastProcessedWas2x6Template={lastProcessedWas2x6Template} ★★★");
+                    
                     printButton.Visibility = Visibility.Visible;
                     printButton.IsEnabled = true;
                     
@@ -5758,7 +4988,7 @@ namespace Photobooth.Pages
                     // DON'T show start button yet - wait for Done button or auto-clear
                     if (startButtonOverlay != null)
                     {
-                        startButtonOverlay.Visibility = Visibility.Collapsed;
+                        CloseOverlay(startButtonOverlay, "start button");
                     }
                     
                     statusText.Text = $"Session loaded! {photoCount} photos, {composedImages.Count} layouts. Ready to reprint.";
@@ -5779,7 +5009,7 @@ namespace Photobooth.Pages
                     // DON'T show start button yet - wait for Done button or auto-clear
                     if (startButtonOverlay != null)
                     {
-                        startButtonOverlay.Visibility = Visibility.Collapsed;
+                        CloseOverlay(startButtonOverlay, "start button");
                     }
                     
                     // Start auto-clear timer if enabled
@@ -5853,7 +5083,7 @@ namespace Photobooth.Pages
                 // Clear current photo strip
                 photoStripImages.Clear();
                 photoStripItems.Clear();
-                capturedPhotoPaths.Clear();
+                photoCaptureService.ResetSession();
                 
                 // Stop live view if camera is running
                 try
@@ -5891,7 +5121,7 @@ namespace Photobooth.Pages
                             bitmap.Freeze();
                             
                             photoStripImages.Add(bitmap);
-                            capturedPhotoPaths.Add(photo.FilePath);
+                            photoCaptureService.CapturedPhotoPaths.Add(photo.FilePath);
                             
                             // Add to photo strip items
                             var stripItem = new PhotoStripItem
@@ -5954,7 +5184,7 @@ namespace Photobooth.Pages
                                         bitmap.BeginInit();
                                         bitmap.CacheOption = BitmapCacheOption.OnLoad;
                                         bitmap.DecodePixelWidth = 150;
-                                        bitmap.UriSource = new Uri(capturedPhotoPaths[0]);
+                                        bitmap.UriSource = new Uri(photoCaptureService.CapturedPhotoPaths[0]);
                                         bitmap.EndInit();
                                         bitmap.Freeze();
                                     }
@@ -6047,7 +5277,7 @@ namespace Photobooth.Pages
                     
                     // Hide countdown overlay if visible
                     if (countdownOverlay != null)
-                        countdownOverlay.Visibility = Visibility.Collapsed;
+                        CloseOverlay(countdownOverlay, "countdown");
                     
                     // Show session loaded indicator
                     if (sessionLoadedIndicator != null)
@@ -6072,6 +5302,7 @@ namespace Photobooth.Pages
                     lastProcessedImagePath = composedImage.FilePath;
                     lastProcessedWas2x6Template = composedImage.OutputFormat == "2x6";
                     
+                    Log.Debug($"★★★ DISPLAY COMPOSED DEBUG: OutputFormat='{composedImage.OutputFormat}', lastProcessedWas2x6Template={lastProcessedWas2x6Template} ★★★");
                     Log.Debug($"DisplayComposedImage: Displayed composed image {index + 1}/{loadedComposedImages.Count}: {composedImage.FilePath}");
                 }
             }
@@ -6194,9 +5425,9 @@ namespace Photobooth.Pages
                     else
                     {
                         // For photos without FilePath, try to get from capturedPhotoPaths
-                        if (itemToSelect.PhotoNumber > 0 && itemToSelect.PhotoNumber <= capturedPhotoPaths.Count)
+                        if (itemToSelect.PhotoNumber > 0 && itemToSelect.PhotoNumber <= photoCaptureService.CapturedPhotoPaths.Count)
                         {
-                            string photoPath = capturedPhotoPaths[itemToSelect.PhotoNumber - 1];
+                            string photoPath = photoCaptureService.CapturedPhotoPaths[itemToSelect.PhotoNumber - 1];
                             if (File.Exists(photoPath))
                             {
                                 try
@@ -6260,7 +5491,7 @@ namespace Photobooth.Pages
             }
         }
         
-        private void AddComposedImageToPhotoStrip(string composedImagePath)
+        public void AddComposedImageToPhotoStrip(string composedImagePath)
         {
             try
             {
@@ -6330,7 +5561,7 @@ namespace Photobooth.Pages
                             bitmap.BeginInit();
                             bitmap.CacheOption = BitmapCacheOption.OnLoad;
                             bitmap.DecodePixelWidth = 150; // Thumbnail size
-                            bitmap.UriSource = new Uri(capturedPhotoPaths[0]); // Use first photo as thumbnail
+                            bitmap.UriSource = new Uri(photoCaptureService.CapturedPhotoPaths[0]); // Use first photo as thumbnail
                             bitmap.EndInit();
                             bitmap.Freeze();
                         }
@@ -6368,7 +5599,7 @@ namespace Photobooth.Pages
                             bitmap.BeginInit();
                             bitmap.CacheOption = BitmapCacheOption.OnLoad;
                             bitmap.DecodePixelWidth = 150;
-                            bitmap.UriSource = new Uri(capturedPhotoPaths[0]);
+                            bitmap.UriSource = new Uri(photoCaptureService.CapturedPhotoPaths[0]);
                             bitmap.EndInit();
                             bitmap.Freeze();
                         }
@@ -6587,18 +5818,18 @@ namespace Photobooth.Pages
                     return;
                 }
                 
-                if (currentDatabaseSessionId.HasValue)
+                if (databaseOperations.CurrentSessionId.HasValue)
                 {
                     Log.Debug("CreateDatabaseSession: Database session already exists");
                     return;
                 }
                 
                 string sessionName = $"{currentEvent.Name}_{currentTemplate.Name}_{DateTime.Now:yyyyMMdd_HHmmss}";
-                currentDatabaseSessionId = database.CreatePhotoSession(currentEvent.Id, currentTemplate.Id, sessionName);
-                currentSessionGuid = System.Guid.NewGuid().ToString();
-                currentSessionPhotoIds.Clear();
+                databaseOperations.CreateSession(currentEvent?.Id, currentTemplate?.Id);
+                // Session GUID managed by DatabaseOperations
+                // Photo IDs cleared by DatabaseOperations
                 
-                Log.Debug($"CreateDatabaseSession: Created session ID {currentDatabaseSessionId} with GUID {currentSessionGuid}");
+                Log.Debug($"CreateDatabaseSession: Created session ID {databaseOperations.CurrentSessionId} with GUID {databaseOperations.CurrentSessionGuid}");
             }
             catch (Exception ex)
             {
@@ -6610,13 +5841,13 @@ namespace Photobooth.Pages
         {
             try
             {
-                if (!currentDatabaseSessionId.HasValue)
+                if (!databaseOperations.CurrentSessionId.HasValue)
                 {
                     Log.Debug("SavePhotoToDatabase: No active session, creating one");
-                    CreateDatabaseSession();
+                    databaseOperations.CreateSession(currentEvent?.Id, currentTemplate?.Id);
                 }
                 
-                if (!currentDatabaseSessionId.HasValue)
+                if (!databaseOperations.CurrentSessionId.HasValue)
                 {
                     Log.Error("SavePhotoToDatabase: Failed to create session");
                     return;
@@ -6624,7 +5855,7 @@ namespace Photobooth.Pages
                 
                 var photoData = new PhotoData
                 {
-                    SessionId = currentDatabaseSessionId.Value,
+                    SessionId = databaseOperations.CurrentSessionId.Value,
                     FilePath = filePath,
                     FileName = Path.GetFileName(filePath),
                     FileSize = new FileInfo(filePath).Length,
@@ -6636,7 +5867,7 @@ namespace Photobooth.Pages
                 };
                 
                 int photoId = database.SavePhoto(photoData);
-                currentSessionPhotoIds.Add(photoId);
+                // Photo ID tracked by DatabaseOperations
                 
                 Log.Debug($"SavePhotoToDatabase: Saved photo {photoId} - {Path.GetFileName(filePath)}");
             }
@@ -6646,19 +5877,40 @@ namespace Photobooth.Pages
             }
         }
         
-        private void SaveComposedImageToDatabase(string filePath, string outputFormat = "4x6")
+        public void UpdateProcessedImagePaths(string displayPath, string printPath)
+        {
+            lastProcessedImagePath = displayPath;
+            lastProcessedImagePathForPrinting = printPath;
+            UpdateSharingButtonsVisibility();
+        }
+        
+        public void SaveComposedImageToDatabase(string filePath, string outputFormat = "4x6")
         {
             try
             {
-                if (!currentDatabaseSessionId.HasValue)
+                Log.Debug($"★★★ SAVE TO DB DEBUG: filePath='{filePath}', outputFormat='{outputFormat}' ★★★");
+                Log.Debug($"★★★ SESSION DEBUG: CurrentSessionId={databaseOperations.CurrentSessionId}, HasValue={databaseOperations.CurrentSessionId.HasValue} ★★★");
+                
+                if (!databaseOperations.CurrentSessionId.HasValue)
                 {
-                    Log.Error("SaveComposedImageToDatabase: No active session");
-                    return;
+                    Log.Error("SaveComposedImageToDatabase: No active session - creating emergency session");
+                    
+                    // Create an emergency session to save the composed image
+                    if (currentEvent != null)
+                    {
+                        databaseOperations.CreateSession(currentEvent.Id, currentTemplate?.Id);
+                        Log.Debug($"★★★ EMERGENCY SESSION: Created session {databaseOperations.CurrentSessionId} ★★★");
+                    }
+                    else
+                    {
+                        Log.Error("SaveComposedImageToDatabase: No currentEvent available for emergency session");
+                        return;
+                    }
                 }
                 
                 var composedImageData = new ComposedImageData
                 {
-                    SessionId = currentDatabaseSessionId.Value,
+                    SessionId = databaseOperations.CurrentSessionId.Value,
                     FilePath = filePath,
                     FileName = Path.GetFileName(filePath),
                     FileSize = new FileInfo(filePath).Length,
@@ -6672,13 +5924,19 @@ namespace Photobooth.Pages
                 int composedImageId = database.SaveComposedImage(composedImageData);
                 
                 // Link this composed image to all photos in the current session
-                if (currentSessionPhotoIds.Count > 0)
+                if (databaseOperations.CurrentPhotoIds.Count > 0)
                 {
-                    database.LinkPhotosToComposedImage(composedImageId, currentSessionPhotoIds);
-                    Log.Debug($"SaveComposedImageToDatabase: Linked composed image {composedImageId} to {currentSessionPhotoIds.Count} photos");
+                    database.LinkPhotosToComposedImage(composedImageId, databaseOperations.CurrentPhotoIds);
+                    Log.Debug($"SaveComposedImageToDatabase: Linked composed image {composedImageId} to {databaseOperations.CurrentPhotoIds.Count} photos");
                 }
                 
                 Log.Debug($"SaveComposedImageToDatabase: Saved composed image {composedImageId} - {Path.GetFileName(filePath)}");
+                Log.Debug($"★★★ SAVED TO DB: composedImageId={composedImageId}, outputFormat='{outputFormat}' ★★★");
+                
+                // CRITICAL: Update lastProcessedWas2x6Template immediately after database save
+                lastProcessedImagePath = filePath;
+                lastProcessedWas2x6Template = outputFormat == "2x6";
+                Log.Debug($"★★★ IMMEDIATE UPDATE: lastProcessedWas2x6Template={lastProcessedWas2x6Template} based on outputFormat='{outputFormat}' ★★★");
                 
                 // Generate GIF in background without blocking (fire and forget)
                 if (Properties.Settings.Default.EnableGifGeneration && capturedPhotoPaths.Count > 1)
@@ -6941,11 +6199,11 @@ namespace Photobooth.Pages
                 {
                     try
                     {
-                        thumbnailPath = GenerateThumbnailPath(capturedPhotoPaths[0]);
+                        thumbnailPath = GenerateThumbnailPath(photoCaptureService.CapturedPhotoPaths[0]);
                         if (!File.Exists(thumbnailPath))
                         {
                             // Create thumbnail from first photo
-                            using (var image = System.Drawing.Image.FromFile(capturedPhotoPaths[0]))
+                            using (var image = System.Drawing.Image.FromFile(photoCaptureService.CapturedPhotoPaths[0]))
                             {
                                 int thumbWidth = 150;
                                 int thumbHeight = (int)(image.Height * (150.0 / image.Width));
@@ -6963,7 +6221,7 @@ namespace Photobooth.Pages
                 }
                 
                 // Save to database as a composed image with animation type
-                if (!currentDatabaseSessionId.HasValue)
+                if (!databaseOperations.CurrentSessionId.HasValue)
                 {
                     Log.Debug("SaveAnimationToDatabase: No active session");
                     return;
@@ -6971,7 +6229,7 @@ namespace Photobooth.Pages
                 
                 var animationData = new ComposedImageData
                 {
-                    SessionId = currentDatabaseSessionId.Value,
+                    SessionId = databaseOperations.CurrentSessionId.Value,
                     FilePath = animationPath,
                     FileName = Path.GetFileName(animationPath),
                     FileSize = new FileInfo(animationPath).Length,
@@ -6985,10 +6243,10 @@ namespace Photobooth.Pages
                 int animationId = database.SaveComposedImage(animationData);
                 
                 // Link to the photos in this session
-                if (animationId > 0 && currentSessionPhotoIds.Count > 0)
+                if (animationId > 0 && databaseOperations.CurrentPhotoIds.Count > 0)
                 {
-                    database.LinkPhotosToComposedImage(animationId, currentSessionPhotoIds);
-                    Log.Debug($"SaveAnimationToDatabase: Saved {animationType} animation ID {animationId} linked to {currentSessionPhotoIds.Count} photos");
+                    database.LinkPhotosToComposedImage(animationId, databaseOperations.CurrentPhotoIds);
+                    Log.Debug($"SaveAnimationToDatabase: Saved {animationType} animation ID {animationId} linked to {databaseOperations.CurrentPhotoIds.Count} photos");
                 }
                 else if (animationId <= 0)
                 {
@@ -7025,24 +6283,23 @@ namespace Photobooth.Pages
         {
             try
             {
-                if (currentDatabaseSessionId.HasValue)
+                if (databaseOperations.CurrentSessionId.HasValue)
                 {
                     // Only end the session if it has photos
-                    if (currentSessionPhotoIds.Count > 0)
+                    if (databaseOperations.CurrentPhotoIds.Count > 0)
                     {
-                        database.EndPhotoSession(currentDatabaseSessionId.Value);
-                        Log.Debug($"EndDatabaseSession: Ended session {currentDatabaseSessionId} with {currentSessionPhotoIds.Count} photos");
+                        database.EndPhotoSession(databaseOperations.CurrentSessionId.Value);
+                        Log.Debug($"EndDatabaseSession: Ended session {databaseOperations.CurrentSessionId} with {databaseOperations.CurrentPhotoIds.Count} photos");
                     }
                     else
                     {
                         // Delete empty session from database
-                        Log.Debug($"EndDatabaseSession: Deleting empty session {currentDatabaseSessionId}");
-                        database.DeletePhotoSession(currentDatabaseSessionId.Value);
+                        Log.Debug($"EndDatabaseSession: Deleting empty session {databaseOperations.CurrentSessionId}");
+                        database.DeletePhotoSession(databaseOperations.CurrentSessionId.Value);
                     }
                     
-                    currentDatabaseSessionId = null;
-                    currentSessionGuid = null;
-                    currentSessionPhotoIds.Clear();
+                    databaseOperations.EndSession();
+                    // Session and photo IDs cleared by DatabaseOperations
                 }
             }
             catch (Exception ex)
@@ -7254,7 +6511,7 @@ namespace Photobooth.Pages
             // If it's the "No Filter" option, show the original image
             if (filterItem.FilterType == FilterType.None && capturedPhotoPaths.Count > 0)
             {
-                var originalImage = new BitmapImage(new Uri(capturedPhotoPaths[0]));
+                var originalImage = new BitmapImage(new Uri(photoCaptureService.CapturedPhotoPaths[0]));
                 liveViewImage.Source = originalImage;
                 statusText.Text = "Preview: Original (No Filter)";
             }
@@ -7368,7 +6625,7 @@ namespace Photobooth.Pages
             }
         }
 
-        private void ShowSimpleMessage(string message)
+        public void ShowSimpleMessage(string message)
         {
             MessageBox.Show(message, "Feature Not Available", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -7459,345 +6716,46 @@ namespace Photobooth.Pages
             get { return uiLayoutService?.IsCustomLayoutActive ?? false; }
         }
         
+        /// <summary>
+        /// Update share result (called from SharingOperations)
+        /// </summary>
+        public void UpdateShareResult(ShareResult result)
+        {
+            currentShareResult = result;
+        }
+        
+        
+        
         #endregion
 
         #region Sharing Button Event Handlers
 
         private void QrCodeSharingButton_Click(object sender, RoutedEventArgs e)
         {
-            Log.Debug("QrCodeSharingButton_Click: Starting QR code sharing");
-            
-            try
-            {
-                // Check if we have a cached gallery URL first (instant)
-                if (currentShareResult != null && !string.IsNullOrEmpty(currentShareResult.GalleryUrl))
-                {
-                    // Show QR code immediately with cached data
-                    ShowQRCodeOverlay(currentShareResult.GalleryUrl);
-                    return;
-                }
-                
-                // Check database in background for existing URL
-                if (!string.IsNullOrEmpty(currentSessionGuid))
-                {
-                    // Show QR overlay immediately with loading state
-                    ShowQRCodeOverlay("Loading...");
-                    
-                    // Load data in background
-                    Task.Run(() => 
-                    {
-                        try
-                        {
-                            var db = new Database.TemplateDatabase();
-                            var galleryUrl = db.GetPhotoSessionGalleryUrl(currentSessionGuid);
-                            
-                            if (!string.IsNullOrEmpty(galleryUrl))
-                            {
-                                Log.Debug($"QrCodeSharingButton_Click: Found gallery URL in database: {galleryUrl}");
-                                
-                                // Generate QR code
-                                var cloudService = CloudShareProvider.GetShareService();
-                                var qrCodeImage = cloudService?.GenerateQRCode(galleryUrl);
-                                
-                                // Cache for future use
-                                currentShareResult = new ShareResult
-                                {
-                                    Success = true,
-                                    GalleryUrl = galleryUrl,
-                                    QRCodeImage = qrCodeImage,
-                                    UploadedPhotos = new List<UploadedPhoto>()
-                                };
-                                
-                                // Update QR overlay on UI thread
-                                Dispatcher.Invoke(() => 
-                                {
-                                    if (qrCodeImage != null && currentShareResult != null)
-                                    {
-                                        ShowQRCodeOverlay(galleryUrl);
-                                    }
-                                });
-                            }
-                            else
-                            {
-                                // No URL found, close overlay and show message
-                                Dispatcher.Invoke(() => 
-                                {
-                                    sharingOverlay.Visibility = Visibility.Collapsed;
-                                    ShowSimpleMessage("Photos need to be uploaded first before sharing QR code.");
-                                });
-                            }
-                        }
-                        catch (Exception dbEx)
-                        {
-                            Log.Error($"QrCodeSharingButton_Click: Error checking database: {dbEx.Message}");
-                            Dispatcher.Invoke(() => 
-                            {
-                                sharingOverlay.Visibility = Visibility.Collapsed;
-                                ShowSimpleMessage("Failed to load QR code.");
-                            });
-                        }
-                    });
-                }
-                else
-                {
-                    ShowSimpleMessage("Photos need to be uploaded first before sharing QR code.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"QrCodeSharingButton_Click: Error showing QR code: {ex.Message}");
-                ShowSimpleMessage($"QR code display failed: {ex.Message}");
-            }
+            // Delegate to SharingOperations service
+            sharingOperations.HandleQrCodeSharingClick(currentShareResult, databaseOperations.CurrentSessionGuid);
         }
 
         private void SmsSharingButton_Click(object sender, RoutedEventArgs e)
         {
-            Log.Debug("SmsSharingButton_Click: Starting SMS sharing (offline-capable)");
-            
-            try
-            {
-                if (lastProcessedImagePath == null)
-                {
-                    ShowSimpleMessage("No photos available for sharing");
-                    return;
-                }
-
-                // Show SMS phone pad immediately - no waiting
-                ShowSmsPhonePadOverlay();
-                
-                // Queue upload in background if needed (non-blocking)
-                Task.Run(async () => 
-                {
-                    try
-                    {
-                        // Only queue for upload if not already uploaded
-                        if (currentShareResult == null || string.IsNullOrEmpty(currentShareResult.GalleryUrl))
-                        {
-                            // Prepare photos for upload/queue
-                            var photosToShare = new List<string>();
-                            if (capturedPhotoPaths != null && capturedPhotoPaths.Count > 0)
-                            {
-                                photosToShare.AddRange(capturedPhotoPaths);
-                            }
-                            if (!string.IsNullOrEmpty(lastProcessedImagePath) && File.Exists(lastProcessedImagePath))
-                            {
-                                photosToShare.Add(lastProcessedImagePath);
-                            }
-
-                            string sessionId = currentSessionGuid ?? Guid.NewGuid().ToString();
-                            
-                            // Check database first for existing gallery URL
-                            var db = new Database.TemplateDatabase();
-                            var existingUrl = db.GetPhotoSessionGalleryUrl(sessionId);
-                            
-                            if (!string.IsNullOrEmpty(existingUrl))
-                            {
-                                // Found existing URL, use it
-                                var cloudService = CloudShareProvider.GetShareService();
-                                currentShareResult = new ShareResult
-                                {
-                                    Success = true,
-                                    GalleryUrl = existingUrl,
-                                    QRCodeImage = cloudService?.GenerateQRCode(existingUrl),
-                                    UploadedPhotos = new List<UploadedPhoto>()
-                                };
-                            }
-                            else
-                            {
-                                // Queue for upload
-                                var queueService = GetOrCreateOfflineQueueService();
-                                var uploadResult = await queueService.QueuePhotosForUpload(sessionId, photosToShare);
-                                
-                                if (uploadResult.Success)
-                                {
-                                    currentShareResult = new ShareResult
-                                    {
-                                        Success = true,
-                                        GalleryUrl = uploadResult.GalleryUrl,
-                                        QRCodeImage = uploadResult.QRCodeImage,
-                                        UploadedPhotos = new List<UploadedPhoto>()
-                                    };
-                                    
-                                    // Store gallery URL if immediate upload
-                                    if (uploadResult.Immediate && !string.IsNullOrEmpty(uploadResult.GalleryUrl))
-                                    {
-                                        db.UpdatePhotoSessionGalleryUrl(sessionId, uploadResult.GalleryUrl);
-                                    }
-                                }
-                            }
-                            
-                            // Update UI on main thread
-                            Dispatcher.Invoke(() => UpdateSharingButtonsVisibility());
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error($"SmsSharingButton_Click: Background upload error: {ex.Message}");
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"SmsSharingButton_Click: Error starting SMS sharing: {ex.Message}");
-                ShowSimpleMessage($"SMS sharing failed: {ex.Message}");
-            }
+            // Delegate to SharingOperations service
+            sharingOperations.HandleSmsSharingClick(lastProcessedImagePath, capturedPhotoPaths, 
+                currentShareResult, databaseOperations.CurrentSessionGuid);
         }
 
-        private OfflineQueueService GetOrCreateOfflineQueueService()
-        {
-            if (_cachedOfflineQueueService == null)
-            {
-                _cachedOfflineQueueService = new OfflineQueueService();
-            }
-            return _cachedOfflineQueueService;
-        }
         
-        private void ShowQRCodeOverlay(string galleryUrl)
-        {
-            try
-            {
-                // Show overlay immediately
-                sharingOverlay.Visibility = Visibility.Visible;
-                
-                if (string.IsNullOrEmpty(galleryUrl) || galleryUrl == "Loading...")
-                {
-                    // Show loading state
-                    qrCodeImage.Source = null;
-                    if (galleryUrlText != null)
-                        galleryUrlText.Text = "Loading...";
-                    return;
-                }
-                
-                var cloudService = CloudShareProvider.GetShareService();
-                var qrCodeBitmap = cloudService.GenerateQRCode(galleryUrl);
-                
-                if (qrCodeBitmap != null)
-                {
-                    // Show a simple QR code display using the existing QR code overlay infrastructure
-                    // but without the SMS components - just show the QR code and URL
-                    
-                    if (qrCodeImage != null)
-                    {
-                        qrCodeImage.Source = qrCodeBitmap;
-                    }
-                    
-                    // Update gallery URL text
-                    if (galleryUrlText != null)
-                    {
-                        galleryUrlText.Text = galleryUrl;
-                    }
-                    
-                    // Hide SMS-related elements (phone number textbox and send button)
-                    if (phoneNumberTextBox != null)
-                    {
-                        phoneNumberTextBox.Visibility = Visibility.Collapsed;
-                    }
-                    if (sendSmsButton != null)
-                    {
-                        sendSmsButton.Visibility = Visibility.Collapsed;
-                    }
-                    
-                    Log.Debug($"ShowQRCodeOverlay: QR code displayed for URL: {galleryUrl}");
-                }
-                else
-                {
-                    ShowSimpleMessage("Failed to generate QR code");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"ShowQRCodeOverlay: Error showing QR code: {ex.Message}");
-                ShowSimpleMessage("Failed to display QR code");
-            }
-        }
-
-        private void HideSMSElementsInOverlay()
-        {
-            try
-            {
-                // Hide SMS-related elements from the sharing overlay when showing QR only
-                var smsElements = new string[] 
-                {
-                    "phoneNumberTextBox",
-                    "sendSmsButton"
-                };
-                
-                foreach (var elementName in smsElements)
-                {
-                    var element = sharingOverlay?.FindName(elementName) as FrameworkElement;
-                    if (element != null)
-                    {
-                        element.Visibility = Visibility.Collapsed;
-                        Log.Debug($"HideSMSElementsInOverlay: Hidden element {elementName}");
-                    }
-                }
-                
-                // Also try to hide the SMS option StackPanel (Grid.Row="4")
-                var grid = sharingOverlay?.FindName("sharingGrid") as Grid;
-                if (grid != null && grid.Children.Count > 4)
-                {
-                    var smsStackPanel = grid.Children[4] as StackPanel;
-                    if (smsStackPanel != null)
-                    {
-                        smsStackPanel.Visibility = Visibility.Collapsed;
-                        Log.Debug("HideSMSElementsInOverlay: Hidden SMS StackPanel");
-                    }
-                }
-                
-                Log.Debug("HideSMSElementsInOverlay: SMS elements hidden from sharing overlay");
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"HideSMSElementsInOverlay: Error hiding SMS elements: {ex.Message}");
-            }
-        }
 
         private void ShowSharingOverlayForSMS()
         {
-            try
+            // Use the main ShowSharingOverlay method
+            ShowSharingOverlay(currentShareResult);
+            
+            // Then focus on phone number input for SMS
+            if (phoneNumberTextBox != null)
             {
-                Log.Debug("ShowSharingOverlayForSMS: Showing sharing overlay for SMS input");
-                
-                // Prepare the sharing overlay for SMS focus
-                if (sharingOverlay != null)
-                {
-                    // Set QR code if available
-                    if (currentShareResult != null && currentShareResult.QRCodeImage != null && qrCodeImage != null)
-                    {
-                        qrCodeImage.Source = currentShareResult.QRCodeImage;
-                        Log.Debug("ShowSharingOverlayForSMS: QR code set");
-                    }
-                    
-                    // Set gallery URL display if available
-                    if (currentShareResult != null && !string.IsNullOrEmpty(currentShareResult.GalleryUrl))
-                    {
-                        // Look for a text element to display the URL
-                        // This may need adjustment based on the actual XAML structure
-                        Log.Debug($"ShowSharingOverlayForSMS: Gallery URL available: {currentShareResult.GalleryUrl}");
-                    }
-                    
-                    // Clear and focus phone number input
-                    if (phoneNumberTextBox != null)
-                    {
-                        phoneNumberTextBox.Text = "";
-                        phoneNumberTextBox.Focus();
-                        Log.Debug("ShowSharingOverlayForSMS: Phone number textbox focused");
-                    }
-                    
-                    // Show the overlay
-                    sharingOverlay.Visibility = Visibility.Visible;
-                    Log.Debug("ShowSharingOverlayForSMS: Sharing overlay shown");
-                }
-                else
-                {
-                    Log.Error("ShowSharingOverlayForSMS: sharingOverlay is null");
-                    ShowSimpleMessage("Sharing overlay not available");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"ShowSharingOverlayForSMS: Error showing SMS sharing overlay: {ex.Message}");
-                ShowSimpleMessage("Failed to show SMS sharing interface");
+                phoneNumberTextBox.Text = "";
+                phoneNumberTextBox.Focus();
+                Log.Debug("ShowSharingOverlayForSMS: Phone number textbox focused");
             }
         }
         
@@ -7806,15 +6764,11 @@ namespace Photobooth.Pages
             try
             {
                 // Set PIN pad to phone number mode
-                _currentPinMode = PinPadMode.PhoneNumber;
+                pinLockService.SetMode(PinLockService.PinPadMode.PhoneNumber);
                 
                 // Show PIN pad overlay for phone number input
                 pinEntryOverlay.Visibility = Visibility.Visible;
                 pinDisplayBox.Text = "Enter Phone Number (+1234567890)";
-                _enteredPin = "";
-                
-                // Update PIN dots display
-                UpdatePinDots();
                 
                 Log.Debug("ShowSMSInputDialog: SMS input dialog shown");
             }
@@ -7828,7 +6782,7 @@ namespace Photobooth.Pages
         /// <summary>
         /// Show or hide sharing buttons based on conditions
         /// </summary>
-        private void UpdateSharingButtonsVisibility()
+        public void UpdateSharingButtonsVisibility()
         {
             try
             {
@@ -7846,12 +6800,12 @@ namespace Photobooth.Pages
                     photosUploaded = true;
                 }
                 // If not in currentShareResult, check database for existing gallery URL
-                else if (!string.IsNullOrEmpty(currentSessionGuid))
+                else if (!string.IsNullOrEmpty(databaseOperations.CurrentSessionGuid))
                 {
                     try
                     {
                         var db = new Database.TemplateDatabase();
-                        string galleryUrl = db.GetPhotoSessionGalleryUrl(currentSessionGuid);
+                        string galleryUrl = db.GetPhotoSessionGalleryUrl(databaseOperations.CurrentSessionGuid);
                         photosUploaded = !string.IsNullOrEmpty(galleryUrl);
                         
                         // If we found a URL in database but currentShareResult is null, create it
@@ -7905,7 +6859,7 @@ namespace Photobooth.Pages
             try
             {
                 // Get queue status from cached offline queue service
-                var queueService = GetOrCreateOfflineQueueService();
+                var queueService = sharingOperations.GetOrCreateOfflineQueueService();
                 var status = queueService.GetQueueStatus();
                 
                 Dispatcher.Invoke(() =>
@@ -8036,7 +6990,7 @@ namespace Photobooth.Pages
                 
                 // Get gallery URL from current share result or use pending URL
                 string galleryUrl = currentShareResult?.GalleryUrl;
-                string sessionId = currentSessionGuid ?? Guid.NewGuid().ToString();
+                string sessionId = databaseOperations.CurrentSessionGuid ?? Guid.NewGuid().ToString();
                 
                 // If no gallery URL, this means photos are pending upload
                 if (string.IsNullOrEmpty(galleryUrl))
@@ -8046,7 +7000,7 @@ namespace Photobooth.Pages
                 }
                 
                 // Use cached offline queue service for SMS (works offline)
-                var queueService = GetOrCreateOfflineQueueService();
+                var queueService = sharingOperations.GetOrCreateOfflineQueueService();
                 var queueResult = await queueService.QueueSMS(phoneNumber, galleryUrl, sessionId);
                 
                 if (queueResult.Success)
@@ -8077,7 +7031,7 @@ namespace Photobooth.Pages
                     }
                     
                     // Close SMS phone pad overlay
-                    CloseSmsPhonePadOverlay();
+                    sharingOperations.HideSmsPhonePadOverlay();
                 }
                 else
                 {
@@ -8096,7 +7050,7 @@ namespace Photobooth.Pages
         {
             try
             {
-                CloseSmsPhonePadOverlay();
+                sharingOperations.HideSmsPhonePadOverlay();
             }
             catch (Exception ex)
             {
@@ -8119,50 +7073,6 @@ namespace Photobooth.Pages
             }
         }
         
-        private void ShowSmsPhonePadOverlay()
-        {
-            try
-            {
-                Log.Debug("ShowSmsPhonePadOverlay: Showing dedicated SMS phone pad");
-                
-                // Reset phone number to default
-                _smsPhoneNumber = "+1";
-                UpdateSmsPhoneDisplay();
-                
-                // Show the overlay
-                if (smsPhonePadOverlay != null)
-                {
-                    smsPhonePadOverlay.Visibility = Visibility.Visible;
-                    Log.Debug("ShowSmsPhonePadOverlay: SMS phone pad overlay shown");
-                }
-                else
-                {
-                    Log.Error("ShowSmsPhonePadOverlay: smsPhonePadOverlay is null");
-                    ShowSimpleMessage("SMS phone pad not available");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"ShowSmsPhonePadOverlay: Error showing SMS phone pad: {ex.Message}");
-                ShowSimpleMessage("Failed to show SMS phone pad");
-            }
-        }
-        
-        private void CloseSmsPhonePadOverlay()
-        {
-            try
-            {
-                if (smsPhonePadOverlay != null)
-                {
-                    smsPhonePadOverlay.Visibility = Visibility.Collapsed;
-                    Log.Debug("CloseSmsPhonePadOverlay: SMS phone pad overlay closed");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"CloseSmsPhonePadOverlay: Error closing SMS phone pad: {ex.Message}");
-            }
-        }
         
         #endregion
 

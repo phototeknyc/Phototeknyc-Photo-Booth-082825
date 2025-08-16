@@ -1,0 +1,66 @@
+// These are the simplified handlers that should replace the existing ones:
+
+private void QrCodeSharingButton_Click(object sender, RoutedEventArgs e)
+{
+    // Delegate to SharingOperations service
+    sharingOperations.HandleQrCodeSharingClick(currentShareResult, currentSessionGuid);
+}
+
+private void SmsSharingButton_Click(object sender, RoutedEventArgs e)
+{
+    // Delegate to SharingOperations service
+    sharingOperations.HandleSmsSharingClick(lastProcessedImagePath, capturedPhotoPaths, 
+        currentShareResult, currentSessionGuid);
+}
+
+// SMS Phone Pad handlers
+private void SmsPhonePadButton_Click(object sender, RoutedEventArgs e)
+{
+    try
+    {
+        var button = sender as Button;
+        if (button?.Content is StackPanel stackPanel)
+        {
+            var textBlock = stackPanel.Children.OfType<TextBlock>().FirstOrDefault();
+            if (textBlock != null)
+            {
+                string digit = textBlock.Text;
+                sharingOperations.HandleSmsPhonePadButton(digit);
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Error($"SmsPhonePadButton_Click: Error adding digit: {ex.Message}");
+    }
+}
+
+private void SmsPhoneBackspace_Click(object sender, RoutedEventArgs e)
+{
+    try
+    {
+        sharingOperations.HandleSmsPhoneBackspace();
+    }
+    catch (Exception ex)
+    {
+        Log.Error($"SmsPhoneBackspace_Click: Error removing digit: {ex.Message}");
+    }
+}
+
+private async void SmsSendButton_Click(object sender, RoutedEventArgs e)
+{
+    try
+    {
+        bool success = await sharingOperations.SendSms(currentShareResult, currentSessionGuid);
+        if (success)
+        {
+            // Close SMS phone pad overlay
+            CloseSmsPhonePadOverlay();
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Error($"SmsSendButton_Click: Error sending SMS: {ex.Message}");
+        ShowSimpleMessage($"SMS send failed: {ex.Message}");
+    }
+}

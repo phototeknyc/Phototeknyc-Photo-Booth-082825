@@ -201,6 +201,13 @@ namespace Photobooth.Services
         {
             var result = new PrintResult();
             
+            // DEBUG: Log the critical parameters
+            System.Diagnostics.Debug.WriteLine($"★★★ PRINT DEBUG START ★★★");
+            System.Diagnostics.Debug.WriteLine($"=== PRINT DEBUG: isOriginal2x6Format={isOriginal2x6Format}, AutoRoutePrinter={Properties.Settings.Default.AutoRoutePrinter}, Printer2x6Name='{Properties.Settings.Default.Printer2x6Name}'");
+            System.Diagnostics.Debug.WriteLine($"=== PRINT DEBUG: Primary PrinterName='{Properties.Settings.Default.PrinterName}'");
+            System.Diagnostics.Debug.WriteLine($"=== PRINT DEBUG: EnablePrinting={Properties.Settings.Default.EnablePrinting}");
+            System.Diagnostics.Debug.WriteLine($"★★★ PRINT DEBUG END ★★★");
+            
             // Validate print allowance
             int totalRequestedPrints = photoPaths.Count * copies;
             if (!CanPrint(sessionId, totalRequestedPrints))
@@ -238,7 +245,7 @@ namespace Photobooth.Services
                 if (isOriginal2x6Format)
                 {
                     // For 2x6, check if we're printing a duplicated 4x6 or original 2x6
-                    // If the image is 1200x1800 (portrait 4x6), we need landscape printing
+                    // If the image is 1200x1800 (duplicated 4x6), we need PORTRAIT printing for proper 2-inch cuts
                     // If the image is 600x1800 (original 2x6), we need portrait printing
                     if (photoPaths != null && photoPaths.Count > 0)
                     {
@@ -256,9 +263,10 @@ namespace Photobooth.Services
                     
                     if (isDuplicated4x6)
                     {
-                        // For duplicated 4x6 in portrait format (1200x1800), use landscape printing
-                        desiredLandscapeOrientation = true;
-                        System.Diagnostics.Debug.WriteLine($"ORIENTATION: Will use LANDSCAPE mode for duplicated 4x6 from 2x6");
+                        // For duplicated 4x6 in portrait format (1200x1800), use PORTRAIT printing
+                        // This ensures proper 2-inch cuts for photo strips when printed on 2x6 media
+                        desiredLandscapeOrientation = false;
+                        System.Diagnostics.Debug.WriteLine($"ORIENTATION: Will use PORTRAIT mode for duplicated 4x6 from 2x6 (ensures proper 2-inch cuts)");
                     }
                     else
                     {
@@ -277,14 +285,35 @@ namespace Photobooth.Services
                 string printerName;
                 bool isStripFormat = isOriginal2x6Format;
                 
+                System.Diagnostics.Debug.WriteLine($"=== PRINTER ROUTING: isOriginal2x6Format={isOriginal2x6Format}, AutoRoutePrinter={Properties.Settings.Default.AutoRoutePrinter}");
+                
                 if (isOriginal2x6Format && Properties.Settings.Default.AutoRoutePrinter)
                 {
                     // Use the 2x6 printer for original 2x6 templates
-                    printerName = Properties.Settings.Default.Printer2x6Name;
-                    System.Diagnostics.Debug.WriteLine($"Using 2x6 printer for original 2x6 template: {printerName}");
+                    string configured2x6Printer = Properties.Settings.Default.Printer2x6Name;
+                    System.Diagnostics.Debug.WriteLine($"=== 2x6 ROUTING: Configured 2x6 printer = '{configured2x6Printer}'");
+                    
+                    if (!string.IsNullOrEmpty(configured2x6Printer))
+                    {
+                        // Use the specifically configured 2x6 printer
+                        printerName = configured2x6Printer;
+                        System.Diagnostics.Debug.WriteLine($"✅ SELECTED 2x6 PRINTER: {printerName}");
+                    }
+                    else
+                    {
+                        // No specific 2x6 printer configured - force strip format detection for pooling/routing
+                        System.Diagnostics.Debug.WriteLine("⚠️ No 2x6 printer configured - forcing strip format for proper routing");
+                        isStripFormat = true;
+                        
+                        // Use default printer but ensure it's treated as a strip format
+                        printerName = Properties.Settings.Default.PrinterName;
+                        System.Diagnostics.Debug.WriteLine($"Using default printer with strip format for 2x6 template: {printerName}");
+                    }
                 }
                 else
                 {
+                    System.Diagnostics.Debug.WriteLine($"❌ NOT using 2x6 routing - isOriginal2x6Format={isOriginal2x6Format}, AutoRoutePrinter={Properties.Settings.Default.AutoRoutePrinter}");
+                    
                     // Determine printer based on actual image size
                     printerName = DeterminePrinterByImageSize(photoPaths);
                     
@@ -308,8 +337,9 @@ namespace Photobooth.Services
                 string pooledPrinter = poolManager.GetPooledPrinter(isStripFormat);
                 if (!string.IsNullOrEmpty(pooledPrinter))
                 {
-                    // Only use pooled printer if we don't already have a specific 2x6 printer selected
-                    if (!(isOriginal2x6Format && Properties.Settings.Default.AutoRoutePrinter && !string.IsNullOrEmpty(Properties.Settings.Default.Printer2x6Name)))
+                    // Only use pooled printer if this is NOT a 2x6 format with auto-routing enabled
+                    // We preserve 2x6 routing even when no specific 2x6 printer is configured
+                    if (!(isOriginal2x6Format && Properties.Settings.Default.AutoRoutePrinter))
                     {
                         System.Diagnostics.Debug.WriteLine($"Using pooled printer: {pooledPrinter}");
                         printerName = pooledPrinter;
@@ -495,11 +525,19 @@ namespace Photobooth.Services
                 printDocument.DefaultPageSettings.Landscape = desiredLandscapeOrientation;
                 System.Diagnostics.Debug.WriteLine($"ORIENTATION FINAL: Set landscape to {desiredLandscapeOrientation} (AFTER DEVMODE)");
                 
+                // CRITICAL 2x6 FIX: Override orientation for 2x6 templates after DEVMODE
+                if (isOriginal2x6Format)
+                {
+                    printDocument.DefaultPageSettings.Landscape = true; // Force landscape for 2x6 strips
+                    System.Diagnostics.Debug.WriteLine($"🎯 2x6 OVERRIDE: Forced landscape=true for 2x6 template (was {desiredLandscapeOrientation})");
+                }
+                
                 // Also ensure it's set on the printer settings
                 if (printDocument.PrinterSettings != null && printDocument.PrinterSettings.DefaultPageSettings != null)
                 {
-                    printDocument.PrinterSettings.DefaultPageSettings.Landscape = desiredLandscapeOrientation;
-                    System.Diagnostics.Debug.WriteLine($"ORIENTATION: Also set printer settings landscape to {desiredLandscapeOrientation}");
+                    bool finalLandscapeOrientation = isOriginal2x6Format ? true : desiredLandscapeOrientation;
+                    printDocument.PrinterSettings.DefaultPageSettings.Landscape = finalLandscapeOrientation;
+                    System.Diagnostics.Debug.WriteLine($"ORIENTATION: Also set printer settings landscape to {finalLandscapeOrientation}");
                 }
                 
                 // Log the actual page settings that will be used
@@ -751,6 +789,24 @@ namespace Photobooth.Services
                         if (isDuplicated4x6)
                         {
                             System.Diagnostics.Debug.WriteLine($"Auto-rotation SKIPPED for duplicated 4x6 (orientation already corrected)");
+                            System.Diagnostics.Debug.WriteLine($"HOWEVER: Will check if this is a 2x6 template that needs special orientation handling...");
+                            
+                            // CRITICAL: Check if this is actually a 2x6 template print job
+                            // This information comes from the original method call parameter
+                            // For now, we can detect if we're using 2x6 printer settings as a fallback
+                            if (Properties.Settings.Default.AutoRoutePrinter && !string.IsNullOrEmpty(Properties.Settings.Default.Printer2x6Name))
+                            {
+                                System.Diagnostics.Debug.WriteLine($"POSSIBLE 2x6 TEMPLATE: Auto-routing enabled and 2x6 printer configured");
+                                
+                                // For 2x6 strips, if the image is portrait (1200x1800) but we need landscape cutting
+                                // We might need to force landscape orientation
+                                if (isPortrait4x6 && !printerIsLandscape)
+                                {
+                                    // Try forcing landscape for proper 2x6 strip cutting  
+                                    e.PageSettings.Landscape = true;
+                                    System.Diagnostics.Debug.WriteLine($"2x6 ORIENTATION FIX: Forced landscape orientation for 2x6 strip cutting");
+                                }
+                            }
                         }
                         // If printer is landscape and image is portrait, OR
                         // If printer is portrait and image is landscape, rotate 90 degrees
@@ -762,6 +818,14 @@ namespace Photobooth.Services
                         else if (!autoRotateEnabled)
                         {
                             System.Diagnostics.Debug.WriteLine("Auto-rotation is DISABLED in settings");
+                            
+                            // For regular 4x6 photos: still honor explicit landscape setting from UI
+                            // If user set PrintLandscape=true but image orientation doesn't match, rotate anyway
+                            if (printerIsLandscape != imageIsLandscape)
+                            {
+                                needsRotation = true;
+                                System.Diagnostics.Debug.WriteLine($"EXPLICIT ORIENTATION (4x6): Will rotate to match user's landscape setting (Printer landscape={printerIsLandscape}, Image landscape={imageIsLandscape})");
+                            }
                         }
                         else
                         {

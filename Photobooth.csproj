@@ -214,6 +214,14 @@
     <Compile Include="Services\PrintService.cs" />
     <Compile Include="Services\PrinterPoolService.cs" />
     <Compile Include="Services\PrinterMonitorService.cs" />
+    <Compile Include="Services\SharingOperations.cs" />
+    <Compile Include="Services\CameraOperations.cs" />
+    <Compile Include="Services\PhotoProcessingOperations.cs" />
+    <Compile Include="Services\DatabaseOperations.cs" />
+    <Compile Include="Services\PinLockService.cs" />
+    <Compile Include="Services\EventTemplateService.cs" />
+    <Compile Include="Services\PhotoCaptureService.cs" />
+    <Compile Include="Services\PrintingService.cs" />
     <Compile Include="NavButton.cs" />
     <Compile Include="PhotoBoothWindow.xaml.cs">
       <DependentUpon>PhotoBoothWindow.xaml</DependentUpon>
