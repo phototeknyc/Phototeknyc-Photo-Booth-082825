@@ -27,6 +27,7 @@ using Photobooth.Database;
 using Photobooth.Controls;
 using System.ComponentModel;
 using Photobooth.Models;
+using System.Data.SQLite;
 
 namespace Photobooth.Pages
 {
@@ -221,8 +222,9 @@ namespace Photobooth.Pages
                 Log.Debug("PhotoboothTouch_Unloaded: Unsubscribed from camera events");
                 
                 // Stop printer monitoring
+                printingService.PrinterStatusChanged -= OnPrinterStatusChanged;
                 printingService.StopMonitoring();
-                Log.Debug("PhotoboothTouch_Unloaded: Stopped printer monitoring");
+                Log.Debug("PhotoboothTouch_Unloaded: Unsubscribed from printer events and stopped monitoring");
                 
                 // Stop any ongoing photo sequence
                 StopPhotoSequence();
@@ -331,8 +333,9 @@ namespace Photobooth.Pages
             Log.Debug("PhotoboothTouch_Loaded: Subscribed to camera events");
             
             // Subscribe to printer status events
+            printingService.PrinterStatusChanged += OnPrinterStatusChanged;
             printingService.StartMonitoring();
-            Log.Debug("PhotoboothTouch_Loaded: Started printer monitoring");
+            Log.Debug("PhotoboothTouch_Loaded: Started printer monitoring and subscribed to status events");
             
             // Prepare camera for use using singleton manager
             CameraSessionManager.Instance.PrepareCameraForUse();
@@ -713,7 +716,35 @@ namespace Photobooth.Pages
                 Log.Debug("StopButton_Click: No photos captured yet, stopping entire session");
                 StopPhotoSequence();
                 
-                UpdateStatusText("Session cancelled");
+                // Reset to start state
+                currentPhotoIndex = 0;
+                totalPhotosNeeded = 0;
+                capturedPhotoPaths.Clear();
+                photoStripImages.Clear();
+                photoStripItems.Clear();
+                
+                // End database session if one was started
+                if (databaseOperations.CurrentSessionId.HasValue)
+                {
+                    databaseOperations.EndSession();
+                }
+                
+                // Show the start button again
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = Visibility.Visible;
+                }
+                
+                // Hide stop button
+                if (stopSessionButton != null)
+                {
+                    stopSessionButton.Visibility = Visibility.Collapsed;
+                }
+                
+                // Clear photo strip UI
+                UpdatePhotoStripPlaceholders();
+                
+                UpdateStatusText("Touch START to begin");
                 return;
             }
             
@@ -1151,6 +1182,12 @@ namespace Photobooth.Pages
             if (!preserveExisting)
             {
                 photoStripItems.Clear();
+            }
+            
+            // Show/hide the photo strip container based on whether we have photos to show
+            if (photoStripContainer != null)
+            {
+                photoStripContainer.Visibility = (totalPhotosNeeded > 0) ? Visibility.Visible : Visibility.Collapsed;
             }
             
             if (preserveExisting)
@@ -1687,7 +1724,7 @@ namespace Photobooth.Pages
         }
 
 
-        private void Log_LogMessage(LogEventArgs e)
+        private void Log_LogMessage(CameraControl.Devices.Classes.LogEventArgs e)
         {
             // Output to Visual Studio Debug Output window
             System.Diagnostics.Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {e.Message}");
@@ -2292,11 +2329,23 @@ namespace Photobooth.Pages
                 eventsListControl.Visibility = Visibility.Visible;
                 // confirmSelectionButton.Visibility = Visibility.Visible; // Button removed from UI
                 cancelSelectionButton.Content = "✕ Close";
+                
+                // Show the start button again since user cancelled template selection
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = Visibility.Visible;
+                }
             }
             else
             {
                 // Regular event selection cancel
                 eventSelectionOverlay.Visibility = Visibility.Collapsed;
+                
+                // Show the start button again since user cancelled
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = Visibility.Visible;
+                }
             }
             
             // Clear temporary selections
@@ -2315,6 +2364,8 @@ namespace Photobooth.Pages
         }
         
         // Handle template selection from overlay  
+        private TemplateData previewingTemplate = null;
+        
         private void OnTemplateSelected(object sender, MouseButtonEventArgs e)
         {
             try
@@ -2329,56 +2380,142 @@ namespace Photobooth.Pages
                 
                 if (templateData != null)
                 {
-                    Log.Debug($"★★★ TEMPLATE SELECTION: Selected template '{templateData.Name}'");
-                    Log.Debug($"★★★ TEMPLATE SELECTION: SelectedEventForOverlay = {eventTemplateService.SelectedEventForOverlay?.Name ?? "NULL"}");
-                    // When in template selection mode for a session
-                    if (eventTemplateService.SelectedEventForOverlay != null)
-                    {
-                        Log.Debug($"★★★ TEMPLATE SELECTION: Taking DIRECT START path - starting photo sequence immediately");
-                        // CRITICAL: Set currentEvent for database session creation
-                        currentEvent = eventTemplateService.SelectedEventForOverlay;
-                        currentTemplate = templateData;
-                        
-                        Log.Debug($"★★★ MULTI-TEMPLATE SESSION: Set currentEvent={currentEvent?.Name}, currentTemplate={currentTemplate?.Name}");
-                        
-                        // Get photo count from template
-                        totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
-                        currentPhotoIndex = 0;
-                        UpdatePhotoStripPlaceholders();
-                        
-                        // Hide overlay
-                        eventSelectionOverlay.Visibility = Visibility.Collapsed;
-                        
-                        // Hide start button since session is starting
-                        if (startButtonOverlay != null)
-                            startButtonOverlay.Visibility = Visibility.Collapsed;
-                        
-                        // Restore UI for next time
-                        eventsListControl.Visibility = Visibility.Visible;
-                        // confirmSelectionButton.Visibility = Visibility.Visible; // Button removed from UI
-                        cancelSelectionButton.Content = "✕ Close";
-                        
-                        // Clear flags
-                        // Template selection workflow completed
-                        eventTemplateService.SelectedTemplateForOverlay = null;
-                        
-                        statusText.Text = $"Template: {currentTemplate.Name} selected - Starting capture...";
-                        
-                        // Start the photo sequence immediately
-                        StartPhotoSequence();
-                    }
-                    else
-                    {
-                        Log.Debug($"★★★ TEMPLATE SELECTION: Taking NORMAL SELECTION path - just selecting template");
-                        // Normal selection mode - just select the template
-                        SelectTemplate(templateData);
-                    }
+                    // Show large preview instead of immediately selecting
+                    ShowTemplatePreview(templateData);
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"★★★ OnTemplateSelected EXCEPTION: {ex.Message}");
                 Log.Error($"OnTemplateSelected failed: {ex.Message}", ex);
+            }
+        }
+        
+        private void ShowTemplatePreview(TemplateData templateData)
+        {
+            try
+            {
+                previewingTemplate = templateData;
+                
+                // Update preview UI
+                if (previewTemplateName != null)
+                    previewTemplateName.Text = templateData.Name ?? "Template";
+                
+                if (previewTemplateInfo != null)
+                {
+                    int photoCount = photoboothService.GetTemplatePhotoCount(templateData);
+                    string dimensions = $"{templateData.CanvasWidth:F0} x {templateData.CanvasHeight:F0}";
+                    previewTemplateInfo.Text = $"{photoCount} photos • {dimensions}";
+                }
+                
+                // Load the thumbnail image in larger size
+                if (largeTemplatePreview != null)
+                {
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(templateData.ThumbnailImagePath) && 
+                            System.IO.File.Exists(templateData.ThumbnailImagePath))
+                        {
+                            var bitmap = new BitmapImage();
+                            bitmap.BeginInit();
+                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                            bitmap.UriSource = new Uri(templateData.ThumbnailImagePath, UriKind.Absolute);
+                            bitmap.EndInit();
+                            largeTemplatePreview.Source = bitmap;
+                        }
+                        else if (!string.IsNullOrEmpty(templateData.BackgroundImagePath) && 
+                                System.IO.File.Exists(templateData.BackgroundImagePath))
+                        {
+                            var bitmap = new BitmapImage();
+                            bitmap.BeginInit();
+                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                            bitmap.UriSource = new Uri(templateData.BackgroundImagePath, UriKind.Absolute);
+                            bitmap.EndInit();
+                            largeTemplatePreview.Source = bitmap;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"Failed to load template preview image: {ex.Message}");
+                    }
+                }
+                
+                // Show the preview overlay
+                if (templatePreviewOverlay != null)
+                    templatePreviewOverlay.Visibility = Visibility.Visible;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShowTemplatePreview failed: {ex.Message}", ex);
+            }
+        }
+        
+        private void CloseTemplatePreview_Click(object sender, RoutedEventArgs e)
+        {
+            if (templatePreviewOverlay != null)
+                templatePreviewOverlay.Visibility = Visibility.Collapsed;
+            previewingTemplate = null;
+        }
+        
+        private void PreviewBorder_Click(object sender, MouseButtonEventArgs e)
+        {
+            // Prevent closing when clicking on the preview border itself
+            e.Handled = true;
+        }
+        
+        private void SelectTemplateFromPreview_Click(object sender, RoutedEventArgs e)
+        {
+            if (previewingTemplate != null)
+            {
+                // Close preview
+                if (templatePreviewOverlay != null)
+                    templatePreviewOverlay.Visibility = Visibility.Collapsed;
+                
+                Log.Debug($"★★★ TEMPLATE SELECTION: Selected template '{previewingTemplate.Name}' from preview");
+                Log.Debug($"★★★ TEMPLATE SELECTION: SelectedEventForOverlay = {eventTemplateService.SelectedEventForOverlay?.Name ?? "NULL"}");
+                
+                // When in template selection mode for a session
+                if (eventTemplateService.SelectedEventForOverlay != null)
+                {
+                    Log.Debug($"★★★ TEMPLATE SELECTION: Taking DIRECT START path - starting photo sequence immediately");
+                    // CRITICAL: Set currentEvent for database session creation
+                    currentEvent = eventTemplateService.SelectedEventForOverlay;
+                    currentTemplate = previewingTemplate;
+                    
+                    Log.Debug($"★★★ MULTI-TEMPLATE SESSION: Set currentEvent={currentEvent?.Name}, currentTemplate={currentTemplate?.Name}");
+                    
+                    // Get photo count from template
+                    totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
+                    currentPhotoIndex = 0;
+                    UpdatePhotoStripPlaceholders();
+                    
+                    // Hide overlay
+                    eventSelectionOverlay.Visibility = Visibility.Collapsed;
+                    
+                    // Hide start button since session is starting
+                    if (startButtonOverlay != null)
+                        startButtonOverlay.Visibility = Visibility.Collapsed;
+                    
+                    // Restore UI for next time
+                    eventsListControl.Visibility = Visibility.Visible;
+                    cancelSelectionButton.Content = "✕ Close";
+                    
+                    // Clear flags
+                    eventTemplateService.SelectedTemplateForOverlay = null;
+                    
+                    statusText.Text = $"Template: {currentTemplate.Name} selected - Starting capture...";
+                    
+                    // Start the photo sequence immediately
+                    StartPhotoSequence();
+                }
+                else
+                {
+                    Log.Debug($"★★★ TEMPLATE SELECTION: Taking NORMAL SELECTION path - just selecting template");
+                    // Normal selection mode - just select the template
+                    SelectTemplate(previewingTemplate);
+                }
+                
+                previewingTemplate = null;
             }
         }
         
@@ -3594,6 +3731,116 @@ namespace Photobooth.Pages
             return enabledFilters[index];
         }
         
+        public ShareResult GetCurrentShareResult()
+        {
+            return currentShareResult;
+        }
+        
+        public string GetCurrentSessionGuid()
+        {
+            try
+            {
+                // Get the current session ID from DatabaseOperations
+                if (databaseOperations?.CurrentSessionId != null)
+                {
+                    string connectionString = "Data Source=templates.db;Version=3;";
+                    using (var conn = new SQLiteConnection(connectionString))
+                    {
+                        conn.Open();
+                        string query = "SELECT SessionGuid FROM PhotoSessions WHERE Id = @id";
+                        using (var cmd = new SQLiteCommand(query, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@id", databaseOperations.CurrentSessionId.Value);
+                            var result = cmd.ExecuteScalar();
+                            if (result != null)
+                            {
+                                return result.ToString();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"GetCurrentSessionGuid: Error getting session GUID: {ex.Message}");
+            }
+            return null;
+        }
+        
+        private async Task AutoUploadSessionPhotos(string processedImagePath)
+        {
+            try
+            {
+                // Get the session GUID from the database
+                string sessionId = GetCurrentSessionGuid();
+                
+                Log.Debug($"AutoUploadSessionPhotos: Starting auto-upload for session {sessionId}");
+                
+                if (string.IsNullOrEmpty(sessionId))
+                {
+                    // Generate a new session ID if needed
+                    sessionId = Guid.NewGuid().ToString();
+                    Log.Debug($"AutoUploadSessionPhotos: Generated new session ID: {sessionId}");
+                }
+                
+                // Prepare photos for upload (include processed template)
+                List<string> photosToUpload = new List<string>();
+                
+                // Add the processed template image
+                if (!string.IsNullOrEmpty(processedImagePath) && File.Exists(processedImagePath))
+                {
+                    photosToUpload.Add(processedImagePath);
+                }
+                
+                // Add individual captured photos
+                foreach (var photoPath in capturedPhotoPaths)
+                {
+                    if (File.Exists(photoPath))
+                    {
+                        photosToUpload.Add(photoPath);
+                    }
+                }
+                
+                Log.Debug($"AutoUploadSessionPhotos: Uploading {photosToUpload.Count} photos");
+                
+                // Use offline queue service to upload (handles both online and offline scenarios)
+                var queueService = sharingOperations.GetOrCreateOfflineQueueService();
+                var uploadResult = await queueService.QueuePhotosForUpload(sessionId, photosToUpload);
+                
+                if (uploadResult.Success)
+                {
+                    Log.Debug($"AutoUploadSessionPhotos: Upload queued successfully. Immediate: {uploadResult.Immediate}");
+                    
+                    // Store the gallery URL if we got one
+                    if (!string.IsNullOrEmpty(uploadResult.GalleryUrl))
+                    {
+                        // Save to database for later retrieval
+                        var db = new TemplateDatabase();
+                        db.UpdatePhotoSessionGalleryUrl(sessionId, uploadResult.GalleryUrl);
+                        Log.Debug($"AutoUploadSessionPhotos: Saved gallery URL to database: {uploadResult.GalleryUrl}");
+                        
+                        // Update current share result for immediate QR code access
+                        currentShareResult = new ShareResult
+                        {
+                            Success = true,
+                            GalleryUrl = uploadResult.GalleryUrl,
+                            ShortUrl = uploadResult.ShortUrl,
+                            QRCodeImage = uploadResult.QRCodeImage
+                        };
+                    }
+                }
+                else
+                {
+                    Log.Error($"AutoUploadSessionPhotos: Failed to queue upload: {uploadResult.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"AutoUploadSessionPhotos: Error during auto-upload: {ex.Message}");
+                // Don't show error to user - auto-upload is a background operation
+            }
+        }
+        
         private void ProcessTemplateWithPhotosInternal(FilterType selectedFilter = FilterType.None)
         {
             statusText.Text = $"Processing template with {capturedPhotoPaths.Count} photos...";
@@ -3632,6 +3879,9 @@ namespace Photobooth.Pages
                     if (!string.IsNullOrEmpty(processedImagePath) && File.Exists(processedImagePath))
                     {
                         Log.Debug($"ProcessTemplateWithPhotos: Template processed successfully: {processedImagePath}");
+                        
+                        // Auto-upload the processed image and photos to cloud
+                        await AutoUploadSessionPhotos(processedImagePath);
                         
                         Dispatcher.Invoke(() =>
                         {
@@ -3869,6 +4119,39 @@ namespace Photobooth.Pages
                 
                 // Update queue count
                 printerQueueText.Text = e.JobsInQueue.ToString();
+                
+                // Update media remaining if available (for DNP printers)
+                if (e.MediaRemaining > 0)
+                {
+                    mediaRemainingPanel.Visibility = Visibility.Visible;
+                    mediaRemainingText.Text = e.MediaRemaining.ToString();
+                    
+                    // Update the suffix text based on media type
+                    if (!string.IsNullOrEmpty(e.MediaType))
+                    {
+                        mediaTypeText.Text = $" {e.MediaType} left";
+                    }
+                    else
+                    {
+                        mediaTypeText.Text = " prints left";
+                    }
+                    
+                    // Color code based on remaining amount
+                    var color = new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 175, 80)); // Green
+                    if (e.MediaRemaining < 50)
+                    {
+                        color = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 152, 0)); // Orange
+                    }
+                    if (e.MediaRemaining < 20)
+                    {
+                        color = new SolidColorBrush(System.Windows.Media.Color.FromRgb(244, 67, 54)); // Red
+                    }
+                    mediaRemainingText.Foreground = color;
+                }
+                else
+                {
+                    mediaRemainingPanel.Visibility = Visibility.Collapsed;
+                }
                 
                 // Add queue count to status if there are jobs
                 if (e.JobsInQueue > 0 && !e.HasError)
@@ -4173,16 +4456,23 @@ namespace Photobooth.Pages
                 if (!string.IsNullOrEmpty(bucketName) && !string.IsNullOrEmpty(accessKey) && !string.IsNullOrEmpty(secretKey))
                 {
                     // Cloud sync is configured
-                    cloudSyncStatusText.Text = "☁️ Connected";
+                    cloudSyncStatusText.Text = "Connected";
                     cloudSyncStatusText.Foreground = new SolidColorBrush(Colors.LimeGreen);
-                    cloudSyncBucketText.Text = bucketName;
+                    
+                    // Truncate bucket name if too long for display
+                    string displayBucketName = bucketName;
+                    if (displayBucketName.Length > 15)
+                    {
+                        displayBucketName = displayBucketName.Substring(0, 12) + "...";
+                    }
+                    cloudSyncBucketText.Text = displayBucketName;
                     cloudSyncBucketText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(136, 136, 136));
                     Log.Debug($"UpdateCloudSyncStatus: Cloud sync configured with bucket {bucketName}");
                 }
                 else
                 {
                     // Cloud sync not configured
-                    cloudSyncStatusText.Text = "☁️ Not Configured";
+                    cloudSyncStatusText.Text = "Not Configured";
                     cloudSyncStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 152, 0)); // Orange
                     cloudSyncBucketText.Text = "Setup in settings";
                     cloudSyncBucketText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(136, 136, 136));
@@ -4192,7 +4482,7 @@ namespace Photobooth.Pages
             catch (Exception ex)
             {
                 Log.Error($"UpdateCloudSyncStatus: Error checking cloud sync status: {ex.Message}");
-                cloudSyncStatusText.Text = "☁️ Error";
+                cloudSyncStatusText.Text = "Error";
                 cloudSyncStatusText.Foreground = new SolidColorBrush(Colors.Red);
                 cloudSyncBucketText.Text = "Check settings";
                 cloudSyncBucketText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(136, 136, 136));
@@ -4792,6 +5082,12 @@ namespace Photobooth.Pages
             if (stopSessionButton != null)
             {
                 stopSessionButton.Visibility = Visibility.Collapsed;
+            }
+            
+            // Show the start button again
+            if (startButtonOverlay != null)
+            {
+                startButtonOverlay.Visibility = Visibility.Visible;
             }
             
             // Check if this is a multi-template event - if so, return to template selection
@@ -6602,8 +6898,8 @@ namespace Photobooth.Pages
                     Log.Debug("WARNING: CloseShareOverlay_Click: sharingOverlay is null");
                 }
                 
-                // Clear the share result
-                currentShareResult = null;
+                // Don't clear the share result - keep it cached for subsequent QR code displays
+                // currentShareResult = null;  // Commented out to preserve gallery URL
                 
                 // Clear the QR code image
                 if (qrCodeImage != null)
@@ -6728,19 +7024,269 @@ namespace Photobooth.Pages
         
         #endregion
 
+        #region Template Preview Generation
+
+        private void TemplatePreviewCanvas_Loaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is Canvas canvas && canvas.Tag is TemplateData templateData)
+                {
+                    GenerateTemplatePreview(canvas, templateData);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TemplatePreviewCanvas_Loaded: Error generating preview: {ex.Message}");
+            }
+        }
+
+        private void GenerateTemplatePreview(Canvas canvas, TemplateData templateData)
+        {
+            try
+            {
+                // Clear existing content
+                canvas.Children.Clear();
+                
+                double canvasWidth = canvas.Width;
+                double canvasHeight = canvas.Height;
+                
+                // Calculate scale to fit template in preview
+                double templateWidth = templateData.CanvasWidth;
+                double templateHeight = templateData.CanvasHeight;
+                double scale = Math.Min(canvasWidth / templateWidth, canvasHeight / templateHeight) * 0.85;
+                
+                // Center the template preview
+                double offsetX = (canvasWidth - templateWidth * scale) / 2;
+                double offsetY = (canvasHeight - templateHeight * scale) / 2;
+                
+                // Draw template background
+                var templateBorder = new Border
+                {
+                    Width = templateWidth * scale,
+                    Height = templateHeight * scale,
+                    Background = new SolidColorBrush(Colors.White),
+                    BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(100, 100, 100)),
+                    BorderThickness = new Thickness(1)
+                };
+                Canvas.SetLeft(templateBorder, offsetX);
+                Canvas.SetTop(templateBorder, offsetY);
+                canvas.Children.Add(templateBorder);
+                
+                // Get template items from database
+                var items = database.GetCanvasItems(templateData.Id);
+                Log.Debug($"GenerateTemplatePreview: Template '{templateData.Name}' (ID: {templateData.Id}) has {items.Count} canvas items");
+                
+                // Filter for photo placeholders and images
+                var photoItems = items.Where(i => i.ItemType == "Placeholder" || i.ItemType == "Image").ToList();
+                Log.Debug($"GenerateTemplatePreview: Found {photoItems.Count} photo placeholders/images");
+                
+                // If no items found, create default placeholders based on template type
+                if (photoItems.Count == 0)
+                {
+                    Log.Debug($"GenerateTemplatePreview: No items found, generating default layout");
+                    photoItems = GenerateDefaultPlaceholders(templateData);
+                }
+                
+                // Draw placeholder boxes for photo positions
+                foreach (var item in photoItems)
+                {
+                    double x = offsetX + item.X * scale;
+                    double y = offsetY + item.Y * scale;
+                    double width = item.Width * scale;
+                    double height = item.Height * scale;
+                    
+                    // Create placeholder rectangle
+                    var placeholder = new Border
+                    {
+                        Width = width,
+                        Height = height,
+                        Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240)),
+                        BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(180, 180, 180)),
+                        BorderThickness = new Thickness(1)
+                    };
+                    
+                    // Add camera icon
+                    var icon = new TextBlock
+                    {
+                        Text = "📷",
+                        FontSize = Math.Min(width, height) * 0.4,
+                        Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(150, 150, 150)),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    
+                    placeholder.Child = icon;
+                    
+                    Canvas.SetLeft(placeholder, x);
+                    Canvas.SetTop(placeholder, y);
+                    canvas.Children.Add(placeholder);
+                }
+                
+                // Add template type label (optional)
+                string templateType = GetTemplateTypeLabel(templateData);
+                if (!string.IsNullOrEmpty(templateType))
+                {
+                    var typeLabel = new Border
+                    {
+                        Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(200, 0, 0, 0)),
+                        CornerRadius = new CornerRadius(3),
+                        Padding = new Thickness(5, 2, 5, 2)
+                    };
+                    
+                    var labelText = new TextBlock
+                    {
+                        Text = templateType,
+                        FontSize = 10,
+                        Foreground = new SolidColorBrush(Colors.White),
+                        FontWeight = FontWeights.Bold
+                    };
+                    
+                    typeLabel.Child = labelText;
+                    Canvas.SetRight(typeLabel, 5);
+                    Canvas.SetBottom(typeLabel, 5);
+                    canvas.Children.Add(typeLabel);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"GenerateTemplatePreview: Error: {ex.Message}");
+                
+                // Fallback to simple icon
+                canvas.Children.Clear();
+                var fallbackIcon = new TextBlock
+                {
+                    Text = "📷",
+                    FontSize = 60,
+                    Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(100, 100, 100)),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Canvas.SetLeft(fallbackIcon, canvas.Width / 2 - 30);
+                Canvas.SetTop(fallbackIcon, canvas.Height / 2 - 30);
+                canvas.Children.Add(fallbackIcon);
+            }
+        }
+        
+        private List<CanvasItemData> GenerateDefaultPlaceholders(TemplateData templateData)
+        {
+            var placeholders = new List<CanvasItemData>();
+            double ratio = templateData.CanvasWidth / templateData.CanvasHeight;
+            
+            // Generate default layouts based on template dimensions
+            if (Math.Abs(ratio - 1.5) < 0.1) // 4x6 landscape
+            {
+                // 2x2 grid for landscape
+                double itemWidth = templateData.CanvasWidth * 0.4;
+                double itemHeight = templateData.CanvasHeight * 0.4;
+                double spacing = templateData.CanvasWidth * 0.05;
+                
+                placeholders.Add(CreatePlaceholder(spacing, spacing, itemWidth, itemHeight, 1));
+                placeholders.Add(CreatePlaceholder(templateData.CanvasWidth - spacing - itemWidth, spacing, itemWidth, itemHeight, 2));
+                placeholders.Add(CreatePlaceholder(spacing, templateData.CanvasHeight - spacing - itemHeight, itemWidth, itemHeight, 3));
+                placeholders.Add(CreatePlaceholder(templateData.CanvasWidth - spacing - itemWidth, templateData.CanvasHeight - spacing - itemHeight, itemWidth, itemHeight, 4));
+            }
+            else if (Math.Abs(ratio - 0.667) < 0.1) // 4x6 portrait
+            {
+                // 2x3 grid for portrait
+                double itemWidth = templateData.CanvasWidth * 0.4;
+                double itemHeight = templateData.CanvasHeight * 0.27;
+                double spacingX = templateData.CanvasWidth * 0.067;
+                double spacingY = templateData.CanvasHeight * 0.04;
+                
+                for (int row = 0; row < 3; row++)
+                {
+                    for (int col = 0; col < 2; col++)
+                    {
+                        double x = spacingX + col * (itemWidth + spacingX);
+                        double y = spacingY + row * (itemHeight + spacingY);
+                        placeholders.Add(CreatePlaceholder(x, y, itemWidth, itemHeight, row * 2 + col + 1));
+                    }
+                }
+            }
+            else if (Math.Abs(ratio - 0.333) < 0.1) // 2x6 strip
+            {
+                // 3 vertical photos for strip
+                double itemWidth = templateData.CanvasWidth * 0.8;
+                double itemHeight = templateData.CanvasHeight * 0.28;
+                double spacingX = templateData.CanvasWidth * 0.1;
+                double spacingY = templateData.CanvasHeight * 0.04;
+                
+                for (int i = 0; i < 3; i++)
+                {
+                    double y = spacingY + i * (itemHeight + spacingY);
+                    placeholders.Add(CreatePlaceholder(spacingX, y, itemWidth, itemHeight, i + 1));
+                }
+            }
+            else
+            {
+                // Default single centered placeholder
+                double itemWidth = templateData.CanvasWidth * 0.8;
+                double itemHeight = templateData.CanvasHeight * 0.8;
+                double x = (templateData.CanvasWidth - itemWidth) / 2;
+                double y = (templateData.CanvasHeight - itemHeight) / 2;
+                placeholders.Add(CreatePlaceholder(x, y, itemWidth, itemHeight, 1));
+            }
+            
+            return placeholders;
+        }
+        
+        private CanvasItemData CreatePlaceholder(double x, double y, double width, double height, int number)
+        {
+            return new CanvasItemData
+            {
+                ItemType = "Placeholder",
+                X = x,
+                Y = y,
+                Width = width,
+                Height = height,
+                PlaceholderNumber = number,
+                Name = $"Photo {number}"
+            };
+        }
+        
+        private string GetTemplateTypeLabel(TemplateData templateData)
+        {
+            double ratio = templateData.CanvasWidth / templateData.CanvasHeight;
+            
+            // Detect template type based on dimensions
+            if (Math.Abs(ratio - 1.5) < 0.1) // 4x6 landscape (6/4 = 1.5)
+                return "4x6 Landscape";
+            else if (Math.Abs(ratio - 0.667) < 0.1) // 4x6 portrait (4/6 = 0.667)
+                return "4x6 Portrait";
+            else if (Math.Abs(ratio - 0.333) < 0.1) // 2x6 strip (2/6 = 0.333)
+                return "2x6 Strip";
+            else if (Math.Abs(ratio - 1.25) < 0.1) // 5x7 landscape
+                return "5x7 Landscape";
+            else if (Math.Abs(ratio - 0.8) < 0.1) // 5x7 portrait
+                return "5x7 Portrait";
+            else if (Math.Abs(ratio - 1.25) < 0.1) // 8x10 landscape
+                return "8x10 Landscape";
+            else if (Math.Abs(ratio - 0.8) < 0.1) // 8x10 portrait
+                return "8x10 Portrait";
+            else
+                return "";
+        }
+
+        #endregion
+
         #region Sharing Button Event Handlers
 
         private void QrCodeSharingButton_Click(object sender, RoutedEventArgs e)
         {
             // Delegate to SharingOperations service
-            sharingOperations.HandleQrCodeSharingClick(currentShareResult, databaseOperations.CurrentSessionGuid);
+            // Get the session GUID properly
+            string sessionGuid = GetCurrentSessionGuid();
+            sharingOperations.HandleQrCodeSharingClick(currentShareResult, sessionGuid);
         }
 
         private void SmsSharingButton_Click(object sender, RoutedEventArgs e)
         {
             // Delegate to SharingOperations service
+            // Get the session GUID properly
+            string sessionGuid = GetCurrentSessionGuid();
             sharingOperations.HandleSmsSharingClick(lastProcessedImagePath, capturedPhotoPaths, 
-                currentShareResult, databaseOperations.CurrentSessionGuid);
+                currentShareResult, sessionGuid);
         }
 
         
@@ -6864,9 +7410,24 @@ namespace Photobooth.Pages
                 
                 Dispatcher.Invoke(() =>
                 {
-                    if (status.PendingUploads > 0 || status.PendingSMS > 0)
+                    if (status.IsUploading)
                     {
-                        // Items pending
+                        // Currently uploading
+                        syncStatusIcon.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(33, 150, 243)); // Blue
+                        syncStatusText.Text = "Uploading...";
+                        syncStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(33, 150, 243));
+                        
+                        // Show upload name
+                        syncPendingCount.Text = status.CurrentUploadName;
+                        syncPendingCount.Visibility = Visibility.Visible;
+                        
+                        // Show and update progress bar
+                        syncUploadProgress.Visibility = Visibility.Visible;
+                        syncUploadProgress.Value = status.UploadProgress * 100; // Convert to percentage
+                    }
+                    else if (status.PendingUploads > 0 || status.PendingSMS > 0)
+                    {
+                        // Items pending but not currently uploading
                         syncStatusIcon.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 167, 38)); // Orange
                         syncStatusText.Text = "Uploads Pending";
                         syncStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 167, 38));
@@ -6876,7 +7437,7 @@ namespace Photobooth.Pages
                         syncPendingCount.Text = $"{totalPending} item{(totalPending != 1 ? "s" : "")} pending";
                         syncPendingCount.Visibility = Visibility.Visible;
                         
-                        // Hide progress bar for now (can be enhanced later)
+                        // Hide progress bar when not uploading
                         syncUploadProgress.Visibility = Visibility.Collapsed;
                     }
                     else if (!status.IsOnline)
@@ -6905,10 +7466,42 @@ namespace Photobooth.Pages
             }
         }
         
+        private void OnUploadProgressChanged(double progress, string uploadName)
+        {
+            // Update UI immediately when upload progress changes
+            Dispatcher.Invoke(() =>
+            {
+                if (progress > 0 || !string.IsNullOrEmpty(uploadName))
+                {
+                    // Show uploading status
+                    syncStatusIcon.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(33, 150, 243)); // Blue
+                    syncStatusText.Text = "Uploading...";
+                    syncStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(33, 150, 243));
+                    
+                    // Show upload name
+                    syncPendingCount.Text = uploadName;
+                    syncPendingCount.Visibility = Visibility.Visible;
+                    
+                    // Show and update progress bar
+                    syncUploadProgress.Visibility = Visibility.Visible;
+                    syncUploadProgress.Value = progress * 100; // Convert to percentage
+                }
+                else
+                {
+                    // Upload complete, trigger full status update
+                    UpdateSyncStatus();
+                }
+            });
+        }
+        
         private void StartSyncStatusMonitoring()
         {
             try
             {
+                // Get the offline queue service and subscribe to upload progress
+                var queueService = sharingOperations.GetOrCreateOfflineQueueService();
+                queueService.UploadProgressChanged += OnUploadProgressChanged;
+                
                 // Create a timer to update sync status every 5 seconds
                 var syncStatusTimer = new System.Windows.Threading.DispatcherTimer();
                 syncStatusTimer.Interval = TimeSpan.FromSeconds(5);

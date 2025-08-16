@@ -104,13 +104,26 @@
                             
                             <StackPanel Margin="20">
                                 <!-- Template Preview -->
-                                <Border Background="#222" Height="180" CornerRadius="8" Margin="0,0,0,15">
+                                <Border Background="Transparent" MinHeight="120" MaxHeight="180" CornerRadius="8" Margin="0,0,0,15">
                                     <Grid>
                                         <Image Source="{Binding ThumbnailImageSource}" 
-                                              Stretch="UniformToFill"/>
+                                              Stretch="Uniform"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
                                         
                                         <TextBlock Text="📷" FontSize="48" Foreground="#666"
-                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasThumbnail}" Value="False">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </Grid>
                                 </Border>
                                 
@@ -173,5 +186,71 @@
             </StackPanel>
         </Border>
         
+        <!-- Large Preview Overlay -->
+        <Grid x:Name="PreviewOverlay" 
+              Grid.RowSpan="3"
+              Background="#CC000000"
+              Visibility="Collapsed"
+              MouseLeftButtonDown="PreviewOverlay_Click">
+            
+            <Border Background="#333" 
+                    CornerRadius="20"
+                    MaxWidth="800" MaxHeight="600"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Margin="40">
+                
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Large Template Preview -->
+                    <Border Grid.Row="0" 
+                            Background="#222" 
+                            CornerRadius="15,15,0,0"
+                            Margin="20,20,20,10">
+                        <Image x:Name="LargePreviewImage"
+                               Stretch="Uniform"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                    </Border>
+                    
+                    <!-- Template Info and Action -->
+                    <StackPanel Grid.Row="1" 
+                                Margin="20"
+                                HorizontalAlignment="Center">
+                        
+                        <TextBlock x:Name="LargePreviewTitle"
+                                  Text="Template Name"
+                                  FontSize="28" 
+                                  FontWeight="Bold" 
+                                  Foreground="White"
+                                  HorizontalAlignment="Center"
+                                  Margin="0,0,0,10"/>
+                        
+                        <TextBlock x:Name="LargePreviewDescription"
+                                  Text="Template Description"
+                                  FontSize="18" 
+                                  Foreground="#CCC"
+                                  HorizontalAlignment="Center"
+                                  Margin="0,0,0,20"/>
+                        
+                        <Button Style="{StaticResource TouchButton}"
+                               Content="✅ Start Photo Session"
+                               FontSize="24"
+                               Width="300" Height="70"
+                               Click="StartSession_Click"/>
+                        
+                        <TextBlock Text="Click anywhere outside to go back"
+                                  FontSize="14"
+                                  Foreground="#888"
+                                  HorizontalAlignment="Center"
+                                  Margin="0,15,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

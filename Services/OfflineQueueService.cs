@@ -16,6 +16,14 @@ namespace Photobooth.Services
         private readonly IShareService _shareService;
         private bool _isOnline = true;
         private System.Threading.Timer _processTimer;
+        
+        // Upload progress tracking
+        private bool _isUploading = false;
+        private double _uploadProgress = 0.0;
+        private string _currentUploadName = "";
+        
+        // Event for upload progress updates
+        public event Action<double, string> UploadProgressChanged;
 
         public OfflineQueueService()
         {
@@ -143,7 +151,38 @@ namespace Photobooth.Services
                 // Try immediate upload if online
                 if (_isOnline)
                 {
+                    // Set upload status and notify UI
+                    _isUploading = true;
+                    _currentUploadName = $"Session {sessionId}";
+                    _uploadProgress = 0.0;
+                    UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
+                    
+                    // Start a task to simulate progress
+                    var progressTask = Task.Run(async () =>
+                    {
+                        for (int i = 1; i <= 9; i++)
+                        {
+                            await Task.Delay(200); // Simulate progress every 200ms
+                            if (_isUploading)
+                            {
+                                _uploadProgress = i * 0.1; // Progress from 10% to 90%
+                                UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
+                            }
+                        }
+                    });
+                    
                     var shareResult = await _shareService.CreateShareableGalleryAsync(sessionId, photoPaths);
+                    
+                    // Cancel progress simulation and set to complete
+                    _uploadProgress = 1.0;
+                    UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
+                    
+                    // Reset upload status
+                    _isUploading = false;
+                    _uploadProgress = 0.0;
+                    _currentUploadName = "";
+                    UploadProgressChanged?.Invoke(0.0, "");
+                    
                     if (shareResult.Success)
                     {
                         return new UploadQueueResult
@@ -173,6 +212,12 @@ namespace Photobooth.Services
                 // Generate local QR code pointing to pending page
                 var pendingUrl = $"https://photos.app/pending/{sessionId}";
                 var qrCode = _shareService.GenerateQRCode(pendingUrl);
+                
+                // Trigger immediate processing if we're online
+                if (_isOnline)
+                {
+                    Task.Run(() => ProcessQueue(null));
+                }
                 
                 return new UploadQueueResult
                 {
@@ -238,13 +283,26 @@ namespace Photobooth.Services
                         }
                         
                         // Process each upload
+                        int currentIndex = 0;
                         foreach (var upload in uploads)
                         {
                             try
                             {
+                                // Update progress tracking
+                                _isUploading = true;
+                                _currentUploadName = $"Session {upload.SessionId}";
+                                _uploadProgress = (double)currentIndex / uploads.Count;
+                                
+                                // Notify UI of progress
+                                UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
+                                
                                 var result = await _shareService.CreateShareableGalleryAsync(
                                     upload.SessionId, 
                                     upload.PhotoPaths);
+                                
+                                currentIndex++;
+                                _uploadProgress = (double)currentIndex / uploads.Count;
+                                UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
                                 
                                 if (result.Success)
                                 {
@@ -274,12 +332,25 @@ namespace Photobooth.Services
                                 IncrementRetryCount("upload_queue", upload.Id, conn);
                             }
                         }
+                        
+                        // Reset upload status when done
+                        _isUploading = false;
+                        _uploadProgress = 0.0;
+                        _currentUploadName = "";
+                        UploadProgressChanged?.Invoke(0.0, "");
                     }
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error processing upload queue: {ex.Message}");
+            }
+            finally
+            {
+                // Ensure upload status is reset on error
+                _isUploading = false;
+                _uploadProgress = 0.0;
+                _currentUploadName = "";
             }
         }
 
@@ -358,6 +429,8 @@ namespace Photobooth.Services
         /// </summary>
         private void CheckOnlineStatus()
         {
+            bool wasOffline = !_isOnline;
+            
             try
             {
                 using (var client = new System.Net.WebClient())
@@ -374,6 +447,12 @@ namespace Photobooth.Services
             }
             
             OnOnlineStatusChanged?.Invoke(_isOnline);
+            
+            // If we just came back online, trigger immediate processing
+            if (wasOffline && _isOnline)
+            {
+                Task.Run(() => ProcessQueue(null));
+            }
         }
 
         private void IncrementRetryCount(string table, int id, SQLiteConnection conn)
@@ -393,7 +472,13 @@ namespace Photobooth.Services
             {
                 conn.Open();
                 
-                var status = new QueueStatus { IsOnline = _isOnline };
+                var status = new QueueStatus 
+                { 
+                    IsOnline = _isOnline,
+                    IsUploading = _isUploading,
+                    UploadProgress = _uploadProgress,
+                    CurrentUploadName = _currentUploadName
+                };
                 
                 // Count pending uploads
                 var cmd = new SQLiteCommand(
@@ -435,5 +520,8 @@ namespace Photobooth.Services
         public bool IsOnline { get; set; }
         public int PendingUploads { get; set; }
         public int PendingSMS { get; set; }
+        public bool IsUploading { get; set; }
+        public double UploadProgress { get; set; } // 0.0 to 1.0
+        public string CurrentUploadName { get; set; }
     }
 }

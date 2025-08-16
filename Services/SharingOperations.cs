@@ -69,13 +69,37 @@ namespace Photobooth.Services
                 // Check if we have a cached gallery URL first (instant)
                 if (currentShareResult != null && !string.IsNullOrEmpty(currentShareResult.GalleryUrl))
                 {
+                    Log.Debug($"SharingOperations: Using cached gallery URL: {currentShareResult.GalleryUrl}");
                     // Show QR code immediately with cached data
                     ShowQRCodeOverlay(currentShareResult.GalleryUrl);
                     return;
                 }
                 
+                // Check if we have a cached share result in the parent
+                var parentShareResult = _parent.GetCurrentShareResult();
+                if (parentShareResult != null && !string.IsNullOrEmpty(parentShareResult.GalleryUrl))
+                {
+                    Log.Debug($"SharingOperations: Using parent's cached gallery URL: {parentShareResult.GalleryUrl}");
+                    currentShareResult = parentShareResult;
+                    ShowQRCodeOverlay(parentShareResult.GalleryUrl);
+                    return;
+                }
+                
                 // Check database in background for existing URL
-                if (!string.IsNullOrEmpty(currentSessionGuid))
+                // First try to get the actual session GUID from the database
+                string sessionGuid = currentSessionGuid;
+                if (string.IsNullOrEmpty(sessionGuid))
+                {
+                    // Try to get it from the current database session
+                    sessionGuid = _parent.GetCurrentSessionGuid();
+                    Log.Debug($"SharingOperations: Got session GUID from database: {sessionGuid}");
+                }
+                else
+                {
+                    Log.Debug($"SharingOperations: Using provided session GUID: {sessionGuid}");
+                }
+                
+                if (!string.IsNullOrEmpty(sessionGuid))
                 {
                     // Show loading QR overlay immediately
                     ShowQRCodeOverlay("Loading..."); // Show overlay with loading state
@@ -86,7 +110,7 @@ namespace Photobooth.Services
                         try
                         {
                             var db = new TemplateDatabase();
-                            var galleryUrl = db.GetPhotoSessionGalleryUrl(currentSessionGuid);
+                            var galleryUrl = db.GetPhotoSessionGalleryUrl(sessionGuid);
                             
                             if (!string.IsNullOrEmpty(galleryUrl))
                             {

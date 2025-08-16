@@ -740,96 +740,41 @@ namespace Photobooth.Services
                         Image imageToprint = originalImage;
                         bool disposeRotatedImage = false;
                         
-                        // Check if this is a 2x6 that was duplicated to 4x6
-                        // A duplicated 4x6 will have dimensions roughly:
-                        // - Portrait: 1200x1800 at 300 DPI (aspect ratio 0.667)
-                        // - Landscape: 1800x1200 at 300 DPI (aspect ratio 1.5)
-                        bool isDuplicated4x6 = false;
+                        // Get image aspect ratio for logging
                         float aspectRatio = (float)originalImage.Width / originalImage.Height;
+                        System.Diagnostics.Debug.WriteLine($"ORIENTATION: Image aspect ratio: {aspectRatio:F3}");
                         
-                        // Check for both portrait (4x6) and landscape (6x4) orientations
-                        bool isPortrait4x6 = Math.Abs(aspectRatio - (4.0f / 6.0f)) < 0.05f; // 0.667
-                        bool isLandscape4x6 = Math.Abs(aspectRatio - (6.0f / 4.0f)) < 0.05f; // 1.5
+                        // SIMPLIFIED ORIENTATION MATCHING LOGIC
+                        // Match template orientation with actual printer orientation
                         
-                        if (isPortrait4x6 || isLandscape4x6)
-                        {
-                            isDuplicated4x6 = true;
-                            System.Diagnostics.Debug.WriteLine($"ORIENTATION: Detected duplicated 4x6 image (aspect ratio: {aspectRatio:F3}, portrait={isPortrait4x6}, landscape={isLandscape4x6})");
-                        }
-                        
-                        // For landscape 4x6 images (1800x1200), ensure landscape printing
-                        if (isDuplicated4x6 && isLandscape4x6 && !e.PageSettings.Landscape)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"ORIENTATION FIX: Forcing landscape for landscape 4x6 (was {e.PageSettings.Landscape})");
-                            e.PageSettings.Landscape = true;
-                        }
-                        // For portrait 4x6 images (1200x1800), ensure portrait printing
-                        else if (isDuplicated4x6 && isPortrait4x6 && e.PageSettings.Landscape)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"ORIENTATION FIX: Forcing portrait for portrait 4x6 (was {e.PageSettings.Landscape})");
-                            e.PageSettings.Landscape = false;
-                        }
-                        
-                        // Auto-rotate logic based on printer orientation and image dimensions
-                        bool printerIsLandscape = e.PageSettings.Landscape;
+                        // Determine actual printer orientation from page bounds
+                        // This is more reliable than PageSettings.Landscape which might not reflect DEVMODE correctly
+                        bool actualPrinterIsLandscape = e.PageBounds.Width > e.PageBounds.Height;
+                        bool devmodeIsLandscape = e.PageSettings.Landscape;
                         bool imageIsLandscape = originalImage.Width > originalImage.Height;
+                        
+                        // Use actual page bounds orientation as it's most reliable
+                        bool printerIsLandscape = actualPrinterIsLandscape;
                         
                         System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Image dimensions: {originalImage.Width}x{originalImage.Height}");
                         System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Page bounds: {e.PageBounds.Width}x{e.PageBounds.Height}");
-                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Printer landscape setting: {printerIsLandscape}");
-                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Image is landscape: {imageIsLandscape}");
+                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: PageSettings.Landscape: {devmodeIsLandscape}");
+                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Actual orientation from bounds: {(actualPrinterIsLandscape ? "Landscape" : "Portrait")}");
+                        System.Diagnostics.Debug.WriteLine($"PrintDocument_PrintPage: Template is landscape: {imageIsLandscape}");
                         
                         // Determine if rotation is needed
                         bool needsRotation = false;
                         
-                        // Check if auto-rotation is enabled in settings
-                        bool autoRotateEnabled = Properties.Settings.Default.AutoRotateForPrinting;
-                        
-                        // Skip auto-rotation for duplicated 4x6 images as we've already set the correct orientation
-                        if (isDuplicated4x6)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Auto-rotation SKIPPED for duplicated 4x6 (orientation already corrected)");
-                            System.Diagnostics.Debug.WriteLine($"HOWEVER: Will check if this is a 2x6 template that needs special orientation handling...");
-                            
-                            // CRITICAL: Check if this is actually a 2x6 template print job
-                            // This information comes from the original method call parameter
-                            // For now, we can detect if we're using 2x6 printer settings as a fallback
-                            if (Properties.Settings.Default.AutoRoutePrinter && !string.IsNullOrEmpty(Properties.Settings.Default.Printer2x6Name))
-                            {
-                                System.Diagnostics.Debug.WriteLine($"POSSIBLE 2x6 TEMPLATE: Auto-routing enabled and 2x6 printer configured");
-                                
-                                // For 2x6 strips, if the image is portrait (1200x1800) but we need landscape cutting
-                                // We might need to force landscape orientation
-                                if (isPortrait4x6 && !printerIsLandscape)
-                                {
-                                    // Try forcing landscape for proper 2x6 strip cutting  
-                                    e.PageSettings.Landscape = true;
-                                    System.Diagnostics.Debug.WriteLine($"2x6 ORIENTATION FIX: Forced landscape orientation for 2x6 strip cutting");
-                                }
-                            }
-                        }
-                        // If printer is landscape and image is portrait, OR
-                        // If printer is portrait and image is landscape, rotate 90 degrees
-                        else if (autoRotateEnabled && (printerIsLandscape != imageIsLandscape))
+                        // SIMPLE RULE: If template orientation doesn't match printer DEVMODE orientation, rotate
+                        // This works for ALL paper sizes (4x6, 5x7, 8x10, etc.)
+                        if (printerIsLandscape != imageIsLandscape)
                         {
                             needsRotation = true;
-                            System.Diagnostics.Debug.WriteLine($"Auto-rotation WILL BE applied: Printer landscape={printerIsLandscape}, Image landscape={imageIsLandscape}");
-                        }
-                        else if (!autoRotateEnabled)
-                        {
-                            System.Diagnostics.Debug.WriteLine("Auto-rotation is DISABLED in settings");
-                            
-                            // For regular 4x6 photos: still honor explicit landscape setting from UI
-                            // If user set PrintLandscape=true but image orientation doesn't match, rotate anyway
-                            if (printerIsLandscape != imageIsLandscape)
-                            {
-                                needsRotation = true;
-                                System.Diagnostics.Debug.WriteLine($"EXPLICIT ORIENTATION (4x6): Will rotate to match user's landscape setting (Printer landscape={printerIsLandscape}, Image landscape={imageIsLandscape})");
-                            }
+                            System.Diagnostics.Debug.WriteLine($"ORIENTATION MISMATCH: Template={(imageIsLandscape ? "Landscape" : "Portrait")}, DEVMODE={(printerIsLandscape ? "Landscape" : "Portrait")} - WILL ROTATE");
                         }
                         else
                         {
-                            System.Diagnostics.Debug.WriteLine($"Auto-rotation NOT needed: Orientations match (Printer landscape={printerIsLandscape}, Image landscape={imageIsLandscape})");
+                            System.Diagnostics.Debug.WriteLine($"ORIENTATION MATCH: Both are {(printerIsLandscape ? "Landscape" : "Portrait")} - NO ROTATION NEEDED");
                         }
                         
                         // Apply rotation if needed

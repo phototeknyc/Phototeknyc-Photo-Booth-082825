@@ -222,6 +222,8 @@
     <Compile Include="Services\EventTemplateService.cs" />
     <Compile Include="Services\PhotoCaptureService.cs" />
     <Compile Include="Services\PrintingService.cs" />
+    <Compile Include="Services\PrinterSettingsManager.cs" />
+    <Compile Include="Services\SimplifiedPrintService.cs" />
     <Compile Include="NavButton.cs" />
     <Compile Include="PhotoBoothWindow.xaml.cs">
       <DependentUpon>PhotoBoothWindow.xaml</DependentUpon>
@@ -259,6 +261,9 @@
     </Compile>
     <Compile Include="Windows\GalleryWindow.xaml.cs">
       <DependentUpon>GalleryWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\PrinterProfileConfigWindow.xaml.cs">
+      <DependentUpon>PrinterProfileConfigWindow.xaml</DependentUpon>
     </Compile>
     <Page Include="Design\Canvas\CanvasContainer.xaml">
       <Generator>MSBuild:Compile</Generator>
@@ -436,6 +441,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Windows\GalleryWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Windows\PrinterProfileConfigWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

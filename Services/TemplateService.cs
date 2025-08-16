@@ -507,9 +507,26 @@ namespace Photobooth.Services
         {
             try
             {
-                // Match the aspect ratio of 2x6 template
-                const int thumbnailWidth = 280;
-                const int thumbnailHeight = 840; // 280 * 3 for 2:6 ratio
+                // Calculate thumbnail dimensions based on actual template aspect ratio
+                double aspectRatio = canvasWidth / canvasHeight;
+                int thumbnailWidth;
+                int thumbnailHeight;
+                
+                // Set maximum thumbnail dimensions
+                const int maxDimension = 280;
+                
+                if (aspectRatio > 1)
+                {
+                    // Landscape orientation
+                    thumbnailWidth = maxDimension;
+                    thumbnailHeight = (int)(maxDimension / aspectRatio);
+                }
+                else
+                {
+                    // Portrait or square orientation
+                    thumbnailHeight = maxDimension;
+                    thumbnailWidth = (int)(maxDimension * aspectRatio);
+                }
                 
                 // Check if canvas dimensions look like display dimensions (< 500) or pixel dimensions (> 500)
                 bool isPixelDimensions = canvasWidth > 500 || canvasHeight > 500;
@@ -519,8 +536,7 @@ namespace Photobooth.Services
                 // If these are pixel dimensions, convert to display dimensions for proper scaling
                 if (isPixelDimensions)
                 {
-                    // For a 2x6 template: 600x1800 pixels at 300 DPI = 2x6 inches
-                    // Display at roughly 72-96 DPI for screen = divide by ~3-4
+                    // Convert from pixel to display dimensions
                     actualCanvasWidth = canvasWidth / 2.3;
                     actualCanvasHeight = canvasHeight / 2.3;
                 }

@@ -2066,6 +2066,18 @@ namespace Photobooth.Pages
                 byte[] devModeBytes = new byte[bytesNeeded];
                 Marshal.Copy(pDevModeData, devModeBytes, 0, bytesNeeded);
 
+                // Parse the DEVMODE to check orientation
+                var devMode = (DEVMODE)Marshal.PtrToStructure(pDevModeData, typeof(DEVMODE));
+                System.Diagnostics.Debug.WriteLine($"DEVMODE CAPTURE: dmOrientation={devMode.dmOrientation}, dmFields=0x{devMode.dmFields:X8}");
+                System.Diagnostics.Debug.WriteLine($"DEVMODE CAPTURE: Orientation field set={(devMode.dmFields & DM_ORIENTATION) != 0}");
+                System.Diagnostics.Debug.WriteLine($"DEVMODE CAPTURE: Paper size={devMode.dmPaperSize}, Width={devMode.dmPaperWidth}, Height={devMode.dmPaperLength}");
+                
+                // Ensure orientation field is set
+                if ((devMode.dmFields & DM_ORIENTATION) == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"WARNING: Orientation not set in DEVMODE, will need to determine from paper dimensions");
+                }
+
                 // Convert to Base64 for storage
                 string base64Data = Convert.ToBase64String(devModeBytes);
                 
@@ -2629,7 +2641,13 @@ namespace Photobooth.Pages
                     // Apply to PrintDocument's DefaultPageSettings
                     if ((devMode.dmFields & DM_ORIENTATION) != 0)
                     {
-                        printDocument.DefaultPageSettings.Landscape = (devMode.dmOrientation == 2);
+                        bool isLandscape = (devMode.dmOrientation == 2); // 2 = DMORIENT_LANDSCAPE, 1 = DMORIENT_PORTRAIT
+                        printDocument.DefaultPageSettings.Landscape = isLandscape;
+                        System.Diagnostics.Debug.WriteLine($"DEVMODE ORIENTATION: dmOrientation={devMode.dmOrientation}, Setting Landscape={isLandscape}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"DEVMODE ORIENTATION: DM_ORIENTATION flag not set in dmFields (0x{devMode.dmFields:X8})");
                     }
                     
                     if ((devMode.dmFields & DM_PAPERSIZE) != 0)
@@ -2723,6 +2741,24 @@ namespace Photobooth.Pages
             {
                 MessageBox.Show($"Error exporting printer profile: {ex.Message}", "Export Profile", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ConfigurePrinterProfiles_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var profileWindow = new Windows.PrinterProfileConfigWindow();
+                profileWindow.Owner = Window.GetWindow(this);
+                profileWindow.ShowDialog();
+                
+                // Refresh printer lists after configuration
+                RefreshPrinters_Click(sender, e);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening printer profile configuration: {ex.Message}", 
+                    "Configuration Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

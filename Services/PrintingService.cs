@@ -37,6 +37,13 @@ namespace Photobooth.Services
         private DateTime lastPrintTime = DateTime.MinValue;
         private string lastPrintedSessionId;
         
+        // Expose printer status event from monitor service
+        public event EventHandler<PrinterMonitorService.PrinterStatusEventArgs> PrinterStatusChanged
+        {
+            add { printerMonitor.PrinterStatusChanged += value; }
+            remove { printerMonitor.PrinterStatusChanged -= value; }
+        }
+        
         public PrintingService()
         {
             printService = PrintService.Instance;
@@ -255,8 +262,10 @@ namespace Photobooth.Services
         {
             try
             {
-                printerMonitor.StartMonitoring();
-                Log.Debug("PrintingService: Started comprehensive printer monitoring");
+                // Get the current printer name from settings
+                string printerName = printService.GetCurrentPrinterName();
+                printerMonitor.StartMonitoring(printerName);
+                Log.Debug($"PrintingService: Started comprehensive printer monitoring for '{printerName ?? "default"}'");
             }
             catch (Exception ex)
             {

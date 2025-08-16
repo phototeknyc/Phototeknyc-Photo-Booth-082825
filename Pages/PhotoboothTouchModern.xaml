@@ -442,15 +442,16 @@
                             
                             <!-- Photo Count -->
                             <TextBlock x:Name="photoCountText" 
-                                       Text="Photos: 0" 
+                                       Text="" 
                                        FontSize="16" 
                                        FontWeight="Bold" 
                                        Foreground="#4CAF50" 
                                        HorizontalAlignment="Center"
-                                       Margin="0,5,0,0"/>
+                                       Margin="0,5,0,0"
+                                       Visibility="Collapsed"/>
                             
                             <!-- Cloud Sync Status -->
-                            <Border Background="#1A1A1A" 
+                            <Border Background="Transparent" 
                                     CornerRadius="8" 
                                     Margin="0,8,0,0"
                                     Padding="8,5">
@@ -530,6 +531,7 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 
                                 <!-- Printer Name and Connection -->
@@ -562,7 +564,7 @@
                                                FontWeight="Normal"/>
                                 </StackPanel>
                                 
-                                <!-- Print Queue Info -->
+                                <!-- Print Queue and Media Info -->
                                 <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3,0,0">
                                     <TextBlock Text="Queue: " 
                                                FontSize="11" 
@@ -572,11 +574,34 @@
                                                FontSize="11" 
                                                Foreground="White"
                                                FontWeight="Bold"/>
-                                    <TextBlock Text=" jobs" 
+                                    <TextBlock Text=" Jobs" 
                                                FontSize="11" 
                                                Foreground="#AAA"
                                                Margin="2,0,0,0"/>
+                                    
+                                    <!-- Media Remaining (inline with queue) -->
+                                    <StackPanel x:Name="mediaRemainingPanel" 
+                                                Orientation="Horizontal" 
+                                                Margin="10,0,0,0"
+                                                Visibility="Collapsed">
+                                        <TextBlock Text="•" 
+                                                   FontSize="11" 
+                                                   Foreground="#666"
+                                                   Margin="0,0,5,0"/>
+                                        <TextBlock x:Name="mediaRemainingText" 
+                                                   Text="400" 
+                                                   FontSize="11" 
+                                                   Foreground="#4CAF50"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock x:Name="mediaTypeText" 
+                                                   Text=" prints left" 
+                                                   FontSize="11" 
+                                                   Foreground="#AAA"
+                                                   Margin="2,0,0,0"/>
+                                    </StackPanel>
                                 </StackPanel>
+                                
+                                <!-- Empty Row 3 (was used for media) -->
                             </Grid>
                             
                             <!-- Error Message (if any) -->
@@ -1091,7 +1116,9 @@
                 Grid.RowSpan="2"
                 Background="#1E1E1E" 
                 Padding="15,20"
-                Margin="0,0,0,40">
+                Margin="0,0,0,40"
+                Visibility="Collapsed"
+                x:Name="photoStripContainer">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -1472,7 +1499,8 @@
                                             MouseLeftButtonUp="OnTemplateSelected"
                                             Tag="{Binding}"
                                             Width="250"
-                                            Height="320">
+                                            MinHeight="280"
+                                            MaxHeight="400">
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Style.Triggers>
@@ -1486,18 +1514,20 @@
                                         </Border.Style>
                                         <Grid>
                                             <Grid.RowDefinitions>
-                                                <RowDefinition Height="200"/>
-                                                <RowDefinition Height="Auto"/>
                                                 <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
                                             </Grid.RowDefinitions>
                                             
                                             <!-- Template Thumbnail -->
                                             <Border Grid.Row="0" 
-                                                    Background="#FF2A2A2A" 
+                                                    Background="Transparent" 
                                                     CornerRadius="5"
-                                                    Margin="0,0,0,10">
+                                                    Margin="10"
+                                                    MaxHeight="250"
+                                                    VerticalAlignment="Center">
                                                 <Grid>
-                                                    <!-- Thumbnail Image -->
+                                                    <!-- Dynamic Template Preview -->
                                                     <Image Source="{Binding ThumbnailImagePath}"
                                                            Stretch="Uniform"
                                                            HorizontalAlignment="Center"
@@ -1509,27 +1539,6 @@
                                                                               Opacity="0.5"/>
                                                         </Image.Effect>
                                                     </Image>
-                                                    
-                                                    <!-- Fallback if no thumbnail -->
-                                                    <TextBlock Text="📷"
-                                                               FontSize="60"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center"
-                                                               Foreground="#FF666666">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding ThumbnailImagePath}" Value="{x:Null}">
-                                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding ThumbnailImagePath}" Value="">
-                                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
                                                 </Grid>
                                             </Border>
                                             
@@ -3531,6 +3540,104 @@
                                                       Margin="40,20,40,20"/>
                 </ScrollViewer>
             </Grid>
+        </Grid>
+        
+        <!-- Large Template Preview Overlay -->
+        <Grid x:Name="templatePreviewOverlay" 
+              Visibility="Collapsed"
+              Background="#DD000000"
+              MouseLeftButtonDown="CloseTemplatePreview_Click">
+            
+            <Border Background="#FF2A2A2A"
+                    CornerRadius="20"
+                    MaxWidth="900"
+                    MaxHeight="700"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Margin="40"
+                    MouseLeftButtonDown="PreviewBorder_Click">
+                
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Header -->
+                    <Border Grid.Row="0" 
+                            Background="#FF1A1A1A"
+                            CornerRadius="20,20,0,0"
+                            Padding="30,20">
+                        <Grid>
+                            <TextBlock x:Name="previewTemplateName"
+                                      Text="Template Name"
+                                      FontSize="28"
+                                      FontWeight="Bold"
+                                      Foreground="White"
+                                      HorizontalAlignment="Left"/>
+                            
+                            <Button Content="✕"
+                                   FontSize="24"
+                                   Width="40"
+                                   Height="40"
+                                   HorizontalAlignment="Right"
+                                   Click="CloseTemplatePreview_Click"
+                                   Style="{StaticResource TouchButtonStyle}"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Large Preview Image -->
+                    <Border Grid.Row="1" 
+                            Background="#FF1E1E1E"
+                            Margin="20">
+                        <Image x:Name="largeTemplatePreview"
+                               Stretch="Uniform"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               MaxWidth="800"
+                               MaxHeight="500"/>
+                    </Border>
+                    
+                    <!-- Actions -->
+                    <StackPanel Grid.Row="2" 
+                               Orientation="Horizontal"
+                               HorizontalAlignment="Center"
+                               Margin="20">
+                        
+                        <Button Content="✓ Select This Template"
+                               x:Name="selectTemplateButton"
+                               FontSize="20"
+                               Width="250"
+                               Height="60"
+                               Margin="10"
+                               Click="SelectTemplateFromPreview_Click"
+                               Style="{StaticResource TouchButtonStyle}">
+                            <Button.Background>
+                                <SolidColorBrush Color="#4CAF50"/>
+                            </Button.Background>
+                        </Button>
+                        
+                        <Button Content="← Back to Templates"
+                               FontSize="18"
+                               Width="200"
+                               Height="60"
+                               Margin="10"
+                               Click="CloseTemplatePreview_Click"
+                               Style="{StaticResource TouchButtonStyle}"/>
+                    </StackPanel>
+                    
+                    <!-- Template Info -->
+                    <TextBlock x:Name="previewTemplateInfo"
+                              Grid.Row="2"
+                              Text="Template details"
+                              FontSize="14"
+                              Foreground="#AAA"
+                              HorizontalAlignment="Left"
+                              VerticalAlignment="Bottom"
+                              Margin="30,0,0,10"/>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </Page>
