@@ -3805,11 +3805,18 @@ namespace Photobooth.Pages
                 
                 // Use offline queue service to upload (handles both online and offline scenarios)
                 var queueService = sharingOperations.GetOrCreateOfflineQueueService();
-                var uploadResult = await queueService.QueuePhotosForUpload(sessionId, photosToUpload);
+                string eventName = currentEvent?.Name;
+                var uploadResult = await queueService.QueuePhotosForUpload(sessionId, photosToUpload, eventName);
                 
                 if (uploadResult.Success)
                 {
                     Log.Debug($"AutoUploadSessionPhotos: Upload queued successfully. Immediate: {uploadResult.Immediate}");
+                    
+                    // Automatically create/update the event gallery page
+                    if (currentEvent != null && uploadResult.Immediate)
+                    {
+                        _ = Task.Run(async () => await UpdateEventGalleryAsync(eventName, currentEvent.Id));
+                    }
                     
                     // Store the gallery URL if we got one
                     if (!string.IsNullOrEmpty(uploadResult.GalleryUrl))
@@ -4201,6 +4208,21 @@ namespace Photobooth.Pages
                 }
                 
                 Log.Debug($"SetEvent: Event '{eventData.Name}' loaded with {eventTemplateService.AvailableTemplates?.Count ?? 0} templates");
+                
+                // Force the start button to be visible after setting the event
+                // Always show the start button when an event is set, even if templates aren't loaded yet
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (startButtonOverlay != null)
+                    {
+                        // Show start button if we have an event, regardless of template loading status
+                        // Templates will be selected when the user clicks START
+                        bool shouldShowStartButton = currentEvent != null;
+                        
+                        startButtonOverlay.Visibility = shouldShowStartButton ? Visibility.Visible : Visibility.Collapsed;
+                        Log.Debug($"SetEvent: Start button visibility set to {startButtonOverlay.Visibility}, event={currentEvent?.Name}, templates={eventTemplateService.AvailableTemplates?.Count ?? 0}");
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
             }
         }
         
@@ -4565,7 +4587,8 @@ namespace Photobooth.Pages
                 
                 // Upload photos and create gallery
                 Log.Debug("TriggerCloudSharing: Calling CreateShareableGalleryAsync...");
-                var shareResult = await cloudShareService.CreateShareableGalleryAsync(sessionId, photosToUpload);
+                string eventName = currentEvent?.Name;
+                var shareResult = await cloudShareService.CreateShareableGalleryAsync(sessionId, photosToUpload, eventName);
                 
                 Log.Debug($"TriggerCloudSharing: Upload result - Success: {shareResult.Success}, " +
                          $"GalleryUrl: {shareResult.GalleryUrl}, " +
@@ -7304,6 +7327,53 @@ namespace Photobooth.Pages
                 Log.Debug("ShowSharingOverlayForSMS: Phone number textbox focused");
             }
         }
+        
+        private async Task UpdateEventGalleryAsync(string eventName, int eventId)
+        {
+            try
+            {
+                Log.Debug($"UpdateEventGalleryAsync: Updating gallery for event '{eventName}'");
+                
+                // Get the cloud share service
+                var shareService = Services.CloudShareProvider.GetShareService();
+                
+                if (shareService is Services.CloudShareServiceRuntime runtimeService)
+                {
+                    // Create/update the event gallery
+                    var (galleryUrl, password) = await runtimeService.CreateEventGalleryAsync(eventName, eventId);
+                    
+                    if (!string.IsNullOrEmpty(galleryUrl))
+                    {
+                        Log.Debug($"UpdateEventGalleryAsync: Event gallery updated successfully");
+                        Log.Debug($"Gallery URL: {galleryUrl}");
+                        Log.Debug($"Gallery Password: {password}");
+                        
+                        // Store the event gallery URL for later use
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            // You could store this in a property or database for display later
+                            currentEventGalleryUrl = galleryUrl;
+                            currentEventGalleryPassword = password;
+                        });
+                    }
+                    else
+                    {
+                        Log.Debug("UpdateEventGalleryAsync: Failed to create event gallery");
+                    }
+                }
+                else
+                {
+                    Log.Debug("UpdateEventGalleryAsync: CloudShareServiceRuntime not available");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"UpdateEventGalleryAsync: Error updating event gallery: {ex.Message}");
+            }
+        }
+        
+        private string currentEventGalleryUrl;
+        private string currentEventGalleryPassword;
         
         private void ShowSMSInputDialog()
         {

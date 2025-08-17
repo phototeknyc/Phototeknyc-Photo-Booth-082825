@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using Photobooth.Database;
 
@@ -38,13 +39,158 @@ namespace Photobooth.Services
                     ContactPhone = contactPhone
                 };
                 
-                return database.CreateEvent(eventData);
+                int eventId = database.CreateEvent(eventData);
+                
+                // Automatically create event gallery in S3
+                if (eventId > 0)
+                {
+                    _ = Task.Run(async () => 
+                    {
+                        await CreateEventGalleryAsync(eventName, eventId);
+                    });
+                }
+                
+                return eventId;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Failed to create event: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return -1;
+            }
+        }
+        
+        private async Task CreateEventGalleryAsync(string eventName, int eventId)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"Creating gallery for event: {eventName} (ID: {eventId})");
+                
+                // Get the cloud share service
+                var shareService = CloudShareProvider.GetShareService();
+                
+                if (shareService is CloudShareServiceRuntime runtimeService)
+                {
+                    // Create the event gallery (passwordless by default)
+                    var (galleryUrl, password) = await runtimeService.CreateEventGalleryAsync(eventName, eventId, usePassword: false);
+                    
+                    if (!string.IsNullOrEmpty(galleryUrl))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Event gallery created: {galleryUrl}");
+                        
+                        // Silently save gallery info to database
+                        var eventData = database.GetEvent(eventId);
+                        if (eventData != null)
+                        {
+                            eventData.GalleryUrl = galleryUrl;
+                            eventData.GalleryPassword = password; // Will be empty for passwordless
+                            database.UpdateEvent(eventId, eventData);
+                            System.Diagnostics.Debug.WriteLine($"Gallery info saved to database for event {eventId}");
+                        }
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("Failed to create event gallery - no URL returned");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("CloudShareServiceRuntime not available - gallery not created");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error creating event gallery: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Get gallery info for an event
+        /// </summary>
+        public (string url, string password) GetEventGalleryInfo(int eventId)
+        {
+            try
+            {
+                var eventData = database.GetEvent(eventId);
+                if (eventData != null)
+                {
+                    return (eventData.GalleryUrl, eventData.GalleryPassword);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting gallery info: {ex.Message}");
+            }
+            return (null, null);
+        }
+        
+        /// <summary>
+        /// Generate password for existing gallery
+        /// </summary>
+        public async Task<string> AddPasswordToGallery(int eventId)
+        {
+            try
+            {
+                var eventData = database.GetEvent(eventId);
+                if (eventData != null && !string.IsNullOrEmpty(eventData.GalleryUrl))
+                {
+                    // Generate password
+                    string password = GenerateGalleryPassword(eventData.Name);
+                    
+                    // Update the gallery with password
+                    await CreateEventGalleryAsync(eventData.Name, eventId, usePassword: true);
+                    
+                    // Save password to database
+                    eventData.GalleryPassword = password;
+                    database.UpdateEvent(eventId, eventData);
+                    
+                    return password;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error adding password: {ex.Message}");
+            }
+            return null;
+        }
+        
+        private string GenerateGalleryPassword(string eventName)
+        {
+            if (string.IsNullOrEmpty(eventName))
+                return "";
+            
+            var hashCode = eventName.GetHashCode();
+            var password = hashCode.ToString("X");
+            return password.Substring(0, Math.Min(4, password.Length));
+        }
+        
+        /// <summary>
+        /// Create gallery with optional password
+        /// </summary>
+        private async Task CreateEventGalleryAsync(string eventName, int eventId, bool usePassword)
+        {
+            try
+            {
+                var shareService = CloudShareProvider.GetShareService();
+                if (shareService is CloudShareServiceRuntime runtimeService)
+                {
+                    var (galleryUrl, password) = await runtimeService.CreateEventGalleryAsync(eventName, eventId, usePassword);
+                    
+                    if (!string.IsNullOrEmpty(galleryUrl))
+                    {
+                        var eventData = database.GetEvent(eventId);
+                        if (eventData != null)
+                        {
+                            eventData.GalleryUrl = galleryUrl;
+                            eventData.GalleryPassword = password;
+                            database.UpdateEvent(eventId, eventData);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error creating gallery with password: {ex.Message}");
             }
         }
         
@@ -94,6 +240,12 @@ namespace Photobooth.Services
             try
             {
                 database.UpdateEvent(eventData.Id, eventData);
+                
+                // Update the event gallery if it exists
+                _ = Task.Run(async () => 
+                {
+                    await CreateEventGalleryAsync(eventData.Name, eventData.Id);
+                });
             }
             catch (Exception ex)
             {

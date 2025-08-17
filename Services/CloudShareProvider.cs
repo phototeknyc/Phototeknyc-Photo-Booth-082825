@@ -123,7 +123,7 @@ namespace Photobooth.Services
             _optimizationService = new PhotoOptimizationService();
         }
 
-        public async Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths)
+        public async Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths, string eventName = null)
         {
             return await Task.FromResult(CreateLocalShareResult(sessionId, photoPaths));
         }

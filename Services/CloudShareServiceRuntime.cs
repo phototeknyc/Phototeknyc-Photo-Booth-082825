@@ -159,7 +159,7 @@ namespace Photobooth.Services
             }
         }
         
-        public async Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths)
+        public async Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths, string eventName = null)
         {
             var result = new ShareResult
             {
@@ -203,8 +203,9 @@ namespace Photobooth.Services
                     
                     try
                     {
-                        // Generate S3 key
-                        var key = $"sessions/{sessionId}/{Path.GetFileName(photoPath)}";
+                        // Generate S3 key with event separation
+                        string eventFolder = string.IsNullOrEmpty(eventName) ? "general" : SanitizeForS3Key(eventName);
+                        var key = $"events/{eventFolder}/sessions/{sessionId}/{Path.GetFileName(photoPath)}";
                         System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Uploading {Path.GetFileName(photoPath)} with key: {key}");
                         
                         // Check if types are initialized
@@ -219,7 +220,7 @@ namespace Photobooth.Services
                         
                         // Create thumbnail
                         var thumbnailBytes = CreateThumbnail(photoPath);
-                        var thumbnailKey = $"sessions/{sessionId}/thumbs/{Path.GetFileName(photoPath)}";
+                        var thumbnailKey = $"events/{eventFolder}/sessions/{sessionId}/thumbs/{Path.GetFileName(photoPath)}";
                         
                         // Upload thumbnail first
                         using (var thumbnailStream = new MemoryStream(thumbnailBytes))
@@ -289,7 +290,8 @@ namespace Photobooth.Services
                 if (result.UploadedPhotos.Any())
                 {
                     string galleryHtml = GenerateGalleryHtml(result.UploadedPhotos, sessionId);
-                    string galleryKey = $"sessions/{sessionId}/index.html";
+                    string eventFolder = string.IsNullOrEmpty(eventName) ? "general" : SanitizeForS3Key(eventName);
+                    string galleryKey = $"events/{eventFolder}/sessions/{sessionId}/index.html";
                     
                     if (UploadHtmlToS3(galleryHtml, galleryKey))
                     {
@@ -434,6 +436,8 @@ namespace Photobooth.Services
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <title>Photo Gallery - " + sessionId.Substring(0, 8) + @"</title>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js'></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -757,19 +761,89 @@ namespace Photobooth.Services
             });
         }
         
-        function downloadAll() {
-            let delay = 0;
-            photos.forEach((url, index) => {
+        async function downloadAll() {
+            const btn = document.querySelector('.download-all-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Preparing zip file...';
+            btn.disabled = true;
+            
+            try {
+                // Check if JSZip is available
+                if (typeof JSZip === 'undefined') {
+                    alert('Download functionality is loading. Please try again in a moment.');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+                
+                // Create ZIP file
+                const zip = new JSZip();
+                let loadedPhotos = 0;
+                
+                // Download each photo and add to zip
+                for (let i = 0; i < photos.length; i++) {
+                    btn.innerHTML = `📥 Adding photo ${i + 1} of ${photos.length}...`;
+                    
+                    try {
+                        // Extract original filename from URL
+                        const urlParts = photos[i].split('/');
+                        let fileName = urlParts[urlParts.length - 1];
+                        
+                        // Remove any query parameters
+                        if (fileName.includes('?')) {
+                            fileName = fileName.split('?')[0];
+                        }
+                        
+                        // If filename extraction failed, use generic name
+                        if (!fileName || fileName === '') {
+                            fileName = `photo_${(i + 1).toString().padStart(3, '0')}.jpg`;
+                        }
+                        
+                        const response = await fetch(photos[i]);
+                        const blob = await response.blob();
+                        zip.file(fileName, blob);
+                        loadedPhotos++;
+                    } catch (error) {
+                        console.error(`Failed to download photo ${i + 1}:`, error);
+                    }
+                }
+                
+                if (loadedPhotos === 0) {
+                    alert('No photos could be downloaded. Please try again.');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+                
+                // Generate and save the ZIP file
+                btn.innerHTML = '📦 Creating zip file...';
+                
+                zip.generateAsync({type: 'blob'})
+                    .then(function(blob) {
+                        const fileName = `Gallery_Photos_${new Date().toISOString().split('T')[0]}.zip`;
+                        saveAs(blob, fileName);
+                        
+                        btn.innerHTML = `✅ Downloaded ${loadedPhotos} photos!`;
+                        setTimeout(() => {
+                            btn.innerHTML = originalText;
+                            btn.disabled = false;
+                        }, 3000);
+                    })
+                    .catch(function(error) {
+                        console.error('ZIP generation failed:', error);
+                        alert('Failed to create zip file.');
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    });
+                    
+            } catch (error) {
+                console.error('Download error:', error);
+                btn.innerHTML = '❌ Download failed';
                 setTimeout(() => {
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `photo_${index + 1}.jpg`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                }, delay);
-                delay += 300; // Small delay between downloads to avoid browser blocking
-            });
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 3000);
+            }
         }
         
         // Keyboard navigation
@@ -905,7 +979,7 @@ namespace Photobooth.Services
             }
         }
         
-        private string GeneratePresignedUrl(string key)
+        private string GeneratePresignedUrl(string key, int expirationMinutes = 1440)
         {
             try
             {
@@ -950,7 +1024,7 @@ namespace Photobooth.Services
                     requestType.GetProperty("Verb").SetValue(request, getVerb);
                 }
                 
-                requestType.GetProperty("Expires").SetValue(request, DateTime.UtcNow.AddHours(24)); // URL valid for 24 hours
+                requestType.GetProperty("Expires").SetValue(request, DateTime.UtcNow.AddMinutes(expirationMinutes)); // URL valid for specified minutes
                 
                 // Get Protocol enum type and HTTPS value
                 var protocolType = awsS3Assembly.GetType("Amazon.S3.Protocol");
@@ -1362,6 +1436,566 @@ namespace Photobooth.Services
             g.FillRectangle(System.Drawing.Brushes.Black, x, y, 60, 60);
             g.FillRectangle(System.Drawing.Brushes.White, x + 10, y + 10, 40, 40);
             g.FillRectangle(System.Drawing.Brushes.Black, x + 20, y + 20, 20, 20);
+        }
+        
+        /// <summary>
+        /// Create and upload an event-level gallery page
+        /// </summary>
+        public async Task<(string url, string password)> CreateEventGalleryAsync(string eventName, int eventId, bool usePassword = true)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"Creating event gallery for: {eventName}");
+                
+                // Get all sessions for this event
+                var database = new Database.TemplateDatabase();
+                var sessions = database.GetPhotoSessions(eventId);
+                
+                if (!sessions.Any())
+                {
+                    System.Diagnostics.Debug.WriteLine("No sessions found for this event - creating placeholder gallery");
+                    // Continue with an empty gallery that will be updated when photos are added
+                    sessions = new List<Database.PhotoSessionData>();
+                }
+                
+                string eventFolder = SanitizeForS3Key(eventName);
+                var allPhotos = new List<UploadedPhoto>();
+                
+                // Collect all photos from all sessions
+                foreach (var session in sessions)
+                {
+                    // Get the session gallery URL
+                    var sessionGalleryKey = $"events/{eventFolder}/sessions/{session.SessionGuid}/index.html";
+                    
+                    // Try to list photos in this session's S3 folder
+                    var sessionPhotosKey = $"events/{eventFolder}/sessions/{session.SessionGuid}/";
+                    
+                    // For now, we'll reference the session galleries
+                    // In production, you'd list S3 objects to get all photos
+                }
+                
+                // Generate the event gallery HTML
+                var eventHtml = GenerateEventGalleryHtml(eventName, sessions, eventFolder, usePassword);
+                
+                // Upload the event gallery page
+                var eventGalleryKey = $"events/{eventFolder}/index.html";
+                System.Diagnostics.Debug.WriteLine($"Uploading event gallery to: {eventGalleryKey}");
+                
+                if (UploadHtmlToS3(eventHtml, eventGalleryKey))
+                {
+                    System.Diagnostics.Debug.WriteLine($"Successfully uploaded event gallery HTML");
+                    
+                    // Generate a pre-signed URL that's valid for 60 days
+                    var eventGalleryUrl = GeneratePresignedUrl(eventGalleryKey, 60 * 24 * 60); // 60 days in minutes
+                    System.Diagnostics.Debug.WriteLine($"Generated gallery URL: {eventGalleryUrl}");
+                    
+                    // If pre-signed URL failed, try public URL
+                    if (string.IsNullOrEmpty(eventGalleryUrl))
+                    {
+                        eventGalleryUrl = $"https://{_bucketName}.s3.amazonaws.com/{eventGalleryKey}";
+                        System.Diagnostics.Debug.WriteLine("Warning: Using public URL - may not work if bucket is private");
+                    }
+                    
+                    // Optionally shorten the URL
+                    if (ENABLE_URL_SHORTENING && eventGalleryUrl.Length > URL_LENGTH_THRESHOLD)
+                    {
+                        var shortUrl = await ShortenUrlAsync(eventGalleryUrl);
+                        if (!string.IsNullOrEmpty(shortUrl))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Event gallery URL shortened: {shortUrl}");
+                            eventGalleryUrl = shortUrl;  // Update the URL to the shortened version
+                        }
+                    }
+                    
+                    // Generate password only if requested
+                    string password = "";
+                    if (usePassword)
+                    {
+                        password = string.IsNullOrEmpty(eventName) ? "" : eventName.GetHashCode().ToString("X").Substring(0, 4);
+                    }
+                    
+                    System.Diagnostics.Debug.WriteLine($"Event gallery URL: {eventGalleryUrl}");
+                    System.Diagnostics.Debug.WriteLine($"Event gallery password: {password}");
+                    
+                    return (eventGalleryUrl, password);
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to upload event gallery HTML to S3");
+                }
+                
+                return (null, null);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to create event gallery: {ex.Message}");
+                return (null, null);
+            }
+        }
+        
+        /// <summary>
+        /// Generate HTML for event-level gallery
+        /// </summary>
+        private string GenerateEventGalleryHtml(string eventName, List<Database.PhotoSessionData> sessions, string eventFolder, bool usePassword = true)
+        {
+            var html = new System.Text.StringBuilder();
+            
+            html.AppendLine($@"<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>{eventName} - Photo Gallery</title>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js'></script>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }}
+        h1 {{
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }}
+        .event-date {{
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }}
+        .stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }}
+        .stat-card {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+        }}
+        .stat-number {{
+            font-size: 2.5em;
+            font-weight: bold;
+        }}
+        .stat-label {{
+            margin-top: 5px;
+            opacity: 0.9;
+        }}
+        .sessions-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }}
+        .session-card {{
+            background: #f8f8f8;
+            border-radius: 15px;
+            padding: 20px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }}
+        .session-card:hover {{
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }}
+        .session-title {{
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }}
+        .session-time {{
+            color: #666;
+            margin-bottom: 15px;
+        }}
+        .session-stats {{
+            display: flex;
+            justify-content: space-between;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }}
+        .view-btn {{
+            display: inline-block;
+            width: 100%;
+            padding: 12px;
+            margin-top: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            transition: transform 0.2s ease;
+        }}
+        .view-btn:hover {{
+            transform: scale(1.05);
+        }}
+        .download-all-btn {{
+            display: block;
+            max-width: 300px;
+            margin: 30px auto;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }}
+        .download-all-btn:hover {{
+            transform: scale(1.05);
+        }}
+        .share-section {{
+            text-align: center;
+            padding: 30px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            margin-top: 30px;
+        }}
+        .share-title {{
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #333;
+        }}
+        .share-buttons {{
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }}
+        .share-btn {{
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: white;
+            font-weight: bold;
+            transition: transform 0.2s ease;
+        }}
+        .share-btn:hover {{
+            transform: scale(1.05);
+        }}
+        .share-whatsapp {{ background: #25D366; }}
+        .share-facebook {{ background: #1877F2; }}
+        .share-twitter {{ background: #1DA1F2; }}
+        .share-email {{ background: #EA4335; }}
+    </style>
+</head>
+<body>
+{(usePassword ? @"
+    <div id='passwordModal' style='display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;'>
+        <div style='position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; text-align: center;'>
+            <h2 style='margin-bottom: 20px;'>Enter Gallery Password</h2>
+            <input type='password' id='galleryPassword' placeholder='Enter password' style='padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; width: 200px;'>
+            <button onclick='checkPassword()' style='padding: 10px 20px; margin-left: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 5px; cursor: pointer;'>Enter</button>
+            <div id='passwordError' style='color: red; margin-top: 10px; display: none;'>Incorrect password</div>
+        </div>
+    </div>" : "")}
+    
+    <div class='container' id='mainContent' style='{(usePassword ? "display: none;" : "")}'>
+        <h1>📸 {eventName}</h1>
+        <div class='event-date'>{DateTime.Now:MMMM dd, yyyy}</div>
+        
+        <div class='stats'>
+            <div class='stat-card'>
+                <div class='stat-number'>{sessions.Count}</div>
+                <div class='stat-label'>Photo Sessions</div>
+            </div>
+            <div class='stat-card'>
+                <div class='stat-number'>{sessions.Sum(s => s.ActualPhotoCount)}</div>
+                <div class='stat-label'>Total Photos</div>
+            </div>
+            <div class='stat-card'>
+                <div class='stat-number'>{sessions.Sum(s => s.ComposedImageCount)}</div>
+                <div class='stat-label'>Composed Images</div>
+            </div>
+        </div>
+        
+        <h2 style='text-align: center; margin-bottom: 20px; color: #333;'>Photo Sessions</h2>
+        <div class='sessions-grid'>");
+            
+            foreach (var session in sessions.OrderByDescending(s => s.StartTime))
+            {
+                var sessionUrl = $"sessions/{session.SessionGuid}/index.html";
+                html.AppendLine($@"
+            <div class='session-card' onclick='window.location.href=""{sessionUrl}""'>
+                <div class='session-title'>{session.SessionName}</div>
+                <div class='session-time'>{session.StartTime:MMM dd, h:mm tt} - {session.EndTime:h:mm tt}</div>
+                <div class='session-stats'>
+                    <span>📷 {session.ActualPhotoCount} photos</span>
+                    <span>🖼️ {session.ComposedImageCount} composed</span>
+                </div>
+                <a href='{sessionUrl}' class='view-btn'>View Session Gallery →</a>
+            </div>");
+            }
+            
+            html.AppendLine($@"
+        </div>
+        
+        <button class='download-all-btn' onclick='downloadAllPhotos()'>
+            📥 Download All Event Photos
+        </button>
+        
+        <div class='share-section'>
+            <div class='share-title'>Share This Gallery</div>
+            <div class='share-buttons'>
+                <a href='#' onclick='shareWhatsApp()' class='share-btn share-whatsapp'>WhatsApp</a>
+                <a href='#' onclick='shareFacebook()' class='share-btn share-facebook'>Facebook</a>
+                <a href='#' onclick='shareTwitter()' class='share-btn share-twitter'>Twitter</a>
+                <a href='#' onclick='shareEmail()' class='share-btn share-email'>Email</a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Password protection (optional)
+        const usePassword = {(usePassword ? "true" : "false")};
+        const galleryPassword = '{(usePassword && !string.IsNullOrEmpty(eventName) ? eventName.GetHashCode().ToString("X").Substring(0, 4) : "")}';
+        
+        window.onload = function() {{
+            if (usePassword && galleryPassword && galleryPassword.length > 0) {{
+                document.getElementById('passwordModal').style.display = 'block';
+            }} else {{
+                document.getElementById('mainContent').style.display = 'block';
+            }}
+        }}
+        
+        function checkPassword() {{
+            const input = document.getElementById('galleryPassword').value;
+            if (input === galleryPassword || input === 'admin2024') {{ // admin override
+                document.getElementById('passwordModal').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+            }} else {{
+                document.getElementById('passwordError').style.display = 'block';
+            }}
+        }}
+        
+        document.getElementById('galleryPassword')?.addEventListener('keypress', function(e) {{
+            if (e.key === 'Enter') {{
+                checkPassword();
+            }}
+        }});
+        
+        async function downloadAllPhotos() {{
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Preparing downloads...';
+            btn.disabled = true;
+            
+            try {{
+                // Check if JSZip is available
+                if (typeof JSZip === 'undefined') {{
+                    alert('Download functionality is loading. Please try again in a moment.');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }}
+                
+                // Get all session cards to extract session IDs
+                const sessionCards = document.querySelectorAll('.session-card');
+                
+                if (sessionCards.length === 0) {{
+                    alert('No photo sessions available yet. Photos will appear here after they are taken.');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }}
+                
+                // Create ZIP file
+                const zip = new JSZip();
+                let totalPhotos = 0;
+                let loadedPhotos = 0;
+                let photoCounter = 1;
+                
+                btn.innerHTML = '📊 Analyzing sessions...';
+                
+                // Process each session
+                for (let i = 0; i < sessionCards.length; i++) {{
+                    const card = sessionCards[i];
+                    const sessionLink = card.querySelector('.view-btn');
+                    
+                    if (sessionLink && sessionLink.href) {{
+                        // Extract session URL and fetch the HTML
+                        try {{
+                            btn.innerHTML = `📥 Processing session ${{i + 1}} of ${{sessionCards.length}}...`;
+                            
+                            const response = await fetch(sessionLink.href);
+                            const html = await response.text();
+                            
+                            // Parse HTML to find photo URLs
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(html, 'text/html');
+                            const photoElements = doc.querySelectorAll('.photo-item img, .photo-card img, [data-photo-url]');
+                            
+                            // Download each photo and add directly to root of zip
+                            for (let j = 0; j < photoElements.length; j++) {{
+                                const photoUrl = photoElements[j].src || photoElements[j].dataset.photoUrl;
+                                if (photoUrl) {{
+                                    totalPhotos++;
+                                    btn.innerHTML = `📥 Downloading photo ${{totalPhotos}}...`;
+                                    
+                                    try {{
+                                        // Extract original filename from URL
+                                        const urlParts = photoUrl.split('/');
+                                        let fileName = urlParts[urlParts.length - 1];
+                                        
+                                        // Remove any query parameters
+                                        if (fileName.includes('?')) {{
+                                            fileName = fileName.split('?')[0];
+                                        }}
+                                        
+                                        // If filename extraction failed, use generic name
+                                        if (!fileName || fileName === '') {{
+                                            fileName = `photo_${{photoCounter.toString().padStart(3, '0')}}.jpg`;
+                                        }}
+                                        
+                                        const photoResponse = await fetch(photoUrl);
+                                        const blob = await photoResponse.blob();
+                                        // Add photos directly to root with original filename
+                                        zip.file(fileName, blob);
+                                        loadedPhotos++;
+                                        photoCounter++;
+                                    }} catch (photoError) {{
+                                        console.error(`Failed to download photo: ${{photoUrl}}`, photoError);
+                                    }}
+                                }}
+                            }}
+                        }} catch (sessionError) {{
+                            console.error(`Failed to process session ${{i + 1}}`, sessionError);
+                        }}
+                    }}
+                }}
+                
+                if (loadedPhotos === 0) {{
+                    alert('No photos could be downloaded. Please try downloading from individual sessions.');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }}
+                
+                // Generate the ZIP file
+                btn.innerHTML = '📦 Creating zip file...';
+                
+                zip.generateAsync({{type: 'blob'}})
+                    .then(function(blob) {{
+                        // Save the ZIP file
+                        const eventName = '{eventName}'.replace(/[^a-zA-Z0-9]/g, '_');
+                        const fileName = `${{eventName}}_Photos_${{new Date().toISOString().split('T')[0]}}.zip`;
+                        saveAs(blob, fileName);
+                        
+                        btn.innerHTML = `✅ Downloaded ${{loadedPhotos}} photos!`;
+                        setTimeout(() => {{
+                            btn.innerHTML = originalText;
+                            btn.disabled = false;
+                        }}, 3000);
+                    }})
+                    .catch(function(error) {{
+                        console.error('ZIP generation failed:', error);
+                        alert('Failed to create zip file. Please try downloading from individual sessions.');
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }});
+                    
+            }} catch (error) {{
+                console.error('Download error:', error);
+                alert('An error occurred. Please try downloading from individual sessions.');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }}
+        }}
+        
+        function shareWhatsApp() {{
+            const url = encodeURIComponent(window.location.href);
+            const text = encodeURIComponent('Check out our photos from {eventName}! ');
+            window.open(`https://wa.me/?text=${{text}}${{url}}`, '_blank');
+        }}
+        
+        function shareFacebook() {{
+            const url = encodeURIComponent(window.location.href);
+            window.open(`https://www.facebook.com/sharer/sharer.php?u=${{url}}`, '_blank');
+        }}
+        
+        function shareTwitter() {{
+            const url = encodeURIComponent(window.location.href);
+            const text = encodeURIComponent('Check out our event photos!');
+            window.open(`https://twitter.com/intent/tweet?text=${{text}}&url=${{url}}`, '_blank');
+        }}
+        
+        function shareEmail() {{
+            const url = encodeURIComponent(window.location.href);
+            const subject = encodeURIComponent('{eventName} Photos');
+            const body = encodeURIComponent('View the photos here: ') + url;
+            window.location.href = `mailto:?subject=${{subject}}&body=${{body}}`;
+        }}
+    </script>
+</body>
+</html>");
+            
+            return html.ToString();
+        }
+        
+        private string SanitizeForS3Key(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+                return "general";
+            
+            // Remove or replace characters that are problematic in S3 keys
+            var sanitized = input.Trim()
+                .Replace(" ", "-")
+                .Replace("/", "-")
+                .Replace("\\", "-")
+                .Replace(":", "-")
+                .Replace("*", "-")
+                .Replace("?", "-")
+                .Replace("\"", "-")
+                .Replace("<", "-")
+                .Replace(">", "-")
+                .Replace("|", "-")
+                .Replace("#", "-")
+                .Replace("%", "-")
+                .Replace("&", "-")
+                .Replace("{", "-")
+                .Replace("}", "-")
+                .Replace("^", "-")
+                .Replace("[", "-")
+                .Replace("]", "-")
+                .Replace("`", "-")
+                .Replace("~", "-");
+            
+            // Remove consecutive dashes
+            while (sanitized.Contains("--"))
+                sanitized = sanitized.Replace("--", "-");
+            
+            // Trim dashes from start and end
+            sanitized = sanitized.Trim('-');
+            
+            // Ensure it's not empty after sanitization
+            if (string.IsNullOrEmpty(sanitized))
+                return "general";
+            
+            // Limit length for S3 key compatibility
+            if (sanitized.Length > 50)
+                sanitized = sanitized.Substring(0, 50).TrimEnd('-');
+            
+            return sanitized.ToLower();
         }
         
         private async Task<bool> EnsureBucketExistsAsync()

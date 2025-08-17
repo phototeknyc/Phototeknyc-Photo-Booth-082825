@@ -2328,6 +2328,8 @@ namespace Photobooth.Database
         public bool IsActive { get; set; } = true;
         public DateTime CreatedDate { get; set; }
         public DateTime ModifiedDate { get; set; }
+        public string GalleryUrl { get; set; }
+        public string GalleryPassword { get; set; }
     }
     
     // New data classes for photo session management

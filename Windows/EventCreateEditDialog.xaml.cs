@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -235,18 +236,17 @@ namespace Photobooth.Windows
                     originalEvent.ModifiedDate = DateTime.Now;
 
                     eventService.UpdateEvent(originalEvent);
-                    MessageBox.Show("Event updated successfully!", "Success", 
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    // No message - just close
                 }
                 else
                 {
-                    // Create new event
+                    // Create new event with simplified data (name only is required)
                     var eventId = eventService.CreateEvent(
                         EventName,
                         Description,
-                        EventType,
+                        EventType ?? "General",  // Default to General if not specified
                         Location,
-                        EventDate,
+                        EventDate ?? DateTime.Today,  // Default to today if not specified
                         startTime,
                         endTime,
                         HostName,
@@ -255,13 +255,53 @@ namespace Photobooth.Windows
 
                     if (eventId > 0)
                     {
-                        MessageBox.Show("Event created successfully!", "Success", 
-                            MessageBoxButton.OK, MessageBoxImage.Information);
+                        // Try to copy templates from the last opened event
+                        bool templatesAssigned = false;
+                        
+                        // Get the most recently created event (excluding the one we just created)
+                        var allEvents = eventService.GetAllEvents()
+                            .Where(ev => ev.Id != eventId)
+                            .OrderByDescending(ev => ev.CreatedDate)
+                            .ToList();
+                        
+                        if (allEvents.Any())
+                        {
+                            // Get templates from the most recent event
+                            var lastEvent = allEvents.First();
+                            var lastEventTemplates = eventService.GetEventTemplates(lastEvent.Id);
+                            
+                            if (lastEventTemplates != null && lastEventTemplates.Count > 0)
+                            {
+                                // Copy templates from last event
+                                foreach (var template in lastEventTemplates)
+                                {
+                                    eventService.AssignTemplateToEvent(eventId, template.Id, false);
+                                }
+                                templatesAssigned = true;
+                            }
+                        }
+                        
+                        // If no templates were copied from last event, assign all available templates
+                        if (!templatesAssigned)
+                        {
+                            var templateDatabase = new TemplateDatabase();
+                            var allTemplates = templateDatabase.GetAllTemplates();
+                            
+                            if (allTemplates != null && allTemplates.Count > 0)
+                            {
+                                // Assign all templates to the event automatically
+                                foreach (var template in allTemplates)
+                                {
+                                    eventService.AssignTemplateToEvent(eventId, template.Id, false);
+                                }
+                            }
+                        }
+                        
+                        // No message - just close
                     }
                     else
                     {
-                        MessageBox.Show("Failed to create event. Please try again.", "Error", 
-                            MessageBoxButton.OK, MessageBoxImage.Error);
+                        // Silent failure - just return
                         return;
                     }
                 }

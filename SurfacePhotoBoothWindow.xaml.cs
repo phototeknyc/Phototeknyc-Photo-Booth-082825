@@ -405,6 +405,62 @@ namespace Photobooth
             galleryWindow.ShowDialog();
         }
         
+        private async void NavigateToCloudGallery_Click(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                // Test upload when Shift key is held
+                if (Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift))
+                {
+                    MessageBox.Show("Testing S3 upload...", "Test Mode", MessageBoxButton.OK, MessageBoxImage.Information);
+                    
+                    // Upload test file
+                    bool success = await TestGalleryUploader.UploadSimpleTestFile();
+                    
+                    if (success)
+                    {
+                        MessageBox.Show("Test file uploaded! Check your browser.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Test upload failed. Check your AWS credentials.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                    return;
+                }
+                
+                // Show loading indicator
+                if (sender is Border border)
+                {
+                    var originalContent = border.Child;
+                    var loadingText = new TextBlock
+                    {
+                        Text = "Loading Gallery...",
+                        FontSize = 20,
+                        Foreground = new SolidColorBrush(Colors.White),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    border.Child = loadingText;
+                    
+                    // Open the master gallery
+                    await Photobooth.Services.HostGalleryExtensions.OpenMasterGallery();
+                    
+                    // Restore original content
+                    border.Child = originalContent;
+                }
+                else
+                {
+                    // Just open the gallery without UI feedback
+                    await Photobooth.Services.HostGalleryExtensions.OpenMasterGallery();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to open cloud gallery: {ex.Message}", 
+                    "Gallery Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
         private void NavigateToCameraSettings_Click(object sender, MouseButtonEventArgs e)
         {
             NavigateToPage(new CameraSettings(), "Camera Settings");

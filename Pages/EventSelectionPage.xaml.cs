@@ -287,6 +287,19 @@ namespace Photobooth.Pages
             // Get the created event
             var quickEvent = eventService.GetEvent(eventId);
             
+            // Automatically assign all available templates to the quick session
+            var templateDatabase = new TemplateDatabase();
+            var allTemplates = templateDatabase.GetAllTemplates();
+            
+            if (allTemplates != null && allTemplates.Count > 0)
+            {
+                // Assign all templates to the quick session
+                foreach (var template in allTemplates)
+                {
+                    eventService.AssignTemplateToEvent(eventId, template.Id, false);
+                }
+            }
+            
             selectedEvent = quickEvent;
             LaunchPhotoBooth(quickEvent);
         }

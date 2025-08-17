@@ -3182,7 +3182,8 @@ namespace Photobooth.Pages
                 // Try to create a test session
                 var testResult = await shareService.CreateShareableGalleryAsync(
                     "test-" + Guid.NewGuid().ToString().Substring(0, 8),
-                    new List<string>());
+                    new List<string>(),
+                    "test-event");
 
                 if (testResult != null)
                 {

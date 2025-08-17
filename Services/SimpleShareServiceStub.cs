@@ -25,7 +25,7 @@ namespace Photobooth.Services
         /// <summary>
         /// Upload photos and create a shareable gallery (STUB)
         /// </summary>
-        public async Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths)
+        public async Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths, string eventName = null)
         {
             // Stub implementation - returns local result
             return await Task.FromResult(CreateLocalShareResult(sessionId, photoPaths));

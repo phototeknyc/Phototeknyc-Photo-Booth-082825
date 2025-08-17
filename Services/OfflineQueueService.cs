@@ -78,6 +78,7 @@ namespace Photobooth.Services
                         photo_paths TEXT NOT NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         retry_count INTEGER DEFAULT 0,
+                        event_name TEXT,
                         uploaded_at DATETIME,
                         status TEXT DEFAULT 'pending',
                         gallery_url TEXT
@@ -144,7 +145,7 @@ namespace Photobooth.Services
         /// <summary>
         /// Queue photos for upload (works offline)
         /// </summary>
-        public async Task<UploadQueueResult> QueuePhotosForUpload(string sessionId, List<string> photoPaths)
+        public async Task<UploadQueueResult> QueuePhotosForUpload(string sessionId, List<string> photoPaths, string eventName = null)
         {
             try
             {
@@ -171,7 +172,7 @@ namespace Photobooth.Services
                         }
                     });
                     
-                    var shareResult = await _shareService.CreateShareableGalleryAsync(sessionId, photoPaths);
+                    var shareResult = await _shareService.CreateShareableGalleryAsync(sessionId, photoPaths, eventName);
                     
                     // Cancel progress simulation and set to complete
                     _uploadProgress = 1.0;
@@ -201,11 +202,12 @@ namespace Photobooth.Services
                 {
                     conn.Open();
                     var cmd = new SQLiteCommand(@"
-                        INSERT INTO upload_queue (session_id, photo_paths) 
-                        VALUES (@session, @paths)", conn);
+                        INSERT INTO upload_queue (session_id, photo_paths, event_name) 
+                        VALUES (@session, @paths, @event)", conn);
                     
                     cmd.Parameters.AddWithValue("@session", sessionId);
                     cmd.Parameters.AddWithValue("@paths", JsonConvert.SerializeObject(photoPaths));
+                    cmd.Parameters.AddWithValue("@event", eventName ?? "general");
                     cmd.ExecuteNonQuery();
                 }
                 
@@ -278,7 +280,8 @@ namespace Photobooth.Services
                             {
                                 Id = reader.GetInt32(0),
                                 SessionId = reader.GetString(1),
-                                PhotoPaths = JsonConvert.DeserializeObject<List<string>>(reader.GetString(2))
+                                PhotoPaths = JsonConvert.DeserializeObject<List<string>>(reader.GetString(2)),
+                                EventName = reader.IsDBNull(6) ? null : reader.GetString(6)
                             });
                         }
                         
@@ -298,7 +301,8 @@ namespace Photobooth.Services
                                 
                                 var result = await _shareService.CreateShareableGalleryAsync(
                                     upload.SessionId, 
-                                    upload.PhotoPaths);
+                                    upload.PhotoPaths,
+                                    upload.EventName);
                                 
                                 currentIndex++;
                                 _uploadProgress = (double)currentIndex / uploads.Count;

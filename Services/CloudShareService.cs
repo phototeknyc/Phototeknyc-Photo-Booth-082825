@@ -78,7 +78,7 @@ namespace Photobooth.Services
             }
         }
 
-        public async Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths)
+        public async Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths, string eventName = null)
         {
             var result = new ShareResult
             {
@@ -111,8 +111,9 @@ namespace Photobooth.Services
                         
                         var fileToUpload = optimizationResult.Success ? optimizedPath : photoPath;
                         
-                        // Generate S3 key
-                        var key = $"sessions/{sessionId}/{Path.GetFileName(photoPath)}";
+                        // Generate S3 key with event separation
+                        string eventFolder = string.IsNullOrEmpty(eventName) ? "general" : SanitizeForS3Key(eventName);
+                        var key = $"events/{eventFolder}/sessions/{sessionId}/{Path.GetFileName(photoPath)}";
                         
                         // Upload to S3
                         using (var fileStream = File.OpenRead(fileToUpload))
@@ -271,6 +272,52 @@ namespace Photobooth.Services
                 System.Diagnostics.Debug.WriteLine($"Failed to ensure bucket exists: {ex.Message}");
                 return false;
             }
+        }
+        
+        private string SanitizeForS3Key(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+                return "general";
+            
+            // Remove or replace characters that are problematic in S3 keys
+            var sanitized = input.Trim()
+                .Replace(" ", "-")
+                .Replace("/", "-")
+                .Replace("\\", "-")
+                .Replace(":", "-")
+                .Replace("*", "-")
+                .Replace("?", "-")
+                .Replace("\"", "-")
+                .Replace("<", "-")
+                .Replace(">", "-")
+                .Replace("|", "-")
+                .Replace("#", "-")
+                .Replace("%", "-")
+                .Replace("&", "-")
+                .Replace("{", "-")
+                .Replace("}", "-")
+                .Replace("^", "-")
+                .Replace("[", "-")
+                .Replace("]", "-")
+                .Replace("`", "-")
+                .Replace("~", "-");
+            
+            // Remove consecutive dashes
+            while (sanitized.Contains("--"))
+                sanitized = sanitized.Replace("--", "-");
+            
+            // Trim dashes from start and end
+            sanitized = sanitized.Trim('-');
+            
+            // Ensure it's not empty after sanitization
+            if (string.IsNullOrEmpty(sanitized))
+                return "general";
+            
+            // Limit length for S3 key compatibility
+            if (sanitized.Length > 50)
+                sanitized = sanitized.Substring(0, 50).TrimEnd('-');
+            
+            return sanitized.ToLower();
         }
     }
 }

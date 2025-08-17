@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using Photobooth.Database;
@@ -25,11 +26,15 @@ namespace Photobooth.Windows
             InitializeComponent();
             DataContext = this;
             
+            // Ensure fullscreen mode
+            this.WindowState = WindowState.Maximized;
+            this.WindowStyle = WindowStyle.None;
+            
             eventService = new EventService();
             templateDatabase = new TemplateDatabase();
             filteredEvents = new ObservableCollection<EventItemViewModel>();
             
-            EventsList.ItemsSource = filteredEvents;
+            EventsItemsControl.ItemsSource = filteredEvents;
             
             Loaded += EventBrowserWindow_Loaded;
         }
@@ -72,7 +77,13 @@ namespace Photobooth.Windows
         private void FilterAndSortEvents()
         {
             var searchText = SearchBox.Text?.ToLower() ?? "";
-            var sortBy = ((ComboBoxItem)SortComboBox.SelectedItem)?.Content?.ToString() ?? "Name";
+            
+            // Get filter status based on RadioButton selection
+            string filterType = "All";
+            if (UpcomingFilter != null && UpcomingFilter.IsChecked == true)
+                filterType = "Upcoming";
+            else if (PastFilter != null && PastFilter.IsChecked == true)
+                filterType = "Past";
             
             var filtered = allEvents.Where(e => 
                 string.IsNullOrEmpty(searchText) ||
@@ -83,22 +94,20 @@ namespace Photobooth.Windows
                 (e.Event.HostName?.ToLower().Contains(searchText) == true)
             );
             
-            // Sort events
-            switch (sortBy)
+            // Apply date filter
+            var today = DateTime.Today;
+            switch (filterType)
             {
-                case "Event Date":
-                    filtered = filtered.OrderByDescending(e => e.Event.EventDate ?? DateTime.MinValue);
+                case "Upcoming":
+                    filtered = filtered.Where(e => e.Event.EventDate >= today);
                     break;
-                case "Date Created":
-                    filtered = filtered.OrderByDescending(e => e.Event.CreatedDate);
-                    break;
-                case "Event Type":
-                    filtered = filtered.OrderBy(e => e.Event.EventType ?? "").ThenBy(e => e.Event.Name ?? "");
-                    break;
-                default: // Name
-                    filtered = filtered.OrderBy(e => e.Event.Name ?? "");
+                case "Past":
+                    filtered = filtered.Where(e => e.Event.EventDate < today);
                     break;
             }
+            
+            // Sort by event date by default (newest first)
+            filtered = filtered.OrderByDescending(e => e.Event.EventDate ?? DateTime.MinValue);
             
             filteredEvents.Clear();
             foreach (var eventItem in filtered)
@@ -106,15 +115,8 @@ namespace Photobooth.Windows
                 filteredEvents.Add(eventItem);
             }
             
-            // Show/hide empty state
-            if (filteredEvents.Count == 0)
-            {
-                ShowEmptyState();
-            }
-            else
-            {
-                HideEmptyState();
-            }
+            // Update event count
+            UpdateEventCount();
         }
 
         private void UpdateStatus()
@@ -132,15 +134,23 @@ namespace Photobooth.Windows
                 StatusText.Text = $"{allEvents.Count} event(s) loaded";
             }
         }
+        
+        private void UpdateEventCount()
+        {
+            if (EventCountText != null)
+            {
+                EventCountText.Text = $"{filteredEvents.Count} event{(filteredEvents.Count != 1 ? "s" : "")}";
+            }
+        }
 
         private void ShowEmptyState()
         {
-            EmptyState.Visibility = Visibility.Visible;
+            // Empty state is handled by having no items in the ItemsControl
         }
 
         private void HideEmptyState()
         {
-            EmptyState.Visibility = Visibility.Collapsed;
+            // Empty state is handled by having no items in the ItemsControl
         }
 
         // Event Handlers
@@ -174,7 +184,7 @@ namespace Photobooth.Windows
             UpdateStatus();
         }
 
-        private void SortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void FilterChanged(object sender, RoutedEventArgs e)
         {
             if (allEvents != null)
             {
@@ -202,6 +212,119 @@ namespace Photobooth.Windows
             if (eventItem != null)
             {
                 LoadSelectedEvent(eventItem);
+            }
+        }
+        
+        private async void CreateGallery_Click(object sender, RoutedEventArgs e)
+        {
+            var menuItem = sender as MenuItem;
+            var eventItem = menuItem?.Tag as EventItemViewModel;
+            if (eventItem != null)
+            {
+                await CreateGalleryForEvent(eventItem);
+            }
+        }
+        
+        private async void CreateGalleryButton_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as Button;
+            var eventItem = button?.Tag as EventItemViewModel;
+            if (eventItem != null)
+            {
+                await CreateGalleryForEvent(eventItem);
+            }
+        }
+        
+        private void CopyGalleryLinkButton_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as Button;
+            var eventItem = button?.Tag as EventItemViewModel;
+            if (eventItem != null)
+            {
+                GalleryInfoHelper.CopyGalleryInfo(eventItem.Event.Id);
+            }
+        }
+        
+        private void CopyGalleryLink_Click(object sender, RoutedEventArgs e)
+        {
+            var menuItem = sender as MenuItem;
+            var eventItem = menuItem?.Tag as EventItemViewModel;
+            if (eventItem != null)
+            {
+                GalleryInfoHelper.CopyGalleryInfo(eventItem.Event.Id);
+            }
+        }
+        
+        private async Task CreateGalleryForEvent(EventItemViewModel eventItem)
+        {
+            try
+            {
+                StatusText.Text = $"Creating gallery for {eventItem.Event.Name}...";
+                
+                // Get the cloud share service
+                var shareService = CloudShareProvider.GetShareService();
+                
+                if (shareService is CloudShareServiceRuntime runtimeService)
+                {
+                    // Create the event gallery (passwordless by default)
+                    var (galleryUrl, password) = await runtimeService.CreateEventGalleryAsync(
+                        eventItem.Event.Name, 
+                        eventItem.Event.Id, 
+                        usePassword: false);
+                    
+                    if (!string.IsNullOrEmpty(galleryUrl))
+                    {
+                        // Save gallery info to database
+                        var eventData = eventItem.Event;
+                        eventData.GalleryUrl = galleryUrl;
+                        eventData.GalleryPassword = password;
+                        
+                        var database = new TemplateDatabase();
+                        database.UpdateEvent(eventItem.Event.Id, eventData);
+                        
+                        StatusText.Text = $"Gallery created for {eventItem.Event.Name}";
+                        
+                        // Refresh the events list to show the new gallery indicator
+                        await LoadEvents();
+                        
+                        // Show the gallery info
+                        MessageBox.Show($"Gallery created successfully!\n\nURL: {galleryUrl}\n\nThe URL has been copied to your clipboard.", 
+                            "Gallery Created", MessageBoxButton.OK, MessageBoxImage.Information);
+                        
+                        // Copy to clipboard
+                        Clipboard.SetText(galleryUrl);
+                    }
+                    else
+                    {
+                        StatusText.Text = "Failed to create gallery";
+                        MessageBox.Show("Failed to create gallery. Please check your AWS settings.", 
+                            "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+                else
+                {
+                    StatusText.Text = "Cloud service not available";
+                    MessageBox.Show("Cloud share service is not configured.", 
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Error creating gallery";
+                MessageBox.Show($"Error creating gallery: {ex.Message}", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        private void AddGalleryPassword_Click(object sender, RoutedEventArgs e)
+        {
+            var menuItem = sender as MenuItem;
+            var eventItem = menuItem?.Tag as EventItemViewModel;
+            if (eventItem != null)
+            {
+                GalleryInfoHelper.AddPasswordToGallery(eventItem.Event.Id);
+                // Refresh after adding password
+                _ = LoadEvents();
             }
         }
 
@@ -306,7 +429,22 @@ namespace Photobooth.Windows
         private void LoadSelectedEvent(EventItemViewModel eventItem)
         {
             SelectedEvent = eventItem.Event;
+            
+            // Update the event's modified date to track it as recently used
+            if (SelectedEvent != null)
+            {
+                SelectedEvent.ModifiedDate = DateTime.Now;
+                var database = new TemplateDatabase();
+                database.UpdateEvent(SelectedEvent.Id, SelectedEvent);
+            }
+            
             this.DialogResult = true;
+            Close();
+        }
+
+        private void BackButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.DialogResult = false;
             Close();
         }
 
@@ -405,6 +543,42 @@ namespace Photobooth.Windows
             }
         }
 
+        private async void HostGallery_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                StatusText.Text = "Generating host gallery dashboard...";
+                
+                var hostGalleryService = new HostGalleryService();
+                var dashboardHtml = await hostGalleryService.GenerateMasterGalleryHtml();
+                
+                if (!string.IsNullOrEmpty(dashboardHtml))
+                {
+                    // Save to temp file and open in browser
+                    var tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "host_gallery_dashboard.html");
+                    System.IO.File.WriteAllText(tempPath, dashboardHtml);
+                    
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = tempPath,
+                        UseShellExecute = true
+                    });
+                    
+                    StatusText.Text = "Host gallery dashboard opened in browser";
+                }
+                else
+                {
+                    StatusText.Text = "No gallery data available";
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to generate host gallery: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusText.Text = "Failed to generate host gallery";
+            }
+        }
+        
         private void EventSettings_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -438,6 +612,36 @@ namespace Photobooth.Windows
         public string HostName => Event.HostName ?? "Unknown Host";
         public DateTime CreatedDate => Event.CreatedDate;
         public DateTime? EventDate => Event.EventDate;
+        
+        public string FormattedDate
+        {
+            get
+            {
+                if (EventDate.HasValue)
+                {
+                    var date = EventDate.Value;
+                    var today = DateTime.Today;
+                    
+                    if (date.Date == today)
+                        return "Today";
+                    else if (date.Date == today.AddDays(1))
+                        return "Tomorrow";
+                    else if (date.Date == today.AddDays(-1))
+                        return "Yesterday";
+                    else if ((date - today).TotalDays > 0 && (date - today).TotalDays < 7)
+                        return date.ToString("dddd"); // Day name for upcoming week
+                    else
+                        return date.ToString("MMM d, yyyy");
+                }
+                return "Date TBD";
+            }
+        }
+        
+        // Gallery info
+        public string GalleryUrl => Event.GalleryUrl;
+        public string GalleryPassword => Event.GalleryPassword;
+        public bool HasGallery => !string.IsNullOrEmpty(GalleryUrl);
+        public bool IsPasswordProtected => !string.IsNullOrEmpty(GalleryPassword);
         
         private int _templateCount;
         public int TemplateCount

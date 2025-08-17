@@ -389,16 +389,50 @@
                                        HorizontalAlignment="Center" 
                                        VerticalAlignment="Top"
                                        Margin="0,20,0,0"/>
-                            <TextBlock Text="Gallery" 
+                            <TextBlock Text="Local Gallery" 
                                        FontSize="24" 
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimaryBrush}"
                                        HorizontalAlignment="Center" 
                                        VerticalAlignment="Center"
                                        Margin="0,20,0,0"/>
-                            <TextBlock Text="View captured photos" 
+                            <TextBlock Text="View local photos" 
                                        FontSize="14"
                                        Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" 
+                                       VerticalAlignment="Bottom"
+                                       Margin="0,0,0,20"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource NavCardStyle}"
+                            Width="300" Height="180"
+                            MouseLeftButtonDown="NavigateToCloudGallery_Click">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#00D9FF" Offset="0"/>
+                                <GradientStop Color="#7928CA" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Border.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="5" Opacity="0.3"/>
+                        </Border.Effect>
+                        <Grid>
+                            <TextBlock Text="☁️" FontSize="48" 
+                                       HorizontalAlignment="Center" 
+                                       VerticalAlignment="Top"
+                                       Margin="0,20,0,0"/>
+                            <TextBlock Text="Cloud Gallery" 
+                                       FontSize="24" 
+                                       FontWeight="SemiBold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center" 
+                                       VerticalAlignment="Center"
+                                       Margin="0,20,0,0"/>
+                            <TextBlock Text="View all events online" 
+                                       FontSize="14"
+                                       Foreground="White"
+                                       Opacity="0.9"
                                        HorizontalAlignment="Center" 
                                        VerticalAlignment="Bottom"
                                        Margin="0,0,0,20"/>

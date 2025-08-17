@@ -4,116 +4,260 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Event Browser" 
-        Height="700" Width="1000"
-        Background="#2D2D30"
-        WindowStartupLocation="CenterOwner"
-        ResizeMode="CanResize">
+        Title="Event Manager - Surface Edition"
+        WindowState="Maximized"
+        WindowStyle="None"
+        Topmost="False"
+        Background="#0A0E27"
+        AllowsTransparency="False"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        ShowInTaskbar="True"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        RenderOptions.BitmapScalingMode="HighQuality"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        FontFamily="Segoe UI">
 
     <Window.Resources>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#E1E1E1"/>
-        </Style>
+        <!-- Surface Pro Optimized Colors -->
+        <Color x:Key="PrimaryColor">#0A0E27</Color>
+        <Color x:Key="SecondaryColor">#1A1E37</Color>
+        <Color x:Key="AccentColor">#00D9FF</Color>
+        <Color x:Key="AccentPurple">#7928CA</Color>
+        <Color x:Key="AccentPink">#FF0080</Color>
+        <Color x:Key="TextPrimary">#FFFFFF</Color>
+        <Color x:Key="TextSecondary">#B8BCC8</Color>
         
-        <Style TargetType="TextBox">
-            <Setter Property="Background" Value="#3C3C3C"/>
-            <Setter Property="Foreground" Value="#E1E1E1"/>
-            <Setter Property="BorderBrush" Value="#555"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="8,6"/>
+        <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource PrimaryColor}"/>
+        <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource SecondaryColor}"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
+
+        <!-- Gradient Brushes -->
+        <LinearGradientBrush x:Key="HeaderGradient" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#0A0E27" Offset="0"/>
+            <GradientStop Color="#1A1E37" Offset="0.5"/>
+            <GradientStop Color="#0A0E27" Offset="1"/>
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="{StaticResource AccentColor}" Offset="0"/>
+            <GradientStop Color="{StaticResource AccentPurple}" Offset="0.5"/>
+            <GradientStop Color="{StaticResource AccentPink}" Offset="1"/>
+        </LinearGradientBrush>
+
+        <!-- Touch-Optimized Event Card Style -->
+        <Style x:Key="EventCardStyle" TargetType="Border">
+            <Setter Property="Width" Value="380"/>
+            <Setter Property="Height" Value="220"/>
+            <Setter Property="Margin" Value="15"/>
+            <Setter Property="CornerRadius" Value="20"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#2A2E47" Offset="0"/>
+                        <GradientStop Color="#1A1E37" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <EventTrigger RoutedEvent="MouseEnter">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX"
+                                           To="1.05" Duration="0:0:0.2"/>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY"
+                                           To="1.05" Duration="0:0:0.2"/>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+                <EventTrigger RoutedEvent="MouseLeave">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX"
+                                           To="1" Duration="0:0:0.2"/>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY"
+                                           To="1" Duration="0:0:0.2"/>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+            </Style.Triggers>
         </Style>
-        
-        <Style x:Key="ActionButton" TargetType="Button">
-            <Setter Property="Background" Value="#0078D4"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="16,8"/>
+
+        <!-- Touch Button Style -->
+        <Style x:Key="TouchButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="60"/>
+            <Setter Property="MinWidth" Value="150"/>
             <Setter Property="Margin" Value="5"/>
+            <Setter Property="Padding" Value="20,15"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{StaticResource AccentGradient}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="12"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform x:Name="scale" ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
+                            <Border.Effect>
+                                <DropShadowEffect Color="Black" BlurRadius="15" ShadowDepth="3" Opacity="0.3"/>
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="scale"
+                                                           Storyboard.TargetProperty="ScaleX"
+                                                           To="0.95" Duration="0:0:0.1"/>
+                                            <DoubleAnimation Storyboard.TargetName="scale"
+                                                           Storyboard.TargetProperty="ScaleY"
+                                                           To="0.95" Duration="0:0:0.1"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="scale"
+                                                           Storyboard.TargetProperty="ScaleX"
+                                                           To="1" Duration="0:0:0.1"/>
+                                            <DoubleAnimation Storyboard.TargetName="scale"
+                                                           Storyboard.TargetProperty="ScaleY"
+                                                           To="1" Duration="0:0:0.1"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Action Button Styles -->
+        <Style x:Key="ActionButton" TargetType="Button">
+            <Setter Property="Background" Value="#667EEA"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border Background="{TemplateBinding Background}"
-                                CornerRadius="3"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
                         </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#106EBE"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#005A9E"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
                     </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        
-        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
-            <Setter Property="Background" Value="#5C5C5C"/>
-        </Style>
-        
-        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
-            <Setter Property="Background" Value="#D83B01"/>
-        </Style>
-        
-        <Style x:Key="ToolbarButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="8,6"/>
-            <Setter Property="Margin" Value="2,0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Width" Value="80"/>
-            <Setter Property="Height" Value="60"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" 
-                                CornerRadius="3"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#404040"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#505050"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        
-        <Style x:Key="EventCard" TargetType="Border">
-            <Setter Property="Background" Value="#3C3C3C"/>
-            <Setter Property="BorderBrush" Value="#555"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="6"/>
-            <Setter Property="Margin" Value="8"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Effect">
-                <Setter.Value>
-                    <DropShadowEffect ShadowDepth="2" Opacity="0.3" BlurRadius="6"/>
                 </Setter.Value>
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#464646"/>
-                    <Setter Property="BorderBrush" Value="#0078D4"/>
+                    <Setter Property="Background" Value="#7982ED"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
-        
+
+        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+            <Setter Property="Background" Value="#4A5568"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#5A6578"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+            <Setter Property="Background" Value="#E53E3E"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#F56565"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Template for event items -->
         <DataTemplate x:Key="EventItemTemplate">
-            <Border Style="{StaticResource EventCard}" 
-                    Width="320" Height="180"
+            <Border Style="{StaticResource EventCardStyle}" 
                     MouseLeftButtonDown="EventCard_MouseLeftButtonDown"
                     Tag="{Binding}">
+                <Border.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="☁️ Create Gallery" Click="CreateGallery_Click" Tag="{Binding}">
+                            <MenuItem.Style>
+                                <Style TargetType="MenuItem">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasGallery}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </MenuItem.Style>
+                        </MenuItem>
+                        <MenuItem Header="📋 Copy Gallery Link" Click="CopyGalleryLink_Click" Tag="{Binding}">
+                            <MenuItem.Style>
+                                <Style TargetType="MenuItem">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasGallery}" Value="False">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </MenuItem.Style>
+                        </MenuItem>
+                        <MenuItem Header="🔒 Add Password" Click="AddGalleryPassword_Click" Tag="{Binding}">
+                            <MenuItem.Style>
+                                <Style TargetType="MenuItem">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding HasGallery}" Value="True"/>
+                                                <Condition Binding="{Binding IsPasswordProtected}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="IsEnabled" Value="True"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </MenuItem.Style>
+                        </MenuItem>
+                        <Separator/>
+                        <MenuItem Header="Edit Event" Click="EditEvent_Click" Tag="{Binding}"/>
+                        <MenuItem Header="Delete Event" Click="DeleteEvent_Click" Tag="{Binding}"/>
+                    </ContextMenu>
+                </Border.ContextMenu>
+                
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="5" Opacity="0.3"/>
+                </Border.Effect>
+                
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -121,68 +265,137 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     
-                    <!-- Header with event type -->
-                    <Border Grid.Row="0" Background="#2A2A2A" Margin="8,8,8,4"
-                            CornerRadius="4,4,0,0" Padding="8,4">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding EventType}" FontWeight="SemiBold" 
-                                       FontSize="11" Foreground="#0078D4"/>
-                            <TextBlock Text="{Binding EventDate, StringFormat=' • {0:MMM dd, yyyy}'}" 
-                                       FontSize="10" Foreground="#AAA"/>
+                    <!-- Event Type Badge and Gallery Status -->
+                    <Grid Grid.Row="0" Margin="15,15,15,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <Border Grid.Column="0" Background="{StaticResource AccentGradient}" 
+                                CornerRadius="15" Padding="12,5">
+                            <TextBlock Text="{Binding EventType}" 
+                                     FontSize="11" FontWeight="Bold" 
+                                     Foreground="White"/>
+                        </Border>
+                        
+                        <!-- Gallery status indicators -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="☁️" FontSize="16" VerticalAlignment="Center" Margin="0,0,4,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasGallery}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Text="🔒" FontSize="12" VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsPasswordProtected}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </StackPanel>
-                    </Border>
+                    </Grid>
                     
-                    <!-- Event Details -->
-                    <StackPanel Grid.Row="1" Margin="12,4,12,4">
-                        <!-- Event Name -->
+                    <!-- Event Info -->
+                    <StackPanel Grid.Row="1" Margin="15,5">
                         <TextBlock Text="{Binding Name}" 
-                                   FontWeight="Bold" FontSize="16"
-                                   TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding Name}"
-                                   Margin="0,0,0,4"/>
-                        
-                        <!-- Location and Host -->
+                                 FontSize="20" FontWeight="Bold" 
+                                 Foreground="White"
+                                 TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding FormattedDate}" 
+                                 FontSize="14" 
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 Margin="0,5,0,0"/>
                         <TextBlock Text="{Binding Location}" 
-                                   FontSize="12" Foreground="#CCC"
-                                   TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding Location}"
-                                   Margin="0,0,0,2"/>
-                        
-                        <TextBlock Text="{Binding HostName, StringFormat='Host: {0}'}" 
-                                   FontSize="11" Foreground="#AAA"
-                                   TextTrimming="CharacterEllipsis"
-                                   Margin="0,0,0,2"/>
-                        
-                        <!-- Description -->
-                        <TextBlock Text="{Binding Description}" 
-                                   FontSize="10" Foreground="#AAA"
-                                   TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding Description}"
-                                   Margin="0,2,0,0"
-                                   MaxHeight="30"/>
+                                 FontSize="13" 
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 TextTrimming="CharacterEllipsis"
+                                 Margin="0,2,0,0"/>
                     </StackPanel>
                     
                     <!-- Action buttons -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" 
-                                HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                Margin="8,4,8,8">
-                        <Button Content="Load" Style="{StaticResource ActionButton}"
-                                FontSize="10" Padding="8,4"
-                                Click="LoadEvent_Click"
-                                Tag="{Binding}"/>
-                        <Button Content="Edit" Style="{StaticResource SecondaryButton}"
-                                FontSize="10" Padding="8,4"
-                                Click="EditEvent_Click"
-                                Tag="{Binding}"/>
-                        <Button Content="Copy" Style="{StaticResource SecondaryButton}"
-                                FontSize="10" Padding="8,4"
-                                Click="CopyEvent_Click"
-                                Tag="{Binding}"/>
-                        <Button Content="Delete" Style="{StaticResource DangerButton}"
-                                FontSize="10" Padding="8,4"
-                                Click="DeleteEvent_Click"
-                                Tag="{Binding}"/>
-                    </StackPanel>
+                    <Grid Grid.Row="2" Margin="15,5,15,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- Gallery buttons -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- Create Gallery button - visible when no gallery exists -->
+                            <Button Content="☁️"
+                                    FontSize="14" Padding="10,6"
+                                    Click="CreateGalleryButton_Click"
+                                    Tag="{Binding}"
+                                    ToolTip="Create Gallery">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionButton}">
+                                        <Setter Property="Background" Value="#FF9800"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasGallery}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#FFA726"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            
+                            <!-- Copy Gallery Link button - visible when gallery exists -->
+                            <Button Content="📋"
+                                    FontSize="14" Padding="10,6"
+                                    Click="CopyGalleryLinkButton_Click"
+                                    Tag="{Binding}"
+                                    ToolTip="Copy Gallery Link">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionButton}">
+                                        <Setter Property="Background" Value="#4CAF50"/>
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasGallery}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#66BB6A"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </StackPanel>
+                        
+                        <!-- Main action buttons -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" 
+                                    HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                            <Button Content="Load" Style="{StaticResource ActionButton}"
+                                    FontSize="12" Padding="12,6"
+                                    Click="LoadEvent_Click"
+                                    Tag="{Binding}"/>
+                            <Button Content="Edit" Style="{StaticResource SecondaryButton}"
+                                    FontSize="12" Padding="12,6"
+                                    Click="EditEvent_Click"
+                                    Tag="{Binding}"/>
+                            <Button Content="Delete" Style="{StaticResource DangerButton}"
+                                    FontSize="12" Padding="12,6"
+                                    Click="DeleteEvent_Click"
+                                    Tag="{Binding}"/>
+                        </StackPanel>
+                    </Grid>
                 </Grid>
             </Border>
         </DataTemplate>
@@ -194,183 +407,154 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        
-        <!-- Header -->
-        <Border Grid.Row="0" Background="#383838" BorderBrush="#555" BorderThickness="0,0,0,1">
-            <Grid Margin="20">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                
-                <!-- Title -->
-                <TextBlock Grid.Row="0" Text="Event Browser" 
-                           FontSize="20" FontWeight="Bold"
-                           VerticalAlignment="Center" Margin="0,0,0,15"/>
-                
-                <!-- Toolbar -->
-                <Border Grid.Row="1" Background="#2D2D30" BorderBrush="#3C3C3C" BorderThickness="1" CornerRadius="3" Margin="0,0,0,15">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,6">
-                        
-                        <!-- Create Event -->
-                        <Button Name="CreateEventToolbarBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Create Event" Click="CreateEvent_Click" Margin="0,0,2,0">
-                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
-                                <Path Data="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,5V19H5V5H19Z M17,8H7V10H17V8M15,12H7V14H15V12" 
-                                      Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
-                                <TextBlock Text="Create Event" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <!-- Refresh -->
-                        <Button Name="RefreshToolbarBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Refresh Events" Click="RefreshEvents_Click" Margin="0,0,2,0">
-                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
-                                <Path Data="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z" 
-                                      Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
-                                <TextBlock Text="Refresh" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <!-- Import Event -->
-                        <Button Name="ImportEventBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Import Event" Click="ImportEvent_Click" Margin="0,0,2,0">
-                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
-                                <Path Data="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z M12,12L16,16H13.5V19H10.5V16H8L12,12Z" 
-                                      Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
-                                <TextBlock Text="Import Event" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <!-- Export Event -->
-                        <Button Name="ExportEventBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Export Event" Click="ExportEvent_Click" Margin="0,0,2,0">
-                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
-                                <Path Data="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z M12,19L8,15H10.5V12H13.5V15H16L12,19Z" 
-                                      Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
-                                <TextBlock Text="Export Event" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <!-- Separator -->
-                        <Rectangle Fill="#3C3C3C" Width="1" Height="35" Margin="8,0"/>
-                        
-                        <!-- Event Templates -->
-                        <Button Name="EventTemplatesBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Manage Event Templates" Click="EventTemplates_Click" Margin="0,0,2,0">
-                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
-                                <Path Data="M19,5V7H15V5H19M9,5V11H5V5H9M19,13V19H15V13H19M9,17V19H5V17H9M21,3H13V9H21V3M11,3H3V13H11V3M21,11H13V21H21V11M11,15H3V21H11V15Z" 
-                                      Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
-                                <TextBlock Text="Event Templates" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <!-- Assign Template -->
-                        <Button Name="AssignTemplateBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Assign Current Template" Click="AssignTemplate_Click" Margin="0,0,2,0">
-                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
-                                <Path Data="M10.59,13.41C11,13.8 11,14.4 10.59,14.81C10.2,15.2 9.6,15.2 9.19,14.81L7.77,13.39L6.36,14.8C5.95,15.21 5.35,15.21 4.94,14.8C4.53,14.39 4.53,13.79 4.94,13.38L6.35,11.97L4.94,10.56C4.53,10.15 4.53,9.55 4.94,9.14C5.35,8.73 5.95,8.73 6.36,9.14L7.77,10.55L9.19,9.14C9.6,8.73 10.2,8.73 10.61,9.14C11.02,9.55 11.02,10.15 10.61,10.56L9.2,11.97L10.59,13.41M21.7,13.35L20.28,11.94L18.87,13.35C18.46,13.76 17.86,13.76 17.45,13.35C17.04,12.94 17.04,12.34 17.45,11.93L18.86,10.52L17.45,9.11C17.04,8.7 17.04,8.1 17.45,7.69C17.86,7.28 18.46,7.28 18.87,7.69L20.28,9.1L21.7,7.69C22.11,7.28 22.71,7.28 23.12,7.69C23.53,8.1 23.53,8.7 23.12,9.11L21.71,10.52L23.12,11.93C23.53,12.34 23.53,12.94 23.12,13.35C22.71,13.76 22.11,13.76 21.7,13.35Z" 
-                                      Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
-                                <TextBlock Text="Assign Template" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <!-- Separator -->
-                        <Rectangle Fill="#3C3C3C" Width="1" Height="35" Margin="8,0"/>
-                        
-                        <!-- Settings -->
-                        <Button Name="EventSettingsBtn" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Event Settings" Click="EventSettings_Click" Margin="0,0,2,0">
-                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
-                                <Path Data="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.98C19.47,12.66 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11.02L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.65 15.48,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.52,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11.02C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.66 4.57,12.98L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.52,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.48,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.98Z" 
-                                      Fill="#E1E1E1" Width="20" Height="20" Stretch="Uniform"/>
-                                <TextBlock Text="Settings" FontSize="9" Foreground="#E1E1E1" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </Button>
-                        
-                    </StackPanel>
-                </Border>
-                
-                <!-- Search and filters -->
-                <Grid Grid.Row="2" Margin="0,0,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    
-                    <Grid Grid.Column="0" Margin="0,0,10,0">
-                        <TextBox Name="SearchBox" 
-                                 TextChanged="SearchBox_TextChanged"/>
-                        <TextBlock IsHitTestVisible="False" 
-                                   Text="Search events..." 
-                                   VerticalAlignment="Center" 
-                                   HorizontalAlignment="Left" 
-                                   Margin="9,0,0,0" 
-                                   Foreground="#666">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </Grid>
-                    
-                    <TextBlock Grid.Column="1" Text="Sort by:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox Grid.Column="2" Name="SortComboBox" 
-                              MinWidth="120"
-                              SelectionChanged="SortComboBox_SelectionChanged">
-                        <ComboBoxItem Content="Name" IsSelected="True"/>
-                        <ComboBoxItem Content="Event Date"/>
-                        <ComboBoxItem Content="Date Created"/>
-                        <ComboBoxItem Content="Event Type"/>
-                    </ComboBox>
-                </Grid>
-            </Grid>
-        </Border>
-        
-        <!-- Event Grid -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" 
-                      Background="#2D2D30" Padding="12">
-            <ItemsControl Name="EventsList" ItemTemplate="{StaticResource EventItemTemplate}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <WrapPanel Orientation="Horizontal" 
-                                   HorizontalAlignment="Center"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-            </ItemsControl>
-        </ScrollViewer>
-        
-        <!-- Empty state -->
-        <Border Grid.Row="1" Name="EmptyState" Visibility="Collapsed"
-                Background="#2D2D30">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Path Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,17A1.5,1.5 0 0,1 10.5,15.5A1.5,1.5 0 0,1 12,14A1.5,1.5 0 0,1 13.5,15.5A1.5,1.5 0 0,1 12,17M12,10A1.5,1.5 0 0,1 13.5,8.5A1.5,1.5 0 0,1 15,10V12A3,3 0 0,1 12,15A3,3 0 0,1 9,12V10A1.5,1.5 0 0,1 10.5,8.5A1.5,1.5 0 0,1 12,10Z" 
-                      Fill="#666" Width="48" Height="48" Stretch="Uniform"/>
-                <TextBlock Text="No events found" FontSize="18" Foreground="#666" 
-                           HorizontalAlignment="Center" Margin="0,16,0,8"/>
-                <TextBlock Text="Create your first event to get started" 
-                           FontSize="12" Foreground="#888"
-                           HorizontalAlignment="Center"/>
-            </StackPanel>
-        </Border>
-        
-        <!-- Footer -->
-        <Border Grid.Row="2" Background="#383838" BorderBrush="#555" BorderThickness="0,1,0,0">
-            <Grid Margin="20,12">
+
+        <!-- Header with gradient background -->
+        <Border Grid.Row="0" Background="{StaticResource HeaderGradient}" 
+                Height="100">
+            <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 
-                <TextBlock Grid.Column="0" Name="StatusText" 
-                           Text="Ready" FontSize="11" 
-                           VerticalAlignment="Center"/>
+                <!-- Back button -->
+                <Button Grid.Column="0" Style="{StaticResource TouchButtonStyle}"
+                        Click="BackButton_Click"
+                        Margin="20,0,0,0"
+                        Background="Transparent">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="⬅" FontSize="24" Margin="0,0,10,0"/>
+                        <TextBlock Text="Back" FontSize="18" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
                 
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button Content="Close" Style="{StaticResource SecondaryButton}"
-                            Click="Close_Click"/>
+                <!-- Title -->
+                <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="Event Manager" 
+                             FontSize="36" FontWeight="Light"
+                             Foreground="White"
+                             HorizontalAlignment="Center"/>
+                    <TextBlock Text="Manage your events and galleries" 
+                             FontSize="14"
+                             Foreground="{StaticResource TextSecondaryBrush}"
+                             HorizontalAlignment="Center"/>
                 </StackPanel>
+                
+                <!-- Action buttons -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" 
+                           VerticalAlignment="Center"
+                           Margin="0,0,20,0">
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Click="CreateEvent_Click"
+                            Margin="5">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="➕" FontSize="20" Margin="0,0,8,0"/>
+                            <TextBlock Text="New Event" FontSize="16"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Click="HostGallery_Click"
+                            Margin="5">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🌐" FontSize="20" Margin="0,0,8,0"/>
+                            <TextBlock Text="Host Gallery" FontSize="16"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Filter and Search Bar -->
+        <Border Grid.Row="0" VerticalAlignment="Bottom" 
+                Background="#1A1E37" Height="60"
+                Margin="0,100,0,0">
+            <Grid Margin="20,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Filter buttons -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <RadioButton x:Name="AllEventsFilter" Content="All Events" 
+                               IsChecked="True"
+                               Checked="FilterChanged"
+                               Style="{StaticResource {x:Type ToggleButton}}"
+                               Foreground="White"
+                               FontSize="14"
+                               Padding="15,8"
+                               Margin="5,0"/>
+                    <RadioButton x:Name="UpcomingFilter" Content="Upcoming"
+                               Checked="FilterChanged"
+                               Style="{StaticResource {x:Type ToggleButton}}"
+                               Foreground="White"
+                               FontSize="14"
+                               Padding="15,8"
+                               Margin="5,0"/>
+                    <RadioButton x:Name="PastFilter" Content="Past"
+                               Checked="FilterChanged"
+                               Style="{StaticResource {x:Type ToggleButton}}"
+                               Foreground="White"
+                               FontSize="14"
+                               Padding="15,8"
+                               Margin="5,0"/>
+                </StackPanel>
+                
+                <!-- Search box -->
+                <Border Grid.Column="2" Background="#2A2E47" 
+                        CornerRadius="20" Width="300">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="🔍" 
+                                 FontSize="16" 
+                                 Margin="15,0,5,0"
+                                 VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" x:Name="SearchBox"
+                               Background="Transparent"
+                               BorderThickness="0"
+                               Foreground="White"
+                               FontSize="14"
+                               VerticalAlignment="Center"
+                               Margin="0,0,15,0"
+                               TextChanged="SearchBox_TextChanged"/>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Events Grid -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                     Margin="0,10,0,0">
+            <ItemsControl x:Name="EventsItemsControl"
+                         ItemTemplate="{StaticResource EventItemTemplate}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" 
+                                 HorizontalAlignment="Center"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="2" Background="#1A1E37" Height="40">
+            <Grid Margin="20,0">
+                <TextBlock x:Name="StatusText" 
+                         Text="Ready"
+                         Foreground="{StaticResource TextSecondaryBrush}"
+                         VerticalAlignment="Center"
+                         FontSize="13"/>
+                <TextBlock x:Name="EventCountText"
+                         HorizontalAlignment="Right"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource TextSecondaryBrush}"
+                         FontSize="13"/>
             </Grid>
         </Border>
     </Grid>

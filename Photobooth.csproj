@@ -218,6 +218,10 @@
     <Compile Include="Services\CameraOperations.cs" />
     <Compile Include="Services\PhotoProcessingOperations.cs" />
     <Compile Include="Services\DatabaseOperations.cs" />
+    <Compile Include="Services\HostGalleryService.cs" />
+    <Compile Include="Services\HostGalleryExtensions.cs" />
+    <Compile Include="Services\GalleryInfoHelper.cs" />
+    <Compile Include="TestGalleryUploader.cs" />
     <Compile Include="Services\PinLockService.cs" />
     <Compile Include="Services\EventTemplateService.cs" />
     <Compile Include="Services\PhotoCaptureService.cs" />

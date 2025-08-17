@@ -9,7 +9,7 @@ namespace Photobooth.Services
     /// </summary>
     public interface IShareService
     {
-        Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths);
+        Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths, string eventName = null);
         Task<bool> SendSMSAsync(string phoneNumber, string galleryUrl);
         BitmapImage GenerateQRCode(string url);
     }
