@@ -296,8 +296,46 @@ namespace Canon.Eos.Framework
             this.CheckDisposed();
             if (!this.IsSessionOpen)
             {
-                Util.Assert(Edsdk.EdsOpenSession(this.Handle), "Failed to open session.");
-                this.IsSessionOpen = true;
+                // Try to open session with retries for Canon R100 compatibility
+                int retries = 3;
+                Exception lastException = null;
+                
+                for (int i = 0; i < retries; i++)
+                {
+                    try
+                    {
+                        var result = Edsdk.EdsOpenSession(this.Handle);
+                        if (result == 0) // Success
+                        {
+                            this.IsSessionOpen = true;
+                            return;
+                        }
+                        
+                        // If not successful, wait a bit before retry
+                        if (i < retries - 1)
+                        {
+                            System.Threading.Thread.Sleep(500);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        if (i < retries - 1)
+                        {
+                            System.Threading.Thread.Sleep(500);
+                        }
+                    }
+                }
+                
+                // If we get here, all retries failed
+                if (lastException != null)
+                {
+                    throw lastException;
+                }
+                else
+                {
+                    Util.Assert(Edsdk.EdsOpenSession(this.Handle), "Failed to open session after " + retries + " attempts.");
+                }
             }
         }
 

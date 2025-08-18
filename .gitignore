@@ -180,3 +180,7 @@ __pycache__/
 temp/
 captures/
 exports/
+
+# Sony SDK (large files)
+sonysdk/
+ffmpeg.exe

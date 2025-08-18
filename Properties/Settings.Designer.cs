@@ -1126,5 +1126,221 @@ namespace Photobooth.Properties {
                 this["ShowSessionPrompts"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool VideoEnabled {
+            get {
+                return ((bool)(this["VideoEnabled"]));
+            }
+            set {
+                this["VideoEnabled"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool BoomerangEnabled {
+            get {
+                return ((bool)(this["BoomerangEnabled"]));
+            }
+            set {
+                this["BoomerangEnabled"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("30")]
+        public int VideoDuration {
+            get {
+                return ((int)(this["VideoDuration"]));
+            }
+            set {
+                this["VideoDuration"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("10")]
+        public int BoomerangFrames {
+            get {
+                return ((int)(this["BoomerangFrames"]));
+            }
+            set {
+                this["BoomerangFrames"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("100")]
+        public int BoomerangSpeed {
+            get {
+                return ((int)(this["BoomerangSpeed"]));
+            }
+            set {
+                this["BoomerangSpeed"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool ShowVideoButton {
+            get {
+                return ((bool)(this["ShowVideoButton"]));
+            }
+            set {
+                this["ShowVideoButton"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool ShowBoomerangButton {
+            get {
+                return ((bool)(this["ShowBoomerangButton"]));
+            }
+            set {
+                this["ShowBoomerangButton"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Auto")]
+        public string VideoISO {
+            get {
+                return ((string)(this["VideoISO"]));
+            }
+            set {
+                this["VideoISO"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Auto")]
+        public string VideoAperture {
+            get {
+                return ((string)(this["VideoAperture"]));
+            }
+            set {
+                this["VideoAperture"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Auto")]
+        public string VideoShutterSpeed {
+            get {
+                return ((string)(this["VideoShutterSpeed"]));
+            }
+            set {
+                this["VideoShutterSpeed"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Auto")]
+        public string VideoWhiteBalance {
+            get {
+                return ((string)(this["VideoWhiteBalance"]));
+            }
+            set {
+                this["VideoWhiteBalance"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Continuous AF")]
+        public string VideoFocusMode {
+            get {
+                return ((string)(this["VideoFocusMode"]));
+            }
+            set {
+                this["VideoFocusMode"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public string VideoExposureCompensation {
+            get {
+                return ((string)(this["VideoExposureCompensation"]));
+            }
+            set {
+                this["VideoExposureCompensation"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("30 fps")]
+        public string VideoFrameRate {
+            get {
+                return ((string)(this["VideoFrameRate"]));
+            }
+            set {
+                this["VideoFrameRate"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("High (ALL-I)")]
+        public string VideoQuality {
+            get {
+                return ((string)(this["VideoQuality"]));
+            }
+            set {
+                this["VideoQuality"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool FlipbookEnabled {
+            get {
+                return ((bool)(this["FlipbookEnabled"]));
+            }
+            set {
+                this["FlipbookEnabled"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("4")]
+        public int FlipbookDuration {
+            get {
+                return ((int)(this["FlipbookDuration"]));
+            }
+            set {
+                this["FlipbookDuration"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool ShowFlipbookButton {
+            get {
+                return ((bool)(this["ShowFlipbookButton"]));
+            }
+            set {
+                this["ShowFlipbookButton"] = value;
+            }
+        }
     }
 }

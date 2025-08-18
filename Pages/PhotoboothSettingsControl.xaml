@@ -1089,6 +1089,184 @@
                 </StackPanel>
             </Expander>
             
+            <!-- Video & Boomerang Modules -->
+            <Expander Header="Video &amp; Boomerang Modules" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎬" FontSize="18" Margin="0,0,15,0"/>
+                            <TextBlock Text="{Binding}" Style="{StaticResource SectionTitleStyle}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="20,15,20,20">
+                    
+                    <!-- Video Recording Settings -->
+                    <TextBlock Text="Video Recording" Style="{StaticResource SectionTitleStyle}" Margin="0,0,0,15"/>
+                    <Border Style="{StaticResource GlassSectionStyle}">
+                        <StackPanel>
+                            <CheckBox x:Name="enableVideoModuleCheckBox" 
+                                      Content="Enable Video Recording Module" 
+                                      IsChecked="False"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"
+                                      ToolTip="Enable video recording capability in the photobooth"
+                                      Checked="EnableVideoModule_Changed"
+                                      Unchecked="EnableVideoModule_Changed"/>
+                            
+                            <CheckBox x:Name="showVideoButtonCheckBox" 
+                                      Content="Show Video Recording Button" 
+                                      IsChecked="True"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"
+                                      IsEnabled="{Binding IsChecked, ElementName=enableVideoModuleCheckBox}"
+                                      ToolTip="Show/hide the video recording button in the interface"
+                                      Checked="ShowVideoButton_Changed"
+                                      Unchecked="ShowVideoButton_Changed"/>
+                            
+                            <TextBlock Text="Maximum video duration (seconds)" Style="{StaticResource SettingsTextStyle}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                                <Slider x:Name="videoDurationSlider" 
+                                        Minimum="5" 
+                                        Maximum="60" 
+                                        Value="30" 
+                                        TickPlacement="BottomRight" 
+                                        TickFrequency="5" 
+                                        IsSnapToTickEnabled="True"
+                                        Width="300"
+                                        ValueChanged="VideoDurationSlider_ValueChanged"
+                                        Style="{StaticResource SettingsSliderStyle}"
+                                        IsEnabled="{Binding IsChecked, ElementName=enableVideoModuleCheckBox}"/>
+                                <TextBlock x:Name="videoDurationValueText" 
+                                           Text="30 seconds" 
+                                           VerticalAlignment="Center" 
+                                           Margin="20,0,0,0" 
+                                           Foreground="White" 
+                                           FontWeight="Bold"
+                                           FontSize="18"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Boomerang Settings -->
+                    <TextBlock Text="Boomerang" Style="{StaticResource SectionTitleStyle}" Margin="0,30,0,15"/>
+                    <Border Style="{StaticResource GlassSectionStyle}">
+                        <StackPanel>
+                            <CheckBox x:Name="enableBoomerangModuleCheckBox" 
+                                      Content="Enable Boomerang Module" 
+                                      IsChecked="False"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"
+                                      ToolTip="Enable boomerang creation capability in the photobooth"
+                                      Checked="EnableBoomerangModule_Changed"
+                                      Unchecked="EnableBoomerangModule_Changed"/>
+                            
+                            <CheckBox x:Name="showBoomerangButtonCheckBox" 
+                                      Content="Show Boomerang Button" 
+                                      IsChecked="True"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"
+                                      IsEnabled="{Binding IsChecked, ElementName=enableBoomerangModuleCheckBox}"
+                                      ToolTip="Show/hide the boomerang button in the interface"
+                                      Checked="ShowBoomerangButton_Changed"
+                                      Unchecked="ShowBoomerangButton_Changed"/>
+                            
+                            <TextBlock Text="Number of frames to capture" Style="{StaticResource SettingsTextStyle}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                                <Slider x:Name="boomerangFramesSlider" 
+                                        Minimum="5" 
+                                        Maximum="20" 
+                                        Value="10" 
+                                        TickPlacement="BottomRight" 
+                                        TickFrequency="5" 
+                                        IsSnapToTickEnabled="True"
+                                        Width="300"
+                                        ValueChanged="BoomerangFramesSlider_ValueChanged"
+                                        Style="{StaticResource SettingsSliderStyle}"
+                                        IsEnabled="{Binding IsChecked, ElementName=enableBoomerangModuleCheckBox}"/>
+                                <TextBlock x:Name="boomerangFramesValueText" 
+                                           Text="10 frames" 
+                                           VerticalAlignment="Center" 
+                                           Margin="20,0,0,0" 
+                                           Foreground="White" 
+                                           FontWeight="Bold"
+                                           FontSize="18"/>
+                            </StackPanel>
+                            
+                            <TextBlock Text="Frame capture speed (milliseconds)" Style="{StaticResource SettingsTextStyle}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                                <Slider x:Name="boomerangSpeedSlider" 
+                                        Minimum="50" 
+                                        Maximum="500" 
+                                        Value="100" 
+                                        TickPlacement="BottomRight" 
+                                        TickFrequency="50" 
+                                        IsSnapToTickEnabled="True"
+                                        Width="300"
+                                        ValueChanged="BoomerangSpeedSlider_ValueChanged"
+                                        Style="{StaticResource SettingsSliderStyle}"
+                                        IsEnabled="{Binding IsChecked, ElementName=enableBoomerangModuleCheckBox}"/>
+                                <TextBlock x:Name="boomerangSpeedValueText" 
+                                           Text="100 ms" 
+                                           VerticalAlignment="Center" 
+                                           Margin="20,0,0,0" 
+                                           Foreground="White" 
+                                           FontWeight="Bold"
+                                           FontSize="18"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Flipbook Module Settings -->
+                    <TextBlock Text="Flipbook Module" Style="{StaticResource SectionTitleStyle}" Margin="0,25,0,15"/>
+                    <Border Style="{StaticResource GlassSectionStyle}">
+                        <StackPanel>
+                            <CheckBox x:Name="enableFlipbookModuleCheckBox" 
+                                      Content="Enable Flipbook Module" 
+                                      Style="{StaticResource SettingsCheckBoxStyle}"
+                                      ToolTip="Enable flipbook creation capability in the photobooth"
+                                      Checked="EnableFlipbookModule_Changed"
+                                      Unchecked="EnableFlipbookModule_Changed"/>
+                            
+                            <CheckBox x:Name="showFlipbookButtonCheckBox" 
+                                      Content="Show Flipbook Button" 
+                                      Style="{StaticResource SettingsCheckBoxStyle}"
+                                      IsEnabled="{Binding IsChecked, ElementName=enableFlipbookModuleCheckBox}"
+                                      ToolTip="Show/hide the flipbook button in the interface"
+                                      Checked="ShowFlipbookButton_Changed"
+                                      Unchecked="ShowFlipbookButton_Changed"/>
+                            
+                            <StackPanel Orientation="Horizontal" Margin="0,20,0,10">
+                                <TextBlock Text="Recording Duration:" 
+                                           Style="{StaticResource SettingsTextStyle}"
+                                           IsEnabled="{Binding IsChecked, ElementName=enableFlipbookModuleCheckBox}"/>
+                                <Slider x:Name="flipbookDurationSlider" 
+                                        Minimum="3" 
+                                        Maximum="10" 
+                                        Value="4"
+                                        TickPlacement="BottomRight"
+                                        TickFrequency="1"
+                                        IsSnapToTickEnabled="True"
+                                        Width="250"
+                                        Margin="20,0,0,0"
+                                        ValueChanged="FlipbookDurationSlider_ValueChanged"
+                                        Style="{StaticResource SettingsSliderStyle}"
+                                        IsEnabled="{Binding IsChecked, ElementName=enableFlipbookModuleCheckBox}"/>
+                                <TextBlock x:Name="flipbookDurationValueText" 
+                                           Text="4 seconds" 
+                                           VerticalAlignment="Center" 
+                                           Margin="20,0,0,0" 
+                                           Foreground="White" 
+                                           FontWeight="Bold"
+                                           FontSize="18"/>
+                            </StackPanel>
+                            
+                            <TextBlock Text="Note: Flipbook uses the same camera settings as Video Recording" 
+                                       Style="{StaticResource SettingsTextStyle}"
+                                       FontStyle="Italic"
+                                       Opacity="0.8"
+                                       Margin="0,10,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Expander>
+            
             <!-- Effects & Filters Settings -->
             <Expander Header="Effects &amp; Filters" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
                 <Expander.HeaderTemplate>

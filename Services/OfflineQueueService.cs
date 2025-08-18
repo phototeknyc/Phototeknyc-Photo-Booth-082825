@@ -28,6 +28,7 @@ namespace Photobooth.Services
         public OfflineQueueService()
         {
             _shareService = CloudShareProvider.GetShareService();
+            System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Initialized with share service: {_shareService?.GetType().Name}");
             
             // Create queue database
             _dbPath = Path.Combine(
@@ -46,6 +47,7 @@ namespace Photobooth.Services
             
             // Check online status
             CheckOnlineStatus();
+            System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Online status after check: {_isOnline}");
         }
 
         private void InitializeDatabase()
@@ -149,9 +151,13 @@ namespace Photobooth.Services
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine($"OfflineQueueService.QueuePhotosForUpload: Starting for session {sessionId}, {photoPaths?.Count ?? 0} photos, online={_isOnline}");
+                
                 // Try immediate upload if online
                 if (_isOnline)
                 {
+                    System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Online - attempting immediate upload");
+                    
                     // Set upload status and notify UI
                     _isUploading = true;
                     _currentUploadName = $"Session {sessionId}";
@@ -172,6 +178,7 @@ namespace Photobooth.Services
                         }
                     });
                     
+                    System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Calling CreateShareableGalleryAsync on {_shareService?.GetType().Name}");
                     var shareResult = await _shareService.CreateShareableGalleryAsync(sessionId, photoPaths, eventName);
                     
                     // Cancel progress simulation and set to complete
@@ -186,6 +193,7 @@ namespace Photobooth.Services
                     
                     if (shareResult.Success)
                     {
+                        System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Upload successful! Gallery URL: {shareResult.GalleryUrl}");
                         return new UploadQueueResult
                         {
                             Success = true,
@@ -194,6 +202,10 @@ namespace Photobooth.Services
                             ShortUrl = shareResult.ShortUrl,
                             QRCodeImage = shareResult.QRCodeImage
                         };
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Upload failed - {shareResult.ErrorMessage}");
                     }
                 }
                 
@@ -437,6 +449,12 @@ namespace Photobooth.Services
             
             try
             {
+                // For AWS uploads, we should always try - AWS SDK will handle retries
+                // Just assume we're online and let the AWS SDK handle connection issues
+                _isOnline = true;
+                System.Diagnostics.Debug.WriteLine("OfflineQueueService: Assuming online status for AWS uploads");
+                
+                /* Old connectivity check - not reliable in all network configurations
                 using (var client = new System.Net.WebClient())
                 {
                     using (client.OpenRead("http://www.google.com"))
@@ -444,10 +462,13 @@ namespace Photobooth.Services
                         _isOnline = true;
                     }
                 }
+                */
             }
-            catch
+            catch (Exception ex)
             {
-                _isOnline = false;
+                // Still set online to true - let AWS SDK handle connectivity
+                _isOnline = true;
+                System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Exception in online check (ignoring): {ex.Message}");
             }
             
             OnOnlineStatusChanged?.Invoke(_isOnline);

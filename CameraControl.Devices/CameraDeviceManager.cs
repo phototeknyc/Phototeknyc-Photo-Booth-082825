@@ -40,6 +40,7 @@ using CameraControl.Devices.Classes;
 using CameraControl.Devices.Custom;
 using CameraControl.Devices.Nikon;
 using CameraControl.Devices.Others;
+using CameraControl.Devices.Sony;
 using CameraControl.Devices.TransferProtocol;
 using CameraControl.Devices.TransferProtocol.DDServer;
 using CameraControl.Devices.TransferProtocol.PtpIp;
@@ -480,6 +481,43 @@ namespace CameraControl.Devices
 
         }
 
+        private void ConnectSonyUSBCameras()
+        {
+            try
+            {
+                var sonyDevices = SonyUSBProvider.GetConnectedCameras();
+                
+                foreach (var descriptor in sonyDevices)
+                {
+                    // Check if camera is already connected
+                    bool alreadyConnected = ConnectedDevices.Any(d => 
+                        d.SerialNumber == descriptor.SerialNumber || 
+                        (d is SonyUSBCamera && d.PortName == descriptor.WpdId));
+                    
+                    if (!alreadyConnected)
+                    {
+                        var camera = new SonyUSBCamera();
+                        if (camera.Init(descriptor))
+                        {
+                            descriptor.CameraDevice = camera;
+                            ConnectedDevices.Add(camera);
+                            _deviceEnumerator.Add(descriptor);
+                            NewCameraConnected(camera);
+                            Log.Debug($"Sony USB camera connected: {camera.DeviceName}");
+                        }
+                        else
+                        {
+                            Log.Error($"Failed to initialize Sony camera: {descriptor.WpdId}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Error in ConnectSonyUSBCameras", ex);
+            }
+        }
+
         private void AddCanonCameras()
         {
             lock (_locker)
@@ -583,6 +621,17 @@ namespace CameraControl.Devices
             _deviceEnumerator.RemoveDisconnected();
 
             Log.Debug("Connection device start" );
+            
+            // Check for Sony USB cameras first
+            try
+            {
+                ConnectSonyUSBCameras();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Error connecting Sony USB cameras", ex);
+            }
+            
             try
             {
                 var devices = PortableDeviceCollection.Instance.Devices;
@@ -978,7 +1027,11 @@ namespace CameraControl.Devices
         public bool ConnectToCamera()
         {
             if (UseExperimentalDrivers)
+            {
                 InitCanon();
+                // Also check for Sony USB cameras
+                ConnectSonyUSBCameras();
+            }
             return ConnectToCamera(true);
         }
 

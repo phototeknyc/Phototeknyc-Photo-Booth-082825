@@ -219,6 +219,10 @@
     <Compile Include="Services\PhotoProcessingOperations.cs" />
     <Compile Include="Services\DatabaseOperations.cs" />
     <Compile Include="Services\HostGalleryService.cs" />
+    <Compile Include="Services\VideoRecordingService.cs" />
+    <Compile Include="Services\BoomerangService.cs" />
+    <Compile Include="Services\PhotoboothModulesConfig.cs" />
+    <Compile Include="Services\FlipbookService.cs" />
     <Compile Include="Services\HostGalleryExtensions.cs" />
     <Compile Include="Services\GalleryInfoHelper.cs" />
     <Compile Include="TestGalleryUploader.cs" />
@@ -608,4 +612,12 @@
     <Error Condition="!Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets'))" />
   </Target>
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
+  <PropertyGroup>
+    <PostBuildEvent>
+      xcopy /Y "$(ProjectDir)sonysdk\external\crsdk\*.dll" "$(TargetDir)"
+      xcopy /Y "$(ProjectDir)sonysdk\external\crsdk\CrAdapter\*.dll" "$(TargetDir)"
+      xcopy /Y "$(ProjectDir)EDSDK.dll" "$(TargetDir)"
+      xcopy /Y "$(ProjectDir)EdsImage.dll" "$(TargetDir)"
+    </PostBuildEvent>
+  </PropertyGroup>
 </Project>

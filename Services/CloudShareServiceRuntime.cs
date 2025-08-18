@@ -64,12 +64,23 @@ namespace Photobooth.Services
                 {
                     System.Diagnostics.Debug.WriteLine("CloudShareServiceRuntime: Credentials found, initializing AWS client...");
                     InitializeAwsClient(accessKey, secretKey, region);
+                    
+                    // Write success to debug file
+                    var debugFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cloudshare_debug.txt");
+                    File.AppendAllText(debugFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] CloudShareServiceRuntime: AWS credentials found, initializing client\r\n");
+                    File.AppendAllText(debugFile, $"  Bucket: {_bucketName}, Region: {region}\r\n");
                 }
                 else
                 {
                     System.Diagnostics.Debug.WriteLine("CloudShareServiceRuntime: No AWS credentials found in User environment variables");
                     System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: AWS_ACCESS_KEY_ID = '{accessKey}'");
                     System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: AWS_SECRET_ACCESS_KEY = '{secretKey}'");
+                    
+                    // Write error to debug file
+                    var debugFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cloudshare_debug.txt");
+                    File.AppendAllText(debugFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] CloudShareServiceRuntime: No AWS credentials found\r\n");
+                    File.AppendAllText(debugFile, $"  AWS_ACCESS_KEY_ID present: {!string.IsNullOrEmpty(accessKey)}\r\n");
+                    File.AppendAllText(debugFile, $"  AWS_SECRET_ACCESS_KEY present: {!string.IsNullOrEmpty(secretKey)}\r\n");
                 }
             }
             catch (Exception ex)
@@ -146,6 +157,10 @@ namespace Photobooth.Services
                 
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: S3 client created: {_s3Client != null}");
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Successfully initialized with bucket {_bucketName} in region {region}");
+                
+                // Write success to debug file
+                var debugFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cloudshare_debug.txt");
+                File.AppendAllText(debugFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] CloudShareServiceRuntime: S3 client successfully created for bucket {_bucketName} in region {region}\r\n");
             }
             catch (Exception ex)
             {
@@ -195,7 +210,7 @@ namespace Photobooth.Services
                 // Ensure bucket exists
                 await EnsureBucketExistsAsync();
                 
-                // Upload each photo
+                // Upload each photo or video
                 foreach (var photoPath in photoPaths)
                 {
                     if (!File.Exists(photoPath))
@@ -215,6 +230,48 @@ namespace Photobooth.Services
                             continue;
                         }
                         
+                        // Check if this is a video file
+                        bool isVideo = photoPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) || 
+                                      photoPath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase) ||
+                                      photoPath.EndsWith(".avi", StringComparison.OrdinalIgnoreCase);
+                        
+                        if (isVideo)
+                        {
+                            // Upload video file directly without resizing
+                            System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Uploading video file: {Path.GetFileName(photoPath)}");
+                            
+                            using (var videoStream = File.OpenRead(photoPath))
+                            {
+                                var putRequest = Activator.CreateInstance(_putObjectRequestType);
+                                var putRequestType = putRequest.GetType();
+                                
+                                putRequestType.GetProperty("BucketName").SetValue(putRequest, _bucketName);
+                                putRequestType.GetProperty("Key").SetValue(putRequest, key);
+                                putRequestType.GetProperty("InputStream").SetValue(putRequest, videoStream);
+                                putRequestType.GetProperty("ContentType").SetValue(putRequest, "video/mp4");
+                                
+                                // Upload the video
+                                await UploadToS3Async(putRequest);
+                                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Successfully uploaded video {Path.GetFileName(photoPath)} to S3");
+                            }
+                            
+                            // Generate pre-signed URL for video
+                            var videoUrl = GeneratePresignedUrl(key);
+                            System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Generated video URL: {videoUrl}");
+                            
+                            // Add to result as video
+                            result.UploadedPhotos.Add(new UploadedPhoto
+                            {
+                                OriginalPath = photoPath,
+                                WebUrl = videoUrl,
+                                ThumbnailUrl = videoUrl, // For videos, use same URL as thumbnail
+                                UploadedAt = DateTime.Now,
+                                IsVideo = true
+                            });
+                            continue; // Skip image processing for videos
+                        }
+                        
+                        // For images, process as before
                         // Resize image for upload
                         var resizedImageBytes = ResizeImageForUpload(photoPath);
                         
@@ -647,7 +704,42 @@ namespace Photobooth.Services
                 // Extract filename for download
                 var fileName = Path.GetFileName(photo.OriginalPath ?? $"photo_{photoNumber}.jpg");
                 
-                html += $@"
+                if (photo.IsVideo)
+                {
+                    // Special handling for videos
+                    html += $@"
+            <div class='photo-item video-item'>
+                <div style='position: relative; cursor: pointer;' onclick='openVideoModal(""{photo.WebUrl}"")'>
+                    <video style='width: 100%; height: 100%; object-fit: cover;' muted>
+                        <source src='{photo.WebUrl}' type='video/mp4'>
+                    </video>
+                    <div style='position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60px; height: 60px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center;'>
+                        <svg fill='white' viewBox='0 0 24 24' width='30' height='30'>
+                            <path d='M8 5v14l11-7z'/>
+                        </svg>
+                    </div>
+                    <span class='photo-number'>{photoNumber}</span>
+                </div>
+                <div class='photo-overlay'>
+                    <a href='{photo.WebUrl}' download='{fileName}' class='action-btn' onclick='event.stopPropagation()'>
+                        <svg fill='currentColor' viewBox='0 0 20 20'>
+                            <path d='M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z'/>
+                        </svg>
+                        Download
+                    </a>
+                    <button class='action-btn' onclick='sharePhoto(""{photo.WebUrl}"", {photoNumber}); event.stopPropagation()'>
+                        <svg fill='currentColor' viewBox='0 0 20 20'>
+                            <path d='M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z'/>
+                        </svg>
+                        Share
+                    </button>
+                </div>
+            </div>";
+                }
+                else
+                {
+                    // Regular photo handling
+                    html += $@"
             <div class='photo-item'>
                 <img src='{photo.ThumbnailUrl ?? photo.WebUrl}' alt='Photo {photoNumber}' loading='lazy' onclick='openModal(""{photo.WebUrl}"")'>
                 <span class='photo-number'>{photoNumber}</span>
@@ -666,6 +758,7 @@ namespace Photobooth.Services
                     </button>
                 </div>
             </div>";
+                }
                 photoNumber++;
             }
 
@@ -734,6 +827,18 @@ namespace Photobooth.Services
         
         function closeModal() {
             document.getElementById('modal').classList.remove('active');
+        }
+        
+        function openVideoModal(url) {
+            const modal = document.getElementById('modal');
+            const modalContent = modal.querySelector('.modal-content');
+            modalContent.innerHTML = `
+                <video controls autoplay style='max-width: 100%; max-height: 90vh;'>
+                    <source src='${url}' type='video/mp4'>
+                    Your browser does not support the video tag.
+                </video>
+            `;
+            modal.classList.add('active');
         }
         
         function sharePhoto(url, index) {

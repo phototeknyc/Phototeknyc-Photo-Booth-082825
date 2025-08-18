@@ -873,6 +873,64 @@
                         </Button.Template>
                     </Button>
                     
+                    <!-- Flipbook Button - Left side of screen below Boomerang -->
+                    <Button x:Name="flipbookButton" 
+                            Width="90" 
+                            Height="90"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            Margin="50,0,0,-100"
+                            Background="#FFFF5722"
+                            BorderThickness="0"
+                            FontSize="28"
+                            FontWeight="Bold"
+                            Foreground="White"
+                            ToolTip="Create Flipbook"
+                            Click="FlipbookButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="45">
+                                    <Grid>
+                                        <StackPanel HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center"
+                                                    x:Name="flipbookButtonContent">
+                                            <TextBlock Text="📖" 
+                                                       FontSize="36"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="FLIPBOOK" 
+                                                       FontSize="11"
+                                                       FontWeight="Bold"
+                                                       Margin="0,2,0,0"
+                                                       HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                        
+                                        <!-- Recording indicator -->
+                                        <StackPanel HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center"
+                                                    x:Name="flipbookRecordingIndicator"
+                                                    Visibility="Collapsed">
+                                            <TextBlock x:Name="flipbookTimeText"
+                                                       Text="0s" 
+                                                       FontSize="24"
+                                                       FontWeight="Bold"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="Recording" 
+                                                       FontSize="12"
+                                                       Margin="0,2,0,0"
+                                                       HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FFFF7043"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
                     <!-- Gallery Button - Below Print Button -->
                     <Button x:Name="galleryButton" 
                             Width="80" 
@@ -907,6 +965,145 @@
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter Property="Background" Value="#FFAB47BC"/>
                                     </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <!-- Video Recording Button - Left side of screen -->
+                    <Button x:Name="videoRecordButton" 
+                            Width="90" 
+                            Height="90"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            Margin="50,0,0,300"
+                            Background="#FFFF5722"
+                            BorderThickness="0"
+                            FontSize="28"
+                            FontWeight="Bold"
+                            Foreground="White"
+                            ToolTip="Record Video"
+                            Visibility="Collapsed"
+                            Click="VideoRecordButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="45">
+                                    <Grid>
+                                        <StackPanel HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center"
+                                                    x:Name="videoButtonContent">
+                                            <TextBlock Text="🎥" 
+                                                       FontSize="36"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="VIDEO" 
+                                                       FontSize="13"
+                                                       FontWeight="Bold"
+                                                       Margin="0,2,0,0"
+                                                       HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                        
+                                        <!-- Recording indicator -->
+                                        <StackPanel HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center"
+                                                    x:Name="recordingIndicator"
+                                                    Visibility="Collapsed">
+                                            <Border Width="30" Height="30" 
+                                                    CornerRadius="5"
+                                                    Background="White">
+                                                <Border.Triggers>
+                                                    <EventTrigger RoutedEvent="Border.Loaded">
+                                                        <BeginStoryboard>
+                                                            <Storyboard RepeatBehavior="Forever">
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                From="1.0" To="0.3" Duration="0:0:0.5"
+                                                                                AutoReverse="True"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </EventTrigger>
+                                                </Border.Triggers>
+                                            </Border>
+                                            <TextBlock Text="STOP" 
+                                                       FontSize="13"
+                                                       FontWeight="Bold"
+                                                       Margin="0,5,0,0"
+                                                       HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FFFF6A40"/>
+                                    </Trigger>
+                                    <DataTrigger Binding="{Binding IsRecording, RelativeSource={RelativeSource AncestorType=Page}}" Value="True">
+                                        <Setter TargetName="videoButtonContent" Property="Visibility" Value="Collapsed"/>
+                                        <Setter TargetName="recordingIndicator" Property="Visibility" Value="Visible"/>
+                                        <Setter Property="Background" Value="#FFD32F2F"/>
+                                    </DataTrigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <!-- Boomerang Button - Left side of screen -->
+                    <Button x:Name="boomerangButton" 
+                            Width="90" 
+                            Height="90"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            Margin="50,0,0,100"
+                            Background="#FF00BCD4"
+                            BorderThickness="0"
+                            FontSize="28"
+                            FontWeight="Bold"
+                            Foreground="White"
+                            ToolTip="Create Boomerang"
+                            Visibility="Collapsed"
+                            Click="BoomerangButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="45">
+                                    <Grid>
+                                        <StackPanel HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center"
+                                                    x:Name="boomerangButtonContent">
+                                            <TextBlock Text="♻️" 
+                                                       FontSize="36"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="BOOMERANG" 
+                                                       FontSize="11"
+                                                       FontWeight="Bold"
+                                                       Margin="0,2,0,0"
+                                                       HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                        
+                                        <!-- Capturing indicator -->
+                                        <StackPanel HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center"
+                                                    x:Name="capturingIndicator"
+                                                    Visibility="Collapsed">
+                                            <TextBlock x:Name="boomerangFrameCountText"
+                                                       Text="0/10" 
+                                                       FontSize="24"
+                                                       FontWeight="Bold"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="FRAMES" 
+                                                       FontSize="11"
+                                                       Margin="0,2,0,0"
+                                                       HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FF26C6DA"/>
+                                    </Trigger>
+                                    <DataTrigger Binding="{Binding IsCapturingBoomerang, RelativeSource={RelativeSource AncestorType=Page}}" Value="True">
+                                        <Setter TargetName="boomerangButtonContent" Property="Visibility" Value="Collapsed"/>
+                                        <Setter TargetName="capturingIndicator" Property="Visibility" Value="Visible"/>
+                                        <Setter Property="Background" Value="#FF0097A7"/>
+                                    </DataTrigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </Button.Template>

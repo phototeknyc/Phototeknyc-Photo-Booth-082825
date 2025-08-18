@@ -1,0 +1,1748 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Timers;
+using CameraControl.Devices;
+using CameraControl.Devices.Classes;
+using Photobooth.Properties;
+
+namespace Photobooth.Services
+{
+    public class VideoRecordingService
+    {
+        private ICameraDevice _camera;
+        private System.Timers.Timer _recordingTimer;
+        private DateTime _recordingStartTime;
+        private bool _isRecording;
+        private string _currentVideoPath;
+        private readonly PhotoboothModulesConfig _config;
+        private string _originalCameraMode; // Store original mode to restore it
+        
+        // Store photo settings to restore after video
+        private class PhotoSettings
+        {
+            public string ISO { get; set; }
+            public string Aperture { get; set; }
+            public string ShutterSpeed { get; set; }
+            public string WhiteBalance { get; set; }
+            public string FocusMode { get; set; }
+            public string ExposureCompensation { get; set; }
+        }
+        private PhotoSettings _savedPhotoSettings;
+        
+        public event EventHandler<VideoRecordingEventArgs> RecordingStarted;
+        public event EventHandler<VideoRecordingEventArgs> RecordingStopped;
+        public event EventHandler<TimeSpan> RecordingProgress;
+        public event EventHandler<string> RecordingError;
+        
+        public bool IsRecording => _isRecording;
+        public TimeSpan ElapsedTime => _isRecording ? DateTime.Now - _recordingStartTime : TimeSpan.Zero;
+        public TimeSpan MaxDuration => TimeSpan.FromSeconds(_config.VideoDuration);
+        
+        public VideoRecordingService()
+        {
+            _config = PhotoboothModulesConfig.Instance;
+            _recordingTimer = new System.Timers.Timer(100); // Update every 100ms
+            _recordingTimer.Elapsed += OnRecordingTimerElapsed;
+        }
+
+        public void Initialize(ICameraDevice camera)
+        {
+            _camera = camera;
+            
+            // Don't automatically switch camera modes during initialization
+            // This preserves the user's camera dial setting (M, Av, Tv, P, etc.)
+            System.Diagnostics.Debug.WriteLine("[VIDEO] VideoRecordingService initialized, preserving current camera mode");
+        }
+        
+        private async Task EnsurePhotoMode()
+        {
+            try
+            {
+                // Only switch modes for Canon cameras
+                if (_camera != null && _camera.GetType().Name.Contains("Canon"))
+                {
+                    var modeProperty = _camera.Mode;
+                    if (modeProperty != null)
+                    {
+                        string currentMode = modeProperty.Value;
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] EnsurePhotoMode: Current camera mode at startup: {currentMode}");
+                        
+                        // Show all available modes for debugging
+                        if (modeProperty.Values != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] EnsurePhotoMode: Available modes: {string.Join(", ", modeProperty.Values)}");
+                        }
+                        
+                        // Be very specific about what constitutes "movie mode" 
+                        // Most Canon cameras use specific movie mode names, not just "movie"
+                        bool isInMovieMode = currentMode != null && (
+                            currentMode.ToLower().Contains("movie") ||
+                            currentMode.ToLower().Contains("video") ||
+                            currentMode.ToLower() == "movie" ||
+                            currentMode.ToLower() == "video"
+                        );
+                        
+                        if (isInMovieMode)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Camera is in movie/video mode at startup, switching to photo mode...");
+                            
+                            // Priority: Manual (M) first, then Program, then Av, then Tv as last resort
+                            var photoMode = modeProperty.Values?.FirstOrDefault(v => 
+                                v.Equals("M", StringComparison.OrdinalIgnoreCase)) ??
+                            modeProperty.Values?.FirstOrDefault(v => 
+                                v.ToLower().Contains("program")) ??
+                            modeProperty.Values?.FirstOrDefault(v => 
+                                v.ToLower().Contains("av")) ??
+                            modeProperty.Values?.FirstOrDefault(v => 
+                                v.ToLower().Contains("tv"));
+                            
+                            if (photoMode != null)
+                            {
+                                try
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] EnsurePhotoMode: Switching from {currentMode} to {photoMode}");
+                                    modeProperty.SetValue(photoMode);
+                                    await Task.Delay(500);
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] Successfully switched to photo mode on initialization");
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Failed to switch to photo mode: {ex.Message}");
+                                }
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine("[VIDEO] No suitable photo mode found");
+                            }
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera already in photo mode ({currentMode}), no change needed");
+                            // Don't change anything if camera is already in a photo mode (M, Av, Tv, P, etc.)
+                        }
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] EnsurePhotoMode: Camera mode property is null");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] EnsurePhotoMode: Not a Canon camera or camera is null");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error ensuring photo mode: {ex.Message}");
+            }
+        }
+
+        public async Task<bool> StartRecordingAsync(string outputPath = null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[VIDEO] StartRecordingAsync called. Camera: {_camera?.DeviceName ?? "NULL"}, Already recording: {_isRecording}");
+            
+            if (_isRecording || _camera == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Cannot start - already recording or no camera");
+                return false;
+            }
+
+            try
+            {
+                // Run diagnostic for Canon T6 if detected
+                if (_camera?.DeviceName != null && 
+                    (_camera.DeviceName.Contains("T6") || _camera.DeviceName.Contains("1300D") || _camera.DeviceName.Contains("Rebel")))
+                {
+                    await DiagnoseCanonT6VideoCapabilities();
+                }
+                
+                // Check if camera supports video recording
+                if (!IsVideoRecordingSupported())
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera does not support video recording");
+                    RecordingError?.Invoke(this, "This camera does not support video recording");
+                    return false;
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera supports video, will switch to movie mode now...");
+                
+                // Store the original camera mode before making any changes
+                if (_camera?.Mode?.Value != null)
+                {
+                    _originalCameraMode = _camera.Mode.Value;
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Stored original camera mode: {_originalCameraMode}");
+                }
+                
+                // Save current photo settings and apply video settings
+                SavePhotoSettings();
+                ApplyVideoSettings();
+                
+                // Try to switch camera to movie mode if it's a Canon camera
+                await SwitchToMovieModeIfNeeded();
+                
+                // Generate output path if not provided
+                if (string.IsNullOrEmpty(outputPath))
+                {
+                    // Videos are saved in: C:\Users\[username]\Pictures\PhotoBooth\Videos\[date]\
+                    string videoDir = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                        "PhotoBooth",
+                        "Videos",
+                        DateTime.Now.ToString("yyyy-MM-dd")
+                    );
+                    
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Creating directory: {videoDir}");
+                    
+                    if (!Directory.Exists(videoDir))
+                    {
+                        Directory.CreateDirectory(videoDir);
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Directory created successfully");
+                    }
+                    
+                    string fileName = $"VID_{DateTime.Now:yyyyMMdd_HHmmss}.mp4";
+                    outputPath = Path.Combine(videoDir, fileName);
+                    
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] *** VIDEO WILL BE SAVED TO: {outputPath} ***");
+                }
+                
+                _currentVideoPath = outputPath;
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Calling camera.StartRecordMovie()...");
+                
+                // For Canon cameras, ensure movie mode and add delay
+                if (_camera.GetType().Name.Contains("Canon"))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Canon camera detected, ensuring movie mode...");
+                    
+                    // Try to ensure the camera is in movie mode
+                    await EnsureCanonMovieMode();
+                    
+                    // Give the camera time to switch modes
+                    await Task.Delay(1000);
+                }
+                
+                // Start recording on camera
+                bool recordingStarted = false;
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Executing StartRecordMovie()...");
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera type: {_camera.GetType().FullName}");
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera device name: {_camera.DeviceName}");
+                        
+                        // For Canon cameras, we've fixed the LiveViewqueue processing issue
+                        // The camera should be in Manual (M) mode on the physical dial
+                        if (_camera.GetType().Name.Contains("Canon"))
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Canon camera detected");
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] IMPORTANT: Camera should be in Manual (M) mode on physical dial");
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Calling StartRecordMovie() - this will process the LiveViewqueue");
+                            _camera.StartRecordMovie();
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] StartRecordMovie called - LiveViewqueue processed");
+                        }
+                        else
+                        {
+                            _camera.StartRecordMovie();
+                        }
+                        
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] StartRecordMovie() returned - no exception");
+                        recordingStarted = true;
+                    }
+                    catch (Exception ex) when (ex.GetType().Name == "EosPropertyException")
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] ERROR: Canon EosPropertyException - {ex.Message}");
+                        // Canon cameras need to be in movie mode first
+                        throw new InvalidOperationException(
+                            "Camera may not be in video/movie mode. Please switch the camera to movie mode and try again.", ex);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] ERROR starting recording: {ex.GetType().Name} - {ex.Message}");
+                        throw;
+                    }
+                });
+                
+                // Wait a bit to ensure recording actually started
+                await Task.Delay(500);
+                
+                // For Canon cameras, verify recording actually started
+                if (_camera.GetType().Name.Contains("Canon"))
+                {
+                    bool isActuallyRecording = await CheckCanonRecordingStatus();
+                    if (!isActuallyRecording)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] ERROR: Canon camera is not recording despite StartRecord call");
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] IMPORTANT: Please manually set your camera to MOVIE MODE using the mode dial");
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] The mode dial should be set to the movie camera icon");
+                        RecordingError?.Invoke(this, "Camera is not recording. Please set the camera mode dial to MOVIE MODE (video camera icon) and try again.");
+                        _isRecording = false;
+                        return false;
+                    }
+                }
+                
+                if (!recordingStarted)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] ERROR: Recording did not start");
+                    RecordingError?.Invoke(this, "Failed to start video recording. Please ensure the camera is in movie mode.");
+                    return false;
+                }
+                
+                _isRecording = true;
+                _recordingStartTime = DateTime.Now;
+                _recordingTimer.Start();
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] *** RECORDING STARTED SUCCESSFULLY at {_recordingStartTime:HH:mm:ss} ***");
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Max duration: {MaxDuration.TotalSeconds} seconds");
+                
+                RecordingStarted?.Invoke(this, new VideoRecordingEventArgs
+                {
+                    FilePath = _currentVideoPath,
+                    StartTime = _recordingStartTime
+                });
+                
+                // Auto-stop if max duration is set
+                if (MaxDuration > TimeSpan.Zero)
+                {
+                    Task.Delay(MaxDuration).ContinueWith(t =>
+                    {
+                        if (_isRecording)
+                        {
+                            _ = StopRecordingAsync();
+                        }
+                    });
+                }
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                RecordingError?.Invoke(this, $"Failed to start recording: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<string> StopRecordingAsync()
+        {
+            System.Diagnostics.Debug.WriteLine($"[VIDEO] StopRecordingAsync called. Recording: {_isRecording}, Camera: {_camera?.DeviceName ?? "NULL"}");
+            
+            if (!_isRecording || _camera == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Cannot stop - not recording or no camera");
+                return null;
+            }
+
+            try
+            {
+                _recordingTimer.Stop();
+                var recordingDuration = DateTime.Now - _recordingStartTime;
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Stopping recording after {recordingDuration.TotalSeconds:F1} seconds");
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Expected file location: {_currentVideoPath}");
+                
+                // Stop recording on camera
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Calling camera.StopRecordMovie()...");
+                        _camera.StopRecordMovie();
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] StopRecordMovie() completed");
+                    }
+                    catch (Exception ex) when (ex.GetType().Name == "EosPropertyException")
+                    {
+                        // Canon cameras sometimes fail to stop recording with property errors
+                        // This is often because the recording has already stopped
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Canon stop recording property error (recording may have already stopped): {ex.Message}");
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log but don't fail - recording may have stopped anyway
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Error stopping recording (may be normal): {ex.Message}");
+                    }
+                });
+                
+                _isRecording = false;
+                var duration = DateTime.Now - _recordingStartTime;
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Recording stopped. Duration: {duration.TotalSeconds:F1} seconds");
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Waiting for file to be written...");
+                
+                // Wait a bit for file to be written
+                await Task.Delay(1000); // Increased delay for file writing
+                
+                // Check if file exists
+                if (File.Exists(_currentVideoPath))
+                {
+                    var fileInfo = new FileInfo(_currentVideoPath);
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] *** SUCCESS! Video file created: {_currentVideoPath} ***");
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] File size: {fileInfo.Length / 1024.0 / 1024.0:F2} MB");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] *** WARNING: Video file NOT found at: {_currentVideoPath} ***");
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera may be saving to memory card instead of computer");
+                    
+                    // Try to find videos in the parent directory structure
+                    var videoDirectory = Path.GetDirectoryName(_currentVideoPath);
+                    if (Directory.Exists(videoDirectory))
+                    {
+                        var videoFiles = Directory.GetFiles(videoDirectory, "*.mp4", SearchOption.AllDirectories);
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Searching for video files in {videoDirectory}:");
+                        if (videoFiles.Length > 0)
+                        {
+                            foreach (var file in videoFiles.OrderByDescending(f => File.GetCreationTime(f)).Take(5))
+                            {
+                                var fileInfo = new FileInfo(file);
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO]   Found: {file} ({fileInfo.Length / 1024.0 / 1024.0:F2} MB, {File.GetCreationTime(file):HH:mm:ss})");
+                            }
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO]   No MP4 files found in video directory");
+                        }
+                    }
+                    
+                    // Check if Canon camera has a download method for videos
+                    await CheckForCanonVideoDownload();
+                }
+                
+                // Switch back to photo mode if needed
+                await SwitchBackToPhotoModeIfNeeded();
+                
+                // Restore photo settings after video recording
+                RestorePhotoSettings();
+                
+                RecordingStopped?.Invoke(this, new VideoRecordingEventArgs
+                {
+                    FilePath = _currentVideoPath,
+                    StartTime = _recordingStartTime,
+                    Duration = duration
+                });
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] StopRecordingAsync completed. Returning path: {_currentVideoPath}");
+                return _currentVideoPath;
+            }
+            catch (Exception ex)
+            {
+                RecordingError?.Invoke(this, $"Failed to stop recording: {ex.Message}");
+                _isRecording = false;
+                
+                // Still return the path as the video file may have been created
+                return _currentVideoPath;
+            }
+        }
+
+
+        private async Task SwitchToMovieModeIfNeeded()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Checking camera mode. Camera type: {_camera.GetType().Name}");
+                
+                // Check if it's a Canon camera
+                if (_camera.GetType().Name.Contains("Canon"))
+                {
+                    // IMPORTANT: For Canon cameras, we need to configure save location to PC
+                    // before starting video recording to ensure videos are saved to computer
+                    ConfigureCanonSaveToPC();
+                    
+                    // Try to get the current mode
+                    var modeProperty = _camera.Mode;
+                    if (modeProperty != null)
+                    {
+                        // Check if we're already in movie mode
+                        string currentMode = modeProperty.Value;
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Current camera mode: {currentMode}");
+                        
+                        // IMPORTANT: Check if we're in the wrong mode
+                        // "Photo in Movie" is for taking photos, not recording video!
+                        if (currentMode != null && currentMode.ToLower().Contains("photo") && currentMode.ToLower().Contains("movie"))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] WARNING: Camera is in 'Photo in Movie' mode - this is for taking photos, not recording!");
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Need to switch to actual movie recording mode");
+                        }
+                        
+                        // Check if we need to switch modes
+                        // We need movie mode, but NOT "Photo in Movie"
+                        bool needsModeSwitch = currentMode != null && (
+                            currentMode.ToLower().Contains("photo") || // Any photo mode including "Photo in Movie"
+                            (!currentMode.ToLower().Contains("movie") && 
+                             !currentMode.ToLower().Contains("tv") &&
+                             !currentMode.ToLower().Contains("av") &&
+                             !currentMode.ToLower().Contains("manual")));
+                        
+                        if (needsModeSwitch)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera not in video-capable mode, attempting to switch...");
+                            
+                            // Don't switch to "Photo in Movie" - that's for taking photos in movie mode
+                            // We need to list all available modes to find the right one
+                            try
+                            {
+                                if (modeProperty.Values != null)
+                                {
+                                    var modeList = new List<string>();
+                                    foreach (var val in modeProperty.Values)
+                                        modeList.Add(val);
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Available modes: {string.Join(", ", modeList)}");
+                                }
+                                
+                                // Look for actual movie/video mode - NOT "Photo in Movie"
+                                // Try different patterns to find the right mode
+                                var movieModeValue = modeProperty.Values?.FirstOrDefault(v => 
+                                    v.Equals("Movie", StringComparison.OrdinalIgnoreCase) ||
+                                    v.Equals("Video", StringComparison.OrdinalIgnoreCase) ||
+                                    v == "20" || // Canon SDK value for movie mode
+                                    (v.ToLower().Contains("movie") && !v.ToLower().Contains("photo")));
+                                
+                                if (movieModeValue != null)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Found movie mode: {movieModeValue}");
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Setting mode to: {movieModeValue}");
+                                    modeProperty.SetValue(movieModeValue);
+                                    
+                                    // Give the camera time to switch modes
+                                    await Task.Delay(1000);
+                                    
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] Switched to movie mode successfully");
+                                }
+                                else
+                                {
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] WARNING: No pure movie mode found in available modes");
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] The camera may need to be manually set to movie mode using the mode dial");
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] Continuing anyway - camera might be in manual movie mode already");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Failed to switch to movie mode: {ex.Message}");
+                                // Continue anyway - user may have manually set the camera to movie mode
+                            }
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera already in video-capable mode: {currentMode}");
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] No mode switch needed - can record video in this mode");
+                        }
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Mode property is null");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Not a Canon camera, skipping mode switch");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error checking/switching camera mode: {ex.Message}");
+                // Continue anyway - the camera might work without switching
+            }
+        }
+        
+        private bool StartCanonRecordingUsingShutterButton()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Attempting Canon recording using virtual shutter button press (DSLRBooth method)...");
+                
+                var cameraType = _camera.GetType();
+                
+                // First check if it's a CanonSDKBase type camera
+                if (cameraType.Name == "CanonSDKBase")
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] Detected CanonSDKBase camera, using button press to start recording...");
+                    
+                    // For video recording in movie mode, we need to send a HALF shutter button press
+                    // In movie mode, half-press starts/stops recording (not full press which takes a photo)
+                    var pressHalfButtonMethod = cameraType.GetMethod("PressHalfButton", 
+                        BindingFlags.Public | BindingFlags.Instance);
+                    
+                    if (pressHalfButtonMethod != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] Calling PressHalfButton() to start recording...");
+                        pressHalfButtonMethod.Invoke(_camera, null);
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] PressHalfButton() called - recording should start");
+                        
+                        // Wait a moment then release the button
+                        Thread.Sleep(500);
+                        
+                        var releaseButtonMethod = cameraType.GetMethod("ReleaseButton", 
+                            BindingFlags.Public | BindingFlags.Instance);
+                        if (releaseButtonMethod != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Releasing shutter button...");
+                            releaseButtonMethod.Invoke(_camera, null);
+                        }
+                        
+                        return true;
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] PressButton method not found, trying alternative...");
+                        
+                        // If PressButton not found, try calling ResetShutterButton then send complete press manually
+                        var resetMethod = cameraType.GetMethod("ResetShutterButton", 
+                            BindingFlags.NonPublic | BindingFlags.Instance) ??
+                            cameraType.GetMethod("ResetShutterButton", 
+                            BindingFlags.Public | BindingFlags.Instance);
+                            
+                        if (resetMethod != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Using ResetShutterButton + manual complete press...");
+                            resetMethod.Invoke(_camera, null);
+                            Thread.Sleep(100);
+                            
+                            // Now we need to access the Camera property to send the complete press
+                            var innerCameraField = cameraType.GetField("Camera", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                            if (innerCameraField != null)
+                            {
+                                var canonCamera = innerCameraField.GetValue(_camera);
+                                if (canonCamera != null)
+                                {
+                                    var sendCommandMethod = canonCamera.GetType().GetMethod("SendCommand",
+                                        BindingFlags.Public | BindingFlags.Instance,
+                                        null,
+                                        new Type[] { typeof(uint), typeof(int) },
+                                        null);
+                                        
+                                    if (sendCommandMethod != null)
+                                    {
+                                        // Send HALF shutter press for video (not complete press)
+                                        const uint CameraCommand_PressShutterButton = 0x00000004;
+                                        const int ShutterButton_Halfway = 0x00000001;
+                                        const int ShutterButton_OFF = 0x00000000;
+                                        
+                                        System.Diagnostics.Debug.WriteLine("[VIDEO] Sending half shutter press for video...");
+                                        sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_PressShutterButton, ShutterButton_Halfway });
+                                        Thread.Sleep(500);
+                                        
+                                        System.Diagnostics.Debug.WriteLine("[VIDEO] Releasing shutter button...");
+                                        sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_PressShutterButton, ShutterButton_OFF });
+                                        System.Diagnostics.Debug.WriteLine("[VIDEO] Half press and release sent");
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Otherwise try to access the internal Canon camera object
+                var outerCameraField = cameraType.GetField("Camera", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                
+                if (outerCameraField != null)
+                {
+                    var canonCamera = outerCameraField.GetValue(_camera);
+                    if (canonCamera != null)
+                    {
+                        var canonCameraType = canonCamera.GetType();
+                        
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] Using shutter button press to start recording in movie mode...");
+                        
+                        // Get SendCommand method with specific parameter types
+                        var sendCommandMethod = canonCameraType.GetMethod("SendCommand", 
+                            BindingFlags.Public | BindingFlags.Instance,
+                            null,
+                            new Type[] { typeof(uint), typeof(int) },
+                            null);
+                        
+                        if (sendCommandMethod != null)
+                        {
+                            // Send autofocus command first (like DigiCamControl does)
+                            const uint CameraCommand_DoEvfAf = 0x00000102;
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Sending autofocus command...");
+                            sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_DoEvfAf, 0 });
+                            Thread.Sleep(100);
+                            
+                            // Send virtual shutter button press to start recording
+                            // This is what triggers recording when camera is in movie mode
+                            const uint CameraCommand_PressShutterButton = 0x00000004;
+                            const int ShutterButton_OFF = 0x00000000;
+                            
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Sending shutter button OFF (reset) command...");
+                            sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_PressShutterButton, ShutterButton_OFF });
+                            Thread.Sleep(100);
+                            
+                            // The shutter button OFF command should trigger recording in movie mode
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Shutter button command sent - recording should start");
+                            
+                            return true;
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] SendCommand method not found");
+                        }
+                    }
+                }
+                
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error in shutter button recording: {ex.Message}");
+                return false;
+            }
+        }
+        
+        private bool StopCanonRecordingUsingShutterButton()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Stopping Canon recording using shutter button...");
+                
+                var cameraType = _camera.GetType();
+                
+                // First check if it's a CanonSDKBase type camera
+                if (cameraType.Name == "CanonSDKBase")
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] Detected CanonSDKBase camera, using button release to stop...");
+                    
+                    // To stop recording, we need another half-press of the shutter button
+                    var pressHalfButtonMethod = cameraType.GetMethod("PressHalfButton", 
+                        BindingFlags.Public | BindingFlags.Instance);
+                    
+                    if (pressHalfButtonMethod != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] Calling PressHalfButton() to stop recording...");
+                        pressHalfButtonMethod.Invoke(_camera, null);
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] PressHalfButton() called - recording should stop");
+                        
+                        // Wait a moment then release the button
+                        Thread.Sleep(500);
+                        
+                        var releaseButtonMethod = cameraType.GetMethod("ReleaseButton", 
+                            BindingFlags.Public | BindingFlags.Instance);
+                        if (releaseButtonMethod != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Releasing shutter button...");
+                            releaseButtonMethod.Invoke(_camera, null);
+                        }
+                        
+                        return true;
+                    }
+                    else
+                    {
+                        // Fallback to ResetShutterButton if ReleaseButton not found
+                        var resetShutterMethod = cameraType.GetMethod("ResetShutterButton", 
+                            BindingFlags.NonPublic | BindingFlags.Instance) ??
+                            cameraType.GetMethod("ResetShutterButton", 
+                            BindingFlags.Public | BindingFlags.Instance);
+                        
+                        if (resetShutterMethod != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Using ResetShutterButton() to stop recording (fallback)...");
+                            resetShutterMethod.Invoke(_camera, null);
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] ResetShutterButton() called - recording should stop");
+                            return true;
+                        }
+                    }
+                }
+                
+                // Otherwise try to access the internal Canon camera object
+                var cameraField = cameraType.GetField("Camera", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                
+                if (cameraField != null)
+                {
+                    var canonCamera = cameraField.GetValue(_camera);
+                    if (canonCamera != null)
+                    {
+                        var canonCameraType = canonCamera.GetType();
+                        
+                        // Get SendCommand method
+                        var sendCommandMethod = canonCameraType.GetMethod("SendCommand", 
+                            BindingFlags.Public | BindingFlags.Instance,
+                            null,
+                            new Type[] { typeof(uint), typeof(int) },
+                            null);
+                        
+                        if (sendCommandMethod != null)
+                        {
+                            // Send shutter button OFF command to stop recording
+                            const uint CameraCommand_PressShutterButton = 0x00000004;
+                            const int ShutterButton_OFF = 0x00000000;
+                            
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Sending shutter button OFF to stop recording...");
+                            sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_PressShutterButton, ShutterButton_OFF });
+                            
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Recording stopped via shutter button");
+                            return true;
+                        }
+                    }
+                }
+                
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error stopping recording with shutter button: {ex.Message}");
+                return false;
+            }
+        }
+        
+        private bool StartCanonRecordingDirect()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Attempting direct Canon recording commands...");
+                
+                var cameraType = _camera.GetType();
+                var cameraField = cameraType.GetField("Camera", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                
+                if (cameraField != null)
+                {
+                    var canonCamera = cameraField.GetValue(_camera);
+                    if (canonCamera != null)
+                    {
+                        var canonCameraType = canonCamera.GetType();
+                        
+                        // Try to execute recording commands directly without queuing
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] Executing direct recording sequence...");
+                        
+                        // Stop live view
+                        var stopLiveViewMethod = canonCameraType.GetMethod("StopLiveView", BindingFlags.Public | BindingFlags.Instance);
+                        if (stopLiveViewMethod != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Stopping live view...");
+                            stopLiveViewMethod.Invoke(canonCamera, null);
+                            Thread.Sleep(100);
+                        }
+                        
+                        // Send MovieSelectSwON command - be specific about parameter types to avoid ambiguity
+                        var sendCommandMethod = canonCameraType.GetMethod("SendCommand", 
+                            BindingFlags.Public | BindingFlags.Instance,
+                            null,
+                            new Type[] { typeof(uint), typeof(int) },
+                            null);
+                        
+                        if (sendCommandMethod == null)
+                        {
+                            // Try with just uint parameter
+                            sendCommandMethod = canonCameraType.GetMethod("SendCommand",
+                                BindingFlags.Public | BindingFlags.Instance,
+                                null,
+                                new Type[] { typeof(uint) },
+                                null);
+                        }
+                        
+                        if (sendCommandMethod != null)
+                        {
+                            const uint CameraCommand_MovieSelectSwON = 0x00000217;
+                            
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Sending MovieSelectSwON...");
+                            var parameters = sendCommandMethod.GetParameters();
+                            if (parameters.Length == 2)
+                            {
+                                sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_MovieSelectSwON, 0 });
+                            }
+                            else if (parameters.Length == 1)
+                            {
+                                sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_MovieSelectSwON });
+                            }
+                            Thread.Sleep(100);
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] SendCommand method not found");
+                        }
+                        
+                        // Start live view
+                        var startLiveViewMethod = canonCameraType.GetMethod("StartLiveView", BindingFlags.Public | BindingFlags.Instance);
+                        if (startLiveViewMethod != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Starting live view...");
+                            startLiveViewMethod.Invoke(canonCamera, null);
+                            Thread.Sleep(100);
+                        }
+                        
+                        // Send autofocus command
+                        if (sendCommandMethod != null)
+                        {
+                            const uint CameraCommand_DoEvfAf = 0x00000102;
+                            
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Sending DoEvfAf...");
+                            var parameters = sendCommandMethod.GetParameters();
+                            if (parameters.Length == 2)
+                            {
+                                sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_DoEvfAf, 0 });
+                            }
+                            else if (parameters.Length == 1)
+                            {
+                                sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_DoEvfAf });
+                            }
+                            Thread.Sleep(100);
+                        }
+                        
+                        // Set PropID_Record to 4 (start recording)
+                        var setPropertyMethod = canonCameraType.GetMethod("SetPropertyIntegerData", BindingFlags.Public | BindingFlags.Instance);
+                        if (setPropertyMethod != null)
+                        {
+                            const uint PropID_Record = 0x00000510;
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Setting PropID_Record to 4 (start recording)...");
+                            
+                            // Try multiple times for Canon R100
+                            for (int attempt = 0; attempt < 3; attempt++)
+                            {
+                                setPropertyMethod.Invoke(canonCamera, new object[] { PropID_Record, (long)4 });
+                                Thread.Sleep(200);
+                                
+                                // Check if recording actually started
+                                var getPropertyMethod = canonCameraType.GetMethod("GetProperty", BindingFlags.Public | BindingFlags.Instance);
+                                if (getPropertyMethod != null)
+                                {
+                                    var recordStatus = getPropertyMethod.Invoke(canonCamera, new object[] { PropID_Record });
+                                    int status = recordStatus != null ? Convert.ToInt32(recordStatus) : 0;
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Attempt {attempt + 1}: PropID_Record status = {status}");
+                                    
+                                    if (status == 4)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine("[VIDEO] Direct Canon recording started successfully!");
+                                        return true;
+                                    }
+                                    else if (status == 3 && attempt == 0)
+                                    {
+                                        // Canon R100 might be in ready state, send additional trigger
+                                        System.Diagnostics.Debug.WriteLine("[VIDEO] Canon R100 in ready state, sending additional triggers...");
+                                        
+                                        // Send DoEvfAf command
+                                        if (sendCommandMethod != null)
+                                        {
+                                            const uint CameraCommand_DoEvfAf = 0x00000102;
+                                            sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_DoEvfAf, 1 });
+                                            Thread.Sleep(100);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Direct Canon recording commands completed but status not confirmed");
+                            return false;
+                        }
+                    }
+                }
+                
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error in StartCanonRecordingDirect: {ex.Message}");
+                return false;
+            }
+        }
+        
+        private async Task<bool> CheckCanonRecordingStatus()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Checking if Canon camera is actually recording...");
+                
+                var cameraType = _camera.GetType();
+                var cameraField = cameraType.GetField("Camera", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                
+                if (cameraField != null)
+                {
+                    var canonCamera = cameraField.GetValue(_camera);
+                    if (canonCamera != null)
+                    {
+                        var canonCameraType = canonCamera.GetType();
+                        var getPropertyMethod = canonCameraType.GetMethod("GetProperty", BindingFlags.Public | BindingFlags.Instance);
+                        
+                        if (getPropertyMethod != null)
+                        {
+                            try
+                            {
+                                // PropID_Record = 0x00000510
+                                const uint PropID_Record = 0x00000510;
+                                var recordStatus = getPropertyMethod.Invoke(canonCamera, new object[] { PropID_Record });
+                                
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Canon PropID_Record status: {recordStatus}");
+                                
+                                // Value 4 means recording, 0 means not recording
+                                // Canon R100 may return 3 when ready to record, need to trigger actual recording
+                                int status = recordStatus != null ? Convert.ToInt32(recordStatus) : 0;
+                                
+                                if (status == 4)
+                                {
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] Canon camera IS recording (status=4)");
+                                    return true;
+                                }
+                                else if (status == 3)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Canon camera in READY state (status=3), attempting to trigger recording...");
+                                    
+                                    // Canon R100 needs an additional trigger to start recording
+                                    // Try sending the record start command again
+                                    try
+                                    {
+                                        var setPropertyMethod = canonCameraType.GetMethod("SetPropertyIntegerData", BindingFlags.Public | BindingFlags.Instance);
+                                        if (setPropertyMethod != null)
+                                        {
+                                            System.Diagnostics.Debug.WriteLine("[VIDEO] Sending PropID_Record=4 to trigger actual recording...");
+                                            setPropertyMethod.Invoke(canonCamera, new object[] { PropID_Record, (long)4 });
+                                            Thread.Sleep(500);
+                                            
+                                            // Check status again
+                                            var newStatus = getPropertyMethod.Invoke(canonCamera, new object[] { PropID_Record });
+                                            if (newStatus != null && Convert.ToInt32(newStatus) == 4)
+                                            {
+                                                System.Diagnostics.Debug.WriteLine("[VIDEO] Canon camera NOW recording after trigger");
+                                                return true;
+                                            }
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Error triggering recording: {ex.Message}");
+                                    }
+                                    
+                                    return false;
+                                }
+                                else
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Canon camera is NOT recording (status={recordStatus})");
+                                    return false;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error checking record status: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+                
+                // If we can't check, assume it's not recording
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error in CheckCanonRecordingStatus: {ex.Message}");
+                return false;
+            }
+        }
+        
+        private async Task DiagnoseCanonT6VideoCapabilities()
+        {
+            System.Diagnostics.Debug.WriteLine("[VIDEO] ===== CANON T6 VIDEO DIAGNOSTIC =====");
+            
+            try
+            {
+                await Task.Run(() =>
+                {
+                    var cameraType = _camera.GetType();
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera type: {cameraType.Name}");
+                    
+                    // Get device name
+                    if (_camera?.DeviceName != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera model: {_camera.DeviceName}");
+                        
+                        // Check if it's a T6/1300D
+                        if (_camera.DeviceName.Contains("T6") || _camera.DeviceName.Contains("1300D") || 
+                            _camera.DeviceName.Contains("Rebel"))
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] DETECTED: Canon EOS Rebel T6 (1300D)");
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] NOTE: This camera model has limited SDK video recording support");
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] WORKAROUND: Manual mode dial adjustment to MOVIE mode may be required");
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] ALTERNATIVE: Consider using external recording tools or HDMI capture");
+                        }
+                    }
+                    
+                    // Try to get the Canon camera object for more diagnostics
+                    var cameraField = cameraType.GetField("Camera", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    
+                    if (cameraField != null)
+                    {
+                        var canonCamera = cameraField.GetValue(_camera);
+                        if (canonCamera != null)
+                        {
+                            var canonCameraType = canonCamera.GetType();
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Internal Canon camera type: {canonCameraType.Name}");
+                            
+                            // Check if it's an old Canon model
+                            var isOldCanonMethod = canonCameraType.GetMethod("IsOldCanon", 
+                                BindingFlags.Public | BindingFlags.Instance);
+                            
+                            if (isOldCanonMethod != null)
+                            {
+                                var isOld = isOldCanonMethod.Invoke(canonCamera, null);
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Is old Canon model: {isOld}");
+                            }
+                            
+                            // Check current recording capabilities
+                            var getPropertyMethod = canonCameraType.GetMethod("GetProperty", 
+                                BindingFlags.Public | BindingFlags.Instance);
+                            
+                            if (getPropertyMethod != null)
+                            {
+                                try
+                                {
+                                    // Check if PropID_Record is available
+                                    const uint PropID_Record = 0x00000510;
+                                    var recordStatus = getPropertyMethod.Invoke(canonCamera, new object[] { PropID_Record });
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] PropID_Record current value: {recordStatus}");
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] PropID_Record is available - SDK video recording might work");
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] PropID_Record not available: {ex.Message}");
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] WARNING: This camera may not support SDK video recording");
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] The Canon T6 requires the mode dial to be physically set to MOVIE mode");
+                                }
+                                
+                                try
+                                {
+                                    // Check live view status
+                                    const uint PropID_Evf_Mode = 0x00000500;
+                                    var liveViewStatus = getPropertyMethod.Invoke(canonCamera, new object[] { PropID_Evf_Mode });
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Live view mode: {liveViewStatus}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Cannot check live view: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                System.Diagnostics.Debug.WriteLine("[VIDEO] ===== DIAGNOSTIC COMPLETE =====");
+                System.Diagnostics.Debug.WriteLine("[VIDEO] RECOMMENDATION: For Canon T6, ensure:");
+                System.Diagnostics.Debug.WriteLine("[VIDEO] 1. Camera mode dial is physically set to MOVIE mode (video camera icon)");
+                System.Diagnostics.Debug.WriteLine("[VIDEO] 2. Live view is enabled before attempting to record");
+                System.Diagnostics.Debug.WriteLine("[VIDEO] 3. Camera firmware is up to date");
+                System.Diagnostics.Debug.WriteLine("[VIDEO] 4. Memory card has sufficient space and write speed");
+                System.Diagnostics.Debug.WriteLine("[VIDEO] NOTE: The T6 may require physical button press on camera to start/stop recording");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Diagnostic error: {ex.Message}");
+            }
+        }
+        
+        private async Task EnsureCanonMovieMode()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Attempting to switch Canon camera to movie mode...");
+                
+                var cameraType = _camera.GetType();
+                
+                // Try to use reflection to call Canon-specific movie mode commands
+                var sendCommandMethod = cameraType.GetMethod("SendCommand", BindingFlags.Public | BindingFlags.Instance);
+                if (sendCommandMethod == null)
+                {
+                    // Try to find it on the base camera object
+                    var cameraField = cameraType.GetField("Camera", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (cameraField != null)
+                    {
+                        var canonCamera = cameraField.GetValue(_camera);
+                        if (canonCamera != null)
+                        {
+                            var canonCameraType = canonCamera.GetType();
+                            sendCommandMethod = canonCameraType.GetMethod("SendCommand", BindingFlags.Public | BindingFlags.Instance);
+                            
+                            if (sendCommandMethod != null)
+                            {
+                                System.Diagnostics.Debug.WriteLine("[VIDEO] Found SendCommand on Canon camera object");
+                                
+                                // Try to send MovieSelectSwON command (value is 0x00000217)
+                                const uint CameraCommand_MovieSelectSwON = 0x00000217;
+                                
+                                try
+                                {
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] Sending MovieSelectSwON command...");
+                                    // SendCommand might need two parameters: command and parameter
+                                    var parameters = sendCommandMethod.GetParameters();
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] SendCommand expects {parameters.Length} parameters");
+                                    
+                                    if (parameters.Length == 1)
+                                    {
+                                        sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_MovieSelectSwON });
+                                    }
+                                    else if (parameters.Length == 2)
+                                    {
+                                        // Second parameter is usually 0 for no additional parameter
+                                        sendCommandMethod.Invoke(canonCamera, new object[] { CameraCommand_MovieSelectSwON, 0 });
+                                    }
+                                    else
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Unexpected parameter count for SendCommand: {parameters.Length}");
+                                    }
+                                    
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] MovieSelectSwON command sent");
+                                    await Task.Delay(500);
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Error sending MovieSelectSwON: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Also try to set the mode property if available
+                var modeProperty = _camera.Mode;
+                if (modeProperty != null)
+                {
+                    // Check if the property can be set by checking if it has values
+                    if (modeProperty.Values != null && modeProperty.Values.Count > 0)
+                    {
+                        var movieModeValue = modeProperty.Values.FirstOrDefault(v => 
+                            v.ToLower().Contains("movie") || v == "20");
+                        
+                        if (movieModeValue != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Setting mode property to: {movieModeValue}");
+                            try
+                            {
+                                modeProperty.SetValue(movieModeValue);
+                                await Task.Delay(500);
+                                System.Diagnostics.Debug.WriteLine("[VIDEO] Mode property set successfully");
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error setting mode property: {ex.Message}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] Mode property is read-only or has no values");
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Movie mode configuration completed");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error ensuring movie mode: {ex.Message}");
+                // Continue anyway - the camera might work without explicit mode switching
+            }
+        }
+        
+        private void ConfigureCanonSaveToPC()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Configuring Canon camera to save videos to PC...");
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera type: {_camera.GetType().FullName}");
+                
+                // Use reflection to call Canon-specific methods for setting save location
+                var cameraType = _camera.GetType();
+                
+                // List all methods to see what's available
+                var methods = cameraType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Available methods on camera:");
+                foreach (var method in methods.Where(m => m.Name.Contains("Save") || m.Name.Contains("Host")))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO]   - {method.Name}({string.Join(", ", method.GetParameters().Select(p => p.ParameterType.Name))})");
+                }
+                
+                // Try to call SavePicturesToHost if it exists
+                var savePicturesToHostMethod = cameraType.GetMethod("SavePicturesToHost");
+                if (savePicturesToHostMethod != null)
+                {
+                    // Get the user's Videos folder
+                    string videoDir = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                        "PhotoBooth",
+                        "Videos"
+                    );
+                    
+                    if (!Directory.Exists(videoDir))
+                    {
+                        Directory.CreateDirectory(videoDir);
+                    }
+                    
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Setting Canon save location to: {videoDir}");
+                    savePicturesToHostMethod.Invoke(_camera, new object[] { videoDir });
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] Canon camera configured to save to PC successfully");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] SavePicturesToHost method not found on Canon camera");
+                    
+                    // Try alternative methods - check for any SaveTo property
+                    var saveToProperty = cameraType.GetProperty("SaveTo");
+                    if (saveToProperty != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] Found SaveTo property, attempting to set to Host");
+                        try
+                        {
+                            // Try to set SaveTo to Host (value 2)
+                            saveToProperty.SetValue(_camera, 2);
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Set SaveTo property to Host (2)");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Error setting SaveTo property: {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] No SaveTo property found either");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error configuring Canon save location: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Stack trace: {ex.StackTrace}");
+                // Continue anyway - the default might work
+            }
+        }
+        
+        private async Task CheckForCanonVideoDownload()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Checking for Canon video files on memory card...");
+                
+                if (_camera.GetType().Name.Contains("Canon"))
+                {
+                    // Give the camera time to finish writing the video file
+                    await Task.Delay(2000);
+                    
+                    // Try to download the most recent video file from the camera
+                    var downloaded = await DownloadLatestVideoFromCanon();
+                    
+                    if (downloaded)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] Successfully downloaded video from Canon camera");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("[VIDEO] No new video files found on Canon camera");
+                        
+                        // Try alternative method - check if GetFile method exists
+                        var cameraType = _camera.GetType();
+                        var getFileMethod = cameraType.GetMethod("GetFile", BindingFlags.Public | BindingFlags.Instance);
+                        
+                        if (getFileMethod != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Found GetFile method, attempting to use it");
+                            
+                            // Look for video files with common naming patterns
+                            var possibleNames = new[]
+                            {
+                                $"MVI_{DateTime.Now:yyyyMMdd}*.MP4",
+                                $"MVI_{DateTime.Now:yyyyMMdd}*.MOV",
+                                "*.MP4",
+                                "*.MOV"
+                            };
+                            
+                            foreach (var pattern in possibleNames)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Looking for files matching: {pattern}");
+                                // Note: GetFile needs exact filename, so this is just for documentation
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error checking for Canon video download: {ex.Message}");
+            }
+        }
+        
+        private async Task<bool> DownloadLatestVideoFromCanon()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Attempting to download latest video from Canon camera...");
+                
+                // Get all objects from the camera's memory card
+                var objects = _camera.GetObjects(null, false);
+                
+                if (objects == null || objects.Count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] No files found on camera");
+                    return false;
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Found {objects.Count} files on camera");
+                
+                // First, let's see what files are actually on the camera
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Listing last 10 files on camera:");
+                int startIndex = Math.Max(0, objects.Count - 10);
+                for (int i = startIndex; i < objects.Count; i++)
+                {
+                    if (objects[i].FileName != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO]   - {objects[i].FileName}");
+                    }
+                }
+                
+                // Filter for video files (MP4, MOV, AVI, MTS, M2TS)
+                // Canon cameras might use MTS or M2TS for AVCHD format
+                var videoFiles = new List<DeviceObject>();
+                foreach (var obj in objects)
+                {
+                    if (obj.FileName != null)
+                    {
+                        var fileName = obj.FileName.ToUpper();
+                        var ext = Path.GetExtension(fileName);
+                        
+                        // Check for various video extensions and patterns
+                        bool isVideo = ext == ".MP4" || ext == ".MOV" || ext == ".AVI" || 
+                                      ext == ".MTS" || ext == ".M2TS" || ext == ".MPG" ||
+                                      ext == ".MPEG" || ext == ".MXF" ||
+                                      fileName.StartsWith("MVI_") || fileName.StartsWith("MOV_") ||
+                                      fileName.StartsWith("VID_");
+                        
+                        if (isVideo)
+                        {
+                            videoFiles.Add(obj);
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Found video file: {obj.FileName}");
+                        }
+                    }
+                }
+                
+                if (videoFiles.Count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] No video files found on camera");
+                    return false;
+                }
+                
+                // Get the most recent video file (assuming it's the last one)
+                var latestVideo = videoFiles[videoFiles.Count - 1];
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Latest video file: {latestVideo.FileName}");
+                
+                // Download the video file to our expected location
+                if (!string.IsNullOrEmpty(_currentVideoPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Downloading {latestVideo.FileName} to {_currentVideoPath}...");
+                    
+                    await Task.Run(() =>
+                    {
+                        try
+                        {
+                            _camera.TransferFile(latestVideo.Handle, _currentVideoPath);
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Download completed successfully");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Error during file transfer: {ex.Message}");
+                            
+                            // Try alternative download using GetFile if available
+                            var cameraType = _camera.GetType();
+                            var getFileMethod = cameraType.GetMethod("GetFile", 
+                                BindingFlags.Public | BindingFlags.Instance,
+                                null,
+                                new Type[] { typeof(string), typeof(string) },
+                                null);
+                            
+                            if (getFileMethod != null)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Trying GetFile method with {latestVideo.FileName}");
+                                getFileMethod.Invoke(_camera, new object[] { latestVideo.FileName, _currentVideoPath });
+                            }
+                        }
+                    });
+                    
+                    // Check if the file was downloaded successfully
+                    if (File.Exists(_currentVideoPath))
+                    {
+                        var fileInfo = new FileInfo(_currentVideoPath);
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] *** SUCCESS! Video downloaded: {_currentVideoPath} ***");
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] File size: {fileInfo.Length / 1024.0 / 1024.0:F2} MB");
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error downloading video from Canon: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Stack trace: {ex.StackTrace}");
+                return false;
+            }
+        }
+        
+        private async Task SwitchBackToPhotoModeIfNeeded()
+        {
+            try
+            {
+                // Check if it's a Canon camera
+                if (_camera.GetType().Name.Contains("Canon"))
+                {
+                    var modeProperty = _camera.Mode;
+                    if (modeProperty != null)
+                    {
+                        // Check current mode first
+                        var currentMode = modeProperty.Value;
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Current camera mode: {currentMode}");
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Original stored mode: {_originalCameraMode}");
+                        
+                        // Debug: Show all available modes
+                        if (modeProperty.Values != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Available camera modes: {string.Join(", ", modeProperty.Values)}");
+                        }
+                        
+                        // If we have the original mode stored, try to restore it
+                        if (!string.IsNullOrEmpty(_originalCameraMode))
+                        {
+                            // Check if the current mode is already the original mode
+                            if (currentMode != null && currentMode.Equals(_originalCameraMode, StringComparison.OrdinalIgnoreCase))
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera already in original mode ({_originalCameraMode}), keeping it");
+                                return;
+                            }
+                            
+                            // Try to restore the original mode
+                            if (modeProperty.Values?.Contains(_originalCameraMode) == true)
+                            {
+                                try
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Restoring original camera mode: {_originalCameraMode}");
+                                    modeProperty.SetValue(_originalCameraMode);
+                                    await Task.Delay(500);
+                                    System.Diagnostics.Debug.WriteLine("[VIDEO] Successfully restored original camera mode");
+                                    return;
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Failed to restore original mode: {ex.Message}");
+                                    // Fall through to default mode selection
+                                }
+                            }
+                        }
+                        
+                        // Fallback: If current mode is already Manual (M), don't change it
+                        if (currentMode != null && currentMode.Equals("M", StringComparison.OrdinalIgnoreCase))
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] Camera is in Manual mode (M), keeping it");
+                            return;
+                        }
+                        
+                        // Priority order: Manual (M) > Program > Av > Tv
+                        // Look for Manual mode first to preserve user's dial setting
+                        var photoMode = modeProperty.Values?.FirstOrDefault(v => 
+                            v.Equals("M", StringComparison.OrdinalIgnoreCase)) ??
+                        modeProperty.Values?.FirstOrDefault(v => 
+                            v.ToLower().Contains("program")) ??
+                        modeProperty.Values?.FirstOrDefault(v => 
+                            v.ToLower().Contains("av")) ??
+                        modeProperty.Values?.FirstOrDefault(v => 
+                            v.ToLower().Contains("tv"));
+                        
+                        if (photoMode != null)
+                        {
+                            try
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Switching back to photo mode: {photoMode}");
+                                modeProperty.SetValue(photoMode);
+                                await Task.Delay(500);
+                                System.Diagnostics.Debug.WriteLine("[VIDEO] Successfully switched back to photo mode");
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Failed to switch back to photo mode: {ex.Message}");
+                            }
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine("[VIDEO] No suitable photo mode found in available modes");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error switching back to photo mode: {ex.Message}");
+            }
+        }
+        
+        private bool IsVideoRecordingSupported()
+        {
+            try
+            {
+                // Check if camera has the StartRecordMovie method
+                if (_camera == null)
+                    return false;
+                
+                // For Canon cameras, check if it's a model that supports video
+                string cameraName = _camera.GetType().Name;
+                if (cameraName.Contains("Canon"))
+                {
+                    // Most modern Canon DSLRs support video, but some older ones don't
+                    // You might want to check specific model capabilities here
+                    string deviceName = _camera.DeviceName?.ToLower() ?? "";
+                    
+                    // These older models don't support video
+                    string[] nonVideoModels = { "40d", "30d", "20d", "10d", "5d", "350d", "400d" };
+                    foreach (var model in nonVideoModels)
+                    {
+                        if (deviceName.Contains(model))
+                            return false;
+                    }
+                }
+                
+                // For other camera types, assume they support video if they have the method
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        private void OnRecordingTimerElapsed(object sender, ElapsedEventArgs e)
+        {
+            if (_isRecording)
+            {
+                RecordingProgress?.Invoke(this, ElapsedTime);
+                
+                // Check if we've reached max duration
+                if (MaxDuration > TimeSpan.Zero && ElapsedTime >= MaxDuration)
+                {
+                    _ = StopRecordingAsync();
+                }
+            }
+        }
+        
+        private void SavePhotoSettings()
+        {
+            if (_camera == null) return;
+            
+            try
+            {
+                _savedPhotoSettings = new PhotoSettings
+                {
+                    ISO = _camera.IsoNumber?.Value ?? "Auto",
+                    Aperture = _camera.FNumber?.Value ?? "Auto",
+                    ShutterSpeed = _camera.ShutterSpeed?.Value ?? "Auto",
+                    WhiteBalance = _camera.WhiteBalance?.Value ?? "Auto",
+                    FocusMode = _camera.FocusMode?.Value ?? "Auto",
+                    ExposureCompensation = _camera.ExposureCompensation?.Value ?? "0"
+                };
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Saved photo settings - ISO: {_savedPhotoSettings.ISO}, Aperture: {_savedPhotoSettings.Aperture}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error saving photo settings: {ex.Message}");
+            }
+        }
+        
+        private void ApplyVideoSettings()
+        {
+            if (_camera == null) return;
+            
+            try
+            {
+                // Load video settings from Properties.Settings
+                var settings = Settings.Default;
+                
+                // Apply each video setting if it's not "Auto"
+                if (!string.IsNullOrEmpty(settings.VideoISO) && settings.VideoISO != "Auto")
+                {
+                    SetPropertyToValue(_camera.IsoNumber, settings.VideoISO);
+                }
+                
+                if (!string.IsNullOrEmpty(settings.VideoAperture) && settings.VideoAperture != "Auto")
+                {
+                    SetPropertyToValue(_camera.FNumber, settings.VideoAperture);
+                }
+                
+                if (!string.IsNullOrEmpty(settings.VideoShutterSpeed) && settings.VideoShutterSpeed != "Auto")
+                {
+                    SetPropertyToValue(_camera.ShutterSpeed, settings.VideoShutterSpeed);
+                }
+                
+                if (!string.IsNullOrEmpty(settings.VideoWhiteBalance) && settings.VideoWhiteBalance != "Auto")
+                {
+                    SetPropertyToValue(_camera.WhiteBalance, settings.VideoWhiteBalance);
+                }
+                
+                if (!string.IsNullOrEmpty(settings.VideoFocusMode))
+                {
+                    SetPropertyToValue(_camera.FocusMode, settings.VideoFocusMode);
+                }
+                
+                if (!string.IsNullOrEmpty(settings.VideoExposureCompensation))
+                {
+                    SetPropertyToValue(_camera.ExposureCompensation, settings.VideoExposureCompensation);
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Applied video settings - ISO: {settings.VideoISO}, Aperture: {settings.VideoAperture}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error applying video settings: {ex.Message}");
+            }
+        }
+        
+        private void RestorePhotoSettings()
+        {
+            if (_camera == null || _savedPhotoSettings == null) return;
+            
+            try
+            {
+                SetPropertyToValue(_camera.IsoNumber, _savedPhotoSettings.ISO);
+                SetPropertyToValue(_camera.FNumber, _savedPhotoSettings.Aperture);
+                SetPropertyToValue(_camera.ShutterSpeed, _savedPhotoSettings.ShutterSpeed);
+                SetPropertyToValue(_camera.WhiteBalance, _savedPhotoSettings.WhiteBalance);
+                SetPropertyToValue(_camera.FocusMode, _savedPhotoSettings.FocusMode);
+                SetPropertyToValue(_camera.ExposureCompensation, _savedPhotoSettings.ExposureCompensation);
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Restored photo settings - ISO: {_savedPhotoSettings.ISO}, Aperture: {_savedPhotoSettings.Aperture}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error restoring photo settings: {ex.Message}");
+            }
+        }
+        
+        private void SetPropertyToValue(PropertyValue<long> property, string targetValue)
+        {
+            if (property == null || !property.IsEnabled || string.IsNullOrEmpty(targetValue)) return;
+            
+            try
+            {
+                // Find the target value in the property's available values
+                foreach (var value in property.Values)
+                {
+                    if (value == targetValue)
+                    {
+                        property.Value = targetValue;
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error setting property value: {ex.Message}");
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_isRecording)
+            {
+                _ = StopRecordingAsync();
+            }
+            
+            _recordingTimer?.Dispose();
+        }
+    }
+
+    public class VideoRecordingEventArgs : EventArgs
+    {
+        public string FilePath { get; set; }
+        public DateTime StartTime { get; set; }
+        public TimeSpan Duration { get; set; }
+    }
+}

@@ -60,6 +60,39 @@
             <Setter Property="Padding" Value="10,5"/>
             <Setter Property="FontSize" Value="14"/>
         </Style>
+        
+        <!-- Modern Toggle Button Style -->
+        <Style x:Key="ModernToggleButtonStyle" TargetType="ToggleButton">
+            <Setter Property="Background" Value="{StaticResource SurfacePanelBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource SurfaceTextPrimaryBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{StaticResource SurfaceBorderBrush}"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="5"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource SurfaceButtonHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Background" Value="{StaticResource SurfacePrimaryBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- Prominent Test Capture Button Style -->
         <Style x:Key="TestCaptureButtonStyle" TargetType="Button">
@@ -108,15 +141,55 @@
         </Style>
     </Page.Resources>
 
-    <Grid Margin="10">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="400"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+    <TabControl Background="{StaticResource SurfaceBackgroundBrush}" 
+                BorderBrush="{StaticResource SurfaceBorderBrush}"
+                Margin="10"
+                SelectionChanged="TabControl_SelectionChanged">
+        <TabControl.Resources>
+            <Style TargetType="TabItem">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TabItem">
+                            <Border Name="Border" 
+                                    Background="{StaticResource SurfacePanelBrush}" 
+                                    BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                    BorderThickness="1,1,1,0"
+                                    CornerRadius="5,5,0,0"
+                                    Margin="0,0,2,0"
+                                    Padding="15,8">
+                                <ContentPresenter x:Name="ContentSite"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Center"
+                                                  ContentSource="Header"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{StaticResource SurfacePrimaryBrush}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource SurfaceTextPrimaryBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="False">
+                                    <Setter Property="Foreground" Value="{StaticResource SurfaceTextSecondaryBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+        </TabControl.Resources>
+        
+        <!-- Photo Settings Tab -->
+        <TabItem Header="📷 Photo Settings">
+            <Grid Margin="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="400"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-        <!-- Left Column - Settings -->
-        <ScrollViewer Grid.Column="0" Margin="0,0,10,0">
-            <StackPanel>
+                <!-- Left Column - Settings -->
+                <ScrollViewer Grid.Column="0" Margin="0,0,10,0">
+                    <StackPanel>
                 <!-- Header -->
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <StackPanel>
@@ -369,4 +442,318 @@
             </Grid>
         </Border>
     </Grid>
+        </TabItem>
+        
+        <!-- Video Settings Tab -->
+        <TabItem Header="🎥 Video Settings">
+            <Grid Margin="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="400"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left Column - Video Settings -->
+                <ScrollViewer Grid.Column="0" Margin="0,0,10,0">
+                    <StackPanel>
+                        <!-- Header -->
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Video Recording Settings" 
+                                           FontSize="24" 
+                                           FontWeight="Bold" 
+                                           Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="Configure video recording parameters" 
+                                           FontSize="14" 
+                                           Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
+                                           HorizontalAlignment="Center" 
+                                           TextWrapping="Wrap"
+                                           Margin="0,10,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Video Mode Camera Settings -->
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Video Mode Camera Settings" 
+                                           FontSize="18" 
+                                           FontWeight="Bold" 
+                                           Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
+                                           Margin="0,0,0,10"/>
+                                
+                                <!-- ISO for Video -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="ISO" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button x:Name="videoIsoPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" />
+                                        <TextBlock x:Name="videoIsoValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                        <Button x:Name="videoIsoNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Aperture for Video -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Aperture (f/)" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button x:Name="videoAperturePrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" />
+                                        <TextBlock x:Name="videoApertureValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                        <Button x:Name="videoApertureNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Shutter Speed for Video -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Shutter Speed" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button x:Name="videoShutterPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" />
+                                        <TextBlock x:Name="videoShutterValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                        <Button x:Name="videoShutterNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- White Balance for Video -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="White Balance" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button x:Name="videoWbPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" />
+                                        <TextBlock x:Name="videoWbValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                        <Button x:Name="videoWbNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Focus Mode for Video -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Focus Mode" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button x:Name="videoFocusPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" />
+                                        <TextBlock x:Name="videoFocusValueText" Text="Continuous AF" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                        <Button x:Name="videoFocusNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Exposure Compensation for Video -->
+                                <StackPanel Margin="0,0,0,0">
+                                    <TextBlock Text="Exposure Compensation" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button x:Name="videoExposurePrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" />
+                                        <TextBlock x:Name="videoExposureValueText" Text="0" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                        <Button x:Name="videoExposureNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Video Format Settings -->
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Video Format Settings" 
+                                           FontSize="18" 
+                                           FontWeight="Bold" 
+                                           Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
+                                           Margin="0,0,0,10"/>
+                                
+                                <!-- Frame Rate -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Frame Rate" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button x:Name="videoFrameRatePrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" />
+                                        <TextBlock x:Name="videoFrameRateValueText" Text="30 fps" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                        <Button x:Name="videoFrameRateNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Video Quality/Codec -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Video Quality" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button x:Name="videoQualityPrevButton" Content="◀" Style="{StaticResource SettingButtonStyle}" />
+                                        <TextBlock x:Name="videoQualityValueText" Text="High (ALL-I)" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
+                                        <Button x:Name="videoQualityNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Boomerang Settings -->
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Boomerang Settings" 
+                                           FontSize="18" 
+                                           FontWeight="Bold" 
+                                           Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
+                                           Margin="0,0,0,10"/>
+                                
+                                <!-- Boomerang Duration -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Boomerang Duration" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Slider x:Name="boomerangDurationSlider" 
+                                                Grid.Column="0"
+                                                Minimum="1" 
+                                                Maximum="5" 
+                                                Value="3"
+                                                TickFrequency="0.5"
+                                                IsSnapToTickEnabled="True"/>
+                                        <TextBlock x:Name="boomerangDurationText" 
+                                                   Grid.Column="1"
+                                                   Text="3s" 
+                                                   Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
+                                                   VerticalAlignment="Center"
+                                                   HorizontalAlignment="Center"/>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Loop Count -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Loop Count" Foreground="{StaticResource SurfaceTextPrimaryBrush}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <ComboBox x:Name="boomerangLoopCombo" Style="{StaticResource SettingComboBoxStyle}">
+                                        <ComboBoxItem Content="1 (Forward only)"/>
+                                        <ComboBoxItem Content="2 (Forward + Reverse)" IsSelected="True"/>
+                                        <ComboBoxItem Content="3 (Forward + Reverse + Forward)"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Action Buttons -->
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel>
+                                <Button x:Name="testVideoButton"
+                                        Content="🎬 TEST VIDEO RECORDING" 
+                                        Style="{StaticResource TestCaptureButtonStyle}" 
+                                        Padding="20,15"
+                                        FontSize="16"
+                                        FontWeight="Bold"
+                                        HorizontalAlignment="Stretch"
+                                        Margin="0,0,0,10"/>
+                                
+                                <Button x:Name="saveVideoSettingsButton"
+                                        Content="Save Video Settings" 
+                                        Style="{StaticResource SettingButtonStyle}" 
+                                        Padding="15,10"
+                                        FontSize="14"
+                                        HorizontalAlignment="Stretch"
+                                        Margin="0,0,0,10"/>
+                                
+                                <Button x:Name="resetVideoSettingsButton"
+                                        Content="Reset to Defaults" 
+                                        Style="{StaticResource SettingButtonStyle}" 
+                                        Padding="15,10"
+                                        FontSize="14"
+                                        HorizontalAlignment="Stretch"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Right Column - Video Preview -->
+                <Border Grid.Column="1" Style="{StaticResource SettingsCardStyle}" Margin="10,0,0,0">
+                    <Grid>
+                        <!-- Header -->
+                        <TextBlock Text="Video Preview" 
+                                   FontSize="24" 
+                                   FontWeight="Bold" 
+                                   Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Top"
+                                   Margin="0,0,0,20"/>
+
+                        <!-- Live View Area -->
+                        <Border Background="{StaticResource SurfacePrimaryBrush}" 
+                                CornerRadius="10" 
+                                Margin="0,50,0,0">
+                            <Grid>
+                                <!-- Live View Image -->
+                                <Image x:Name="videoLiveViewImage" 
+                                       Stretch="Uniform"
+                                       Margin="10"/>
+                                
+                                <!-- Placeholder when live view is not active -->
+                                <StackPanel x:Name="videoPlaceholder" 
+                                            VerticalAlignment="Center" 
+                                            HorizontalAlignment="Center"
+                                            Visibility="Visible">
+                                    <TextBlock Text="📷" 
+                                               FontSize="120" 
+                                               Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Live View" 
+                                               FontSize="20" 
+                                               Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
+                                               HorizontalAlignment="Center"
+                                               Margin="0,20,0,0"/>
+                                    <TextBlock Text="Camera preview with video settings applied" 
+                                               FontSize="14" 
+                                               Foreground="{StaticResource SurfaceTextTertiaryBrush}" 
+                                               HorizontalAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               TextAlignment="Center"
+                                               Margin="20,10,20,0"/>
+                                </StackPanel>
+                                
+                                <!-- Live View Controls -->
+                                <StackPanel Orientation="Horizontal" 
+                                            HorizontalAlignment="Center" 
+                                            VerticalAlignment="Bottom" 
+                                            Margin="0,0,0,30">
+                                    <ToggleButton x:Name="liveViewToggleButton" 
+                                                  Content="📷 Start Live View" 
+                                                  Style="{StaticResource ModernToggleButtonStyle}" 
+                                                  Margin="5"
+                                                  Checked="LiveViewToggle_Checked"
+                                                  Unchecked="LiveViewToggle_Unchecked"/>
+                                </StackPanel>
+                                
+                                <!-- Live View Info Overlay -->
+                                <Border Background="#CC000000" 
+                                        CornerRadius="8"
+                                        Padding="10"
+                                        VerticalAlignment="Top" 
+                                        HorizontalAlignment="Right" 
+                                        Margin="20"
+                                        x:Name="liveViewInfoPanel"
+                                        Visibility="Collapsed">
+                                    <StackPanel>
+                                        <TextBlock Text="🔴 LIVE" 
+                                                   Foreground="Red" 
+                                                   FontSize="14"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock x:Name="videoSettingsLiveText" 
+                                                   Text="" 
+                                                   Foreground="{StaticResource SurfaceTextPrimaryBrush}" 
+                                                   FontSize="12"
+                                                   Margin="0,5,0,0"/>
+                                        <Separator Margin="0,5,0,5" Background="#666"/>
+                                        <TextBlock Text="Keyboard Shortcuts:" 
+                                                   Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
+                                                   FontSize="10"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock Text="I+↑↓: ISO" 
+                                                   Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
+                                                   FontSize="9"/>
+                                        <TextBlock Text="A+↑↓: Aperture" 
+                                                   Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
+                                                   FontSize="9"/>
+                                        <TextBlock Text="S+↑↓: Shutter" 
+                                                   Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
+                                                   FontSize="9"/>
+                                        <TextBlock Text="E+↑↓: Exp.Comp" 
+                                                   Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
+                                                   FontSize="9"/>
+                                        <TextBlock Text="W+↑↓: White Bal." 
+                                                   Foreground="{StaticResource SurfaceTextSecondaryBrush}" 
+                                                   FontSize="9"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+        </TabItem>
+    </TabControl>
 </Page>

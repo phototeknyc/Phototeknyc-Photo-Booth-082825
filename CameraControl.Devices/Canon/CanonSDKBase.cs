@@ -1277,6 +1277,12 @@ namespace CameraControl.Devices.Canon
 
         private uint ResetShutterButton()
         {
+            if (Camera == null)
+            {
+                Log.Error("Cannot reset shutter button - Camera object is null");
+                return 0;
+            }
+            
             Camera.SendCommand(Edsdk.CameraCommand_DoEvfAf, 0);
             //ErrorCodes.GetCanonException(Camera.SendCommand(Edsdk.CameraCommand_DoEvfAf, 0));
             return Camera.SendCommand(Edsdk.CameraCommand_PressShutterButton,
@@ -1437,6 +1443,12 @@ namespace CameraControl.Devices.Canon
 
         public override void StartLiveView()
         {
+            if (Camera == null)
+            {
+                Log.Error("Cannot start live view - Camera object is null");
+                return;
+            }
+            
             _recording = false;
             ResetShutterButton();
             //if (!Camera.IsInLiveViewMode) 

@@ -202,8 +202,17 @@ namespace CameraControl.Devices.Others
                 return false;
             }
             DeviceManager = new DeviceManager();
-            DeviceManager.RegisterEvent(Conts.wiaEventItemCreated, deviceDescriptor.WiaId);
-            DeviceManager.OnEvent += DeviceManager_OnEvent;
+            Log.Debug($"[WIA] Registering for wiaEventItemCreated ({Conts.wiaEventItemCreated}) on device {deviceDescriptor.WiaId}");
+            try
+            {
+                DeviceManager.RegisterEvent(Conts.wiaEventItemCreated, deviceDescriptor.WiaId);
+                DeviceManager.OnEvent += DeviceManager_OnEvent;
+                Log.Debug($"[WIA] Event registration completed successfully");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[WIA] Failed to register for events: {ex.Message}");
+            }
 
             try
             {
@@ -448,17 +457,35 @@ namespace CameraControl.Devices.Others
 
         private void DeviceManager_OnEvent(string eventId, string deviceId, string itemId)
         {
-            Item tem = Device.GetItem(itemId);
-            ImageFile imageFile = (ImageFile) tem.Transfer("{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}");
-            PhotoCapturedEventArgs args = new PhotoCapturedEventArgs
+            Log.Debug($"[WIA] DeviceManager_OnEvent fired - EventId: {eventId}, DeviceId: {deviceId}, ItemId: {itemId}");
+            try
             {
-                EventArgs = imageFile,
-                CameraDevice = this,
-                FileName = "00000." + imageFile.FileExtension,
-                Handle = new object[] {imageFile, itemId}
-            };
-            OnPhotoCapture(this, args);
-            OnCaptureCompleted(this, new EventArgs());
+                Item tem = Device.GetItem(itemId);
+                Log.Debug($"[WIA] Got item from device, transferring image...");
+                
+                ImageFile imageFile = (ImageFile) tem.Transfer("{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}");
+                Log.Debug($"[WIA] Image transferred successfully, extension: {imageFile.FileExtension}");
+                
+                PhotoCapturedEventArgs args = new PhotoCapturedEventArgs
+                {
+                    EventArgs = imageFile,
+                    CameraDevice = this,
+                    FileName = "00000." + imageFile.FileExtension,
+                    Handle = new object[] {imageFile, itemId}
+                };
+                
+                Log.Debug($"[WIA] Firing OnPhotoCapture event");
+                OnPhotoCapture(this, args);
+                OnCaptureCompleted(this, new EventArgs());
+                IsBusy = false;
+                Log.Debug($"[WIA] Photo capture event handling completed");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[WIA] Error in DeviceManager_OnEvent: {ex.Message}");
+                Log.Error($"[WIA] Stack trace: {ex.StackTrace}");
+                IsBusy = false;
+            }
         }
 
         public WiaCameraDevice()
@@ -654,25 +681,96 @@ namespace CameraControl.Devices.Others
 
         public override void CapturePhoto()
         {
+            Log.Debug($"[WIA] CapturePhoto called for {DeviceName}");
             Monitor.Enter(Locker);
             try
             {
                 IsBusy = true;
-                Device.ExecuteCommand(Conts.wiaCommandTakePicture);
+                Log.Debug($"[WIA] Device connected: {IsConnected}, IsBusy set to true");
+                
+                // Log available commands
+                try
+                {
+                    Log.Debug($"[WIA] Checking device commands...");
+                    foreach (DeviceCommand cmd in Device.Commands)
+                    {
+                        Log.Debug($"[WIA] Available command: {cmd.Name} (ID: {cmd.CommandID})");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"[WIA] Error listing commands: {ex.Message}");
+                }
+                
+                // Try to execute take picture command
+                Log.Debug($"[WIA] Executing wiaCommandTakePicture ({Conts.wiaCommandTakePicture})");
+                
+                // Check if device supports the command
+                bool commandSupported = false;
+                foreach (DeviceCommand cmd in Device.Commands)
+                {
+                    if (cmd.CommandID == Conts.wiaCommandTakePicture)
+                    {
+                        commandSupported = true;
+                        break;
+                    }
+                }
+                
+                if (!commandSupported)
+                {
+                    Log.Error($"[WIA] Device does not support wiaCommandTakePicture command!");
+                    Log.Debug($"[WIA] Attempting alternative capture method via item transfer...");
+                    
+                    // Try alternative: transfer first item if it exists
+                    if (Device.Items.Count > 0)
+                    {
+                        Log.Debug($"[WIA] Found {Device.Items.Count} items on device, attempting transfer of first item");
+                        Item item = Device.Items[1]; // WIA collections are 1-indexed
+                        ImageFile imageFile = (ImageFile)item.Transfer("{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}");
+                        
+                        PhotoCapturedEventArgs args = new PhotoCapturedEventArgs
+                        {
+                            EventArgs = imageFile,
+                            CameraDevice = this,
+                            FileName = "00000." + imageFile.FileExtension,
+                            Handle = new object[] {imageFile, item.ItemID}
+                        };
+                        
+                        OnPhotoCapture(this, args);
+                        OnCaptureCompleted(this, new EventArgs());
+                        IsBusy = false;
+                        Log.Debug($"[WIA] Alternative capture method completed");
+                        return;
+                    }
+                    else
+                    {
+                        Log.Error($"[WIA] No items found on device for alternative capture");
+                        throw new NotSupportedException("Camera does not support remote capture via WIA");
+                    }
+                }
+                else
+                {
+                    Device.ExecuteCommand(Conts.wiaCommandTakePicture);
+                    Log.Debug($"[WIA] ExecuteCommand completed successfully");
+                }
             }
             catch (COMException comException)
             {
                 IsBusy = false;
+                Log.Error($"[WIA] COMException during capture: 0x{comException.ErrorCode:X8} - {comException.Message}");
                 ErrorCodes.GetException(comException);
             }
-            catch
+            catch (Exception ex)
             {
                 IsBusy = false;
+                Log.Error($"[WIA] Exception during capture: {ex.GetType().Name} - {ex.Message}");
+                Log.Error($"[WIA] Stack trace: {ex.StackTrace}");
                 throw;
             }
             finally
             {
                 Monitor.Exit(Locker);
+                Log.Debug($"[WIA] CapturePhoto completed, IsBusy: {IsBusy}");
             }
         }
 

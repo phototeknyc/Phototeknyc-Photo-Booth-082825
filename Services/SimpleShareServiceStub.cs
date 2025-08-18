@@ -148,5 +148,6 @@ namespace Photobooth.Services
         public string WebUrl { get; set; }
         public string ThumbnailUrl { get; set; }
         public DateTime UploadedAt { get; set; }
+        public bool IsVideo { get; set; } = false;
     }
 }

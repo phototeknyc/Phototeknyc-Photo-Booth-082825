@@ -18,6 +18,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Diagnostics;
 using System.Windows.Threading;
 using Path = System.IO.Path;
 using System.Drawing;
@@ -31,7 +32,7 @@ using System.Data.SQLite;
 
 namespace Photobooth.Pages
 {
-    public partial class PhotoboothTouchModern : Page
+    public partial class PhotoboothTouchModern : Page, INotifyPropertyChanged
     {
         private System.Threading.CancellationTokenSource currentCaptureToken;
         // Use singleton camera manager to maintain session across screens
@@ -83,6 +84,18 @@ namespace Photobooth.Pages
         // Filter service - using hybrid Magick.NET/GDI+ service for best performance
         private PhotoFilterServiceHybrid filterService;
         
+        // Video/Photo settings management
+        private class SavedPhotoSettings
+        {
+            public string ISO { get; set; }
+            public string Aperture { get; set; }
+            public string ShutterSpeed { get; set; }
+            public string WhiteBalance { get; set; }
+            public string FocusMode { get; set; }
+            public string ExposureCompensation { get; set; }
+        }
+        private SavedPhotoSettings savedPhotoSettings;
+        
         // Printing service
         private PrintingService printingService;
         
@@ -95,9 +108,24 @@ namespace Photobooth.Pages
         // Cloud sharing services
         private SessionManager sessionManager;
         private SimpleShareService shareService;
+        
+        // Flipbook service
+        private FlipbookService flipbookService;
+        private bool isRecordingFlipbook = false;
+        private DispatcherTimer flipbookTimer;
+        private int flipbookElapsedSeconds = 0;
         // Removed unused fields - now managed by services
         
         // Refactored services
+        
+        // Video and Boomerang modules
+        private VideoRecordingService videoService;
+        private BoomerangService boomerangService;
+        private PhotoboothModulesConfig modulesConfig;
+        private bool isRecording = false;
+        private bool isCapturingBoomerang = false;
+        public bool IsRecording => isRecording;
+        public bool IsCapturingBoomerang => isCapturingBoomerang;
         private SharingOperations sharingOperations;
         private CameraOperations cameraOperations;
         private PhotoProcessingOperations photoProcessingOperations;
@@ -132,6 +160,11 @@ namespace Photobooth.Pages
             cameraOperations = new CameraOperations(this);
             photoProcessingOperations = new PhotoProcessingOperations(this);
             pinLockService = new PinLockService(this);
+            
+            // Initialize video and boomerang modules
+            modulesConfig = PhotoboothModulesConfig.Instance;
+            videoService = new VideoRecordingService();
+            boomerangService = new BoomerangService();
             
             // Initialize UI Layout Service
             uiLayoutService = new UILayoutService();
@@ -330,6 +363,15 @@ namespace Photobooth.Pages
             DeviceManager.CameraConnected += DeviceManager_CameraConnected;
             DeviceManager.PhotoCaptured += DeviceManager_PhotoCaptured;
             DeviceManager.CameraDisconnected += DeviceManager_CameraDisconnected;
+            
+            // Initialize video and boomerang services with camera
+            if (DeviceManager.SelectedCameraDevice != null)
+            {
+                videoService.Initialize(DeviceManager.SelectedCameraDevice);
+            }
+            
+            // Update button visibility based on settings
+            UpdateModuleButtonVisibility();
             Log.Debug("PhotoboothTouch_Loaded: Subscribed to camera events");
             
             // Subscribe to printer status events
@@ -636,6 +678,8 @@ namespace Photobooth.Pages
                 Log.Debug("StartButton_Click: Triggered from centered touch button");
             }
             
+            Log.Debug($"START BUTTON DEBUG: currentEvent={currentEvent?.Name}, currentTemplate={currentTemplate?.Name}, currentPhotoIndex={currentPhotoIndex}");
+            
             if (DeviceManager.SelectedCameraDevice == null)
             {
                 UpdateStatusText("No camera connected");
@@ -679,30 +723,69 @@ namespace Photobooth.Pages
             }
 
             // Check if we need to select a template for this session
-            if (currentEvent != null && currentPhotoIndex == 0)
+            // Check if we need to select a template (regardless of currentPhotoIndex)
+            if (currentTemplate == null)
             {
-                // Check if we need to select a template
-                if (currentTemplate == null)
+                Log.Debug($"START BUTTON DEBUG: No template selected, checking available templates. Count: {eventTemplateService.AvailableTemplates?.Count ?? 0}");
+                
+                // Ensure templates are loaded for current event
+                if (currentEvent != null)
                 {
-                    Log.Debug($"START BUTTON DEBUG: No template selected, checking available templates. Count: {eventTemplateService.AvailableTemplates?.Count ?? 0}");
-                    
-                    // No template selected yet - check if we need to show selection
-                    if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 1)
-                    {
-                        Log.Debug("START BUTTON DEBUG: Multiple templates available - showing selection");
-                        // Multiple templates available - show selection
-                        ShowTemplateSelectionForSession();
-                        return;
-                    }
-                    else if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count == 1)
-                    {
-                        // Single template - use it automatically
-                        currentTemplate = eventTemplateService.AvailableTemplates[0];
-                        totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
-                        UpdatePhotoStripPlaceholders();
-                    }
+                    Log.Debug($"START BUTTON DEBUG: Loading templates for event: {currentEvent.Name}");
+                    eventTemplateService.LoadAvailableTemplates(currentEvent.Id);
+                    Log.Debug($"START BUTTON DEBUG: After loading - template count: {eventTemplateService.AvailableTemplates?.Count ?? 0}");
                 }
-                // If template is already selected, continue with the session
+                
+                // No template selected yet - check if we need to show selection
+                if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 1)
+                {
+                    Log.Debug("START BUTTON DEBUG: Multiple templates available - showing selection");
+                    // Multiple templates available - show selection
+                    ShowTemplateSelectionForSession();
+                    return;
+                }
+                else if (eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count == 1)
+                {
+                    // Single template - use it automatically
+                    Log.Debug("START BUTTON DEBUG: Single template available - auto-selecting");
+                    currentTemplate = eventTemplateService.AvailableTemplates[0];
+                    totalPhotosNeeded = photoboothService.GetTemplatePhotoCount(currentTemplate);
+                    currentPhotoIndex = 0; // Reset photo index for new session
+                    UpdatePhotoStripPlaceholders();
+                }
+                else
+                {
+                    // No templates available or AvailableTemplates is null/empty
+                    Log.Debug("START BUTTON DEBUG: No templates available, cannot start photo sequence");
+                    UpdateStatusText("No templates available for this event");
+                    
+                    // Show start button again
+                    if (startButtonOverlay != null)
+                    {
+                        startButtonOverlay.Visibility = Visibility.Visible;
+                    }
+                    return;
+                }
+            }
+            else
+            {
+                Log.Debug($"START BUTTON DEBUG: Template already selected: {currentTemplate.Name}");
+                // Reset photo index for new session if template is already selected
+                currentPhotoIndex = 0;
+            }
+
+            // Only start photo sequence if we have a valid template
+            if (currentTemplate == null)
+            {
+                Log.Debug("START BUTTON DEBUG: No template selected, cannot start photo sequence");
+                UpdateStatusText("Please select a template first");
+                
+                // Show start button again
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = Visibility.Visible;
+                }
+                return;
             }
 
             StartPhotoSequence();
@@ -1608,50 +1691,84 @@ namespace Photobooth.Pages
                         isRetakingPhoto = photoCaptureService.IsRetakingPhoto;
                         photoIndexToRetake = photoCaptureService.PhotoIndexToRetake;
                         
+                        // Determine file type once for use in multiple places
+                        var fileExtension = System.IO.Path.GetExtension(fileName).ToLower();
+                        
                         // Add to photo strip
                         try
                         {
-                            var bitmap = photoCaptureService.CreatePhotoThumbnail(fileName, 240);
+                            bool isVideo = (fileExtension == ".mp4" || fileExtension == ".mov" || fileExtension == ".avi");
                             
-                            // Handle retake or normal capture for photo strip
-                            if (photoCaptureService.IsRetakingPhoto && photoCaptureService.PhotoIndexToRetake >= 0)
+                            if (isVideo)
                             {
-                                // Replace the photo in the strip for retake
-                                int retakeIndex = photoCaptureService.PhotoIndexToRetake;
-                                if (retakeIndex < photoStripImages.Count)
+                                // It's a video - don't try to create bitmap thumbnail
+                                Log.Debug($"PhotoCaptured: Video file captured, skipping photo strip thumbnail");
+                                
+                                // Mark the strip item as a video
+                                if (currentPhotoIndex - 1 >= 0 && currentPhotoIndex - 1 < photoStripItems.Count)
                                 {
-                                    photoStripImages[retakeIndex] = bitmap;
-                                }
-                                if (retakeIndex < photoStripItems.Count)
-                                {
-                                    photoStripItems[retakeIndex].Image = bitmap;
-                                    photoStripItems[retakeIndex].IsPlaceholder = false;
+                                    photoStripItems[currentPhotoIndex - 1].IsPlaceholder = false;
+                                    photoStripItems[currentPhotoIndex - 1].ItemType = "Video";
+                                    photoStripItems[currentPhotoIndex - 1].FilePath = fileName;
+                                    // Could set a video icon/placeholder here if needed
                                 }
                             }
                             else
                             {
-                                // Normal capture - add to strip
-                                photoStripImages.Add(bitmap);
+                                // It's a photo - create thumbnail normally
+                                var bitmap = photoCaptureService.CreatePhotoThumbnail(fileName, 240);
                                 
-                                // Update the photo strip item
-                                if (currentPhotoIndex - 1 < photoStripItems.Count)
+                                // Handle retake or normal capture for photo strip
+                                if (photoCaptureService.IsRetakingPhoto && photoCaptureService.PhotoIndexToRetake >= 0)
                                 {
-                                    photoStripItems[currentPhotoIndex - 1].Image = bitmap;
-                                    photoStripItems[currentPhotoIndex - 1].IsPlaceholder = false;
-                                    photoStripItems[currentPhotoIndex - 1].ItemType = "Photo";
-                                    photoStripItems[currentPhotoIndex - 1].FilePath = fileName;
+                                    // Replace the photo in the strip for retake
+                                    int retakeIndex = photoCaptureService.PhotoIndexToRetake;
+                                    if (retakeIndex < photoStripImages.Count)
+                                    {
+                                        photoStripImages[retakeIndex] = bitmap;
+                                    }
+                                    if (retakeIndex < photoStripItems.Count)
+                                    {
+                                        photoStripItems[retakeIndex].Image = bitmap;
+                                        photoStripItems[retakeIndex].IsPlaceholder = false;
+                                    }
                                 }
+                                else
+                                {
+                                    // Normal capture - add to strip
+                                    photoStripImages.Add(bitmap);
+                                    
+                                    // Update the photo strip item
+                                    if (currentPhotoIndex - 1 < photoStripItems.Count)
+                                    {
+                                        photoStripItems[currentPhotoIndex - 1].Image = bitmap;
+                                        photoStripItems[currentPhotoIndex - 1].IsPlaceholder = false;
+                                        photoStripItems[currentPhotoIndex - 1].ItemType = "Photo";
+                                        photoStripItems[currentPhotoIndex - 1].FilePath = fileName;
+                                    }
+                                }
+                                
+                                Log.Debug($"PhotoCaptured: Added thumbnail to photo strip");
                             }
-                            
-                            Log.Debug($"PhotoCaptured: Added thumbnail to photo strip");
                         }
                         catch (Exception ex)
                         {
                             Log.Error($"PhotoCaptured: Failed to add to photo strip: {ex.Message}");
                         }
                         
-                        // Show captured image
-                        liveViewImage.Source = (new ImageSourceConverter()).ConvertFromString(fileName) as ImageSource;
+                        // Show captured image or video
+                        if (fileExtension == ".mp4" || fileExtension == ".mov" || fileExtension == ".avi")
+                        {
+                            // It's a video file - don't try to display it as an image
+                            Log.Debug($"PhotoCaptured: Video file captured: {fileName}");
+                            // You could show a video thumbnail or placeholder here
+                            // For now, just skip showing it in the live view
+                        }
+                        else
+                        {
+                            // It's an image file - display it normally
+                            liveViewImage.Source = (new ImageSourceConverter()).ConvertFromString(fileName) as ImageSource;
+                        }
                         
                         // Ensure countdown overlay is hidden
                         CloseOverlay(countdownOverlay, "countdown");
@@ -1664,8 +1781,58 @@ namespace Photobooth.Pages
                         }
                         else
                         {
-                            // Handle event workflow photo sequence
-                            HandlePhotoSequenceProgress(fileName);
+                            // Only handle photo sequence progression for actual photos, not videos
+                            bool isVideo = (fileExtension == ".mp4" || fileExtension == ".mov" || fileExtension == ".avi");
+                            if (!isVideo)
+                            {
+                                // Handle event workflow photo sequence for photos only
+                                HandlePhotoSequenceProgress(fileName);
+                            }
+                            else
+                            {
+                                Log.Debug($"PhotoCaptured: Video file captured, skipping photo sequence logic");
+                                
+                                // Check if this is a boomerang, flipbook, or regular video
+                                if (isCapturingBoomerang)
+                                {
+                                    // This is a boomerang video - process it
+                                    statusText.Text = "Processing boomerang...";
+                                    Log.Debug($"PhotoCaptured: Boomerang video captured: {fileName}");
+                                    Log.Debug($"PhotoCaptured: isCapturingBoomerang=true, processing boomerang");
+                                    
+                                    // Don't display raw video - wait for processed boomerang MP4
+                                    ProcessBoomerangVideo(fileName);
+                                }
+                                else if (isRecordingFlipbook)
+                                {
+                                    // This is a flipbook video - process it
+                                    statusText.Text = "Processing flipbook...";
+                                    Log.Debug($"PhotoCaptured: Flipbook video captured: {fileName}");
+                                    Log.Debug($"PhotoCaptured: isRecordingFlipbook=true, processing flipbook");
+                                    
+                                    // Don't display raw video or add to strip - wait for processed MP4
+                                    // The processed MP4 will be displayed by ProcessFlipbookVideo
+                                    ProcessFlipbookVideo(fileName);
+                                }
+                                else
+                                {
+                                    // This is a regular video recording
+                                    statusText.Text = "Video captured successfully!";
+                                    Log.Debug($"PhotoCaptured: Regular video captured: {fileName}");
+                                    Log.Debug($"PhotoCaptured: isRecordingFlipbook={isRecordingFlipbook}, isCapturingBoomerang={isCapturingBoomerang}, isRecording={isRecording}");
+                                    
+                                    // Display the video in the live view screen
+                                    DisplayVideoInLiveView(fileName);
+                                }
+                                
+                                // Ensure camera busy state is cleared after video display
+                                Log.Debug($"PhotoCaptured: Ensuring camera IsBusy is false after video display");
+                                if (eventArgs.CameraDevice != null)
+                                {
+                                    eventArgs.CameraDevice.IsBusy = false;
+                                    Log.Debug($"PhotoCaptured: Set camera IsBusy = false after video display");
+                                }
+                            }
                         }
                     });
                     Log.Debug($"PhotoCaptured: Image saved successfully, size={new FileInfo(fileName).Length} bytes");
@@ -3214,6 +3381,9 @@ namespace Photobooth.Pages
                     {
                         Log.Debug($"ProcessTemplateWithPhotos: Template processed successfully: {processedImagePath}");
                         
+                        // Auto-upload the processed image and photos to cloud
+                        await AutoUploadSessionPhotos(processedImagePath);
+                        
                         Dispatcher.Invoke(() =>
                         {
                             // Show the processed image (always show the original, not the 4x6 duplicate)
@@ -3243,7 +3413,14 @@ namespace Photobooth.Pages
                                 Dispatcher.Invoke(() =>
                                 {
                                     StopPhotoSequence();
-                                    UpdateStatusText("Session complete - Touch START for new session");
+                                    UpdateStatusText("Session complete - Click Done or wait for timeout");
+                                    
+                                    // Hide the start button when session completes
+                                    if (startButtonOverlay != null)
+                                    {
+                                        startButtonOverlay.Visibility = Visibility.Collapsed;
+                                        Log.Debug("Session complete: Hiding start button");
+                                    }
                                     
                                     // Show Done button if enabled
                                     if (doneButton != null)
@@ -3767,6 +3944,57 @@ namespace Photobooth.Pages
             return null;
         }
         
+        private async Task AutoUploadVideoSession(string videoPath, string videoType)
+        {
+            try
+            {
+                // Generate a session ID for this video
+                string sessionId = $"{videoType}_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString().Substring(0, 8)}";
+                
+                Log.Debug($"AutoUploadVideoSession: Starting auto-upload for {videoType} session {sessionId}");
+                
+                // Create list with just the video file
+                List<string> videosToUpload = new List<string> { videoPath };
+                
+                // Use offline queue service to upload
+                var queueService = sharingOperations.GetOrCreateOfflineQueueService();
+                string eventName = currentEvent?.Name;
+                var uploadResult = await queueService.QueuePhotosForUpload(sessionId, videosToUpload, eventName);
+                
+                if (uploadResult.Success)
+                {
+                    Log.Debug($"AutoUploadVideoSession: {videoType} upload queued successfully. Immediate: {uploadResult.Immediate}");
+                    
+                    if (uploadResult.Immediate && !string.IsNullOrEmpty(uploadResult.GalleryUrl))
+                    {
+                        // Update current share result for immediate QR code access
+                        currentShareResult = new ShareResult
+                        {
+                            Success = true,
+                            SessionId = sessionId,
+                            GalleryUrl = uploadResult.GalleryUrl,
+                            ShortUrl = uploadResult.ShortUrl,
+                            QRCodeImage = uploadResult.QRCodeImage
+                        };
+                        
+                        // Update sharing buttons visibility on UI thread
+                        Dispatcher.Invoke(() => UpdateSharingButtonsVisibility());
+                        
+                        Log.Debug($"AutoUploadVideoSession: {videoType} gallery URL: {uploadResult.GalleryUrl}");
+                    }
+                }
+                else
+                {
+                    Log.Error($"AutoUploadVideoSession: Failed to queue {videoType} upload: {uploadResult.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"AutoUploadVideoSession: Error during {videoType} auto-upload: {ex.Message}");
+                // Don't show error to user - auto-upload is a background operation
+            }
+        }
+        
         private async Task AutoUploadSessionPhotos(string processedImagePath)
         {
             try
@@ -3929,6 +4157,13 @@ namespace Photobooth.Pages
                                 {
                                     StopPhotoSequence();
                                     UpdateStatusText("Session complete - Click photos to view or touch PRINT to print");
+                                    
+                                    // Hide the start button when session completes
+                                    if (startButtonOverlay != null)
+                                    {
+                                        startButtonOverlay.Visibility = Visibility.Collapsed;
+                                        Log.Debug("Session complete (ProcessTemplateWithPhotosInternal): Hiding start button");
+                                    }
                                     
                                     // Show Done button if enabled
                                     if (doneButton != null)
@@ -5940,6 +6175,13 @@ namespace Photobooth.Pages
                     photoStripItems.Add(animationItem);
                     
                     Log.Debug($"AddGifToPhotoStrip: Added {itemType} to photo strip");
+                    
+                    // Display MP4 animations in live view (same as video recordings)
+                    if (itemType == "VIDEO" && animationPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Log.Debug($"AddGifToPhotoStrip: Displaying MP4 animation in live view: {animationPath}");
+                        DisplayVideoInLiveView(animationPath);
+                    }
                 }
             }
             catch (Exception ex)
@@ -7736,6 +7978,1474 @@ namespace Photobooth.Pages
             }
         }
         
+        
+        #endregion
+        
+        #region Video and Boomerang Module Methods
+        
+        private void UpdateModuleButtonVisibility()
+        {
+            try
+            {
+                // Update video button visibility
+                if (videoRecordButton != null)
+                {
+                    videoRecordButton.Visibility = modulesConfig.ShowVideoButton ? Visibility.Visible : Visibility.Collapsed;
+                }
+                
+                // Update boomerang button visibility
+                if (boomerangButton != null)
+                {
+                    boomerangButton.Visibility = modulesConfig.ShowBoomerangButton ? Visibility.Visible : Visibility.Collapsed;
+                }
+                
+                // Show/hide flipbook button
+                if (flipbookButton != null)
+                {
+                    flipbookButton.Visibility = modulesConfig.ShowFlipbookButton ? Visibility.Visible : Visibility.Collapsed;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"UpdateModuleButtonVisibility: Error: {ex.Message}");
+            }
+        }
+        
+        private async void VideoRecordButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Log.Debug($"[VIDEO UI] VideoRecordButton clicked. isRecording: {isRecording}");
+                
+                if (!isRecording)
+                {
+                    // Start recording
+                    UpdateStatusText("Starting video recording...");
+                    Log.Debug($"[VIDEO UI] Preparing to start recording. FolderForPhotos: {FolderForPhotos}");
+                    
+                    // Note: We're keeping live view running during recording
+                    // The Canon camera will handle live view internally
+                    Log.Debug($"[VIDEO UI] Live view timer status: {liveViewTimer?.IsEnabled ?? false}");
+                    
+                    string videoPath = Path.Combine(FolderForPhotos, $"VID_{DateTime.Now:yyyyMMdd_HHmmss}.mp4");
+                    Log.Debug($"[VIDEO UI] Calling StartRecordingAsync with path: {videoPath}");
+                    
+                    bool started = await videoService.StartRecordingAsync(videoPath);
+                    
+                    if (started)
+                    {
+                        isRecording = true;
+                        UpdateStatusText($"Recording... (max {modulesConfig.VideoDuration}s)");
+                        Log.Debug($"[VIDEO UI] Recording started successfully");
+                        
+                        // Subscribe to recording events
+                        videoService.RecordingProgress += OnVideoRecordingProgress;
+                        videoService.RecordingStopped += OnVideoRecordingStopped;
+                        
+                        // Update UI binding for button state
+                        OnPropertyChanged(nameof(IsRecording));
+                    }
+                    else
+                    {
+                        UpdateStatusText("Failed to start recording");
+                        Log.Error("[VIDEO UI] Failed to start video recording");
+                    }
+                }
+                else
+                {
+                    // Stop recording
+                    UpdateStatusText("Stopping video...");
+                    Log.Debug($"[VIDEO UI] Stopping recording...");
+                    
+                    string videoPath = await videoService.StopRecordingAsync();
+                    Log.Debug($"[VIDEO UI] StopRecordingAsync returned: {videoPath ?? "NULL"}");
+                    
+                    if (!string.IsNullOrEmpty(videoPath))
+                    {
+                        isRecording = false;
+                        UpdateStatusText("Video saved!");
+                        
+                        Log.Debug($"[VIDEO UI] Processing completed video: {videoPath}");
+                        
+                        // Critical: Clear camera busy state after video recording
+                        if (DeviceManager.SelectedCameraDevice != null)
+                        {
+                            DeviceManager.SelectedCameraDevice.IsBusy = false;
+                            Log.Debug("[VIDEO UI] Cleared camera IsBusy flag after video recording");
+                        }
+                        
+                        // Add to captured files list
+                        capturedPhotoPaths.Add(videoPath);
+                        Log.Debug($"[VIDEO UI] Added video to captured files list: {capturedPhotoPaths.Count} total files");
+                        
+                        // Update UI binding
+                        OnPropertyChanged(nameof(IsRecording));
+                        
+                        // Display the video in the live view screen
+                        Log.Debug($"[VIDEO UI] About to call DisplayVideoInLiveView with: {videoPath}");
+                        DisplayVideoInLiveView(videoPath);
+                        
+                        // Auto-upload video to cloud
+                        _ = Task.Run(async () => await AutoUploadVideoSession(videoPath, "video"));
+                        
+                        Log.Debug($"[VIDEO UI] Video saved successfully, displaying in live view: {videoPath}");
+                    }
+                    else
+                    {
+                        Log.Debug("[VIDEO UI] VideoPath is null or empty, not displaying video");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"VideoRecordButton_Click: Error: {ex.Message}");
+                UpdateStatusText("Video recording error");
+                isRecording = false;
+                
+                // Ensure camera state is cleared even on error
+                if (DeviceManager.SelectedCameraDevice != null)
+                {
+                    DeviceManager.SelectedCameraDevice.IsBusy = false;
+                    Log.Debug("[VIDEO UI] Cleared camera IsBusy flag after video recording error");
+                }
+                
+                OnPropertyChanged(nameof(IsRecording));
+            }
+        }
+        
+        private void OnVideoRecordingProgress(object sender, TimeSpan elapsed)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                int remaining = modulesConfig.VideoDuration - (int)elapsed.TotalSeconds;
+                if (remaining >= 0)
+                {
+                    UpdateStatusText($"Recording... {remaining}s remaining");
+                }
+            }));
+        }
+        
+        private void OnVideoRecordingStopped(object sender, VideoRecordingEventArgs e)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                isRecording = false;
+                OnPropertyChanged(nameof(IsRecording));
+                
+                // Unsubscribe from events
+                videoService.RecordingProgress -= OnVideoRecordingProgress;
+                videoService.RecordingStopped -= OnVideoRecordingStopped;
+            }));
+        }
+        
+        private void ShowVideoPreview(string videoPath)
+        {
+            try
+            {
+                // Add to photo strip as a special item
+                var videoItem = new PhotoStripItem
+                {
+                    PhotoNumber = photoStripItems.Count + 1,
+                    IsPlaceholder = false,
+                    ItemType = "Video",
+                    FilePath = videoPath
+                };
+                
+                photoStripItems.Add(videoItem);
+                
+                UpdateStatusText("Video captured!");
+                
+                // Show the video in the playback overlay
+                PlayVideoInOverlay(videoPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShowVideoPreview: Error: {ex.Message}");
+            }
+        }
+        
+        private async void BoomerangButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!isCapturingBoomerang)
+                {
+                    // Start boomerang capture using camera video recording (same as flipbook)
+                    UpdateStatusText("Starting boomerang capture...");
+                    Log.Debug("BoomerangButton_Click: Starting boomerang video recording");
+                    
+                    if (DeviceManager.SelectedCameraDevice != null)
+                    {
+                        isCapturingBoomerang = true;
+                        OnPropertyChanged(nameof(IsCapturingBoomerang));
+                        
+                        // Apply video settings before starting recording
+                        ApplyVideoSettingsForRecording();
+                        
+                        // Use the same video recording method as video module
+                        DeviceManager.SelectedCameraDevice.StartRecordMovie();
+                        Log.Debug("BoomerangButton_Click: Camera video recording started");
+                        Log.Debug($"BoomerangButton_Click: isCapturingBoomerang flag set to true");
+                        
+                        // Auto-stop after 3 seconds for boomerang (good duration for boomerang effect)
+                        int boomerangDuration = 3000; // 3 seconds in milliseconds
+                        Log.Debug($"BoomerangButton_Click: Recording for 3 seconds");
+                        await Task.Delay(boomerangDuration);
+                        
+                        // Auto-stop if still capturing
+                        if (isCapturingBoomerang)
+                        {
+                            BoomerangButton_Click(null, null); // Trigger stop
+                        }
+                    }
+                    else
+                    {
+                        UpdateStatusText("No camera connected for boomerang");
+                        Log.Error("BoomerangButton_Click: No camera device available");
+                    }
+                }
+                else
+                {
+                    // Stop boomerang capture using camera video recording
+                    UpdateStatusText("Finishing boomerang...");
+                    Log.Debug("BoomerangButton_Click: Stopping boomerang video recording");
+                    
+                    if (DeviceManager.SelectedCameraDevice != null)
+                    {
+                        DeviceManager.SelectedCameraDevice.StopRecordMovie();
+                        Log.Debug("BoomerangButton_Click: Camera video recording stopped");
+                        
+                        // Restore photo settings after recording
+                        RestorePhotoSettingsAfterRecording();
+                    }
+                    
+                    // DON'T clear the flag here - let ProcessBoomerangVideo clear it
+                    // This ensures the video is recognized as a boomerang in PhotoCaptured
+                    Log.Debug($"BoomerangButton_Click: Keeping isCapturingBoomerang=true until video is processed");
+                    // isCapturingBoomerang = false;  // Don't clear this here - let ProcessBoomerangVideo clear it
+                    OnPropertyChanged(nameof(IsCapturingBoomerang));
+                    
+                    UpdateStatusText("Boomerang capture completed - processing...");
+                    // Note: The actual boomerang file will be handled by PhotoCaptured event
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"BoomerangButton_Click: Error: {ex.Message}");
+                UpdateStatusText("Boomerang error");
+                isCapturingBoomerang = false;
+                OnPropertyChanged(nameof(IsCapturingBoomerang));
+            }
+        }
+        
+        // NOTE: StartBoomerangFrameCapture method removed - now using camera video recording directly
+        // instead of frame-by-frame capture from live view
+        
+        private async void FlipbookButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!isRecordingFlipbook)
+                {
+                    // Start flipbook session with countdown
+                    Log.Debug("FlipbookButton_Click: Starting flipbook session with countdown");
+                    
+                    if (DeviceManager.SelectedCameraDevice != null)
+                    {
+                        // Hide the photo booth start button during flipbook session
+                        if (startButtonOverlay != null)
+                        {
+                            startButtonOverlay.Visibility = Visibility.Collapsed;
+                            Log.Debug("FlipbookButton_Click: Hidden start photobooth button");
+                        }
+                        
+                        // FIRST: Start live view BEFORE applying settings or countdown
+                        try
+                        {
+                            DeviceManager.SelectedCameraDevice.StartLiveView();
+                            Log.Debug("FlipbookButton_Click: Started live view");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Debug($"FlipbookButton_Click: Live view may already be running: {ex.Message}");
+                        }
+                        
+                        // Start live view timer immediately
+                        if (liveViewTimer != null && !liveViewTimer.IsEnabled)
+                        {
+                            liveViewTimer.Start();
+                            Log.Debug("FlipbookButton_Click: Started live view timer");
+                        }
+                        
+                        // Wait a moment for live view to stabilize
+                        await Task.Delay(200);
+                        
+                        // THEN: Apply video settings while live view is running
+                        ApplyVideoSettingsForRecording();
+                        Log.Debug("FlipbookButton_Click: Applied video settings for live view");
+                        
+                        // Get countdown settings, but always use at least 3 seconds for flipbook
+                        int countdownDuration = Properties.Settings.Default.CountdownSeconds;
+                        if (countdownDuration <= 0)
+                        {
+                            countdownDuration = 3; // Default to 3 seconds for flipbook
+                        }
+                        
+                        // Always show countdown for flipbook (ignore ShowCountdown setting)
+                        UpdateStatusText($"Flipbook starting in {countdownDuration}...");
+                        
+                        // Start countdown overlay
+                        countdownOverlay.Visibility = Visibility.Visible;
+                        int remainingSeconds = countdownDuration;
+                        
+                        // Countdown with live view still running
+                        while (remainingSeconds > 0)
+                        {
+                            countdownText.Text = remainingSeconds.ToString();
+                            UpdateStatusText($"Get ready for flipbook! {remainingSeconds}");
+                            await Task.Delay(1000);
+                            remainingSeconds--;
+                        }
+                        
+                        // Show "ACTION!" and prepare for recording
+                        countdownText.Text = "ACTION!";
+                        UpdateStatusText("Starting recording...");
+                        await Task.Delay(500); // Brief pause for "ACTION!"
+                        countdownOverlay.Visibility = Visibility.Collapsed;
+                        
+                        // Stop live view timer JUST before starting recording
+                        if (liveViewTimer != null && liveViewTimer.IsEnabled)
+                        {
+                            liveViewTimer.Stop();
+                            Log.Debug("FlipbookButton_Click: Stopped live view timer for recording");
+                        }
+                        
+                        // Small delay for camera to prepare for recording mode
+                        await Task.Delay(300);
+                        
+                        // Now start actual recording
+                        isRecordingFlipbook = true;
+                        Log.Debug($"FlipbookButton_Click: Set isRecordingFlipbook=true");
+                        
+                        // Start camera video recording
+                        DeviceManager.SelectedCameraDevice.StartRecordMovie();
+                        Log.Debug("FlipbookButton_Click: Camera video recording started");
+                        
+                        // Show recording progress indicator
+                        ShowFlipbookRecordingIndicator(true);
+                        UpdateStatusText("Recording flipbook...");
+                        
+                        // Start timer to track 4 seconds with progress
+                        flipbookElapsedSeconds = 0;
+                        flipbookTimer = new DispatcherTimer();
+                        flipbookTimer.Interval = TimeSpan.FromMilliseconds(100); // Update every 100ms for smooth progress
+                        flipbookTimer.Tick += FlipbookTimer_Tick;
+                        flipbookTimer.Start();
+                        
+                        // Auto-stop after 4 seconds
+                        await Task.Delay(4000);
+                        
+                        // Auto-stop if still recording
+                        if (isRecordingFlipbook)
+                        {
+                            // Stop recording directly instead of recursive call
+                            UpdateStatusText("Stopping flipbook recording...");
+                            Log.Debug("FlipbookButton_Click: Auto-stopping flipbook video recording");
+                            
+                            // Stop timer
+                            if (flipbookTimer != null)
+                            {
+                                flipbookTimer.Stop();
+                                flipbookTimer = null;
+                            }
+                            
+                            if (DeviceManager.SelectedCameraDevice != null)
+                            {
+                                DeviceManager.SelectedCameraDevice.StopRecordMovie();
+                                Log.Debug("FlipbookButton_Click: Camera video recording stopped");
+                                
+                                // Restore photo settings after recording
+                                RestorePhotoSettingsAfterRecording();
+                            }
+                            
+                            // Hide countdown overlay after recording
+                            countdownOverlay.Visibility = Visibility.Collapsed;
+                            
+                            // Restore the photo booth start button
+                            if (startButtonOverlay != null)
+                            {
+                                startButtonOverlay.Visibility = Visibility.Visible;
+                                Log.Debug("FlipbookButton_Click: Restored start photobooth button");
+                            }
+                            
+                            // Don't restart live view here - DisplayVideoInLiveView will handle it through ReturnToLiveView
+                            // Just ensure live view is ready for when the video display ends
+                            Log.Debug("FlipbookButton_Click: Live view will be handled by video display completion");
+                            
+                            // Keep the flag true until the video is received
+                            Log.Debug($"FlipbookButton_Click: Keeping isRecordingFlipbook=true until video is processed");
+                            ShowFlipbookRecordingIndicator(false);
+                            
+                            UpdateStatusText("Flipbook recording completed - processing...");
+                        }
+                    }
+                    else
+                    {
+                        UpdateStatusText("No camera connected for flipbook");
+                        Log.Error("FlipbookButton_Click: No camera device available");
+                    }
+                }
+                else
+                {
+                    // Stop flipbook recording
+                    UpdateStatusText("Stopping flipbook recording...");
+                    Log.Debug("FlipbookButton_Click: Stopping flipbook video recording");
+                    
+                    // Stop timer
+                    if (flipbookTimer != null)
+                    {
+                        flipbookTimer.Stop();
+                        flipbookTimer = null;
+                    }
+                    
+                    if (DeviceManager.SelectedCameraDevice != null)
+                    {
+                        DeviceManager.SelectedCameraDevice.StopRecordMovie();
+                        Log.Debug("FlipbookButton_Click: Camera video recording stopped");
+                        
+                        // Restore photo settings after recording
+                        RestorePhotoSettingsAfterRecording();
+                    }
+                    
+                    // Hide countdown overlay after recording
+                    countdownOverlay.Visibility = Visibility.Collapsed;
+                    
+                    // Restore the photo booth start button
+                    if (startButtonOverlay != null)
+                    {
+                        startButtonOverlay.Visibility = Visibility.Visible;
+                        Log.Debug("FlipbookButton_Click: Restored start photobooth button");
+                    }
+                    
+                    // Don't restart live view here - DisplayVideoInLiveView will handle it through ReturnToLiveView
+                    Log.Debug("FlipbookButton_Click: Live view will be handled by video display completion");
+                    
+                    // Keep the flag true until the video is received
+                    Log.Debug($"FlipbookButton_Click: Keeping isRecordingFlipbook=true until video is processed");
+                    // isRecordingFlipbook = false;  // Don't clear this here - let ProcessFlipbookVideo clear it
+                    ShowFlipbookRecordingIndicator(false);
+                    
+                    UpdateStatusText("Flipbook recording completed - processing...");
+                    // Note: The actual video file will be handled by PhotoCaptured event
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"FlipbookButton_Click: Error: {ex.Message}");
+                UpdateStatusText("Flipbook error");
+                isRecordingFlipbook = false;
+                ShowFlipbookRecordingIndicator(false);
+                
+                // Hide countdown overlay on error
+                countdownOverlay.Visibility = Visibility.Collapsed;
+                
+                // Restore the photo booth start button on error
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = Visibility.Visible;
+                }
+                
+                // On error, we should restart live view since video won't be displayed
+                if (DeviceManager.SelectedCameraDevice != null)
+                {
+                    try
+                    {
+                        DeviceManager.SelectedCameraDevice.StartLiveView();
+                        if (liveViewTimer != null && !liveViewTimer.IsEnabled)
+                        {
+                            liveViewTimer.Start();
+                        }
+                        Log.Debug("FlipbookButton_Click: Restarted live view after error");
+                    }
+                    catch
+                    {
+                        // Ignore errors when trying to restart live view
+                    }
+                }
+                
+                if (flipbookTimer != null)
+                {
+                    flipbookTimer.Stop();
+                    flipbookTimer = null;
+                }
+            }
+        }
+        
+        private void FlipbookTimer_Tick(object sender, EventArgs e)
+        {
+            // Increment elapsed time (now in 100ms increments)
+            flipbookElapsedSeconds++;
+            
+            // Calculate actual elapsed seconds and progress
+            double elapsedSeconds = flipbookElapsedSeconds / 10.0; // Convert from 100ms units to seconds
+            double progress = elapsedSeconds / 4.0; // Progress from 0 to 1 over 4 seconds
+            
+            // Update display with progress
+            UpdateFlipbookProgressDisplay(elapsedSeconds, progress);
+            
+            // Stop after 4 seconds (40 ticks of 100ms)
+            if (flipbookElapsedSeconds >= 40)
+            {
+                flipbookTimer.Stop();
+            }
+        }
+        
+        private void ShowFlipbookRecordingIndicator(bool show)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var button = flipbookButton;
+                if (button != null)
+                {
+                    var content = FindVisualChild<StackPanel>(button, "flipbookButtonContent");
+                    var indicator = FindVisualChild<StackPanel>(button, "flipbookRecordingIndicator");
+                    
+                    if (content != null && indicator != null)
+                    {
+                        content.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
+                        indicator.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                    }
+                }
+            }));
+        }
+        
+        private void UpdateFlipbookTimeDisplay(int seconds)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var button = flipbookButton;
+                if (button != null)
+                {
+                    var textBlock = FindVisualChild<TextBlock>(button, "flipbookTimeText");
+                    if (textBlock != null)
+                    {
+                        textBlock.Text = $"{seconds}s";
+                    }
+                }
+            }));
+        }
+        
+        private void UpdateFlipbookProgressDisplay(double elapsedSeconds, double progress)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                // Update status text with remaining time
+                int remainingSeconds = (int)(4 - elapsedSeconds);
+                UpdateStatusText($"Recording flipbook... {remainingSeconds}s");
+                
+                // DON'T show countdown overlay during recording - it was already used for countdown
+                // Just update the flipbook button display
+                
+                // Update flipbook button time display
+                var button = flipbookButton;
+                if (button != null)
+                {
+                    var textBlock = FindVisualChild<TextBlock>(button, "flipbookTimeText");
+                    if (textBlock != null)
+                    {
+                        textBlock.Text = $"{elapsedSeconds:F1}s / 4s";
+                    }
+                }
+            }));
+        }
+        
+        private async void ProcessBoomerangVideo(string videoPath)
+        {
+            try
+            {
+                Log.Debug($"ProcessBoomerangVideo: Starting to process video: {videoPath}");
+                UpdateStatusText("Creating boomerang effect...");
+                
+                // Create boomerang using FFmpeg (forward + reverse)
+                string ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
+                if (!File.Exists(ffmpegPath))
+                {
+                    Log.Error($"ProcessBoomerangVideo: ffmpeg.exe not found at {ffmpegPath}");
+                    UpdateStatusText("Boomerang error: FFmpeg not found");
+                    return;
+                }
+                
+                // Generate output path for boomerang
+                string outputDir = Path.GetDirectoryName(videoPath);
+                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string boomerangPath = Path.Combine(outputDir, $"boomerang_{timestamp}.mp4");
+                
+                Log.Debug($"ProcessBoomerangVideo: Creating boomerang at: {boomerangPath}");
+                
+                // FFmpeg command to create boomerang effect (forward + reverse)
+                // 1. Create reverse video
+                // 2. Concatenate original + reverse
+                string tempReversePath = Path.Combine(Path.GetTempPath(), $"reverse_{timestamp}.mp4");
+                string tempListPath = Path.Combine(Path.GetTempPath(), $"concat_{timestamp}.txt");
+                
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        // Step 1: Create reversed video
+                        var reverseArgs = $"-i \"{videoPath}\" -vf reverse -c:v libx264 -preset fast -crf 23 -y \"{tempReversePath}\"";
+                        
+                        var reverseProcess = new Process
+                        {
+                            StartInfo = new ProcessStartInfo
+                            {
+                                FileName = ffmpegPath,
+                                Arguments = reverseArgs,
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                CreateNoWindow = true
+                            }
+                        };
+                        
+                        Log.Debug($"ProcessBoomerangVideo: Creating reverse video with FFmpeg: {reverseArgs}");
+                        reverseProcess.Start();
+                        string reverseError = reverseProcess.StandardError.ReadToEnd();
+                        reverseProcess.WaitForExit(10000); // 10 second timeout
+                        
+                        if (reverseProcess.ExitCode != 0 || !File.Exists(tempReversePath))
+                        {
+                            Log.Error($"ProcessBoomerangVideo: Failed to create reverse video. Exit code: {reverseProcess.ExitCode}");
+                            Log.Error($"ProcessBoomerangVideo: FFmpeg error: {reverseError}");
+                            UpdateStatusText("Failed to create boomerang");
+                            return;
+                        }
+                        
+                        // Step 2: Create concat file
+                        File.WriteAllText(tempListPath, 
+                            $"file '{videoPath.Replace('\\', '/')}'\r\n" +
+                            $"file '{tempReversePath.Replace('\\', '/')}'");
+                        
+                        // Step 3: Concatenate forward and reverse videos
+                        var concatArgs = $"-f concat -safe 0 -i \"{tempListPath}\" -c:v libx264 -preset fast -crf 23 -movflags +faststart -y \"{boomerangPath}\"";
+                        
+                        var concatProcess = new Process
+                        {
+                            StartInfo = new ProcessStartInfo
+                            {
+                                FileName = ffmpegPath,
+                                Arguments = concatArgs,
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                CreateNoWindow = true
+                            }
+                        };
+                        
+                        Log.Debug($"ProcessBoomerangVideo: Concatenating videos with FFmpeg: {concatArgs}");
+                        concatProcess.Start();
+                        string concatError = concatProcess.StandardError.ReadToEnd();
+                        concatProcess.WaitForExit(10000); // 10 second timeout
+                        
+                        if (concatProcess.ExitCode != 0 || !File.Exists(boomerangPath))
+                        {
+                            Log.Error($"ProcessBoomerangVideo: Failed to create boomerang. Exit code: {concatProcess.ExitCode}");
+                            Log.Error($"ProcessBoomerangVideo: FFmpeg error: {concatError}");
+                            UpdateStatusText("Failed to create boomerang");
+                            return;
+                        }
+                        
+                        // Clean up temp files
+                        try 
+                        { 
+                            File.Delete(tempReversePath); 
+                            File.Delete(tempListPath);
+                        } 
+                        catch { }
+                        
+                        Log.Debug($"ProcessBoomerangVideo: Boomerang created successfully at: {boomerangPath}");
+                        
+                        // Display the boomerang in live view
+                        Dispatcher.Invoke(() =>
+                        {
+                            UpdateStatusText("Boomerang created!");
+                            DisplayVideoInLiveView(boomerangPath);
+                            
+                            // Auto-upload boomerang to cloud
+                            _ = Task.Run(async () => await AutoUploadVideoSession(boomerangPath, "boomerang"));
+                            
+                            // Add to photo strip
+                            var boomerangItem = new PhotoStripItem
+                            {
+                                PhotoNumber = photoStripItems.Count + 1,
+                                IsPlaceholder = false,
+                                ItemType = "Boomerang",
+                                FilePath = boomerangPath
+                            };
+                            photoStripItems.Add(boomerangItem);
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"ProcessBoomerangVideo: Error creating boomerang: {ex.Message}");
+                        Log.Error($"ProcessBoomerangVideo: Full exception: {ex}");
+                        UpdateStatusText($"Boomerang error: {ex.Message}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                UpdateStatusText($"Boomerang error: {ex.Message}");
+                Log.Error($"ProcessBoomerangVideo: Error: {ex.Message}");
+                Log.Error($"ProcessBoomerangVideo: Full exception: {ex}");
+            }
+            finally
+            {
+                // Clear the boomerang capturing flag
+                isCapturingBoomerang = false;
+                Log.Debug($"ProcessBoomerangVideo: Cleared isCapturingBoomerang flag");
+            }
+        }
+        
+        private async void ProcessFlipbookVideo(string videoPath)
+        {
+            try
+            {
+                Log.Debug($"ProcessFlipbookVideo: Starting to process video: {videoPath}");
+                UpdateStatusText("Creating flipbook pages...");
+                
+                // Initialize flipbook service if needed
+                if (flipbookService == null)
+                {
+                    flipbookService = new FlipbookService();
+                    Log.Debug("ProcessFlipbookVideo: Initialized FlipbookService");
+                }
+                
+                Log.Debug($"ProcessFlipbookVideo: Calling CreateFlipbookFromVideo with path: {videoPath}");
+                // Process the video into flipbook strips
+                var result = await flipbookService.CreateFlipbookFromVideo(videoPath);
+                
+                if (result != null && result.FlipbookStrips != null && result.FlipbookStrips.Count > 0)
+                {
+                    UpdateStatusText($"Flipbook created! {result.FlipbookStrips.Count} strips ready for printing");
+                    Log.Debug($"ProcessFlipbookVideo: Created {result.FlipbookStrips.Count} flipbook strips");
+                    
+                    // Display the MP4 animation in live view
+                    if (!string.IsNullOrEmpty(result.Mp4Path) && File.Exists(result.Mp4Path))
+                    {
+                        Log.Debug($"ProcessFlipbookVideo: Displaying flipbook MP4: {result.Mp4Path}");
+                        DisplayVideoInLiveView(result.Mp4Path);
+                        
+                        // Auto-upload flipbook MP4 to cloud
+                        _ = Task.Run(async () => await AutoUploadVideoSession(result.Mp4Path, "flipbook"));
+                        
+                        // Don't call ShowBoomerangPreview - it internally calls DisplayVideoInLiveView again
+                        // Just add to photo strip directly
+                        var flipbookItem = new PhotoStripItem
+                        {
+                            PhotoNumber = photoStripItems.Count + 1,
+                            IsPlaceholder = false,
+                            ItemType = "Flipbook",
+                            FilePath = result.Mp4Path
+                        };
+                        photoStripItems.Add(flipbookItem);
+                    }
+                    
+                    // Auto-printing disabled per user request
+                    // User can manually print strips if needed
+                    // if (Properties.Settings.Default.EnablePrinting && result.FlipbookStrips.Count > 0)
+                    // {
+                    //     // Print the first strip as a sample
+                    //     PrintFlipbookStrip(result.FlipbookStrips[0]);
+                    // }
+                }
+                else
+                {
+                    UpdateStatusText("Failed to create flipbook");
+                    Log.Error("ProcessFlipbookVideo: Failed to create flipbook strips");
+                }
+            }
+            catch (Exception ex)
+            {
+                UpdateStatusText($"Flipbook error: {ex.Message}");
+                Log.Error($"ProcessFlipbookVideo: Error: {ex.Message}");
+                Log.Error($"ProcessFlipbookVideo: Full exception: {ex}");
+            }
+            finally
+            {
+                // Clear the flipbook recording flag
+                isRecordingFlipbook = false;
+                Log.Debug($"ProcessFlipbookVideo: Cleared isRecordingFlipbook flag");
+            }
+        }
+        
+        private void PrintFlipbookStrip(string stripPath)
+        {
+            try
+            {
+                // Use the 2x6 printer for flipbook strips
+                if (printingService == null)
+                {
+                    printingService = new PrintingService();
+                }
+                
+                // Queue for 2x6 printing
+                _ = printingService.PrintImageAsync(stripPath, null, true); // true = is2x6
+                UpdateStatusText("Printing flipbook strip...");
+                Log.Debug($"PrintFlipbookStrip: Queued flipbook strip for printing: {stripPath}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PrintFlipbookStrip: Error: {ex.Message}");
+            }
+        }
+        
+        private void OnBoomerangFrameCaptured(object sender, int frameCount)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                // Update the frame counter in the button
+                var button = boomerangButton;
+                if (button != null)
+                {
+                    var textBlock = FindVisualChild<TextBlock>(button, "boomerangFrameCountText");
+                    if (textBlock != null)
+                    {
+                        textBlock.Text = $"{frameCount}/{modulesConfig.BoomerangFrames}";
+                    }
+                }
+                
+                UpdateStatusText($"Capturing frame {frameCount}/{modulesConfig.BoomerangFrames}");
+            }));
+        }
+        
+        private void OnBoomerangCreated(object sender, string filePath)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                // Unsubscribe from events
+                boomerangService.FrameCaptured -= OnBoomerangFrameCaptured;
+                boomerangService.BoomerangCreated -= OnBoomerangCreated;
+                
+                UpdateStatusText("Boomerang saved!");
+            }));
+        }
+        
+        private void ShowBoomerangPreview(string boomerangPath)
+        {
+            try
+            {
+                // Add to photo strip as a special item
+                var boomerangItem = new PhotoStripItem
+                {
+                    PhotoNumber = photoStripItems.Count + 1,
+                    IsPlaceholder = false,
+                    ItemType = "Boomerang",
+                    FilePath = boomerangPath
+                };
+                
+                photoStripItems.Add(boomerangItem);
+                
+                // Use the same display method as video recordings (live view display)
+                if (boomerangPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) || 
+                    boomerangPath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Debug($"ShowBoomerangPreview: Displaying boomerang in live view: {boomerangPath}");
+                    DisplayVideoInLiveView(boomerangPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShowBoomerangPreview: Error: {ex.Message}");
+            }
+        }
+        
+        private string currentVideoPath;
+        private DispatcherTimer videoDisplayTimer;
+        
+        private void DisplayVideoInLiveView(string videoPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(videoPath) || !File.Exists(videoPath))
+                {
+                    Log.Error($"DisplayVideoInLiveView: Video file not found: {videoPath}");
+                    return;
+                }
+
+                Log.Debug($"DisplayVideoInLiveView: Displaying video in live view: {videoPath}");
+                
+                // Stop live view timer to prevent camera feed from overriding video
+                if (liveViewTimer != null)
+                {
+                    liveViewTimer.Stop();
+                }
+
+                // Stop any existing video display timer
+                if (videoDisplayTimer != null)
+                {
+                    videoDisplayTimer.Stop();
+                    videoDisplayTimer = null;
+                }
+
+                // Use the main live view image control to display the video
+                // We'll create a MediaElement to play the video in place of the camera feed
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        // Remove any existing video elements first
+                        CleanupVideoElements();
+                        
+                        // Create a MediaElement for video playback in the live view area
+                        var videoElement = new MediaElement
+                        {
+                            Source = new Uri(videoPath),
+                            LoadedBehavior = MediaState.Manual,
+                            UnloadedBehavior = MediaState.Close,
+                            Stretch = Stretch.Uniform,
+                            Name = "liveViewVideoPlayer"
+                        };
+
+                        // Position it over the live view image
+                        if (liveViewImage != null)
+                        {
+                            var parent = liveViewImage.Parent as Panel;
+                            if (parent != null)
+                            {
+                                // Add video element to same container as live view image
+                                parent.Children.Add(videoElement);
+                                
+                                // Hide the camera live view
+                                liveViewImage.Visibility = Visibility.Hidden;
+                                
+                                // Start playing the video
+                                videoElement.Play();
+                                
+                                // Store reference for cleanup
+                                currentVideoPath = videoPath;
+                                
+                                Log.Debug("DisplayVideoInLiveView: Video element added and playing");
+                                
+                                // Set up timeout to return to live view after 10 seconds (for flipbook videos)
+                                bool isFlipbook = videoPath.IndexOf("flipbook", StringComparison.OrdinalIgnoreCase) >= 0;
+                                if (isFlipbook)
+                                {
+                                    videoDisplayTimer = new DispatcherTimer();
+                                    videoDisplayTimer.Interval = TimeSpan.FromSeconds(10);
+                                    videoDisplayTimer.Tick += (s, e) =>
+                                    {
+                                        videoDisplayTimer.Stop();
+                                        Log.Debug("DisplayVideoInLiveView: Video display timeout - returning to live view");
+                                        ReturnToLiveView(isFlipbook);
+                                    };
+                                    videoDisplayTimer.Start();
+                                }
+                                
+                                // Set up event to return to live view when video ends
+                                videoElement.MediaEnded += (s, e) =>
+                                {
+                                    if (videoDisplayTimer != null)
+                                    {
+                                        videoDisplayTimer.Stop();
+                                    }
+                                    ReturnToLiveView(isFlipbook);
+                                };
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"DisplayVideoInLiveView: Error creating video element: {ex.Message}");
+                        ReturnToLiveView(false); // Fallback to live view
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"DisplayVideoInLiveView: Error: {ex.Message}");
+                ReturnToLiveView(false); // Fallback to live view
+            }
+        }
+        
+        private void CleanupVideoElements()
+        {
+            if (liveViewImage != null)
+            {
+                var parent = liveViewImage.Parent as Panel;
+                if (parent != null)
+                {
+                    // Find and remove all video elements
+                    var mediaElements = parent.Children.OfType<MediaElement>().ToList();
+                    foreach (var element in mediaElements)
+                    {
+                        element.Stop();
+                        element.Close();
+                        parent.Children.Remove(element);
+                    }
+                }
+            }
+        }
+
+        private void DisplayGifInLiveView(string gifPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(gifPath) || !File.Exists(gifPath))
+                {
+                    Log.Error($"DisplayGifInLiveView: GIF file not found: {gifPath}");
+                    return;
+                }
+
+                Log.Debug($"DisplayGifInLiveView: Displaying GIF in live view: {gifPath}");
+                
+                // Stop live view timer to prevent camera feed from overriding GIF
+                if (liveViewTimer != null)
+                {
+                    liveViewTimer.Stop();
+                }
+
+                // Use the main live view image control to display the GIF
+                // We'll create a MediaElement to play the GIF in place of the camera feed
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        // Create a MediaElement for GIF playback in the live view area
+                        var gifElement = new MediaElement
+                        {
+                            Source = new Uri(gifPath),
+                            LoadedBehavior = MediaState.Manual,
+                            UnloadedBehavior = MediaState.Close,
+                            Stretch = Stretch.Uniform,
+                            Name = "liveViewGifPlayer"
+                        };
+
+                        // Position it over the live view image
+                        if (liveViewImage != null)
+                        {
+                            var parent = liveViewImage.Parent as Panel;
+                            if (parent != null)
+                            {
+                                // Add GIF element to same container as live view image
+                                parent.Children.Add(gifElement);
+                                
+                                // Hide the camera live view
+                                liveViewImage.Visibility = Visibility.Hidden;
+                                
+                                // Start playing the GIF
+                                gifElement.Play();
+                                
+                                Log.Debug("DisplayGifInLiveView: GIF element added and playing");
+                                
+                                // Set up event to return to live view when GIF ends
+                                // For GIFs, we'll add a timer since they loop indefinitely
+                                var gifTimer = new DispatcherTimer
+                                {
+                                    Interval = TimeSpan.FromSeconds(5) // Show GIF for 5 seconds
+                                };
+                                
+                                gifTimer.Tick += (s, e) =>
+                                {
+                                    gifTimer.Stop();
+                                    ReturnToLiveView(false);
+                                };
+                                
+                                gifTimer.Start();
+                                
+                                // Also handle MediaEnded in case GIF stops
+                                gifElement.MediaEnded += (s, e) =>
+                                {
+                                    gifTimer.Stop();
+                                    ReturnToLiveView(false);
+                                };
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"DisplayGifInLiveView: Error creating GIF element: {ex.Message}");
+                        ReturnToLiveView(false); // Fallback to live view
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"DisplayGifInLiveView: Error: {ex.Message}");
+                ReturnToLiveView(false); // Fallback to live view
+            }
+        }
+
+        private void ReturnToLiveView(bool isFromFlipbook = false)
+        {
+            try
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    // Stop any video display timer
+                    if (videoDisplayTimer != null)
+                    {
+                        videoDisplayTimer.Stop();
+                        videoDisplayTimer = null;
+                    }
+                    
+                    // Remove any video and GIF elements
+                    if (liveViewImage != null)
+                    {
+                        var parent = liveViewImage.Parent as Panel;
+                        if (parent != null)
+                        {
+                            // Find and remove video and GIF elements
+                            var mediaElements = parent.Children.OfType<MediaElement>().ToList();
+                            foreach (var element in mediaElements)
+                            {
+                                element.Stop();
+                                element.Close();
+                                parent.Children.Remove(element);
+                            }
+                        }
+                        
+                        // Show the camera live view again
+                        liveViewImage.Visibility = Visibility.Visible;
+                    }
+                    
+                    // For flipbook, live view should already be running from when recording ended
+                    // Don't restart it again to avoid conflicts
+                    if (!isFromFlipbook)
+                    {
+                        // Handle live view based on idle setting (same as app initialization)
+                        if (DeviceManager?.SelectedCameraDevice != null)
+                        {
+                            if (Properties.Settings.Default.EnableIdleLiveView)
+                            {
+                                // Start live view if idle live view is enabled
+                                try
+                                {
+                                    if (liveViewTimer != null)
+                                    {
+                                        liveViewTimer.Start();
+                                    }
+                                    DeviceManager.SelectedCameraDevice.StartLiveView();
+                                    Log.Debug("ReturnToLiveView: Started idle live view");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Debug($"ReturnToLiveView: Failed to start idle live view: {ex.Message}");
+                                }
+                            }
+                            else
+                            {
+                                // Stop live view if idle live view is disabled
+                                try
+                                {
+                                    if (liveViewTimer != null)
+                                    {
+                                        liveViewTimer.Stop();
+                                    }
+                                    DeviceManager.SelectedCameraDevice.StopLiveView();
+                                    Log.Debug("ReturnToLiveView: Stopped live view (idle live view disabled)");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Debug($"ReturnToLiveView: Failed to stop live view: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Log.Debug("ReturnToLiveView: Skipping live view restart for flipbook (already running)");
+                        // Just ensure the timer is running if it should be
+                        if (liveViewTimer != null && !liveViewTimer.IsEnabled && Properties.Settings.Default.EnableIdleLiveView)
+                        {
+                            liveViewTimer.Start();
+                        }
+                    }
+                    
+                    // Ensure camera is ready for photo mode after video display
+                    if (DeviceManager.SelectedCameraDevice != null)
+                    {
+                        DeviceManager.SelectedCameraDevice.IsBusy = false;
+                        Log.Debug("ReturnToLiveView: Cleared camera IsBusy flag");
+                    }
+                    
+                    // Don't clear template for flipbook - we're still in the same session
+                    if (!isFromFlipbook)
+                    {
+                        // Return to main idle state (same as app startup)
+                        // Clear current template to reset workflow for next session
+                        currentTemplate = null;
+                        Log.Debug("ReturnToLiveView: Cleared currentTemplate to reset workflow");
+                    }
+                    
+                    // Ensure templates are loaded if we have an event (same as initialization logic)
+                    if (currentEvent != null)
+                    {
+                        DebugService.LogDebug($"ReturnToLiveView: Loading templates for event: {currentEvent.Name}");
+                        eventTemplateService.LoadAvailableTemplates(currentEvent.Id);
+                        Log.Debug($"ReturnToLiveView: Loaded {eventTemplateService.AvailableTemplates?.Count ?? 0} templates for event {currentEvent.Name}");
+                    }
+                    
+                    // Show start button based on same logic as initialization
+                    if (startButtonOverlay != null)
+                    {
+                        bool shouldShowStartButton = (currentTemplate != null) || 
+                            (currentEvent != null && eventTemplateService.AvailableTemplates != null && eventTemplateService.AvailableTemplates.Count > 0);
+                        
+                        startButtonOverlay.Visibility = shouldShowStartButton ? Visibility.Visible : Visibility.Collapsed;
+                        Log.Debug($"ReturnToLiveView: Start button visibility = {startButtonOverlay.Visibility}, shouldShow={shouldShowStartButton}");
+                    }
+                    
+                    // Ensure template selection overlay is hidden (return to main idle state)
+                    if (eventSelectionOverlay != null)
+                    {
+                        eventSelectionOverlay.Visibility = Visibility.Collapsed;
+                        Log.Debug("ReturnToLiveView: Hidden template selection overlay");
+                    }
+                    
+                    // Update status display (same as initialization)
+                    RefreshDisplay();
+                    
+                    Log.Debug("ReturnToLiveView: Returned to camera live view with proper UI state");
+                }));
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ReturnToLiveView: Error: {ex.Message}");
+            }
+        }
+        
+        // Method already exists above, removing duplicate
+        
+        private void VideoPlaybackOverlay_Click(object sender, MouseButtonEventArgs e)
+        {
+            // Don't close if clicking on controls
+            if (e.OriginalSource == videoPlayerOverlay)
+            {
+                // Could optionally close the overlay when clicking outside
+                // CloseVideoOverlay();
+            }
+        }
+        
+        private void PlayPauseButton_Click(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                if (videoPlayer.Position >= videoPlayer.NaturalDuration.TimeSpan)
+                {
+                    // If at end, restart
+                    videoPlayer.Position = TimeSpan.Zero;
+                }
+                
+                videoPlayer.Play();
+                playPauseButton.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PlayPauseButton_Click: Error: {ex.Message}");
+            }
+        }
+        
+        private void PlayAgainButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                videoPlayer.Position = TimeSpan.Zero;
+                videoPlayer.Play();
+                playPauseButton.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PlayAgainButton_Click: Error: {ex.Message}");
+            }
+        }
+        
+        private void SaveVideoButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(currentVideoPath))
+                {
+                    // Video is already saved in the session folder
+                    UpdateStatusText("Video saved to session!");
+                    
+                    // Optionally copy to a special location or process further
+                    // You could also trigger upload to cloud here
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SaveVideoButton_Click: Error: {ex.Message}");
+            }
+        }
+        
+        private void ShareVideoButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(currentVideoPath))
+                {
+                    // Share the video - could upload to cloud and get shareable link
+                    // For now, just show message
+                    UpdateStatusText("Preparing video for sharing...");
+                    
+                    // TODO: Implement actual sharing functionality
+                    // Could upload to S3 and generate a shareable link
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShareVideoButton_Click: Error: {ex.Message}");
+            }
+        }
+        
+        private void CloseVideoButton_Click(object sender, RoutedEventArgs e)
+        {
+            CloseVideoOverlay();
+        }
+        
+        private void CloseVideoOverlay()
+        {
+            try
+            {
+                videoPlayer.Stop();
+                videoPlayer.Source = null;
+                videoPlayerOverlay.Visibility = Visibility.Collapsed;
+                currentVideoPath = null;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"CloseVideoOverlay: Error: {ex.Message}");
+            }
+        }
+        
+        private T FindVisualChild<T>(DependencyObject parent, string name) where T : FrameworkElement
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                
+                if (child is T typedChild && typedChild.Name == name)
+                    return typedChild;
+                
+                var result = FindVisualChild<T>(child, name);
+                if (result != null)
+                    return result;
+            }
+            return null;
+        }
+        
+        // Video/Photo settings management methods
+        private void ApplyVideoSettingsForRecording()
+        {
+            if (DeviceManager.SelectedCameraDevice == null) return;
+            
+            try
+            {
+                // Save current photo settings first
+                savedPhotoSettings = new SavedPhotoSettings
+                {
+                    ISO = DeviceManager.SelectedCameraDevice.IsoNumber?.Value ?? "Auto",
+                    Aperture = DeviceManager.SelectedCameraDevice.FNumber?.Value ?? "Auto",
+                    ShutterSpeed = DeviceManager.SelectedCameraDevice.ShutterSpeed?.Value ?? "Auto",
+                    WhiteBalance = DeviceManager.SelectedCameraDevice.WhiteBalance?.Value ?? "Auto",
+                    FocusMode = DeviceManager.SelectedCameraDevice.FocusMode?.Value ?? "Auto",
+                    ExposureCompensation = DeviceManager.SelectedCameraDevice.ExposureCompensation?.Value ?? "0"
+                };
+                
+                Log.Debug($"Saved photo settings - ISO: {savedPhotoSettings.ISO}, Aperture: {savedPhotoSettings.Aperture}");
+                
+                // Apply video settings from Properties.Settings
+                var settings = Properties.Settings.Default;
+                
+                if (!string.IsNullOrEmpty(settings.VideoISO) && settings.VideoISO != "Auto")
+                {
+                    SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.IsoNumber, settings.VideoISO);
+                }
+                
+                if (!string.IsNullOrEmpty(settings.VideoAperture) && settings.VideoAperture != "Auto")
+                {
+                    SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.FNumber, settings.VideoAperture);
+                }
+                
+                if (!string.IsNullOrEmpty(settings.VideoShutterSpeed) && settings.VideoShutterSpeed != "Auto")
+                {
+                    SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.ShutterSpeed, settings.VideoShutterSpeed);
+                }
+                
+                if (!string.IsNullOrEmpty(settings.VideoWhiteBalance) && settings.VideoWhiteBalance != "Auto")
+                {
+                    SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.WhiteBalance, settings.VideoWhiteBalance);
+                }
+                
+                if (!string.IsNullOrEmpty(settings.VideoFocusMode))
+                {
+                    SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.FocusMode, settings.VideoFocusMode);
+                }
+                
+                if (!string.IsNullOrEmpty(settings.VideoExposureCompensation))
+                {
+                    SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.ExposureCompensation, settings.VideoExposureCompensation);
+                }
+                
+                Log.Debug($"Applied video settings - ISO: {settings.VideoISO}, Aperture: {settings.VideoAperture}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error applying video settings: {ex.Message}");
+            }
+        }
+        
+        private void RestorePhotoSettingsAfterRecording()
+        {
+            if (DeviceManager.SelectedCameraDevice == null || savedPhotoSettings == null) return;
+            
+            try
+            {
+                SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.IsoNumber, savedPhotoSettings.ISO);
+                SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.FNumber, savedPhotoSettings.Aperture);
+                SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.ShutterSpeed, savedPhotoSettings.ShutterSpeed);
+                SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.WhiteBalance, savedPhotoSettings.WhiteBalance);
+                SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.FocusMode, savedPhotoSettings.FocusMode);
+                SetCameraPropertyToValue(DeviceManager.SelectedCameraDevice.ExposureCompensation, savedPhotoSettings.ExposureCompensation);
+                
+                Log.Debug($"Restored photo settings - ISO: {savedPhotoSettings.ISO}, Aperture: {savedPhotoSettings.Aperture}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error restoring photo settings: {ex.Message}");
+            }
+        }
+        
+        private void SetCameraPropertyToValue(PropertyValue<long> property, string targetValue)
+        {
+            if (property == null || !property.IsEnabled || string.IsNullOrEmpty(targetValue)) return;
+            
+            try
+            {
+                // Find the target value in the property's available values
+                foreach (var value in property.Values)
+                {
+                    if (value == targetValue)
+                    {
+                        property.Value = targetValue;
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Error setting property value: {ex.Message}");
+            }
+        }
+        
+        // INotifyPropertyChanged implementation for data binding
+        public event PropertyChangedEventHandler PropertyChanged;
+        
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
         
         #endregion
 

@@ -64,10 +64,20 @@ namespace Photobooth.Services
                                 {
                                     _instance = new CloudShareServiceRuntime();
                                     System.Diagnostics.Debug.WriteLine("CloudShareProvider: Successfully created CloudShareServiceRuntime!");
+                                    
+                                    // Write to a debug file for easier diagnosis
+                                    var debugFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cloudshare_debug.txt");
+                                    File.AppendAllText(debugFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] CloudShareProvider: Successfully created CloudShareServiceRuntime\r\n");
                                 }
                                 catch (Exception ex)
                                 {
                                     System.Diagnostics.Debug.WriteLine($"CloudShareProvider: Failed to create CloudShareServiceRuntime: {ex.Message}");
+                                    System.Diagnostics.Debug.WriteLine($"CloudShareProvider: Exception details: {ex}");
+                                    
+                                    // Write to a debug file for easier diagnosis
+                                    var debugFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cloudshare_debug.txt");
+                                    File.AppendAllText(debugFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] CloudShareProvider: Failed to create CloudShareServiceRuntime: {ex.Message}\r\n");
+                                    File.AppendAllText(debugFile, $"  Stack trace: {ex.StackTrace}\r\n");
                                 }
                             }
                             else
@@ -86,6 +96,10 @@ namespace Photobooth.Services
                         {
                             _instance = new StubShareService();
                             System.Diagnostics.Debug.WriteLine("CloudShareProvider: Using stub implementation (cloud features not available)");
+                            
+                            // Write to a debug file for easier diagnosis
+                            var debugFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cloudshare_debug.txt");
+                            File.AppendAllText(debugFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] CloudShareProvider: Using stub implementation (cloud features not available)\r\n");
                         }
                     }
                 }

@@ -208,6 +208,9 @@
     <Compile Include="Sony\CameraDiscovery.cs" />
     <Compile Include="Sony\SonyCameraDeviceInfo.cs" />
     <Compile Include="Sony\SonyWifiCamera.cs" />
+    <Compile Include="Sony\SonyUSBCamera.cs" />
+    <Compile Include="Sony\SonyUSBProvider.cs" />
+    <Compile Include="Sony\SonySDKWrapper.cs" />
     <Compile Include="Others\WiaCameraDevice.cs" />
     <Compile Include="Others\YiCamera.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -323,4 +326,10 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <PropertyGroup>
+    <PostBuildEvent>
+      xcopy /Y "$(ProjectDir)..\sonysdk\external\crsdk\*.dll" "$(TargetDir)"
+      xcopy /Y "$(ProjectDir)..\sonysdk\external\crsdk\CrAdapter\*.dll" "$(TargetDir)"
+    </PostBuildEvent>
+  </PropertyGroup>
 </Project>

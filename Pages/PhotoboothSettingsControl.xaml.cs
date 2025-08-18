@@ -125,6 +125,21 @@ namespace Photobooth.Pages
                 }
                 photoLocationTextBox.Text = photoLocation;
                 
+                // Load Video & Boomerang module settings
+                var modulesConfig = PhotoboothModulesConfig.Instance;
+                enableVideoModuleCheckBox.IsChecked = modulesConfig.VideoEnabled;
+                showVideoButtonCheckBox.IsChecked = modulesConfig.ShowVideoButton;
+                videoDurationSlider.Value = modulesConfig.VideoDuration;
+                
+                enableBoomerangModuleCheckBox.IsChecked = modulesConfig.BoomerangEnabled;
+                showBoomerangButtonCheckBox.IsChecked = modulesConfig.ShowBoomerangButton;
+                boomerangFramesSlider.Value = modulesConfig.BoomerangFrames;
+                boomerangSpeedSlider.Value = modulesConfig.BoomerangSpeed;
+                
+                enableFlipbookModuleCheckBox.IsChecked = modulesConfig.FlipbookEnabled;
+                showFlipbookButtonCheckBox.IsChecked = modulesConfig.ShowFlipbookButton;
+                flipbookDurationSlider.Value = modulesConfig.FlipbookDuration;
+                
                 // Load live view settings
                 mirrorLiveViewCheckBox.IsChecked = Properties.Settings.Default.MirrorLiveView;
                 enableIdleLiveViewCheckBox.IsChecked = Properties.Settings.Default.EnableIdleLiveView;
@@ -270,6 +285,14 @@ namespace Photobooth.Pages
             {
                 SaveSettingsInternal();
                 SaveCloudSettings(); // Save cloud settings too
+                
+                // Also force save the video/boomerang module settings
+                var modulesConfig = PhotoboothModulesConfig.Instance;
+                modulesConfig.SaveAllSettings();
+                
+                // Force save all application settings
+                Properties.Settings.Default.Save();
+                
                 MessageBox.Show("Settings saved successfully!", "Photobooth Settings", 
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -3279,6 +3302,170 @@ namespace Photobooth.Pages
             }
         }
 
+        #endregion
+        
+        #region Video & Boomerang Module Event Handlers
+        
+        private void EnableVideoModule_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var modulesConfig = PhotoboothModulesConfig.Instance;
+                modulesConfig.VideoEnabled = enableVideoModuleCheckBox.IsChecked == true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating video module setting: {ex.Message}");
+            }
+        }
+        
+        private void ShowVideoButton_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var modulesConfig = PhotoboothModulesConfig.Instance;
+                modulesConfig.ShowVideoButton = showVideoButtonCheckBox.IsChecked == true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating video button visibility: {ex.Message}");
+            }
+        }
+        
+        private void VideoDurationSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            try
+            {
+                if (videoDurationValueText != null)
+                {
+                    int seconds = (int)videoDurationSlider.Value;
+                    videoDurationValueText.Text = $"{seconds} seconds";
+                    
+                    var modulesConfig = PhotoboothModulesConfig.Instance;
+                    modulesConfig.VideoDuration = seconds;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating video duration: {ex.Message}");
+            }
+        }
+        
+        private void EnableBoomerangModule_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var modulesConfig = PhotoboothModulesConfig.Instance;
+                modulesConfig.BoomerangEnabled = enableBoomerangModuleCheckBox.IsChecked == true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating boomerang module setting: {ex.Message}");
+            }
+        }
+        
+        private void ShowBoomerangButton_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var modulesConfig = PhotoboothModulesConfig.Instance;
+                modulesConfig.ShowBoomerangButton = showBoomerangButtonCheckBox.IsChecked == true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating boomerang button visibility: {ex.Message}");
+            }
+        }
+        
+        private void BoomerangFramesSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            try
+            {
+                if (boomerangFramesValueText != null)
+                {
+                    int frames = (int)boomerangFramesSlider.Value;
+                    boomerangFramesValueText.Text = $"{frames} frames";
+                    
+                    var modulesConfig = PhotoboothModulesConfig.Instance;
+                    modulesConfig.BoomerangFrames = frames;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating boomerang frames: {ex.Message}");
+            }
+        }
+        
+        private void BoomerangSpeedSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            try
+            {
+                if (boomerangSpeedValueText != null)
+                {
+                    int speed = (int)boomerangSpeedSlider.Value;
+                    boomerangSpeedValueText.Text = $"{speed} ms";
+                    
+                    var modulesConfig = PhotoboothModulesConfig.Instance;
+                    modulesConfig.BoomerangSpeed = speed;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating boomerang speed: {ex.Message}");
+            }
+        }
+        
+        private void EnableFlipbookModule_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var modulesConfig = PhotoboothModulesConfig.Instance;
+                modulesConfig.FlipbookEnabled = enableFlipbookModuleCheckBox.IsChecked == true;
+                Properties.Settings.Default.FlipbookEnabled = enableFlipbookModuleCheckBox.IsChecked == true;
+                Properties.Settings.Default.Save();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating flipbook module setting: {ex.Message}");
+            }
+        }
+        
+        private void ShowFlipbookButton_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var modulesConfig = PhotoboothModulesConfig.Instance;
+                modulesConfig.ShowFlipbookButton = showFlipbookButtonCheckBox.IsChecked == true;
+                Properties.Settings.Default.ShowFlipbookButton = showFlipbookButtonCheckBox.IsChecked == true;
+                Properties.Settings.Default.Save();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating flipbook button visibility: {ex.Message}");
+            }
+        }
+        
+        private void FlipbookDurationSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            try
+            {
+                if (flipbookDurationValueText != null)
+                {
+                    int duration = (int)flipbookDurationSlider.Value;
+                    flipbookDurationValueText.Text = $"{duration} seconds";
+                    
+                    var modulesConfig = PhotoboothModulesConfig.Instance;
+                    modulesConfig.FlipbookDuration = duration;
+                    Properties.Settings.Default.FlipbookDuration = duration;
+                    Properties.Settings.Default.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating flipbook duration: {ex.Message}");
+            }
+        }
+        
         #endregion
     }
 }
