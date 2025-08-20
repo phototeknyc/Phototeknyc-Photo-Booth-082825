@@ -775,8 +775,21 @@ namespace CameraControl.Devices.Sony
         
         private void LiveViewLoop()
         {
-            Log.Debug("Sony USB: Live view loop started");
+            Log.Debug($"Sony USB: Live view loop started, _liveViewRunning={_liveViewRunning}, _isConnected={_isConnected}, handle={_deviceHandle}");
             int consecutiveErrors = 0;
+            int frameCount = 0;
+            bool firstFrame = true;
+            bool capturedOneFrame = false;  // Debug flag to capture one frame
+            
+            // Wait a bit for live view to fully start
+            if (firstFrame)
+            {
+                Log.Debug("Sony USB: Waiting for live view to initialize...");
+                Thread.Sleep(500);
+                firstFrame = false;
+            }
+            
+            Log.Debug($"Sony USB: Entering live view loop, _liveViewRunning={_liveViewRunning}, _isConnected={_isConnected}");
             
             while (_liveViewRunning && _isConnected)
             {
@@ -789,84 +802,207 @@ namespace CameraControl.Devices.Sony
                     }
                     
                     // Get live view image info
+                    Log.Debug("Sony USB: Calling GetLiveViewImageInfo...");
                     CrImageInfo imageInfo;
                     var result = SonySDKWrapper.GetLiveViewImageInfo(_deviceHandle, out imageInfo);
+                    Log.Debug($"Sony USB: GetLiveViewImageInfo result: {result}");
                     
                     if (SonySDKWrapper.IsSuccess(result))
                     {
                         if (imageInfo.BufferSize > 0 && imageInfo.BufferSize < 10 * 1024 * 1024) // Reasonable size check (< 10MB)
                         {
+                            frameCount++;
+                            
                             // Only log occasionally to avoid spam
-                            if (consecutiveErrors == 0 || consecutiveErrors % 50 == 0)
+                            if (consecutiveErrors == 0 || frameCount % 30 == 0)
                             {
                                 Log.Debug($"Sony USB: Live view image info - BufferSize: {imageInfo.BufferSize}, Width: {imageInfo.Width}, Height: {imageInfo.Height}, Format: {imageInfo.Format}");
                             }
                             
-                            // Use buffer size from imageInfo for proper allocation
-                            IntPtr imageDataBuffer = Marshal.AllocHGlobal((int)imageInfo.BufferSize);
+                            // Allocate managed buffer for the image data
+                            byte[] buffer = new byte[imageInfo.BufferSize];
+                            
+                            // Pin the buffer so GC can't move it while native code writes to it
+                            GCHandle bufferHandle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
                             try
                             {
-                                // Zero out the buffer first
-                                byte[] zeroBuffer = new byte[imageInfo.BufferSize];
-                                Marshal.Copy(zeroBuffer, 0, imageDataBuffer, (int)imageInfo.BufferSize);
+                                IntPtr bufferPtr = bufferHandle.AddrOfPinnedObject();
                                 
-                                // Initialize the image data structure with our buffer
-                                var imageData = new CrImageDataBlock
-                                {
-                                    Data = imageDataBuffer,
-                                    Size = imageInfo.BufferSize,
-                                    FrameNo = 0
-                                };
+                                // Create C++ CrImageDataBlock object through helper DLL or manual layout
+                                IntPtr imageDataBlock = IntPtr.Zero;
+                                bool usingHelperDll = false;
                                 
-                                // Allocate memory for the structure itself
-                                IntPtr imageDataPtr = Marshal.AllocHGlobal(Marshal.SizeOf<CrImageDataBlock>());
+                                // Try to use helper DLL first
                                 try
                                 {
-                                    // Copy our structure to unmanaged memory
-                                    Marshal.StructureToPtr(imageData, imageDataPtr, false);
-                                    
-                                    // Get live view image using the structure pointer
-                                    result = SonySDKWrapper.GetLiveViewImage(_deviceHandle, imageDataPtr);
-                                    
-                                    if (SonySDKWrapper.IsSuccess(result))
+                                    imageDataBlock = SonySDKWrapper.CreateImageDataBlock();
+                                    usingHelperDll = true;
+                                    Log.Debug("Sony USB: Using helper DLL for image data block");
+                                }
+                                catch (Exception)
+                                {
+                                    // Helper DLL not available, use manual memory layout
+                                    Log.Debug("Sony USB: Helper DLL not available, using manual memory layout");
+                                }
+                                
+                                // If not using helper DLL, create manual memory layout
+                                if (!usingHelperDll)
+                                {
+                                    imageDataBlock = Marshal.AllocHGlobal(48);
+                                    // Zero out the entire structure first
+                                    for (int i = 0; i < 48; i++)
                                     {
-                                        // Read back the structure to get any updates
-                                        var updatedImageData = Marshal.PtrToStructure<CrImageDataBlock>(imageDataPtr);
-                                        
-                                        // Copy image data from the buffer
-                                        byte[] buffer = new byte[imageInfo.BufferSize];
-                                        Marshal.Copy(updatedImageData.Data, buffer, 0, (int)imageInfo.BufferSize);
-                                        
-                                        lock (_lockObject)
+                                        Marshal.WriteByte(imageDataBlock, i, 0);
+                                    }
+                                    // Skip vtable pointer (8 bytes) and write structure fields
+                                    Marshal.WriteInt32(imageDataBlock, 8, 0);                      // frameNo = 0
+                                    Marshal.WriteInt32(imageDataBlock, 16, (int)imageInfo.BufferSize); // size = buffer size
+                                    Marshal.WriteIntPtr(imageDataBlock, 24, bufferPtr);            // pData = buffer pointer
+                                    Marshal.WriteInt32(imageDataBlock, 32, 0);                     // imageSize = 0
+                                    Marshal.WriteInt32(imageDataBlock, 36, 0);                     // timeCode = 0
+                                }
+                                
+                                // Set buffer data if using helper DLL
+                                if (usingHelperDll && imageDataBlock != IntPtr.Zero)
+                                {
+                                    SonySDKWrapper.SetImageDataBlockSize(imageDataBlock, imageInfo.BufferSize);
+                                    SonySDKWrapper.SetImageDataBlockData(imageDataBlock, bufferPtr);
+                                }
+                                
+                                try
+                                {
+                                    
+                                    // Try to get live view image with retries for first frames
+                                    int retryCount = (consecutiveErrors == 0) ? 5 : 1;
+                                    bool success = false;
+                                    
+                                    for (int attempt = 0; attempt < retryCount; attempt++)
+                                    {
+                                        // Use helper function if available, otherwise direct call
+                                        if (usingHelperDll)
                                         {
-                                            _liveViewData.ImageData = buffer;
-                                            _liveViewData.IsLiveViewRunning = true;
-                                            _liveViewData.ImageWidth = (int)imageInfo.Width;
-                                            _liveViewData.ImageHeight = (int)imageInfo.Height;
+                                            Log.Debug($"Sony USB: Calling GetLiveViewImageHelper (attempt {attempt + 1}/{retryCount})...");
+                                            result = SonySDKWrapper.GetLiveViewImageHelper(_deviceHandle, imageDataBlock);
+                                        }
+                                        else
+                                        {
+                                            Log.Debug($"Sony USB: Calling GetLiveViewImage directly (attempt {attempt + 1}/{retryCount})...");
+                                            result = SonySDKWrapper.GetLiveViewImage(_deviceHandle, imageDataBlock);
                                         }
                                         
-                                        consecutiveErrors = 0; // Reset error counter on success
-                                        if (consecutiveErrors % 100 == 0) // Log success occasionally
+                                        Log.Debug($"Sony USB: GetLiveViewImage result: {SonySDKWrapper.GetErrorMessage(result)} (0x{(int)result:X4})");
+                                        
+                                        if (SonySDKWrapper.IsSuccess(result))
                                         {
-                                            Log.Debug($"Sony USB: Live view image captured successfully - {buffer.Length} bytes");
+                                            success = true;
+                                            Log.Debug("Sony USB: GetLiveViewImage succeeded!");
+                                            break;
+                                        }
+                                        
+                                        // Wait a bit before retry
+                                        if (attempt < retryCount - 1)
+                                        {
+                                            Thread.Sleep(75);
+                                        }
+                                    }
+                                    
+                                    if (success)
+                                    {
+                                        // Get actual image size
+                                        uint actualImageSize = 0;
+                                        if (usingHelperDll)
+                                        {
+                                            actualImageSize = SonySDKWrapper.GetImageDataBlockImageSize(imageDataBlock);
+                                            if (actualImageSize > 0 && actualImageSize <= imageInfo.BufferSize)
+                                            {
+                                                SonySDKWrapper.CopyImageData(imageDataBlock, bufferPtr, imageInfo.BufferSize);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            // Helper functions not available, read directly from memory
+                                            actualImageSize = (uint)Marshal.ReadInt32(imageDataBlock, 32);
+                                        }
+                                        
+                                        // The buffer may contain vendor headers before the JPEG data
+                                        // Use the actual size from the SDK if available
+                                        int dataSize = actualImageSize > 0 ? (int)actualImageSize : (int)imageInfo.BufferSize;
+                                        
+                                        // Log buffer details only for first frame or errors
+                                        if (!capturedOneFrame && dataSize >= 20)
+                                        {
+                                            string hexBytes = "";
+                                            for (int i = 0; i < 20 && i < dataSize; i++)
+                                            {
+                                                hexBytes += $"{buffer[i]:X2} ";
+                                            }
+                                            Log.Debug($"Sony USB: Buffer first 20 bytes: {hexBytes}");
+                                            Log.Debug($"Sony USB: Total data size: {dataSize} bytes, actualImageSize: {actualImageSize}");
+                                        }
+                                        
+                                        // Extract JPEG from buffer by scanning for SOI/EOI markers
+                                        byte[] jpegData = ExtractJpegFromBuffer(buffer, dataSize);
+                                        
+                                        if (jpegData != null)
+                                        {
+                                            lock (_lockObject)
+                                            {
+                                                _liveViewData.ImageData = jpegData;
+                                                _liveViewData.ImageDataPosition = 0;  // JPEG starts at position 0
+                                                _liveViewData.IsLiveViewRunning = true;
+                                                _liveViewData.ImageWidth = (int)imageInfo.Width;
+                                                _liveViewData.ImageHeight = (int)imageInfo.Height;
+                                                _liveViewData.LiveViewImageWidth = (int)imageInfo.Width;
+                                                _liveViewData.LiveViewImageHeight = (int)imageInfo.Height;
+                                            }
+                                            
+                                            consecutiveErrors = 0; // Reset error counter on success
+                                            
+                                            // Log success only for first frame
+                                            if (!capturedOneFrame)
+                                            {
+                                                Log.Debug($"Sony USB: Live view JPEG extracted successfully!");
+                                                Log.Debug($"Sony USB: JPEG size: {jpegData.Length} bytes (from {dataSize} byte buffer)");
+                                                Log.Debug($"Sony USB: JPEG starts with: {jpegData[0]:X2} {jpegData[1]:X2} (should be FF D8)");
+                                                Log.Debug($"Sony USB: JPEG ends with: {jpegData[jpegData.Length-2]:X2} {jpegData[jpegData.Length-1]:X2} (should be FF D9)");
+                                            }
+                                            
+                                            // Mark that we captured one frame for debugging
+                                            if (!capturedOneFrame)
+                                            {
+                                                capturedOneFrame = true;
+                                                Log.Debug("Sony USB: Successfully captured first frame! Continuing normal operation...");
+                                                
+                                                // Save the first frame to disk for verification
+                                                try
+                                                {
+                                                    string debugPath = Path.Combine(Path.GetTempPath(), $"Sony_LiveView_Test_{DateTime.Now:yyyyMMdd_HHmmss}.jpg");
+                                                    File.WriteAllBytes(debugPath, jpegData);
+                                                    Log.Debug($"Sony USB: Saved test frame to: {debugPath}");
+                                                }
+                                                catch (Exception saveEx)
+                                                {
+                                                    Log.Debug($"Sony USB: Failed to save test frame: {saveEx.Message}");
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            // Log what we got instead of JPEG
+                                            if (dataSize >= 4)
+                                            {
+                                                Log.Debug($"Sony USB: No JPEG markers found in {dataSize} byte buffer (first bytes: {buffer[0]:X2} {buffer[1]:X2} {buffer[2]:X2} {buffer[3]:X2})");
+                                            }
+                                            else
+                                            {
+                                                Log.Debug($"Sony USB: Buffer too small: {dataSize} bytes");
+                                            }
+                                            consecutiveErrors++;
                                         }
                                     }
                                     else
                                     {
                                         consecutiveErrors++;
-                                        
-                                        // Try alternative approach if standard approach fails
-                                        if (consecutiveErrors == 10)
-                                        {
-                                            Log.Debug("Sony USB: Trying alternative live view image retrieval method...");
-                                            result = TryAlternativeLiveViewMethod(imageInfo);
-                                            
-                                            if (SonySDKWrapper.IsSuccess(result))
-                                            {
-                                                Log.Debug("Sony USB: Alternative method succeeded!");
-                                                consecutiveErrors = 0;
-                                            }
-                                        }
                                         
                                         // Only log first few errors and every 50th error to avoid spam
                                         if (consecutiveErrors <= 5 || consecutiveErrors % 50 == 0)
@@ -877,12 +1013,23 @@ namespace CameraControl.Devices.Sony
                                 }
                                 finally
                                 {
-                                    Marshal.FreeHGlobal(imageDataPtr);
+                                    // Clean up
+                                    if (imageDataBlock != IntPtr.Zero)
+                                    {
+                                        if (usingHelperDll)
+                                        {
+                                            SonySDKWrapper.DestroyImageDataBlock(imageDataBlock);
+                                        }
+                                        else
+                                        {
+                                            Marshal.FreeHGlobal(imageDataBlock);
+                                        }
+                                    }
                                 }
                             }
                             finally
                             {
-                                Marshal.FreeHGlobal(imageDataBuffer);
+                                bufferHandle.Free();
                             }
                         }
                         else
@@ -1022,6 +1169,49 @@ namespace CameraControl.Devices.Sony
             {
                 Log.Debug($"Sony USB: Exception setting property 0x{code:X4}: {ex.Message}");
             }
+        }
+        
+        private static byte[] ExtractJpegFromBuffer(byte[] buffer, int count)
+        {
+            // Find JPEG Start Of Image (SOI) marker: FF D8
+            int soiIndex = -1;
+            for (int i = 0; i + 1 < count; i++)
+            {
+                if (buffer[i] == 0xFF && buffer[i + 1] == 0xD8)
+                {
+                    soiIndex = i;
+                    break;
+                }
+            }
+            
+            if (soiIndex < 0)
+            {
+                // No JPEG start marker found
+                return null;
+            }
+            
+            // Find JPEG End Of Image (EOI) marker: FF D9
+            int eoiIndex = -1;
+            for (int i = count - 2; i >= soiIndex; i--)
+            {
+                if (buffer[i] == 0xFF && buffer[i + 1] == 0xD9)
+                {
+                    eoiIndex = i + 2; // Include the EOI marker
+                    break;
+                }
+            }
+            
+            if (eoiIndex < 0)
+            {
+                // No JPEG end marker found
+                return null;
+            }
+            
+            // Extract the JPEG data
+            int jpegSize = eoiIndex - soiIndex;
+            byte[] jpegData = new byte[jpegSize];
+            Buffer.BlockCopy(buffer, soiIndex, jpegData, 0, jpegSize);
+            return jpegData;
         }
         
         private void CheckLiveViewProperties()

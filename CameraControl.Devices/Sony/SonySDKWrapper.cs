@@ -6,6 +6,7 @@ namespace CameraControl.Devices.Sony
     public static class SonySDKWrapper
     {
         private const string SONY_SDK_DLL = "Cr_Core.dll";
+        private const string SONY_HELPER_DLL = "SonySDKHelper.dll";
         
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern bool SetDllDirectory(string lpPathName);
@@ -52,6 +53,7 @@ namespace CameraControl.Devices.Sony
         [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "SetSaveInfo")]
         public static extern CrError SetSaveInfo(IntPtr deviceHandle, [MarshalAs(UnmanagedType.LPWStr)] string path, [MarshalAs(UnmanagedType.LPWStr)] string prefix, int no);
         
+        // We need to use IntPtr because CrImageDataBlock is a C++ class with virtual methods, not a struct
         [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "GetLiveViewImage")]
         public static extern CrError GetLiveViewImage(IntPtr deviceHandle, IntPtr imageData);
         
@@ -76,6 +78,31 @@ namespace CameraControl.Devices.Sony
         
         [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "SetDeviceSetting")]
         public static extern CrError SetDeviceSetting(IntPtr deviceHandle, uint key, uint value);
+        
+        // Helper DLL functions for C++ class interop
+        [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
+        public static extern IntPtr CreateImageDataBlock();
+        
+        [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void DestroyImageDataBlock(IntPtr imageData);
+        
+        [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetImageDataBlockSize(IntPtr imageData, uint size);
+        
+        [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetImageDataBlockData(IntPtr imageData, IntPtr data);
+        
+        [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
+        public static extern uint GetImageDataBlockImageSize(IntPtr imageData);
+        
+        [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
+        public static extern IntPtr GetImageDataBlockImageData(IntPtr imageData);
+        
+        [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
+        public static extern CrError GetLiveViewImageHelper(IntPtr deviceHandle, IntPtr imageData);
+        
+        [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void CopyImageData(IntPtr imageData, IntPtr destBuffer, uint bufferSize);
         
         public static string GetErrorMessage(CrError error)
         {
@@ -145,7 +172,9 @@ namespace CameraControl.Devices.Sony
         CrCommandId_CancelMediaFormat = 0x0006,
         CrCommandId_S1andRelease = 0x0007,  // This is the proper still capture command!
         CrCommandId_CancelContentsTransfer = 0x0008,
-        CrCommandId_MovieRecButtonToggle = 0x0014
+        CrCommandId_MovieRecButtonToggle = 0x0014,
+        CrCommandId_StartLiveView = 0x0201,
+        CrCommandId_StopLiveView = 0x0202
     }
     
     public enum CrDevicePropertyCode : uint
