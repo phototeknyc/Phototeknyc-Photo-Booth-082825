@@ -508,6 +508,8 @@ namespace CameraControl.Devices
                         else
                         {
                             Log.Error($"Failed to initialize Sony camera: {descriptor.WpdId}");
+                            // Clean up descriptor resources
+                            descriptor.CleanupSonyInfo();
                         }
                     }
                 }
@@ -1029,8 +1031,14 @@ namespace CameraControl.Devices
             if (UseExperimentalDrivers)
             {
                 InitCanon();
-                // Also check for Sony USB cameras
+                try
+            {
                 ConnectSonyUSBCameras();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Error connecting Sony USB cameras", ex);
+            }
             }
             return ConnectToCamera(true);
         }
@@ -1127,6 +1135,15 @@ namespace CameraControl.Devices
             {
                 connectedDevice.Close();
             }
+            
+            // Clean up Sony camera info from descriptors
+            foreach (var descriptor in _deviceEnumerator.Devices)
+            {
+                descriptor.CleanupSonyInfo();
+            }
+            
+            // Shutdown Sony SDK
+            SonyUSBProvider.Shutdown();
         }
 
         public event PhotoCapturedEventHandler PhotoCaptured;

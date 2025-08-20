@@ -1215,6 +1215,16 @@ namespace Photobooth.Pages
             Log.Debug($"PhotoCaptured: Camera IsBusy before processing: {eventArgs.CameraDevice?.IsBusy}");
             Log.Debug($"PhotoCaptured: Current photo index before increment: {currentPhotoIndex}");
             
+            // Check if FileName is null (common with Sony SDK)
+            // Only generate filename if it's truly null/empty - don't modify Canon filenames
+            if (string.IsNullOrEmpty(eventArgs.FileName))
+            {
+                Log.Debug("PhotoCaptured: FileName is null or empty, generating default filename");
+                // Generate a default filename for cameras that don't provide one (like Sony)
+                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                eventArgs.FileName = $"IMG_{timestamp}.jpg";
+            }
+            
             try
             {
                 string fileName = Path.Combine(FolderForPhotos, Path.GetFileName(eventArgs.FileName));

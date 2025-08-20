@@ -205,12 +205,6 @@
     <Compile Include="Others\PtzOpticsCamera.cs" />
     <Compile Include="Others\PanonoCamera.cs" />
     <Compile Include="Others\WebCameraDevice.cs" />
-    <Compile Include="Sony\CameraDiscovery.cs" />
-    <Compile Include="Sony\SonyCameraDeviceInfo.cs" />
-    <Compile Include="Sony\SonyWifiCamera.cs" />
-    <Compile Include="Sony\SonyUSBCamera.cs" />
-    <Compile Include="Sony\SonyUSBProvider.cs" />
-    <Compile Include="Sony\SonySDKWrapper.cs" />
     <Compile Include="Others\WiaCameraDevice.cs" />
     <Compile Include="Others\YiCamera.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -243,6 +237,11 @@
     <Compile Include="TransferProtocol\PtpIp\PtpIpHeader.cs" />
     <Compile Include="TransferProtocol\PtpIpProtocol.cs" />
     <Compile Include="TransferProtocol\PtpIp\StartDataPacket.cs" />
+    <Compile Include="Sony\SonySDKWrapper.cs" />
+    <Compile Include="Sony\ICrCameraObjectInfo.cs" />
+    <Compile Include="Sony\SonyDeviceCallback.cs" />
+    <Compile Include="Sony\SonyUSBProvider.cs" />
+    <Compile Include="Sony\SonyUSBCamera.cs" />
     <Compile Include="TransferProtocol\SonyTransferProtocol.cs" />
     <Compile Include="TransferProtocol\YiCameraProtocol.cs" />
     <Compile Include="Wifi\DDServerProvider.cs" />
