@@ -44,6 +44,7 @@ namespace CameraControl.Devices.Sony
         public event Action<uint, uint, string> OnNotifyContentsTransfer;
         public event Action<uint> OnWarning;
         public event Action<uint> OnError;
+        public event Action<uint, uint, uint> OnNotifyRemoteTransferContentsListChanged;
         
         // Virtual function table structure matching IDeviceCallback
         [StructLayout(LayoutKind.Sequential)]
@@ -247,6 +248,7 @@ namespace CameraControl.Devices.Sony
         private void OnNotifyRemoteTransferContentsListChangedCallback(IntPtr thisPtr, uint notify, uint slotNumber, uint addSize)
         {
             // Handle contents list change if needed
+            OnNotifyRemoteTransferContentsListChanged?.Invoke(notify, slotNumber, addSize);
         }
         
         private void OnNotifyRemoteFirmwareUpdateResultCallback(IntPtr thisPtr, uint notify, IntPtr param)

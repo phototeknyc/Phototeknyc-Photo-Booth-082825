@@ -79,6 +79,19 @@ namespace CameraControl.Devices.Sony
         [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "SetDeviceSetting")]
         public static extern CrError SetDeviceSetting(IntPtr deviceHandle, uint key, uint value);
         
+        // Content management functions
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "GetContents")]
+        public static extern CrError GetContents(IntPtr deviceHandle, uint slotNumber, CrContentType contentType, uint startPos, out IntPtr contents, out uint numOfContents);
+        
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "ReleaseContents")]
+        public static extern CrError ReleaseContents(IntPtr deviceHandle, IntPtr contents);
+        
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "DownloadFile")]
+        public static extern CrError DownloadFile(IntPtr deviceHandle, IntPtr contentHandle, [MarshalAs(UnmanagedType.LPWStr)] string savePath);
+        
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "RequestDownloadFile")]
+        public static extern CrError RequestDownloadFile(IntPtr deviceHandle, IntPtr contentInfo, CrPropertyCode transferCode);
+        
         // Helper DLL functions for C++ class interop
         [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr CreateImageDataBlock();
@@ -252,6 +265,19 @@ namespace CameraControl.Devices.Sony
         CrDataType_STR = 0xFFFF
     }
     
+    public enum CrContentType : uint
+    {
+        CrContentType_All = 0x00,
+        CrContentType_Photo = 0x01,
+        CrContentType_Movie = 0x02
+    }
+    
+    public enum CrPropertyCode : uint
+    {
+        CrPropertyCode_TransferStart = 0x0001,
+        CrPropertyCode_TransferStop = 0x0002
+    }
+    
     public enum CrCameraDeviceModel : uint
     {
         CrCameraDeviceModel_ILCE_7RM4 = 0,
@@ -330,5 +356,22 @@ namespace CameraControl.Devices.Sony
         public ulong CurrentValue;
         public uint ValueSize;
         public IntPtr ValuePtr;
+    }
+    
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct CrContentInfo
+    {
+        public IntPtr Handle;
+        public uint SlotNumber;
+        public uint ContentType;
+        public ulong FileSize;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string FileName;
+        public uint Year;
+        public uint Month;
+        public uint Day;
+        public uint Hour;
+        public uint Minute;
+        public uint Second;
     }
 }
