@@ -80,17 +80,17 @@ namespace CameraControl.Devices.Sony
         public static extern CrError SetDeviceSetting(IntPtr deviceHandle, uint key, uint value);
         
         // Content management functions
-        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "GetContents")]
-        public static extern CrError GetContents(IntPtr deviceHandle, uint slotNumber, CrContentType contentType, uint startPos, out IntPtr contents, out uint numOfContents);
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "GetContentsHandleList")]
+        public static extern CrError GetContentsHandleList(IntPtr deviceHandle, IntPtr folderHandle, out IntPtr contentsHandles, out uint numOfContents);
         
-        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "ReleaseContents")]
-        public static extern CrError ReleaseContents(IntPtr deviceHandle, IntPtr contents);
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "GetContentsDetailInfo")]
+        public static extern CrError GetContentsDetailInfo(IntPtr deviceHandle, IntPtr contentHandle, out CrMtpContentsInfo contentsInfo);
         
-        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "DownloadFile")]
-        public static extern CrError DownloadFile(IntPtr deviceHandle, IntPtr contentHandle, [MarshalAs(UnmanagedType.LPWStr)] string savePath);
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "ReleaseContentsHandleList")]
+        public static extern CrError ReleaseContentsHandleList(IntPtr deviceHandle, IntPtr contentsHandles);
         
-        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "RequestDownloadFile")]
-        public static extern CrError RequestDownloadFile(IntPtr deviceHandle, IntPtr contentInfo, CrPropertyCode transferCode);
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "PullContentsFile")]
+        public static extern CrError PullContentsFile(IntPtr deviceHandle, IntPtr contentHandle, CrPropertyStillImageTransSize size, [MarshalAs(UnmanagedType.LPWStr)] string path, [MarshalAs(UnmanagedType.LPWStr)] string fileName);
         
         // Helper DLL functions for C++ class interop
         [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
@@ -265,17 +265,11 @@ namespace CameraControl.Devices.Sony
         CrDataType_STR = 0xFFFF
     }
     
-    public enum CrContentType : uint
+    public enum CrPropertyStillImageTransSize : uint
     {
-        CrContentType_All = 0x00,
-        CrContentType_Photo = 0x01,
-        CrContentType_Movie = 0x02
-    }
-    
-    public enum CrPropertyCode : uint
-    {
-        CrPropertyCode_TransferStart = 0x0001,
-        CrPropertyCode_TransferStop = 0x0002
+        CrPropertyStillImageTransSize_Original = 0x00,
+        CrPropertyStillImageTransSize_2M = 0x01,
+        CrPropertyStillImageTransSize_VGA = 0x02
     }
     
     public enum CrCameraDeviceModel : uint
@@ -359,12 +353,16 @@ namespace CameraControl.Devices.Sony
     }
     
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    public struct CrContentInfo
+    public struct CrMtpContentsInfo
     {
-        public IntPtr Handle;
-        public uint SlotNumber;
-        public uint ContentType;
-        public ulong FileSize;
+        public uint Handle;
+        public uint ParentHandle;
+        public uint Format;
+        public uint Protection;
+        public ulong Size;
+        public uint Width;
+        public uint Height;
+        public uint BitDepth;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
         public string FileName;
         public uint Year;
