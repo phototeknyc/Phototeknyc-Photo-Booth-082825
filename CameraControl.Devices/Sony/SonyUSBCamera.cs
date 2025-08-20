@@ -1866,48 +1866,188 @@ namespace CameraControl.Devices.Sony
         {
             try
             {
-                Log.Debug("Sony USB: Triggering manual video transfer...");
+                Log.Debug("Sony USB: Triggering manual video transfer using remote transfer API...");
                 
                 // Wait a moment for the camera to finalize the video file
-                Thread.Sleep(1000);
+                Thread.Sleep(2000);
                 
-                // For now, just notify that video recording is complete
-                // The actual video file needs to be manually retrieved from the camera's memory card
-                // The SDK content enumeration requires specific folder handles which aren't exposed yet
+                // Get list of captured dates from camera
+                IntPtr captureDateList = IntPtr.Zero;
+                uint numDates = 0;
                 
-                string videoSavePath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                    "Photobooth",
-                    DateTime.Now.ToString("MMddyy"));
+                var dateResult = SonySDKWrapper.GetRemoteTransferCapturedDateList(
+                    _deviceHandle, 
+                    CrSlotNumber.CrSlotNumber_Slot1, 
+                    out captureDateList, 
+                    out numDates);
                 
-                if (!Directory.Exists(videoSavePath))
+                if (SonySDKWrapper.IsSuccess(dateResult) && numDates > 0 && captureDateList != IntPtr.Zero)
                 {
-                    Directory.CreateDirectory(videoSavePath);
+                    try
+                    {
+                        // Get today's date
+                        var today = DateTime.Now;
+                        CrCaptureDate todayDate = new CrCaptureDate
+                        {
+                            Year = (ushort)today.Year,
+                            Month = (byte)today.Month,
+                            Day = (byte)today.Day
+                        };
+                        
+                        // Get contents list for today's movies
+                        IntPtr contentsInfoList = IntPtr.Zero;
+                        uint numContents = 0;
+                        
+                        // Marshal today's date to pass to the function
+                        IntPtr todayDatePtr = Marshal.AllocHGlobal(Marshal.SizeOf<CrCaptureDate>());
+                        try
+                        {
+                            Marshal.StructureToPtr(todayDate, todayDatePtr, false);
+                            
+                            var contentsResult = SonySDKWrapper.GetRemoteTransferContentsInfoList(
+                                _deviceHandle,
+                                CrSlotNumber.CrSlotNumber_Slot1,
+                                CrGetContentsInfoListType.CrGetContentsInfoListType_Movie,
+                                todayDatePtr,
+                                100, // max items
+                                out contentsInfoList,
+                                out numContents);
+                            
+                            if (SonySDKWrapper.IsSuccess(contentsResult) && numContents > 0 && contentsInfoList != IntPtr.Zero)
+                            {
+                                try
+                                {
+                                    Log.Debug($"Sony USB: Found {numContents} video file(s) on camera for today");
+                                    
+                                    // Get the most recent video (last in the list)
+                                    IntPtr contentPtr = IntPtr.Add(contentsInfoList, (int)((numContents - 1) * Marshal.SizeOf<CrContentsInfo>()));
+                                    var contentInfo = Marshal.PtrToStructure<CrContentsInfo>(contentPtr);
+                                    
+                                    Log.Debug($"Sony USB: Latest video: {contentInfo.FileName}, Size: {contentInfo.FileSize} bytes");
+                                    Log.Debug($"Sony USB: ContentsId: {contentInfo.ContentsId}, FileId: {contentInfo.FileId}");
+                                    
+                                    // Generate the local save path
+                                    string videoSavePath = Path.Combine(
+                                        Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                                        "Photobooth",
+                                        DateTime.Now.ToString("MMddyy"));
+                                    
+                                    if (!Directory.Exists(videoSavePath))
+                                    {
+                                        Directory.CreateDirectory(videoSavePath);
+                                    }
+                                    
+                                    // Use the camera's filename or generate a unique one
+                                    string fileName = !string.IsNullOrEmpty(contentInfo.FileName) 
+                                        ? contentInfo.FileName 
+                                        : $"VID_{DateTime.Now:yyyyMMdd_HHmmss}.mp4";
+                                    
+                                    // Download the video file from the camera
+                                    Log.Debug($"Sony USB: Downloading video to: {videoSavePath}");
+                                    var downloadResult = SonySDKWrapper.GetRemoteTransferContentsDataFile(
+                                        _deviceHandle,
+                                        CrSlotNumber.CrSlotNumber_Slot1,
+                                        contentInfo.ContentsId,
+                                        contentInfo.FileId,
+                                        0, // division size (0 = entire file)
+                                        videoSavePath,
+                                        fileName);
+                                    
+                                    string fullPath = Path.Combine(videoSavePath, fileName);
+                                    
+                                    if (SonySDKWrapper.IsSuccess(downloadResult))
+                                    {
+                                        Log.Debug("Sony USB: Video download initiated successfully");
+                                        
+                                        // Wait for download to complete
+                                        Thread.Sleep(2000);
+                                        
+                                        // Verify the file exists
+                                        if (File.Exists(fullPath))
+                                        {
+                                            Log.Debug($"Sony USB: Video file saved: {fullPath}, Size: {new FileInfo(fullPath).Length} bytes");
+                                        }
+                                        else
+                                        {
+                                            Log.Debug($"Sony USB: Video file not found yet, may still be downloading: {fullPath}");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Log.Error($"Sony USB: Failed to download video: {SonySDKWrapper.GetErrorMessage(downloadResult)}");
+                                    }
+                                    
+                                    // Create the event args for the video file
+                                    PhotoCapturedEventArgs args = new PhotoCapturedEventArgs
+                                    {
+                                        CameraDevice = this,
+                                        FileName = fullPath,
+                                        Handle = IntPtr.Zero
+                                    };
+                                    
+                                    // Trigger the event so the application knows a video was captured
+                                    OnPhotoCapture(this, args);
+                                }
+                                finally
+                                {
+                                    // Release the contents list
+                                    SonySDKWrapper.ReleaseRemoteTransferContentsInfoList(_deviceHandle, contentsInfoList);
+                                }
+                            }
+                            else
+                            {
+                                Log.Debug($"Sony USB: No video contents found for today. Result: {SonySDKWrapper.GetErrorMessage(contentsResult)}");
+                                NotifyVideoRecordingComplete();
+                            }
+                        }
+                        finally
+                        {
+                            Marshal.FreeHGlobal(todayDatePtr);
+                        }
+                    }
+                    finally
+                    {
+                        // Release the date list
+                        SonySDKWrapper.ReleaseRemoteTransferCapturedDateList(_deviceHandle, captureDateList);
+                    }
+                }
+                else
+                {
+                    Log.Debug($"Sony USB: No capture dates found on camera. Result: {SonySDKWrapper.GetErrorMessage(dateResult)}");
+                    NotifyVideoRecordingComplete();
                 }
                 
-                string videoFileName = Path.Combine(videoSavePath, $"VID_{DateTime.Now:yyyyMMdd_HHmmss}.mp4");
-                
-                Log.Debug($"Sony USB: Video recording complete. File is on camera's memory card.");
-                Log.Debug($"Sony USB: Expected location after manual transfer: {videoFileName}");
-                Log.Debug("Sony USB: Note: Video file needs to be manually copied from camera's memory card");
-                
-                // Create the event args to notify the application that recording is complete
-                PhotoCapturedEventArgs args = new PhotoCapturedEventArgs
-                {
-                    CameraDevice = this,
-                    FileName = videoFileName,
-                    Handle = IntPtr.Zero
-                };
-                
-                // Trigger the event so the application knows a video was captured
-                OnPhotoCapture(this, args);
                 IsBusy = false;
             }
             catch (Exception ex)
             {
                 Log.Error($"Sony USB: Exception in TriggerVideoTransfer: {ex.Message}");
+                NotifyVideoRecordingComplete();
                 IsBusy = false;
             }
+        }
+        
+        private void NotifyVideoRecordingComplete()
+        {
+            // Fallback notification when video can't be downloaded
+            string videoSavePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                "Photobooth",
+                DateTime.Now.ToString("MMddyy"));
+            
+            string videoFileName = Path.Combine(videoSavePath, $"VID_{DateTime.Now:yyyyMMdd_HHmmss}.mp4");
+            
+            Log.Debug($"Sony USB: Video recording complete. File may be on camera's memory card.");
+            Log.Debug($"Sony USB: Expected location after transfer: {videoFileName}");
+            
+            PhotoCapturedEventArgs args = new PhotoCapturedEventArgs
+            {
+                CameraDevice = this,
+                FileName = videoFileName,
+                Handle = IntPtr.Zero
+            };
+            
+            OnPhotoCapture(this, args);
         }
         
         #endregion

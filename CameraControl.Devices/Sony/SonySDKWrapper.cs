@@ -92,6 +92,22 @@ namespace CameraControl.Devices.Sony
         [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "PullContentsFile")]
         public static extern CrError PullContentsFile(IntPtr deviceHandle, IntPtr contentHandle, CrPropertyStillImageTransSize size, [MarshalAs(UnmanagedType.LPWStr)] string path, [MarshalAs(UnmanagedType.LPWStr)] string fileName);
         
+        // Remote Transfer functions for video
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "GetRemoteTransferCapturedDateList")]
+        public static extern CrError GetRemoteTransferCapturedDateList(IntPtr deviceHandle, CrSlotNumber slotNumber, out IntPtr captureDateList, out uint nums);
+        
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "GetRemoteTransferContentsInfoList")]
+        public static extern CrError GetRemoteTransferContentsInfoList(IntPtr deviceHandle, CrSlotNumber slotNumber, CrGetContentsInfoListType type, IntPtr captureDate, uint maxNums, out IntPtr contentsInfoList, out uint nums);
+        
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "GetRemoteTransferContentsDataFile")]
+        public static extern CrError GetRemoteTransferContentsDataFile(IntPtr deviceHandle, CrSlotNumber slotNumber, uint contentsId, uint fileId, uint divisionSize, [MarshalAs(UnmanagedType.LPWStr)] string path, [MarshalAs(UnmanagedType.LPWStr)] string fileName);
+        
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "ReleaseRemoteTransferCapturedDateList")]
+        public static extern CrError ReleaseRemoteTransferCapturedDateList(IntPtr deviceHandle, IntPtr dateList);
+        
+        [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "ReleaseRemoteTransferContentsInfoList")]
+        public static extern CrError ReleaseRemoteTransferContentsInfoList(IntPtr deviceHandle, IntPtr contentsInfoList);
+        
         // Helper DLL functions for C++ class interop
         [DllImport(SONY_HELPER_DLL, CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr CreateImageDataBlock();
@@ -272,6 +288,19 @@ namespace CameraControl.Devices.Sony
         CrPropertyStillImageTransSize_VGA = 0x02
     }
     
+    public enum CrSlotNumber : uint
+    {
+        CrSlotNumber_Slot1 = 0x01,
+        CrSlotNumber_Slot2 = 0x02
+    }
+    
+    public enum CrGetContentsInfoListType : uint
+    {
+        CrGetContentsInfoListType_All = 0x00,
+        CrGetContentsInfoListType_Still = 0x01,
+        CrGetContentsInfoListType_Movie = 0x02
+    }
+    
     public enum CrCameraDeviceModel : uint
     {
         CrCameraDeviceModel_ILCE_7RM4 = 0,
@@ -371,5 +400,30 @@ namespace CameraControl.Devices.Sony
         public uint Hour;
         public uint Minute;
         public uint Second;
+    }
+    
+    [StructLayout(LayoutKind.Sequential)]
+    public struct CrCaptureDate
+    {
+        public ushort Year;
+        public byte Month;
+        public byte Day;
+    }
+    
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct CrContentsInfo
+    {
+        public uint ContentsId;
+        public uint FileId;
+        public uint FileType;  // 1 = Still, 2 = Movie
+        public ulong FileSize;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string FileName;
+        public ushort Year;
+        public byte Month;
+        public byte Day;
+        public byte Hour;
+        public byte Minute;
+        public byte Second;
     }
 }
