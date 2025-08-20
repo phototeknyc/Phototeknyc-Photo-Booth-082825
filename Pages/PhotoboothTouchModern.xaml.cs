@@ -147,6 +147,11 @@ namespace Photobooth.Pages
             database = new TemplateDatabase();
             filterService = new PhotoFilterServiceHybrid();
             
+            // Initialize live view timer
+            liveViewTimer = new DispatcherTimer();
+            liveViewTimer.Interval = TimeSpan.FromMilliseconds(33); // ~30 FPS
+            liveViewTimer.Tick += LiveViewTimer_Tick;
+            
             // Initialize cloud sharing services
             sessionManager = new SessionManager();
             shareService = new SimpleShareService();
@@ -476,7 +481,9 @@ namespace Photobooth.Pages
                         // Start live view if idle live view is enabled
                         try
                         {
+                            Log.Debug($"PhotoboothTouch_Loaded: About to start timer, IsEnabled={liveViewTimer?.IsEnabled}, Interval={liveViewTimer?.Interval}");
                             liveViewTimer.Start();
+                            Log.Debug($"PhotoboothTouch_Loaded: Timer started, IsEnabled={liveViewTimer.IsEnabled}");
                             DeviceManager.SelectedCameraDevice.StartLiveView();
                             Log.Debug("PhotoboothTouch_Loaded: Started idle live view");
                         }
@@ -1475,14 +1482,35 @@ namespace Photobooth.Pages
             {
                 var device = DeviceManager.SelectedCameraDevice;
                 
-                if (device == null || !device.GetCapability(CapabilityEnum.LiveView))
+                if (device == null)
+                {
+                    Log.Debug("LiveViewTimer_Tick: No camera device selected");
                     return;
+                }
+                
+                if (!device.GetCapability(CapabilityEnum.LiveView))
+                {
+                    Log.Debug($"LiveViewTimer_Tick: Camera {device.DeviceName} doesn't support live view");
+                    return;
+                }
 
                 LiveViewData liveViewData = null;
                 
                 try
                 {
                     liveViewData = device.GetLiveViewImage();
+                    if (liveViewData == null)
+                    {
+                        Log.Debug($"LiveViewTimer: GetLiveViewImage returned null");
+                    }
+                    else if (liveViewData.ImageData == null)
+                    {
+                        Log.Debug($"LiveViewTimer: GetLiveViewImage returned data but ImageData is null");
+                    }
+                    else if (liveViewData.ImageData.Length == 0)
+                    {
+                        Log.Debug($"LiveViewTimer: GetLiveViewImage returned data but ImageData is empty");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1490,13 +1518,28 @@ namespace Photobooth.Pages
                     return;
                 }
 
-                if (liveViewData != null && liveViewData.ImageData != null)
+                if (liveViewData != null && liveViewData.ImageData != null && liveViewData.ImageData.Length > 0)
                 {
+                    Log.Debug($"LiveViewTimer: Got live view data with {liveViewData.ImageData.Length} bytes, ImageDataPosition={liveViewData.ImageDataPosition}");
                     try
                     {
-                        using (var memoryStream = new MemoryStream(liveViewData.ImageData))
+                        // For Sony cameras, the JPEG data starts at ImageDataPosition
+                        // For other cameras, ImageDataPosition is typically 0
+                        int startPos = liveViewData.ImageDataPosition;
+                        int dataLength = liveViewData.ImageData.Length - startPos;
+                        
+                        if (dataLength <= 0)
+                        {
+                            // Fallback for cameras that don't set ImageDataPosition
+                            startPos = 0;
+                            dataLength = liveViewData.ImageData.Length;
+                        }
+                        
+                        Log.Debug($"LiveViewTimer: Creating bitmap from {dataLength} bytes starting at position {startPos}");
+                        using (var memoryStream = new MemoryStream(liveViewData.ImageData, startPos, dataLength))
                         {
                             var bitmap = CreateBitmapFromStream(memoryStream);
+                            Log.Debug($"LiveViewTimer: Bitmap created successfully: {bitmap != null}, Width={bitmap?.PixelWidth}, Height={bitmap?.PixelHeight}");
                             
                             // Update UI on main thread
                             Dispatcher.BeginInvoke(new Action(() =>
@@ -1504,6 +1547,11 @@ namespace Photobooth.Pages
                                 if (liveViewImage != null)
                                 {
                                     liveViewImage.Source = bitmap;
+                                    Log.Debug($"LiveViewTimer: Updated liveViewImage.Source");
+                                }
+                                else
+                                {
+                                    Log.Debug($"LiveViewTimer: liveViewImage is null - cannot display!");
                                 }
                             }));
                         }

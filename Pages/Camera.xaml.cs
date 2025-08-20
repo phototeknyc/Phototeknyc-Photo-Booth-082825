@@ -335,9 +335,6 @@ namespace Photobooth.Pages
                                   IntPtr.Zero,
                                   Int32Rect.Empty,
                                   BitmapSizeOptions.FromEmptyOptions());
-
-                // save image to file
-                dst.Save("test.jpg", System.Drawing.Imaging.ImageFormat.Jpeg);
             }
             catch (Exception)
             {

@@ -637,6 +637,21 @@ namespace CameraControl.Devices.Sony
                 
                 Log.Debug("Sony USB: Starting live view...");
                 
+                // Send explicit StartLiveView command
+                var startLvResult = SonySDKWrapper.SendCommand(
+                    _deviceHandle,
+                    (uint)CrCommandId.CrCommandId_StartLiveView,
+                    CrCommandParam.CrCommandParam_Down);
+                    
+                if (SonySDKWrapper.IsSuccess(startLvResult))
+                {
+                    Log.Debug("Sony USB: StartLiveView command sent successfully");
+                }
+                else
+                {
+                    Log.Debug($"Sony USB: StartLiveView command failed: {SonySDKWrapper.GetErrorMessage(startLvResult)}");
+                }
+                
                 // First, try to enable live view if it's not already enabled
                 if (EnableLiveViewSetting())
                 {
@@ -753,12 +768,47 @@ namespace CameraControl.Devices.Sony
             }
         }
         
+        public override bool GetCapability(CapabilityEnum capability)
+        {
+            switch (capability)
+            {
+                case CapabilityEnum.LiveView:
+                    return true;  // Sony FX3 supports live view
+                case CapabilityEnum.RecordMovie:
+                    return true;  // Sony FX3 supports movie recording
+                case CapabilityEnum.CaptureInRam:
+                    return false; // Not implemented yet
+                case CapabilityEnum.CaptureNoAf:
+                    return true;  // Can capture without AF
+                default:
+                    return false;
+            }
+        }
+
         public override void StopLiveView()
         {
             try
             {
                 _liveViewRunning = false;
                 _liveViewData.IsLiveViewRunning = false;
+                
+                // Send explicit StopLiveView command to prevent camera freeze
+                if (_isConnected && _deviceHandle != IntPtr.Zero)
+                {
+                    var stopLvResult = SonySDKWrapper.SendCommand(
+                        _deviceHandle,
+                        (uint)CrCommandId.CrCommandId_StopLiveView,
+                        CrCommandParam.CrCommandParam_Down);
+                        
+                    if (SonySDKWrapper.IsSuccess(stopLvResult))
+                    {
+                        Log.Debug("Sony USB: StopLiveView command sent successfully");
+                    }
+                    else
+                    {
+                        Log.Debug($"Sony USB: StopLiveView command failed: {SonySDKWrapper.GetErrorMessage(stopLvResult)}");
+                    }
+                }
                 
                 Log.Debug("Sony USB: Live view stopped");
             }
@@ -770,7 +820,25 @@ namespace CameraControl.Devices.Sony
         
         public override LiveViewData GetLiveViewImage()
         {
-            return _liveViewData;
+            lock (_lockObject)
+            {
+                if (_liveViewData == null || _liveViewData.ImageData == null || _liveViewData.ImageData.Length == 0)
+                {
+                    return null;
+                }
+                
+                // Return a copy to avoid thread issues
+                return new LiveViewData
+                {
+                    ImageData = _liveViewData.ImageData,
+                    ImageDataPosition = _liveViewData.ImageDataPosition,
+                    IsLiveViewRunning = _liveViewData.IsLiveViewRunning,
+                    ImageWidth = _liveViewData.ImageWidth,
+                    ImageHeight = _liveViewData.ImageHeight,
+                    LiveViewImageWidth = _liveViewData.LiveViewImageWidth,
+                    LiveViewImageHeight = _liveViewData.LiveViewImageHeight
+                };
+            }
         }
         
         private void LiveViewLoop()
@@ -913,15 +981,22 @@ namespace CameraControl.Devices.Sony
                                         if (usingHelperDll)
                                         {
                                             actualImageSize = SonySDKWrapper.GetImageDataBlockImageSize(imageDataBlock);
+                                            Log.Debug($"Sony USB: Got image size from helper: {actualImageSize} bytes");
                                             if (actualImageSize > 0 && actualImageSize <= imageInfo.BufferSize)
                                             {
                                                 SonySDKWrapper.CopyImageData(imageDataBlock, bufferPtr, imageInfo.BufferSize);
+                                                Log.Debug($"Sony USB: Copied image data to buffer");
+                                            }
+                                            else
+                                            {
+                                                Log.Debug($"Sony USB: Invalid image size from helper: {actualImageSize} (buffer size: {imageInfo.BufferSize})");
                                             }
                                         }
                                         else
                                         {
                                             // Helper functions not available, read directly from memory
                                             actualImageSize = (uint)Marshal.ReadInt32(imageDataBlock, 32);
+                                            Log.Debug($"Sony USB: Got image size from memory: {actualImageSize} bytes");
                                         }
                                         
                                         // The buffer may contain vendor headers before the JPEG data
@@ -941,10 +1016,12 @@ namespace CameraControl.Devices.Sony
                                         }
                                         
                                         // Extract JPEG from buffer by scanning for SOI/EOI markers
+                                        Log.Debug($"Sony USB: Extracting JPEG from buffer (dataSize: {dataSize})");
                                         byte[] jpegData = ExtractJpegFromBuffer(buffer, dataSize);
                                         
                                         if (jpegData != null)
                                         {
+                                            Log.Debug($"Sony USB: JPEG extracted: {jpegData.Length} bytes");
                                             lock (_lockObject)
                                             {
                                                 _liveViewData.ImageData = jpegData;
