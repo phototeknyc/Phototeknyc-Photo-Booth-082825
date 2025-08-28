@@ -97,6 +97,18 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("3")]
+        public int DelayBetweenPhotos {
+            get {
+                return ((int)(this["DelayBetweenPhotos"]));
+            }
+            set {
+                this["DelayBetweenPhotos"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool AutoClearSession {
             get {

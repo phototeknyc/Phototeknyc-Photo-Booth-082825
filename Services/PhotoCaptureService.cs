@@ -44,6 +44,14 @@ namespace Photobooth.Services
         /// </summary>
         public string ProcessCapturedPhoto(PhotoCapturedEventArgs eventArgs)
         {
+            return ProcessCapturedPhoto(eventArgs, null);
+        }
+        
+        /// <summary>
+        /// Process a captured photo with event context for proper folder organization
+        /// </summary>
+        public string ProcessCapturedPhoto(PhotoCapturedEventArgs eventArgs, EventData eventData)
+        {
             if (eventArgs == null)
             {
                 throw new ArgumentNullException(nameof(eventArgs));
@@ -51,8 +59,8 @@ namespace Photobooth.Services
             
             try
             {
-                // Generate file path
-                string fileName = GeneratePhotoPath(eventArgs.FileName);
+                // Generate file path with proper event-based folder structure
+                string fileName = GeneratePhotoPathWithEvent(eventArgs.FileName, eventData);
                 
                 // Transfer file from camera
                 TransferPhotoFromCamera(eventArgs, fileName);
@@ -105,20 +113,121 @@ namespace Photobooth.Services
         }
         
         /// <summary>
+        /// Generate photo path with proper event-based folder structure
+        /// Creates: EventName/originals/, EventName/thumbs/, EventName/animation/, EventName/print/, EventName/composed/
+        /// </summary>
+        private string GeneratePhotoPathWithEvent(string originalFileName, EventData eventData)
+        {
+            // Create event-based folder structure
+            string eventName = GetSafeEventName(eventData);
+            string eventFolder = Path.Combine(photoFolder, eventName);
+            
+            // Create subfolders: originals, thumbs, animation, print, composed
+            string originalsFolder = Path.Combine(eventFolder, "originals");
+            string thumbsFolder = Path.Combine(eventFolder, "thumbs");
+            string animationFolder = Path.Combine(eventFolder, "animation");
+            string printFolder = Path.Combine(eventFolder, "print");
+            string composedFolder = Path.Combine(eventFolder, "composed");
+            
+            // Create all directories
+            Directory.CreateDirectory(originalsFolder);
+            Directory.CreateDirectory(thumbsFolder);
+            Directory.CreateDirectory(animationFolder);
+            Directory.CreateDirectory(printFolder);
+            Directory.CreateDirectory(composedFolder);
+            
+            // Place original photos in the "originals" subfolder
+            string fileName = Path.Combine(originalsFolder, Path.GetFileName(originalFileName));
+            
+            // Generate unique filename if exists
+            if (File.Exists(fileName))
+            {
+                fileName = StaticHelper.GetUniqueFilename(
+                    Path.GetDirectoryName(fileName) + "\\" + 
+                    Path.GetFileNameWithoutExtension(fileName) + "_", 
+                    0,
+                    Path.GetExtension(fileName)
+                );
+            }
+            
+            Log.Debug($"PhotoCaptureService: Generated event-based path {fileName}");
+            return fileName;
+        }
+        
+        /// <summary>
+        /// Get safe folder name from event data
+        /// </summary>
+        private string GetSafeEventName(EventData eventData)
+        {
+            if (eventData?.Name != null && !string.IsNullOrWhiteSpace(eventData.Name))
+            {
+                // Clean event name for use as folder name
+                string safeName = eventData.Name.Trim();
+                
+                // Remove invalid filename characters
+                char[] invalidChars = Path.GetInvalidFileNameChars();
+                foreach (char c in invalidChars)
+                {
+                    safeName = safeName.Replace(c, '_');
+                }
+                
+                // Replace spaces with underscores and limit length
+                safeName = safeName.Replace(' ', '_');
+                if (safeName.Length > 50)
+                {
+                    safeName = safeName.Substring(0, 50);
+                }
+                
+                return safeName;
+            }
+            
+            // Fallback to date-based folder name
+            return $"Event_{DateTime.Now:yyyy_MM_dd}";
+        }
+        
+        /// <summary>
         /// Transfer photo from camera to disk
         /// </summary>
         private void TransferPhotoFromCamera(PhotoCapturedEventArgs eventArgs, string fileName)
         {
             try
             {
-                Log.Debug($"PhotoCaptureService: Transferring to {fileName}");
+                Log.Debug($"PhotoCaptureService: Starting transfer to {fileName}");
+                Log.Debug($"PhotoCaptureService: EventArgs - Handle={eventArgs.Handle}, FileName={eventArgs.FileName}");
+                Log.Debug($"PhotoCaptureService: CameraDevice={eventArgs.CameraDevice?.GetType().Name}");
+                
+                // Check if handle is valid
+                if (eventArgs.Handle == null)
+                {
+                    Log.Error("PhotoCaptureService: Handle is null - cannot transfer file");
+                    throw new InvalidOperationException("Camera handle is null - photo capture may have failed");
+                }
+                
+                // Check if camera device is valid
+                if (eventArgs.CameraDevice == null)
+                {
+                    Log.Error("PhotoCaptureService: CameraDevice is null - cannot transfer file");
+                    throw new InvalidOperationException("Camera device is null - cannot retrieve photo");
+                }
+                
+                // Perform the transfer
                 eventArgs.CameraDevice.TransferFile(eventArgs.Handle, fileName);
-                Log.Debug("PhotoCaptureService: Transfer completed");
+                
+                // Verify file was created
+                if (!File.Exists(fileName))
+                {
+                    Log.Error($"PhotoCaptureService: File was not created at {fileName} after transfer");
+                    throw new FileNotFoundException("Photo file was not created after transfer", fileName);
+                }
+                
+                var fileInfo = new FileInfo(fileName);
+                Log.Debug($"PhotoCaptureService: Transfer completed - File size: {fileInfo.Length} bytes");
             }
             catch (Exception ex)
             {
-                Log.Error($"PhotoCaptureService: Transfer failed: {ex.Message}");
-                throw;
+                Log.Error($"PhotoCaptureService: Transfer failed - {ex.GetType().Name}: {ex.Message}");
+                Log.Error($"PhotoCaptureService: Stack trace: {ex.StackTrace}");
+                throw new InvalidOperationException($"Failed to retrieve photo from camera: {ex.Message}", ex);
             }
         }
         

@@ -25,7 +25,29 @@ namespace Photobooth.Services
         // Event for upload progress updates
         public event Action<double, string> UploadProgressChanged;
 
-        public OfflineQueueService()
+        // Singleton pattern to avoid multiple instances
+        private static OfflineQueueService _instance;
+        private static readonly object _lock = new object();
+        
+        public static OfflineQueueService Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    lock (_lock)
+                    {
+                        if (_instance == null)
+                        {
+                            _instance = new OfflineQueueService();
+                        }
+                    }
+                }
+                return _instance;
+            }
+        }
+
+        private OfflineQueueService()
         {
             _shareService = CloudShareProvider.GetShareService();
             System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Initialized with share service: {_shareService?.GetType().Name}");

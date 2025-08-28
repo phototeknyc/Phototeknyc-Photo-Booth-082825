@@ -46,16 +46,18 @@ namespace Photobooth.Services
                         File.Copy(sourcePath, destPath, true);
                     }
 
-                    // Build FFmpeg command for a smooth video with image interpolation
-                    // Using H.264 codec with good compatibility
+                    // Build FFmpeg command - OPTIMIZED FOR SPEED
+                    // Using H.264 codec with fastest settings
                     string arguments = $"-framerate 1/{frameRate} " +  // Each image shows for 'frameRate' seconds
                                       $"-i \"{Path.Combine(tempDir, "frame_%04d.jpg")}\" " +
                                       $"-c:v libx264 " +  // H.264 codec
-                                      $"-r 30 " +  // Output frame rate (smooth playback)
+                                      $"-r 15 " +  // Reduced output frame rate for faster encoding
                                       $"-pix_fmt yuv420p " +  // Compatibility
-                                      $"-vf \"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,fps=30\" " +
-                                      $"-preset fast " +  // Fast encoding
+                                      $"-vf \"scale={width}:{height}:flags=fast_bilinear,fps=15\" " +  // Fast scaling, reduced fps
+                                      $"-preset ultrafast " +  // Fastest encoding preset
+                                      $"-tune fastdecode " +  // Optimize for fast decoding
                                       $"-crf 23 " +  // Good quality (lower = better, 23 is good)
+                                      $"-threads 0 " +  // Use all CPU threads
                                       $"-movflags +faststart " +  // Web optimization
                                       $"-y \"{outputPath}\"";  // Overwrite output
 
@@ -171,13 +173,15 @@ namespace Photobooth.Services
                 }
 
                 // FFmpeg command for a looping GIF-like video
-                // Using higher frame rate for smoother animation
+                // OPTIMIZED FOR SPEED while maintaining quality
                 string arguments = $"-f concat -safe 0 -i \"{tempListFile}\" " +
                                   $"-c:v libx264 -preset ultrafast " +  // Ultra fast encoding
-                                  $"-crf 18 " +  // Better quality for GIF-like appearance
+                                  $"-tune fastdecode " +  // Optimize for fast decoding
+                                  $"-crf 23 " +  // Slightly lower quality for faster encoding (23 vs 18)
                                   $"-pix_fmt yuv420p " +
-                                  $"-vf \"scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2,fps=10\" " +  // 10fps for smooth animation
+                                  $"-vf \"scale=720:480:flags=fast_bilinear,fps=8\" " +  // 720x480 resolution, fast scaling, 8fps
                                   $"-movflags +faststart " +  // Web optimization
+                                  $"-threads 0 " +  // Use all available CPU threads
                                   $"-metadata comment=\"Looping GIF-style video\" " +
                                   $"-y \"{outputPath}\"";
 
@@ -291,7 +295,7 @@ namespace Photobooth.Services
                     // Create forward video
                     string forwardArgs = $"-f concat -safe 0 -i \"{tempListFile}\" " +
                                         $"-c:v libx264 -preset ultrafast -crf 18 " +
-                                        $"-vf \"scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2,fps=15\" " +
+                                        $"-vf \"scale=720:480:force_original_aspect_ratio=decrease,pad=720:480:(ow-iw)/2:(oh-ih)/2,fps=15\" " +
                                         $"-y \"{tempForward}\"";
 
                     ProcessStartInfo psi = new ProcessStartInfo
@@ -357,8 +361,32 @@ namespace Photobooth.Services
         /// </summary>
         private static string FindFFmpeg()
         {
-            // The application is running from bin\Debug or bin\Release
-            // FFmpeg should be in the same directory as the exe
+            // Try to find in PATH first (this works reliably)
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = "ffmpeg",
+                    Arguments = "-version",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using (Process process = Process.Start(psi))
+                {
+                    process.WaitForExit(1000);
+                    if (process.ExitCode == 0)
+                    {
+                        // Found FFmpeg in PATH
+                        return "ffmpeg";
+                    }
+                }
+            }
+            catch { }
+            
+            // Fallback: Check common locations if PATH doesn't work
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             
             // Check common locations
@@ -377,57 +405,34 @@ namespace Photobooth.Services
                 @"C:\Program Files\ffmpeg\bin\ffmpeg.exe"
             };
 
-            // Debug: Write current base directory to help locate ffmpeg
-            string debugPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg_search.txt");
-            try
-            {
-                File.WriteAllText(debugPath, $"Base Directory: {AppDomain.CurrentDomain.BaseDirectory}\r\nCurrent Directory: {Directory.GetCurrentDirectory()}\r\n\r\nSearching paths:\r\n");
-            }
-            catch { }
-
             foreach (string path in possiblePaths)
             {
                 try
                 {
-                    File.AppendAllText(debugPath, $"Checking: {path} - Exists: {File.Exists(path)}\r\n");
+                    // Try to execute FFmpeg directly rather than checking File.Exists()
+                    // This avoids OneDrive sync issues
+                    ProcessStartInfo testPsi = new ProcessStartInfo
+                    {
+                        FileName = path,
+                        Arguments = "-version",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true
+                    };
+
+                    using (Process process = Process.Start(testPsi))
+                    {
+                        process.WaitForExit(1000);
+                        if (process.ExitCode == 0)
+                        {
+                            // Found working FFmpeg
+                            return path;
+                        }
+                    }
                 }
                 catch { }
-
-                if (File.Exists(path))
-                {
-                    // Found FFmpeg at path
-                    try
-                    {
-                        File.AppendAllText(debugPath, $"\r\nFOUND FFMPEG AT: {path}\r\n");
-                    }
-                    catch { }
-                    return path;
-                }
             }
-
-            // Try to find in PATH
-            try
-            {
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = "ffmpeg",
-                    Arguments = "-version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = true
-                };
-
-                using (Process process = Process.Start(psi))
-                {
-                    process.WaitForExit(1000);
-                    if (process.ExitCode == 0)
-                    {
-                        // Found FFmpeg in PATH
-                        return "ffmpeg";
-                    }
-                }
-            }
-            catch { }
 
             return null;
         }

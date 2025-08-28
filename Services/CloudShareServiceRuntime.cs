@@ -455,7 +455,7 @@ namespace Photobooth.Services
                     System.Diagnostics.Debug.WriteLine("CloudShareServiceRuntime: Twilio initialized successfully");
                     
                     // Create and send the message
-                    var messageBody = $"Your photos are ready! View and download them here: {galleryUrl}";
+                    var messageBody = $"Here is your photo: {galleryUrl}";
                     System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Sending SMS from {fromNumber} to {formattedNumber}");
                     System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Message: {messageBody}");
                     

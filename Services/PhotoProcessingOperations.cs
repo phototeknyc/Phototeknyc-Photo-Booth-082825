@@ -19,7 +19,7 @@ namespace Photobooth.Services
     /// </summary>
     public class PhotoProcessingOperations
     {
-        private readonly Pages.PhotoboothTouchModern _parent;
+        private readonly dynamic _parent;
         private PhotoFilterServiceHybrid _filterService;
         
         // UI Elements
@@ -50,6 +50,29 @@ namespace Photobooth.Services
             filterItemsControl = parent.FindName("filterItemsControl") as ItemsControl;
             filterPreviewImage = parent.FindName("filterPreviewImage") as System.Windows.Controls.Image;
             statusText = parent.FindName("statusText") as TextBlock;
+        }
+        
+        public PhotoProcessingOperations(Pages.PhotoboothTouchModernRefactored parent)
+        {
+            _parent = parent;
+            
+            // Get UI elements from parent
+            postSessionFilterOverlay = parent.FindName("postSessionFilterOverlay") as Grid;
+            filterItemsControl = parent.FindName("filterItemsControl") as ItemsControl;
+            filterPreviewImage = parent.FindName("filterPreviewImage") as System.Windows.Controls.Image;
+            statusText = parent.FindName("statusText") as TextBlock;
+        }
+
+        // Constructor for service-based usage with adapter
+        public PhotoProcessingOperations(dynamic serviceAdapter)
+        {
+            _parent = serviceAdapter;
+            
+            // No UI elements needed for service-based composition
+            postSessionFilterOverlay = null;
+            filterItemsControl = null;
+            filterPreviewImage = null;
+            statusText = null;
         }
         
         /// <summary>
@@ -140,8 +163,40 @@ namespace Photobooth.Services
                     graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
                     graphics.CompositingQuality = CompositingQuality.HighQuality;
                     
-                    // Fill with white background
-                    graphics.Clear(System.Drawing.Color.White);
+                    // Fill with template background color or white as default
+                    var backgroundColor = System.Drawing.Color.White;
+                    if (!string.IsNullOrEmpty(currentTemplate.BackgroundColor))
+                    {
+                        try
+                        {
+                            // Parse WPF color format (e.g., #FFRRGGBB or #RRGGBB)
+                            var colorString = currentTemplate.BackgroundColor;
+                            if (colorString.StartsWith("#") && colorString.Length == 9)
+                            {
+                                // WPF format with alpha channel (#AARRGGBB)
+                                var alpha = Convert.ToByte(colorString.Substring(1, 2), 16);
+                                var red = Convert.ToByte(colorString.Substring(3, 2), 16);
+                                var green = Convert.ToByte(colorString.Substring(5, 2), 16);
+                                var blue = Convert.ToByte(colorString.Substring(7, 2), 16);
+                                backgroundColor = System.Drawing.Color.FromArgb(alpha, red, green, blue);
+                            }
+                            else if (colorString.StartsWith("#") && colorString.Length == 7)
+                            {
+                                // Standard HTML format (#RRGGBB)
+                                backgroundColor = System.Drawing.ColorTranslator.FromHtml(colorString);
+                            }
+                            else
+                            {
+                                // Try other formats (named colors, etc.)
+                                backgroundColor = System.Drawing.ColorTranslator.FromHtml(colorString);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Debug($"ComposeTemplateWithPhotos: Could not parse background color '{currentTemplate.BackgroundColor}': {ex.Message}");
+                        }
+                    }
+                    graphics.Clear(backgroundColor);
                     
                     // Process canvas items in Z-order  
                     var sortedItems = canvasItems.OrderBy(item => item.ZIndex).ToList();
@@ -161,6 +216,20 @@ namespace Photobooth.Services
                 // Handle 2x6 template duplication if needed
                 string printPath = await HandleTemplateForPrinting(finalBitmap, templateWidth, templateHeight, 
                     outputPath, currentEvent);
+                
+                // Debug logging
+                Log.Debug($"ComposeTemplateWithPhotos: outputPath = {outputPath}");
+                Log.Debug($"ComposeTemplateWithPhotos: printPath = {printPath}");
+                Log.Debug($"ComposeTemplateWithPhotos: Are paths different? {outputPath != printPath}");
+                
+                // Verify the print file actually exists
+                if (printPath != outputPath && File.Exists(printPath))
+                {
+                    using (var img = System.Drawing.Image.FromFile(printPath))
+                    {
+                        Log.Debug($"ComposeTemplateWithPhotos: Print file verified - dimensions: {img.Width}x{img.Height}");
+                    }
+                }
                 
                 // Update parent with processed paths
                 _parent.UpdateProcessedImagePaths(outputPath, printPath);
@@ -412,7 +481,16 @@ namespace Photobooth.Services
             
             try
             {
-                if (colorString.StartsWith("#"))
+                if (colorString.StartsWith("#") && colorString.Length == 9)
+                {
+                    // WPF format with alpha channel (#AARRGGBB)
+                    var alpha = Convert.ToByte(colorString.Substring(1, 2), 16);
+                    var red = Convert.ToByte(colorString.Substring(3, 2), 16);
+                    var green = Convert.ToByte(colorString.Substring(5, 2), 16);
+                    var blue = Convert.ToByte(colorString.Substring(7, 2), 16);
+                    return System.Drawing.Color.FromArgb(alpha, red, green, blue);
+                }
+                else if (colorString.StartsWith("#"))
                 {
                     return System.Drawing.ColorTranslator.FromHtml(colorString);
                 }
@@ -431,8 +509,9 @@ namespace Photobooth.Services
         {
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             string eventFolderName = SanitizeFileName(currentEvent.Name);
+            // Use proper event-based folder structure: EventName/composed/
             string outputDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                "Photobooth", eventFolderName);
+                "Photobooth", eventFolderName, "composed");
             
             Directory.CreateDirectory(outputDir);
             
@@ -492,24 +571,47 @@ namespace Photobooth.Services
             string outputPath, EventData currentEvent)
         {
             bool is2x6Template = Is2x6Template(templateWidth, templateHeight);
-            bool duplicate2x6To4x6 = true; // Default to duplicating 2x6 templates
+            bool duplicate2x6To4x6 = Properties.Settings.Default.Duplicate2x6To4x6; // Read from settings
+            
+            Log.Debug($"★★★ HandleTemplateForPrinting START ★★★");
+            Log.Debug($"  - Template dimensions: {templateWidth}x{templateHeight}");
+            Log.Debug($"  - is2x6Template: {is2x6Template}");
+            Log.Debug($"  - duplicate2x6To4x6 setting: {duplicate2x6To4x6}");
+            Log.Debug($"  - Original outputPath: {outputPath}");
             
             if (is2x6Template && duplicate2x6To4x6)
             {
-                Log.Debug($"Detected 2x6 template, creating 4x6 version for printing");
+                Log.Debug($"  - ✅ WILL CREATE 4x6 DUPLICATE");
                 
                 using (var duplicatedBitmap = Create4x6From2x6(finalBitmap))
                 {
                     string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                    string outputDir = Path.GetDirectoryName(outputPath);
-                    string printPath = Path.Combine(outputDir, $"{currentEvent.Name}_{timestamp}_4x6_print.jpg");
+                    // Use event-based print folder structure: EventName/print/
+                    string eventFolderName = SanitizeFileName(currentEvent.Name);
+                    string printDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                        "Photobooth", eventFolderName, "print");
+                    Directory.CreateDirectory(printDir);
+                    string printPath = Path.Combine(printDir, $"{currentEvent.Name}_{timestamp}_4x6_print.jpg");
                     
                     SaveComposedImage(duplicatedBitmap, printPath);
-                    Log.Debug($"Saved 4x6 print version to {printPath}");
+                    Log.Debug($"  - Created 4x6 at: {printPath}");
+                    
+                    // Verify the created file
+                    if (File.Exists(printPath))
+                    {
+                        using (var verifyImg = System.Drawing.Image.FromFile(printPath))
+                        {
+                            Log.Debug($"  - Verified 4x6 dimensions: {verifyImg.Width}x{verifyImg.Height}");
+                        }
+                    }
+                    
+                    Log.Debug($"★★★ HandleTemplateForPrinting END - Returning 4x6: {printPath} ★★★");
                     return printPath;
                 }
             }
             
+            Log.Debug($"  - ⚠️ NO DUPLICATION - Using original");
+            Log.Debug($"★★★ HandleTemplateForPrinting END - Returning original: {outputPath} ★★★");
             return outputPath;
         }
         
@@ -518,6 +620,7 @@ namespace Photobooth.Services
         /// </summary>
         private bool Is2x6Template(int width, int height)
         {
+            Log.Debug($"Is2x6Template: Checking dimensions {width}x{height}");
             int targetDpi = 300; // Default print DPI
             
             // 2x6 at common DPIs
@@ -527,14 +630,18 @@ namespace Photobooth.Services
                 int expected2inchPixels = 2 * dpi;
                 int expected6inchPixels = 6 * dpi;
                 
+                Log.Debug($"Is2x6Template: Checking against {dpi} DPI - Expected: {expected2inchPixels}x{expected6inchPixels}");
+                
                 // Allow 5% tolerance
                 if (Math.Abs(width - expected2inchPixels) < expected2inchPixels * 0.05 &&
                     Math.Abs(height - expected6inchPixels) < expected6inchPixels * 0.05)
                 {
+                    Log.Debug($"Is2x6Template: MATCH FOUND! This is a 2x6 template at {dpi} DPI");
                     return true;
                 }
             }
             
+            Log.Debug($"Is2x6Template: NO MATCH - {width}x{height} is not a 2x6 template");
             return false;
         }
         

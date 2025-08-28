@@ -41,12 +41,13 @@ namespace Photobooth.Services
                 // Generate new session GUID
                 currentSessionGuid = Guid.NewGuid().ToString();
                 
-                // Create database session
+                // Create database session with the same GUID
                 string sessionName = $"Session_{DateTime.Now:yyyyMMdd_HHmmss}";
                 currentDatabaseSessionId = database.CreatePhotoSession(
                     eventId ?? 0,
                     templateId ?? 0,
-                    sessionName
+                    sessionName,
+                    currentSessionGuid  // Pass the GUID to ensure consistency
                 );
                 
                 // Clear photo ID list for new session
@@ -122,7 +123,8 @@ namespace Photobooth.Services
                         FilePath = filePath,
                         ThumbnailPath = thumbnailPath,
                         OutputFormat = outputFormat,
-                        CreatedDate = DateTime.Now
+                        CreatedDate = DateTime.Now,
+                        TemplateId = 0 // TODO: Pass actual template ID if available
                     };
                     
                     int composedId = database.SaveComposedImage(composedData);

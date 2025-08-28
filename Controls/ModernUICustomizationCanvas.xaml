@@ -188,8 +188,41 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Device selector -->
+                    <!-- Profile and Device selector -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Profile selector -->
+                        <TextBlock Text="Profile:" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <ComboBox x:Name="ProfileSelector" Width="180" Height="35" Margin="0,0,10,0"
+                                  SelectionChanged="ProfileSelector_SelectionChanged">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
+                                        <TextBlock Text=" - " Foreground="Gray"/>
+                                        <TextBlock Text="{Binding ScreenConfig.DeviceType}" Foreground="Gray" FontStyle="Italic"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        
+                        <!-- Profile actions -->
+                        <Button x:Name="NewProfileBtn" Style="{StaticResource ModernToolButton}" 
+                                ToolTip="Create New Profile" Click="NewProfileBtn_Click">
+                            <Path Data="M12,2 L12,22 M2,12 L22,12" Stroke="White" StrokeThickness="2"/>
+                        </Button>
+                        <Button x:Name="SaveProfileBtn" Style="{StaticResource ModernToolButton}" 
+                                ToolTip="Save Current Profile" Click="SaveProfileBtn_Click">
+                            <Path Data="M5,3 L19,3 L19,21 L5,21 Z M9,3 L9,8 L15,8 L15,3" 
+                                  Stroke="White" StrokeThickness="2" Fill="Transparent"/>
+                        </Button>
+                        <Button x:Name="DeleteProfileBtn" Style="{StaticResource ModernToolButton}" 
+                                ToolTip="Delete Profile" Click="DeleteProfileBtn_Click">
+                            <Path Data="M6,6 L18,18 M6,18 L18,6" Stroke="#FF6B6B" StrokeThickness="2"/>
+                        </Button>
+                        
+                        <Separator Width="1" Height="30" Background="#444" Margin="10,0"/>
+                        
+                        <!-- Device selector -->
                         <TextBlock Text="Device:" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <ComboBox x:Name="DeviceSelector" Width="200" Height="35">
                             <ComboBoxItem Content="iPad (1024×768)" IsSelected="True"/>
@@ -231,6 +264,24 @@
                                 Background="{StaticResource PrimaryBrush}" ToolTip="Save Layout">
                             <Path Data="M5,3 L19,3 L19,21 L5,21 Z M9,3 L9,8 L15,8 L15,3 M12,11 L12,18" 
                                   Stroke="White" StrokeThickness="2" Fill="Transparent"/>
+                        </Button>
+                        
+                        <Separator Width="1" Height="30" Background="#444" Margin="10,0"/>
+                        
+                        <!-- Import Current Layout button -->
+                        <Button x:Name="ImportBtn" Style="{StaticResource ModernToolButton}" 
+                                Background="{StaticResource AccentBrush}" ToolTip="Import Current Layout" Click="ImportBtn_Click">
+                            <Path Data="M12,2 L12,12 M7,7 L12,12 L17,7 M5,20 L19,20" 
+                                  Stroke="White" StrokeThickness="2" Fill="Transparent"/>
+                        </Button>
+                        
+                        <Separator Width="1" Height="30" Background="#444" Margin="10,0"/>
+                        
+                        <!-- Exit button -->
+                        <Button x:Name="ExitBtn" Style="{StaticResource ModernToolButton}" 
+                                Background="#FF5252" ToolTip="Exit Customizer" Click="ExitBtn_Click">
+                            <Path Data="M6,6 L18,18 M6,18 L18,6" 
+                                  Stroke="White" StrokeThickness="2.5"/>
                         </Button>
                     </StackPanel>
                 </Grid>

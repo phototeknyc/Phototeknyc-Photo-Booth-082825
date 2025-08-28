@@ -131,9 +131,6 @@ namespace Photobooth.Pages
         private PhotoProcessingOperations photoProcessingOperations;
         private PinLockService pinLockService;
         private PhotoCaptureService photoCaptureService;
-        
-        // UI Layout Service
-        private UILayoutService uiLayoutService;
 
         public PhotoboothTouchModern()
         {
@@ -170,9 +167,6 @@ namespace Photobooth.Pages
             modulesConfig = PhotoboothModulesConfig.Instance;
             videoService = new VideoRecordingService();
             boomerangService = new BoomerangService();
-            
-            // Initialize UI Layout Service
-            uiLayoutService = new UILayoutService();
             
             // Printer monitoring now handled by PrintingService
 
@@ -351,17 +345,7 @@ namespace Photobooth.Pages
         {
             Log.Debug("PhotoboothTouch_Loaded: Page loaded, initializing camera");
             
-            // Apply custom UI layout if available (non-destructive - overlays on top)
-            try
-            {
-                uiLayoutService.ApplyLayoutToPage(this, mainGrid);
-                Log.Debug($"PhotoboothTouch_Loaded: Custom layout applied: {uiLayoutService.IsCustomLayoutActive}");
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"PhotoboothTouch_Loaded: Error applying custom layout: {ex.Message}");
-                // Continue with default UI
-            }
+            // Custom UI layout removed - using default UI only
             
             // Subscribe to camera events (will be unsubscribed in Unloaded)
             DeviceManager.CameraSelected += DeviceManager_CameraSelected;
@@ -989,21 +973,64 @@ namespace Photobooth.Pages
                 });
                 
                 liveViewTimer.Start();
-                UpdateStatusText("Live view active - Starting countdown...");
                 
-                // Wait a moment for live view to stabilize
-                await Task.Delay(1000);
+                // Check if photographer mode is enabled
+                bool photographerMode = Properties.Settings.Default.PhotographerMode;
+                Log.Debug($"StartPhotoSequence: PhotographerMode = {photographerMode}");
                 
-                // Start countdown - ensure this always happens
-                Log.Debug("StartPhotoSequence: About to call StartCountdown()");
-                
-                // Force countdown to start on UI thread
-                Dispatcher.Invoke(() =>
+                if (photographerMode)
                 {
-                    StartCountdown();
-                });
-                
-                Log.Debug("StartPhotoSequence: StartCountdown() call completed");
+                    // Photographer mode - don't start countdown, wait for trigger
+                    UpdateStatusText($"Photo {currentPhotoIndex + 1} of {totalPhotosNeeded} - Press camera trigger when ready");
+                    Log.Debug("StartPhotoSequence: Photographer mode enabled - waiting for manual trigger");
+                    
+                    // Stop live view to release camera for trigger
+                    try
+                    {
+                        Log.Debug("StartPhotoSequence: Stopping live view to release camera trigger");
+                        DeviceManager.SelectedCameraDevice.StopLiveView();
+                        liveViewTimer.Stop();
+                        
+                        // Reset IsBusy flag to allow trigger
+                        DeviceManager.SelectedCameraDevice.IsBusy = false;
+                        Log.Debug("StartPhotoSequence: Live view stopped, IsBusy set to false - trigger should be ready");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"StartPhotoSequence: Error stopping live view for photographer mode: {ex.Message}");
+                    }
+                    
+                    // Hide countdown overlay since we're waiting for manual trigger
+                    if (countdownOverlay != null)
+                    {
+                        countdownOverlay.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    // Keep stop button visible so session can be cancelled
+                    if (stopSessionButton != null)
+                    {
+                        stopSessionButton.Visibility = Visibility.Visible;
+                    }
+                }
+                else
+                {
+                    // Normal mode - start countdown
+                    UpdateStatusText("Live view active - Starting countdown...");
+                    
+                    // Wait a moment for live view to stabilize
+                    await Task.Delay(1000);
+                    
+                    // Start countdown - ensure this always happens
+                    Log.Debug("StartPhotoSequence: About to call StartCountdown()");
+                    
+                    // Force countdown to start on UI thread
+                    Dispatcher.Invoke(() =>
+                    {
+                        StartCountdown();
+                    });
+                    
+                    Log.Debug("StartPhotoSequence: StartCountdown() call completed");
+                }
             }
             catch (Exception ex)
             {
@@ -1201,10 +1228,19 @@ namespace Photobooth.Pages
                 }
                 catch (DeviceException exception)
                 {
-                    Log.Debug($"PhotoboothTouch: DeviceException caught - ErrorCode: {exception.ErrorCode}, Message: {exception.Message}");
+                    Log.Debug($"PhotoboothTouch: DeviceException caught - ErrorCode: {exception.ErrorCode:X}, Message: {exception.Message}");
                     
+                    // Check for Canon-specific error codes
+                    if ((uint)exception.ErrorCode == 0x00008D01) // AutoFocus Failed
+                    {
+                        Log.Debug("PhotoboothTouch: Canon AutoFocus failed (8D01) - attempting without autofocus");
+                        // Don't throw - the photo may still have been taken
+                        // Wait for the PhotoCaptured event
+                        Thread.Sleep(500);
+                        retry = false;
+                    }
                     // if device is busy retry after a progressive delay
-                    if (exception.ErrorCode == ErrorCodes.MTP_Device_Busy ||
+                    else if (exception.ErrorCode == ErrorCodes.MTP_Device_Busy ||
                         exception.ErrorCode == ErrorCodes.ERROR_BUSY)
                     {
                         retryCount++;
@@ -1254,12 +1290,25 @@ namespace Photobooth.Pages
                 }
                 catch (Exception ex)
                 {
-                    Log.Error("PhotoboothTouch: Capture general exception: " + ex.Message);
-                    Dispatcher.Invoke(() =>
+                    Log.Error($"PhotoboothTouch: Capture general exception: {ex.GetType().Name}: {ex.Message}");
+                    
+                    // Check if it's a Canon-specific exception wrapped in a general exception
+                    if (ex.Message.Contains("8D01") || ex.Message.Contains("Canon error"))
                     {
-                        UpdateStatusText("Capture error: " + ex.Message);
-                        StopPhotoSequence();
-                    });
+                        Log.Debug("PhotoboothTouch: Canon error detected in general exception - photo may still be captured");
+                        // Don't stop the sequence - wait for PhotoCaptured event
+                        Thread.Sleep(1000);
+                        retry = false;
+                    }
+                    else
+                    {
+                        Log.Error($"PhotoboothTouch: Stack trace: {ex.StackTrace}");
+                        Dispatcher.Invoke(() =>
+                        {
+                            UpdateStatusText("Capture error: " + ex.Message);
+                            StopPhotoSequence();
+                        });
+                    }
                 }
 
             } while (retry);
@@ -1719,12 +1768,65 @@ namespace Photobooth.Pages
                 return;
             }
             
+            // Check if we're in photographer mode and waiting for a photo
+            bool photographerMode = Properties.Settings.Default.PhotographerMode;
+            Log.Debug($"PhotoCaptured: PhotographerMode = {photographerMode}, isCapturing = {isCapturing}");
+            
+            // In photographer mode, ensure we're in a capture session
+            if (photographerMode && isCapturing)
+            {
+                // Hide countdown overlay if it's visible (since we're capturing via trigger)
+                Dispatcher.Invoke(() =>
+                {
+                    if (countdownOverlay != null && countdownOverlay.Visibility == Visibility.Visible)
+                    {
+                        countdownOverlay.Visibility = Visibility.Collapsed;
+                        Log.Debug("PhotoCaptured: Hidden countdown overlay for photographer mode capture");
+                    }
+                });
+            }
+            
             try
             {
                 // Use PhotoCaptureService to process the photo
-                string fileName = photoCaptureService.ProcessCapturedPhoto(eventArgs);
+                string fileName = null;
+                try
+                {
+                    fileName = photoCaptureService.ProcessCapturedPhoto(eventArgs);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Log.Error($"PhotoCaptured: Failed to retrieve photo - {ex.Message}");
+                    Dispatcher.Invoke(() =>
+                    {
+                        UpdateStatusText($"Failed to retrieve captured photo: {ex.Message}");
+                        
+                        // Try to recover by restarting live view
+                        try
+                        {
+                            DeviceManager.SelectedCameraDevice?.StopLiveView();
+                            Thread.Sleep(500);
+                            DeviceManager.SelectedCameraDevice?.StartLiveView();
+                            liveViewTimer.Start();
+                        }
+                        catch { }
+                        
+                        StopPhotoSequence();
+                    });
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"PhotoCaptured: Unexpected error - {ex.Message}");
+                    Dispatcher.Invoke(() =>
+                    {
+                        UpdateStatusText($"Photo capture error: {ex.Message}");
+                        StopPhotoSequence();
+                    });
+                    return;
+                }
                 
-                if (File.Exists(fileName))
+                if (fileName != null && File.Exists(fileName))
                 {
                     // Marshal UI update to UI thread
                     Dispatcher.Invoke(() => 
@@ -5180,12 +5282,27 @@ namespace Photobooth.Pages
         
         private void PrintButton_Click(object sender, RoutedEventArgs e)
         {
+            // Debug logging to track which path is being used
+            Log.Debug($"PrintButton_Click: lastProcessedImagePath = {lastProcessedImagePath}");
+            Log.Debug($"PrintButton_Click: lastProcessedImagePathForPrinting = {lastProcessedImagePathForPrinting}");
+            
             // Use the print version if available, otherwise use the display version
             string imageToPrint = !string.IsNullOrEmpty(lastProcessedImagePathForPrinting) ? 
                 lastProcessedImagePathForPrinting : lastProcessedImagePath;
             
             // Use the display version for the dialog preview
             string imageToPreview = lastProcessedImagePath;
+            
+            Log.Debug($"PrintButton_Click: Selected imageToPrint = {imageToPrint}");
+            
+            // Check the actual image dimensions
+            if (File.Exists(imageToPrint))
+            {
+                using (var img = System.Drawing.Image.FromFile(imageToPrint))
+                {
+                    Log.Debug($"PrintButton_Click: Image dimensions = {img.Width}x{img.Height}");
+                }
+            }
                 
             if (string.IsNullOrEmpty(imageToPrint) || !File.Exists(imageToPrint))
             {
@@ -6488,8 +6605,26 @@ namespace Photobooth.Pages
         
         public void UpdateProcessedImagePaths(string displayPath, string printPath)
         {
+            Log.Debug($"UpdateProcessedImagePaths called:");
+            Log.Debug($"  - displayPath: {displayPath}");
+            Log.Debug($"  - printPath: {printPath}");
+            
             lastProcessedImagePath = displayPath;
             lastProcessedImagePathForPrinting = printPath;
+            
+            // Verify the paths are different for 2x6
+            if (displayPath != printPath)
+            {
+                Log.Debug($"  - Paths are different - using 4x6 duplicate for printing");
+                if (File.Exists(printPath))
+                {
+                    using (var img = System.Drawing.Image.FromFile(printPath))
+                    {
+                        Log.Debug($"  - Print image dimensions: {img.Width}x{img.Height}");
+                    }
+                }
+            }
+            
             UpdateSharingButtonsVisibility();
         }
         
@@ -7289,6 +7424,50 @@ namespace Photobooth.Pages
         }
         
         /// <summary>
+        /// Stops live view and cleans up resources - called during shutdown
+        /// </summary>
+        public void StopLiveView()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("PhotoboothTouchModern.StopLiveView called");
+                
+                // Stop the live view timer
+                if (liveViewTimer != null)
+                {
+                    liveViewTimer.Stop();
+                    liveViewTimer = null;
+                }
+                
+                // Stop any running countdown
+                if (countdownTimer != null)
+                {
+                    countdownTimer.Stop();
+                    countdownTimer = null;
+                }
+                
+                // Stop camera live view
+                if (DeviceManager != null && DeviceManager.SelectedCameraDevice != null)
+                {
+                    try
+                    {
+                        DeviceManager.SelectedCameraDevice.StopLiveView();
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error stopping camera live view: {ex.Message}");
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine("PhotoboothTouchModern.StopLiveView completed");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in PhotoboothTouchModern.StopLiveView: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
         /// Public method for custom UI to open camera settings
         /// </summary>
         public void OpenCameraSettings()
@@ -7311,10 +7490,7 @@ namespace Photobooth.Pages
         /// </summary>
         public void RefreshCustomLayout()
         {
-            if (uiLayoutService != null && mainGrid != null)
-            {
-                uiLayoutService.RefreshLayout(this, mainGrid);
-            }
+            // Method kept for compatibility but no longer uses custom layouts
         }
         
         /// <summary>
@@ -7322,7 +7498,7 @@ namespace Photobooth.Pages
         /// </summary>
         public bool IsCustomLayoutActive
         {
-            get { return uiLayoutService?.IsCustomLayoutActive ?? false; }
+            get { return false; } // Custom layouts removed - always return false
         }
         
         /// <summary>

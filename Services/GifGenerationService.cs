@@ -27,7 +27,7 @@ namespace Photobooth.Services
         };
         private static readonly byte[] GifGraphicControlExtension = new byte[] { 0x21, 0xF9, 0x04 };
         
-        public static string GenerateAnimatedGif(List<string> imagePaths, string outputPath, int frameDelayMs = 500, int maxWidth = 600, int maxHeight = 400, int quality = 85)
+        public static string GenerateAnimatedGif(List<string> imagePaths, string outputPath, int frameDelayMs = 500, int maxWidth = 720, int maxHeight = 480, int quality = 85)
         {
             try
             {
@@ -50,8 +50,8 @@ namespace Photobooth.Services
                     return outputPath;
                 }
                 
-                // Create GIF using System.Drawing
-                using (var stream = new FileStream(outputPath, FileMode.Create))
+                // Create GIF using System.Drawing with file sharing
+                using (var stream = CreateFileStreamWithRetry(outputPath))
                 {
                     using (var writer = new BinaryWriter(stream))
                     {
@@ -194,7 +194,7 @@ namespace Photobooth.Services
         {
             try
             {
-                using (var outputStream = new FileStream(outputPath, FileMode.Create))
+                using (var outputStream = CreateFileStreamWithRetry(outputPath))
                 {
                     // First, resize all images to consistent dimensions
                     var resizedImages = new List<BitmapFrame>();
@@ -265,6 +265,47 @@ namespace Photobooth.Services
                     return null;
                 }
             }
+        }
+        
+        /// <summary>
+        /// Creates a FileStream with retry logic and proper file sharing to avoid locking issues
+        /// </summary>
+        private static FileStream CreateFileStreamWithRetry(string filePath, int maxRetries = 5)
+        {
+            Exception lastException = null;
+            
+            for (int retry = 0; retry < maxRetries; retry++)
+            {
+                try
+                {
+                    // Use FileShare.ReadWrite to allow other processes to access the file
+                    return new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+                }
+                catch (IOException ioEx) when (ioEx.HResult == -2147024864) // File in use error
+                {
+                    lastException = ioEx;
+                    System.Diagnostics.Debug.WriteLine($"GIF file locked, retry {retry + 1}/{maxRetries}: {ioEx.Message}");
+                    
+                    if (retry < maxRetries - 1)
+                    {
+                        // Wait with exponential backoff: 50ms, 100ms, 200ms, 400ms
+                        System.Threading.Thread.Sleep(50 * (int)Math.Pow(2, retry));
+                    }
+                }
+                catch (UnauthorizedAccessException uaEx)
+                {
+                    lastException = uaEx;
+                    System.Diagnostics.Debug.WriteLine($"GIF file access denied, retry {retry + 1}/{maxRetries}: {uaEx.Message}");
+                    
+                    if (retry < maxRetries - 1)
+                    {
+                        System.Threading.Thread.Sleep(100 * (retry + 1));
+                    }
+                }
+            }
+            
+            // If all retries failed, throw the last exception
+            throw new IOException($"Failed to create GIF file after {maxRetries} attempts. File may be locked by another process.", lastException);
         }
     }
 }

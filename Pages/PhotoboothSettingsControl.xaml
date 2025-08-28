@@ -891,6 +891,28 @@
                                    FontSize="18"/>
                     </StackPanel>
                     
+                    <TextBlock Text="Delay between photos (for multi-photo sessions):" 
+                               Style="{StaticResource SettingsTextStyle}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                        <Slider x:Name="delayBetweenPhotosSlider" 
+                                Minimum="1" 
+                                Maximum="10" 
+                                Value="3" 
+                                TickPlacement="BottomRight" 
+                                TickFrequency="1" 
+                                IsSnapToTickEnabled="True"
+                                Width="300"
+                                ValueChanged="DelayBetweenPhotosSlider_ValueChanged"
+                                Style="{StaticResource SettingsSliderStyle}"/>
+                        <TextBlock x:Name="delayBetweenPhotosValueText" 
+                                   Text="3 seconds" 
+                                   VerticalAlignment="Center" 
+                                   Margin="20,0,0,0" 
+                                   Foreground="White" 
+                                   FontWeight="Bold"
+                                   FontSize="18"/>
+                    </StackPanel>
+                    
                     <CheckBox x:Name="photographerModeCheckBox" 
                               Content="Enable Photographer Mode (manual trigger for each photo)" 
                               IsChecked="False"

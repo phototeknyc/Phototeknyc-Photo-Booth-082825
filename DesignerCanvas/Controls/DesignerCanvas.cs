@@ -469,8 +469,15 @@ namespace DesignerCanvas.Controls
             if (target == null) throw new ArgumentNullException(nameof(target));
             partCanvas.HorizontalAlignment = HorizontalAlignment.Left;
             partCanvas.VerticalAlignment = VerticalAlignment.Top;
+            
+            // Save original background
+            var originalBackground = partCanvas.Background;
+            
             try
             {
+                // Apply the main canvas background to partCanvas for rendering
+                partCanvas.Background = this.Background ?? Brushes.White;
+                
                 ShowContainers();
                 // Wait for item rendering.
                 CanvasImageExporter.DoEvents();
@@ -478,6 +485,9 @@ namespace DesignerCanvas.Controls
             }
             finally 
             {
+                // Restore original background
+                partCanvas.Background = originalBackground;
+                
                 HideCoveredContainers();
                 partCanvas.HorizontalAlignment = HorizontalAlignment.Stretch;
                 partCanvas.VerticalAlignment = VerticalAlignment.Stretch;
@@ -1806,8 +1816,9 @@ namespace DesignerCanvas.Controls
             double canvasHeight = !double.IsNaN(this.Height) ? this.Height : 
                                  (this.ActualPixelHeight > 0 ? this.ActualPixelHeight : 1800);
             
-            // Fill the canvas area with white background
-            dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, canvasWidth, canvasHeight));
+            // Fill the canvas area with the actual background brush (or white if not set)
+            Brush backgroundBrush = this.Background ?? Brushes.White;
+            dc.DrawRectangle(backgroundBrush, null, new Rect(0, 0, canvasWidth, canvasHeight));
             
             // Draw a subtle grid pattern to show canvas area (optional)
             var gridPen = new Pen(new SolidColorBrush(Color.FromArgb(20, 200, 200, 200)), 0.5);

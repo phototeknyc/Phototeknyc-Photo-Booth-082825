@@ -186,10 +186,14 @@
     <Compile Include="Controls\SessionSelectionModal.xaml.cs">
       <DependentUpon>SessionSelectionModal.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\GalleryBrowserModal.xaml.cs">
+      <DependentUpon>GalleryBrowserModal.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\ModernUICustomizationCanvas.xaml.cs">
       <DependentUpon>ModernUICustomizationCanvas.xaml</DependentUpon>
     </Compile>
     <Compile Include="Models\UITemplates\UILayoutTemplate.cs" />
+    <Compile Include="Models\UITemplates\UILayoutProfile.cs" />
     <Compile Include="Database\UILayoutDatabase.cs" />
     <Compile Include="Converters\BoolToBrushConverter.cs" />
     <Compile Include="PrintCopyDialog.xaml.cs">
@@ -201,6 +205,8 @@
     <Compile Include="Database\TemplateDatabase.cs" />
     <Compile Include="Services\EventService.cs" />
     <Compile Include="Services\TemplateService.cs" />
+    <Compile Include="Services\TemplateSelectionService.cs" />
+    <Compile Include="Services\TemplateSelectionUIService.cs" />
     <Compile Include="Services\DebugService.cs" />
     <Compile Include="Services\PhotoboothService.cs" />
     <Compile Include="Services\ImageProcessingService.cs" />
@@ -263,6 +269,9 @@
     </Compile>
     <Compile Include="Windows\PhotoboothSessionWindow.xaml.cs">
       <DependentUpon>PhotoboothSessionWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\ModernPhotoboothWindow.xaml.cs">
+      <DependentUpon>ModernPhotoboothWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Windows\PhotoboothTemplateSelectorWindow.xaml.cs">
       <DependentUpon>PhotoboothTemplateSelectorWindow.xaml</DependentUpon>
@@ -328,6 +337,20 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Pages\PhotoboothTouchModernRefactored.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <!-- Temporarily commented out XAML components with compilation issues
+    <Page Include="Controls\ModularComponents\ModuleSettingsControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\ModularComponents\PhotoPrintModule.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    -->
     <Page Include="Pages\EventSelectionPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -353,6 +376,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\SessionSelectionModal.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\GalleryBrowserModal.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -444,6 +471,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Windows\ModernPhotoboothWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Windows\PhotoboothTemplateSelectorWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -490,6 +521,27 @@
     <Compile Include="Pages\PhotoboothTouchModern.xaml.cs">
       <DependentUpon>PhotoboothTouchModern.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Pages\PhotoboothTouchModernRefactored.xaml.cs">
+      <DependentUpon>PhotoboothTouchModernRefactored.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ViewModels\PhotoboothTouchModernViewModel.cs" />
+    <Compile Include="Converters\UIConverters.cs" />
+    <Compile Include="Converters\NullImageSourceConverter.cs" />
+    <Compile Include="Converters\NullImageConverter.cs" />
+    <Compile Include="Controls\ModularComponents\IPhotoboothModule.cs" />
+    <Compile Include="Controls\ModularComponents\ModuleManager.cs" />
+    <Compile Include="Controls\ModularComponents\PhotoCaptureModule.cs" />
+    <Compile Include="Controls\ModularComponents\VideoModule.cs" />
+    <Compile Include="Controls\ModularComponents\GifModule.cs" />
+    <Compile Include="Controls\ModularComponents\BoomerangModule.cs" />
+    <!-- Temporarily commented out XAML components with compilation issues
+    <Compile Include="Controls\ModularComponents\ModuleSettingsControl.xaml.cs">
+      <DependentUpon>ModuleSettingsControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\ModularComponents\PhotoPrintModule.xaml.cs">
+      <DependentUpon>PhotoPrintModule.xaml</DependentUpon>
+    </Compile>
+    -->
     <Compile Include="Models\PhotoSession.cs" />
     <Compile Include="Services\IShareService.cs" />
     <Compile Include="Services\SimpleShareServiceStub.cs" />
@@ -500,6 +552,15 @@
     <Compile Include="Services\CloudService.cs" />
     <Compile Include="Services\CloudShareProvider.cs" />
     <Compile Include="Services\CloudShareServiceRuntime.cs" />
+    <Compile Include="Services\PhotoboothSessionService.cs" />
+    <Compile Include="Services\PhotoboothWorkflowService.cs" />
+    <Compile Include="Services\PhotoboothUIService.cs" />
+    <Compile Include="Services\PhotoCompositionService.cs" />
+    <Compile Include="Services\EventGalleryService.cs" />
+    <Compile Include="Services\GalleryActionService.cs" />
+    <Compile Include="Services\SharingUIService.cs" />
+    <Compile Include="Services\PhotoboothQueueService.cs" />
+    <Compile Include="Services\GalleryBrowserService.cs" />
     <Compile Include="Pages\EventSelectionPage.xaml.cs">
       <DependentUpon>EventSelectionPage.xaml</DependentUpon>
     </Compile>

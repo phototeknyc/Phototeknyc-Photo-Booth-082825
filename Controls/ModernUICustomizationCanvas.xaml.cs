@@ -16,6 +16,7 @@ namespace Photobooth.Controls
     public partial class ModernUICustomizationCanvas : UserControl
     {
         private UILayoutTemplate _currentLayout;
+        private UILayoutProfile _currentProfile;
         private UILayoutDatabase _database;
         private UIElementTemplate _selectedElement;
         private bool _isDragging;
@@ -23,14 +24,43 @@ namespace Photobooth.Controls
         private List<UIElementControl> _elementControls = new List<UIElementControl>();
         private Stack<UILayoutTemplate> _undoStack = new Stack<UILayoutTemplate>();
         private Stack<UILayoutTemplate> _redoStack = new Stack<UILayoutTemplate>();
+        private List<UILayoutProfile> _profiles;
 
         public ModernUICustomizationCanvas()
         {
             InitializeComponent();
             _database = new UILayoutDatabase();
+            _database.InitializePredefinedProfiles();
             InitializeCanvas();
             SetupEventHandlers();
+            LoadProfiles();
             LoadDefaultLayout();
+        }
+        
+        private void LoadProfiles()
+        {
+            try
+            {
+                _profiles = _database.GetAllProfiles();
+                ProfileSelector.ItemsSource = _profiles;
+                
+                // Select active profile if exists
+                var activeProfile = _database.GetActiveProfile();
+                if (activeProfile != null)
+                {
+                    ProfileSelector.SelectedItem = activeProfile;
+                    _currentProfile = activeProfile;
+                }
+                else if (_profiles.Count > 0)
+                {
+                    ProfileSelector.SelectedIndex = 0;
+                    _currentProfile = _profiles[0];
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading profiles: {ex.Message}");
+            }
         }
 
         private void InitializeCanvas()
@@ -79,7 +109,16 @@ namespace Photobooth.Controls
 
         private void LoadDefaultLayout()
         {
-            // Load default landscape layout or create empty one
+            // Try to import from current PhotoboothTouchModern layout first
+            var importedLayout = ImportFromPhotoboothTouchModern();
+            if (importedLayout != null && importedLayout.Elements.Count > 0)
+            {
+                _currentLayout = importedLayout;
+                RefreshCanvas();
+                return;
+            }
+            
+            // Otherwise load default landscape layout or create empty one
             _currentLayout = _database.GetActiveLayout(Orientation.Horizontal) 
                           ?? DefaultTemplates.CreateLandscapeTemplate();
             
@@ -826,6 +865,577 @@ namespace Photobooth.Controls
                 RefreshCanvas();
             }
         }
+        
+        #region Profile Management
+        
+        private void ProfileSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ProfileSelector.SelectedItem is UILayoutProfile profile)
+            {
+                _currentProfile = profile;
+                LoadProfileLayout();
+            }
+        }
+        
+        private void LoadProfileLayout()
+        {
+            if (_currentProfile == null) return;
+            
+            try
+            {
+                // Get current orientation
+                string orientation = GetCurrentOrientation();
+                
+                if (_currentProfile.Layouts.ContainsKey(orientation))
+                {
+                    _currentLayout = _currentProfile.Layouts[orientation];
+                    RefreshCanvas();
+                }
+                else
+                {
+                    // Create new layout for this orientation
+                    _currentLayout = orientation == "Portrait" 
+                        ? DefaultTemplates.CreatePortraitTemplate()
+                        : DefaultTemplates.CreateLandscapeTemplate();
+                    _currentProfile.Layouts[orientation] = _currentLayout;
+                }
+                
+                // Update device selector to match profile
+                UpdateDeviceFrame(
+                    (int)_currentProfile.ScreenConfig.Resolution.Width,
+                    (int)_currentProfile.ScreenConfig.Resolution.Height);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading profile: {ex.Message}", "Profile Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        private void NewProfileBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Window
+            {
+                Title = "Create New Profile",
+                Width = 400,
+                Height = 500,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = Window.GetWindow(this)
+            };
+            
+            var grid = new Grid { Margin = new Thickness(20) };
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            
+            // Name input
+            var nameLabel = new TextBlock { Text = "Profile Name:", Margin = new Thickness(0, 0, 0, 5) };
+            Grid.SetRow(nameLabel, 0);
+            grid.Children.Add(nameLabel);
+            
+            var nameBox = new TextBox { Margin = new Thickness(0, 0, 0, 10) };
+            Grid.SetRow(nameBox, 1);
+            grid.Children.Add(nameBox);
+            
+            // Device type
+            var deviceLabel = new TextBlock { Text = "Device Type:", Margin = new Thickness(0, 0, 0, 5) };
+            Grid.SetRow(deviceLabel, 2);
+            grid.Children.Add(deviceLabel);
+            
+            var deviceCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
+            deviceCombo.Items.Add("Tablet");
+            deviceCombo.Items.Add("Kiosk");
+            deviceCombo.Items.Add("Desktop");
+            deviceCombo.Items.Add("Surface");
+            deviceCombo.SelectedIndex = 0;
+            Grid.SetRow(deviceCombo, 3);
+            grid.Children.Add(deviceCombo);
+            
+            // Resolution
+            var resLabel = new TextBlock { Text = "Resolution:", Margin = new Thickness(0, 0, 0, 5) };
+            Grid.SetRow(resLabel, 4);
+            grid.Children.Add(resLabel);
+            
+            var resPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+            var widthBox = new TextBox { Width = 80, Text = "1920" };
+            var xLabel = new TextBlock { Text = " x ", VerticalAlignment = VerticalAlignment.Center };
+            var heightBox = new TextBox { Width = 80, Text = "1080" };
+            resPanel.Children.Add(widthBox);
+            resPanel.Children.Add(xLabel);
+            resPanel.Children.Add(heightBox);
+            Grid.SetRow(resPanel, 5);
+            grid.Children.Add(resPanel);
+            
+            // Touch enabled
+            var touchCheck = new CheckBox { Content = "Touch Enabled", IsChecked = true, Margin = new Thickness(0, 0, 0, 10) };
+            Grid.SetRow(touchCheck, 6);
+            grid.Children.Add(touchCheck);
+            
+            // Description
+            var descLabel = new TextBlock { Text = "Description:", Margin = new Thickness(0, 0, 0, 5) };
+            Grid.SetRow(descLabel, 7);
+            grid.Children.Add(descLabel);
+            
+            var descBox = new TextBox { Height = 60, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 20) };
+            Grid.SetRow(descBox, 8);
+            grid.Children.Add(descBox);
+            
+            // Buttons
+            var buttonPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var okButton = new Button { Content = "Create", Width = 80, Margin = new Thickness(0, 0, 10, 0) };
+            var cancelButton = new Button { Content = "Cancel", Width = 80 };
+            
+            okButton.Click += (s, args) =>
+            {
+                if (string.IsNullOrWhiteSpace(nameBox.Text))
+                {
+                    MessageBox.Show("Please enter a profile name.", "Validation Error", 
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                
+                var newProfile = new UILayoutProfile
+                {
+                    Name = nameBox.Text,
+                    Description = descBox.Text,
+                    Category = deviceCombo.SelectedItem.ToString(),
+                    ScreenConfig = new ScreenConfiguration
+                    {
+                        DeviceType = deviceCombo.SelectedItem.ToString(),
+                        Resolution = new Size(
+                            double.Parse(widthBox.Text),
+                            double.Parse(heightBox.Text)),
+                        IsTouchEnabled = touchCheck.IsChecked ?? true,
+                        PreferredOrientation = double.Parse(widthBox.Text) > double.Parse(heightBox.Text) 
+                            ? ScreenOrientation.Landscape 
+                            : ScreenOrientation.Portrait
+                    }
+                };
+                
+                // Add default layouts
+                newProfile.Layouts["Portrait"] = DefaultTemplates.CreatePortraitTemplate();
+                newProfile.Layouts["Landscape"] = DefaultTemplates.CreateLandscapeTemplate();
+                
+                // Save to database
+                _database.SaveProfile(newProfile);
+                
+                // Refresh profiles list
+                LoadProfiles();
+                ProfileSelector.SelectedItem = newProfile;
+                
+                dialog.DialogResult = true;
+                dialog.Close();
+            };
+            
+            cancelButton.Click += (s, args) =>
+            {
+                dialog.DialogResult = false;
+                dialog.Close();
+            };
+            
+            buttonPanel.Children.Add(okButton);
+            buttonPanel.Children.Add(cancelButton);
+            Grid.SetRow(buttonPanel, 9);
+            grid.Children.Add(buttonPanel);
+            
+            dialog.Content = grid;
+            dialog.ShowDialog();
+        }
+        
+        private void SaveProfileBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentProfile == null)
+            {
+                MessageBox.Show("Please select a profile first.", "No Profile", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            
+            try
+            {
+                // Update current layout in profile
+                string orientation = GetCurrentOrientation();
+                _currentProfile.Layouts[orientation] = _currentLayout;
+                _currentProfile.LastUsedDate = DateTime.Now;
+                
+                // Save to database
+                _database.SaveProfile(_currentProfile);
+                
+                MessageBox.Show($"Profile '{_currentProfile.Name}' saved successfully!", "Profile Saved", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving profile: {ex.Message}", "Save Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        private void DeleteProfileBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentProfile == null)
+            {
+                MessageBox.Show("Please select a profile to delete.", "No Profile", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            
+            if (_currentProfile.Metadata?.IsLocked == true)
+            {
+                MessageBox.Show("This profile is locked and cannot be deleted.", "Profile Locked", 
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            
+            var result = MessageBox.Show(
+                $"Are you sure you want to delete the profile '{_currentProfile.Name}'?", 
+                "Confirm Delete", 
+                MessageBoxButton.YesNo, 
+                MessageBoxImage.Question);
+            
+            if (result == MessageBoxResult.Yes)
+            {
+                try
+                {
+                    _database.DeleteProfile(_currentProfile.Id);
+                    LoadProfiles();
+                    MessageBox.Show("Profile deleted successfully.", "Profile Deleted", 
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error deleting profile: {ex.Message}", "Delete Error", 
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+        
+        private void ImportBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "This will import the current PhotoboothTouchModern layout.\nAny unsaved changes will be lost.\nDo you want to continue?",
+                "Import Layout",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            
+            if (result == MessageBoxResult.Yes)
+            {
+                var importedLayout = ImportFromPhotoboothTouchModern();
+                if (importedLayout != null && importedLayout.Elements.Count > 0)
+                {
+                    _currentLayout = importedLayout;
+                    RefreshCanvas();
+                    
+                    // Show success notification
+                    var notification = new Border
+                    {
+                        Background = new SolidColorBrush(Color.FromRgb(76, 175, 80)),
+                        CornerRadius = new CornerRadius(5),
+                        Padding = new Thickness(20, 10, 20, 10),
+                        Child = new TextBlock { Text = "Layout Imported Successfully!", Foreground = Brushes.White },
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Top,
+                        Margin = new Thickness(0, 50, 0, 0)
+                    };
+                    
+                    Grid.SetRow(notification, 1);
+                    (this.Content as Grid).Children.Add(notification);
+                    
+                    var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromSeconds(2));
+                    fadeOut.BeginTime = TimeSpan.FromSeconds(1);
+                    fadeOut.Completed += (s, args) =>
+                    {
+                        (this.Content as Grid).Children.Remove(notification);
+                    };
+                    notification.BeginAnimation(OpacityProperty, fadeOut);
+                }
+                else
+                {
+                    MessageBox.Show("Failed to import layout.", "Import Error", 
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+        
+        private void ExitBtn_Click(object sender, RoutedEventArgs e)
+        {
+            // Check if there are unsaved changes
+            if (_currentLayout != null && _currentLayout.ModifiedDate > _currentLayout.CreatedDate)
+            {
+                var result = MessageBox.Show(
+                    "You have unsaved changes. Do you want to save before exiting?",
+                    "Unsaved Changes",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
+                
+                if (result == MessageBoxResult.Yes)
+                {
+                    // Save current layout
+                    SaveLayout();
+                }
+                else if (result == MessageBoxResult.Cancel)
+                {
+                    // Don't exit
+                    return;
+                }
+            }
+            
+            // Close the customizer window or navigate back
+            var window = Window.GetWindow(this);
+            if (window != null)
+            {
+                // If this is in a popup window, close it
+                if (window.GetType().Name == "ModernUICustomizationWindow" || 
+                    window != Application.Current.MainWindow)
+                {
+                    window.Close();
+                }
+                else
+                {
+                    // Navigate back to main dashboard
+                    var surfaceWindow = window as SurfacePhotoBoothWindow;
+                    if (surfaceWindow != null)
+                    {
+                        // Return to main dashboard
+                        surfaceWindow.ShowDashboard();
+                    }
+                }
+            }
+        }
+        
+        private string GetCurrentOrientation()
+        {
+            // Check if canvas is in portrait or landscape mode
+            return DesignCanvas.ActualWidth > DesignCanvas.ActualHeight ? "Landscape" : "Portrait";
+        }
+        
+        private UILayoutTemplate ImportFromPhotoboothTouchModern()
+        {
+            try
+            {
+                var layout = new UILayoutTemplate
+                {
+                    Id = "photobooth-modern-import",
+                    Name = "PhotoBooth Modern Layout",
+                    Description = "Imported from PhotoboothTouchModern",
+                    Elements = new List<UIElementTemplate>(),
+                    Theme = new UITheme
+                    {
+                        PrimaryColor = System.Windows.Media.Color.FromRgb(76, 175, 80),
+                        SecondaryColor = System.Windows.Media.Color.FromRgb(33, 150, 243),
+                        AccentColor = System.Windows.Media.Color.FromRgb(255, 193, 7),
+                        BackgroundColor = System.Windows.Media.Color.FromRgb(26, 26, 46),
+                        TextColor = System.Windows.Media.Colors.White
+                    }
+                };
+
+                // Camera Preview (center)
+                layout.Elements.Add(new UIElementTemplate
+                {
+                    Id = "camera-preview",
+                    Name = "Camera Preview",
+                    Type = ElementType.Camera,
+                    Anchor = AnchorPoint.Center,
+                    AnchorOffset = new Point(0, 0),
+                    SizeMode = SizeMode.Relative,
+                    RelativeSize = new Size(0.9, 0.85),
+                    MinSize = new Size(640, 480),
+                    ZIndex = 0,
+                    IsVisible = true,
+                    IsEnabled = true,
+                    Properties = new Dictionary<string, object>
+                    {
+                        { "BorderThickness", 5 },
+                        { "BorderColor", "#FFFFFF" },
+                        { "CornerRadius", 20 }
+                    }
+                });
+
+                // Start Button (center overlay)
+                layout.Elements.Add(new UIElementTemplate
+                {
+                    Id = "start-button",
+                    Name = "Start Session",
+                    Type = ElementType.Button,
+                    Anchor = AnchorPoint.Center,
+                    AnchorOffset = new Point(0, 0),
+                    SizeMode = SizeMode.Fixed,
+                    MinSize = new Size(300, 300),
+                    MaxSize = new Size(300, 300),
+                    ZIndex = 10,
+                    IsVisible = true,
+                    IsEnabled = true,
+                    ActionCommand = "StartPhotoSession",
+                    Properties = new Dictionary<string, object>
+                    {
+                        { "Text", "START" },
+                        { "FontSize", 48 },
+                        { "BackgroundColor", "#4CAF50" },
+                        { "CornerRadius", 150 },
+                        { "IconSize", 80 },
+                        { "Icon", "📸" }
+                    }
+                });
+
+                // Settings Button (top left)
+                layout.Elements.Add(new UIElementTemplate
+                {
+                    Id = "settings-button",
+                    Name = "Settings",
+                    Type = ElementType.Button,
+                    Anchor = AnchorPoint.TopLeft,
+                    AnchorOffset = new Point(20, 20),
+                    SizeMode = SizeMode.Fixed,
+                    MinSize = new Size(60, 60),
+                    MaxSize = new Size(60, 60),
+                    ZIndex = 5,
+                    IsVisible = true,
+                    IsEnabled = true,
+                    ActionCommand = "OpenSettings",
+                    Properties = new Dictionary<string, object>
+                    {
+                        { "Text", "⚙️" },
+                        { "FontSize", 28 },
+                        { "BackgroundColor", "#2196F3" },
+                        { "CornerRadius", 30 }
+                    }
+                });
+
+                // Gallery Button (top right)
+                layout.Elements.Add(new UIElementTemplate
+                {
+                    Id = "gallery-button",
+                    Name = "Gallery",
+                    Type = ElementType.Button,
+                    Anchor = AnchorPoint.TopRight,
+                    AnchorOffset = new Point(-20, 20),
+                    SizeMode = SizeMode.Fixed,
+                    MinSize = new Size(60, 60),
+                    MaxSize = new Size(60, 60),
+                    ZIndex = 5,
+                    IsVisible = true,
+                    IsEnabled = true,
+                    ActionCommand = "OpenGallery",
+                    Properties = new Dictionary<string, object>
+                    {
+                        { "Text", "🖼️" },
+                        { "FontSize", 28 },
+                        { "BackgroundColor", "#FF9800" },
+                        { "CornerRadius", 30 }
+                    }
+                });
+
+                // Stop Button (shown during session)
+                layout.Elements.Add(new UIElementTemplate
+                {
+                    Id = "stop-button",
+                    Name = "Stop Session",
+                    Type = ElementType.Button,
+                    Anchor = AnchorPoint.TopRight,
+                    AnchorOffset = new Point(-20, 20),
+                    SizeMode = SizeMode.Fixed,
+                    MinSize = new Size(50, 50),
+                    MaxSize = new Size(50, 50),
+                    ZIndex = 15,
+                    IsVisible = false, // Hidden by default
+                    IsEnabled = true,
+                    ActionCommand = "StopSession",
+                    Properties = new Dictionary<string, object>
+                    {
+                        { "Text", "✕" },
+                        { "FontSize", 24 },
+                        { "BackgroundColor", "#F44336" },
+                        { "CornerRadius", 25 }
+                    }
+                });
+
+                // Countdown Overlay
+                layout.Elements.Add(new UIElementTemplate
+                {
+                    Id = "countdown-overlay",
+                    Name = "Countdown",
+                    Type = ElementType.Countdown,
+                    Anchor = AnchorPoint.Center,
+                    AnchorOffset = new Point(0, 0),
+                    SizeMode = SizeMode.Fixed,
+                    MinSize = new Size(400, 400),
+                    MaxSize = new Size(400, 400),
+                    ZIndex = 20,
+                    IsVisible = false, // Hidden by default
+                    IsEnabled = false,
+                    Properties = new Dictionary<string, object>
+                    {
+                        { "FontSize", 200 },
+                        { "TextColor", "#FFFFFF" },
+                        { "BackgroundColor", "#80000000" },
+                        { "CornerRadius", 200 }
+                    }
+                });
+
+                // Session Info Text (bottom)
+                layout.Elements.Add(new UIElementTemplate
+                {
+                    Id = "session-info",
+                    Name = "Session Info",
+                    Type = ElementType.Text,
+                    Anchor = AnchorPoint.BottomCenter,
+                    AnchorOffset = new Point(0, -50),
+                    SizeMode = SizeMode.Fixed,
+                    MinSize = new Size(400, 50),
+                    ZIndex = 5,
+                    IsVisible = true,
+                    IsEnabled = false,
+                    Properties = new Dictionary<string, object>
+                    {
+                        { "Text", "Touch START to begin" },
+                        { "FontSize", 18 },
+                        { "TextColor", "#FFFFFF" },
+                        { "BackgroundColor", "#80000000" },
+                        { "CornerRadius", 25 },
+                        { "Padding", 10 }
+                    }
+                });
+
+                // Home Button (bottom left)
+                layout.Elements.Add(new UIElementTemplate
+                {
+                    Id = "home-button",
+                    Name = "Home",
+                    Type = ElementType.Button,
+                    Anchor = AnchorPoint.BottomLeft,
+                    AnchorOffset = new Point(20, -20),
+                    SizeMode = SizeMode.Fixed,
+                    MinSize = new Size(60, 60),
+                    MaxSize = new Size(60, 60),
+                    ZIndex = 5,
+                    IsVisible = true,
+                    IsEnabled = true,
+                    ActionCommand = "ReturnHome",
+                    Properties = new Dictionary<string, object>
+                    {
+                        { "Text", "🏠" },
+                        { "FontSize", 28 },
+                        { "BackgroundColor", "#9C27B0" },
+                        { "CornerRadius", 30 }
+                    }
+                });
+
+                return layout;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error importing layout: {ex.Message}");
+                return null;
+            }
+        }
+        
+        #endregion
     }
 
     // Helper class to wrap UI elements

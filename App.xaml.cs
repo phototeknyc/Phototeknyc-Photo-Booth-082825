@@ -18,6 +18,14 @@ namespace Photobooth
 		[DllImport("user32.dll")]
 		private static extern bool SetProcessDPIAware();
 		
+		private static CameraControl.Devices.CameraDeviceManager _deviceManager;
+		
+		public static CameraControl.Devices.CameraDeviceManager DeviceManager
+		{
+			get { return _deviceManager; }
+			set { _deviceManager = value; }
+		}
+		
 		protected override void OnStartup(StartupEventArgs e)
 		{
 			// Enable DPI awareness for crisp rendering on high-DPI displays
@@ -48,6 +56,52 @@ namespace Photobooth
 				new FrameworkPropertyMetadata(TextFormattingMode.Display));
 			
 			base.OnStartup(e);
+		}
+		
+		protected override void OnExit(ExitEventArgs e)
+		{
+			try
+			{
+				System.Diagnostics.Debug.WriteLine("Application shutting down - cleaning up resources...");
+				
+				// Stop all live view operations
+				if (_deviceManager != null && _deviceManager.ConnectedDevices != null)
+				{
+					foreach (var device in _deviceManager.ConnectedDevices)
+					{
+						try
+						{
+							if (device != null && device.IsConnected)
+							{
+								System.Diagnostics.Debug.WriteLine($"Stopping live view for device: {device.DeviceName}");
+								device.StopLiveView();
+							}
+						}
+						catch (Exception ex)
+						{
+							System.Diagnostics.Debug.WriteLine($"Error stopping live view: {ex.Message}");
+						}
+					}
+				}
+				
+				// Disconnect all cameras
+				if (_deviceManager != null)
+				{
+					System.Diagnostics.Debug.WriteLine("Closing all camera connections...");
+					_deviceManager.CloseAll();
+				}
+				
+				// Allow time for cleanup
+				System.Threading.Thread.Sleep(500);
+				
+				System.Diagnostics.Debug.WriteLine("Application cleanup completed");
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Error during application shutdown: {ex.Message}");
+			}
+			
+			base.OnExit(e);
 		}
 		
 		private bool IsSurfaceDevice()

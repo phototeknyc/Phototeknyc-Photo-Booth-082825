@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,36 +20,71 @@ namespace Photobooth.Services
     {
         private readonly UILayoutDatabase _database;
         private UILayoutTemplate _currentLayout;
+        private UILayoutProfile _currentProfile;
         private bool _isCustomLayoutActive;
 
         public UILayoutService()
         {
             _database = new UILayoutDatabase();
+            _database.InitializePredefinedProfiles();
         }
 
         /// <summary>
-        /// Loads and applies custom layout if available, otherwise uses default
+        /// Loads and applies custom layout based on active profile
         /// </summary>
         public void ApplyLayoutToPage(Page page, Panel mainContainer)
         {
             try
             {
-                // Determine current orientation
-                var orientation = GetCurrentOrientation();
+                // Get active profile
+                _currentProfile = _database.GetActiveProfile();
                 
-                // Try to load active custom layout
-                _currentLayout = _database.GetActiveLayout(orientation);
-                
-                if (_currentLayout != null)
+                if (_currentProfile != null)
                 {
-                    ApplyCustomLayout(page, mainContainer);
-                    _isCustomLayoutActive = true;
+                    // Determine current orientation
+                    var orientation = GetCurrentOrientation();
+                    var orientationKey = orientation == Orientation.Vertical ? "Portrait" : "Landscape";
+                    
+                    // Get layout for current orientation from profile
+                    if (_currentProfile.Layouts.ContainsKey(orientationKey))
+                    {
+                        _currentLayout = _currentProfile.Layouts[orientationKey];
+                        ApplyCustomLayout(page, mainContainer);
+                        _isCustomLayoutActive = true;
+                        System.Diagnostics.Debug.WriteLine($"Applied layout from profile: {_currentProfile.Name} ({orientationKey})");
+                    }
+                    else
+                    {
+                        // Fallback to any active layout
+                        _currentLayout = _database.GetActiveLayout(orientation);
+                        if (_currentLayout != null)
+                        {
+                            ApplyCustomLayout(page, mainContainer);
+                            _isCustomLayoutActive = true;
+                        }
+                        else
+                        {
+                            _isCustomLayoutActive = false;
+                            System.Diagnostics.Debug.WriteLine("No custom layout in profile, using default UI");
+                        }
+                    }
                 }
                 else
                 {
-                    // Keep existing default UI
-                    _isCustomLayoutActive = false;
-                    System.Diagnostics.Debug.WriteLine("No custom layout active, using default UI");
+                    // No profile active, try direct layout
+                    var orientation = GetCurrentOrientation();
+                    _currentLayout = _database.GetActiveLayout(orientation);
+                    
+                    if (_currentLayout != null)
+                    {
+                        ApplyCustomLayout(page, mainContainer);
+                        _isCustomLayoutActive = true;
+                    }
+                    else
+                    {
+                        _isCustomLayoutActive = false;
+                        System.Diagnostics.Debug.WriteLine("No active profile or layout, using default UI");
+                    }
                 }
             }
             catch (Exception ex)
@@ -57,6 +93,38 @@ namespace Photobooth.Services
                 _isCustomLayoutActive = false;
                 // Default UI remains unchanged
             }
+        }
+
+        /// <summary>
+        /// Quick switch to a different profile
+        /// </summary>
+        public void SwitchToProfile(string profileId, Page page, Panel mainContainer)
+        {
+            try
+            {
+                _database.SetActiveProfile(profileId);
+                ApplyLayoutToPage(page, mainContainer);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error switching profile: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Get available profiles for quick switching
+        /// </summary>
+        public List<UILayoutProfile> GetAvailableProfiles()
+        {
+            return _database.GetAllProfiles();
+        }
+
+        /// <summary>
+        /// Get current active profile
+        /// </summary>
+        public UILayoutProfile GetCurrentProfile()
+        {
+            return _currentProfile;
         }
 
         private void ApplyCustomLayout(Page page, Panel mainContainer)
@@ -197,11 +265,27 @@ namespace Photobooth.Services
             {
                 try
                 {
-                    image.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(imagePath, UriKind.RelativeOrAbsolute));
+                    // Check if it's a file path and if file exists
+                    if (!imagePath.StartsWith("http://") && !imagePath.StartsWith("https://"))
+                    {
+                        var fullPath = System.IO.Path.IsPathRooted(imagePath) ? 
+                            imagePath : 
+                            System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, imagePath);
+                        
+                        if (System.IO.File.Exists(fullPath))
+                        {
+                            image.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(fullPath, UriKind.Absolute));
+                        }
+                    }
+                    else
+                    {
+                        image.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(imagePath, UriKind.Absolute));
+                    }
                 }
                 catch
                 {
                     // Use placeholder if image fails to load
+                    System.Diagnostics.Debug.WriteLine($"Could not load image: {imagePath}");
                 }
             }
 
@@ -224,16 +308,37 @@ namespace Photobooth.Services
             {
                 try
                 {
-                    var imageBrush = new ImageBrush
+                    // Check if it's a file path and if file exists
+                    if (!imagePath.StartsWith("http://") && !imagePath.StartsWith("https://"))
                     {
-                        ImageSource = new System.Windows.Media.Imaging.BitmapImage(new Uri(imagePath, UriKind.RelativeOrAbsolute)),
-                        Stretch = Stretch.UniformToFill
-                    };
-                    rect.Fill = imageBrush;
+                        var fullPath = System.IO.Path.IsPathRooted(imagePath) ? 
+                            imagePath : 
+                            System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, imagePath);
+                        
+                        if (System.IO.File.Exists(fullPath))
+                        {
+                            var imageBrush = new ImageBrush
+                            {
+                                ImageSource = new System.Windows.Media.Imaging.BitmapImage(new Uri(fullPath, UriKind.Absolute)),
+                                Stretch = Stretch.UniformToFill
+                            };
+                            rect.Fill = imageBrush;
+                        }
+                    }
+                    else
+                    {
+                        var imageBrush = new ImageBrush
+                        {
+                            ImageSource = new System.Windows.Media.Imaging.BitmapImage(new Uri(imagePath, UriKind.Absolute)),
+                            Stretch = Stretch.UniformToFill
+                        };
+                        rect.Fill = imageBrush;
+                    }
                 }
                 catch
                 {
                     // Keep solid color if image fails
+                    System.Diagnostics.Debug.WriteLine($"Could not load background image: {imagePath}");
                 }
             }
 

@@ -111,6 +111,8 @@ namespace Photobooth.Pages
                 photoDisplayDurationSlider.Value = Properties.Settings.Default.PhotoDisplayDuration;
                 photographerModeCheckBox.IsChecked = Properties.Settings.Default.PhotographerMode;
                 showSessionPromptsCheckBox.IsChecked = Properties.Settings.Default.ShowSessionPrompts;
+                if (delayBetweenPhotosSlider != null)
+                    delayBetweenPhotosSlider.Value = Properties.Settings.Default.DelayBetweenPhotos;
                 
                 // Load auto-clear settings
                 autoClearSessionCheckBox.IsChecked = Properties.Settings.Default.AutoClearSession;
@@ -204,6 +206,8 @@ namespace Photobooth.Pages
         {
             countdownValueText.Text = $"{(int)countdownSlider.Value} seconds";
             photoDisplayDurationValueText.Text = $"{(int)photoDisplayDurationSlider.Value} seconds";
+            if (delayBetweenPhotosSlider != null && delayBetweenPhotosValueText != null)
+                delayBetweenPhotosValueText.Text = $"{(int)delayBetweenPhotosSlider.Value} seconds";
             frameRateValueText.Text = $"{(int)frameRateSlider.Value} FPS";
             buttonSizeValueText.Text = $"{(int)(buttonSizeSlider.Value * 100)}%";
             if (retakeTimeoutValueText != null)
@@ -222,6 +226,12 @@ namespace Photobooth.Pages
         {
             if (photoDisplayDurationValueText != null)
                 photoDisplayDurationValueText.Text = $"{(int)e.NewValue} seconds";
+        }
+        
+        private void DelayBetweenPhotosSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (delayBetweenPhotosValueText != null)
+                delayBetweenPhotosValueText.Text = $"{(int)e.NewValue} seconds";
         }
         
         private void AutoClearTimeoutSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -313,6 +323,8 @@ namespace Photobooth.Pages
                 Properties.Settings.Default.PhotoDisplayDuration = (int)photoDisplayDurationSlider.Value;
                 Properties.Settings.Default.PhotographerMode = photographerModeCheckBox.IsChecked ?? false;
                 Properties.Settings.Default.ShowSessionPrompts = showSessionPromptsCheckBox.IsChecked ?? false;
+                if (delayBetweenPhotosSlider != null)
+                    Properties.Settings.Default.DelayBetweenPhotos = (int)delayBetweenPhotosSlider.Value;
                 
                 // Save auto-clear settings
                 Properties.Settings.Default.AutoClearSession = autoClearSessionCheckBox.IsChecked ?? false;
@@ -347,6 +359,17 @@ namespace Photobooth.Pages
                 Properties.Settings.Default.AllowFilterChange = allowFilterChangeCheckBox.IsChecked ?? true;
                 Properties.Settings.Default.ShowFilterPreview = showFilterPreviewCheckBox.IsChecked ?? true;
                 Properties.Settings.Default.EnabledFilters = GetEnabledFilters();
+                
+                // Save GIF animation settings
+                Properties.Settings.Default.EnableGifGeneration = enableGifGenerationCheckBox.IsChecked ?? false;
+                Properties.Settings.Default.GifFrameDelay = (int)(gifFrameDelaySlider.Value * 1000); // Convert to ms
+                Properties.Settings.Default.EnableGifOverlay = enableGifOverlayCheckBox.IsChecked ?? false;
+                Properties.Settings.Default.GifOverlayPath = gifOverlayPathTextBox.Text;
+                Properties.Settings.Default.GifQuality = (int)gifQualitySlider.Value;
+                if (int.TryParse(gifMaxWidthTextBox.Text, out int maxWidth))
+                    Properties.Settings.Default.GifMaxWidth = maxWidth;
+                if (int.TryParse(gifMaxHeightTextBox.Text, out int maxHeight))
+                    Properties.Settings.Default.GifMaxHeight = maxHeight;
                 
                 // Save print settings with null checks
                 if (enablePrintingCheckBox != null)

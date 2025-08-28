@@ -1664,14 +1664,135 @@ namespace Photobooth.Database
         
         #region Photo Session Management Methods
         
-        public int CreatePhotoSession(int eventId, int templateId, string sessionName = null)
+        public void SavePhotoSession(int eventId, int templateId, string sessionName, string sessionGuid, DateTime startTime)
         {
             using (var connection = new SQLiteConnection(connectionString))
             {
                 connection.Open();
                 
-                string sessionGuid = Guid.NewGuid().ToString();
+                // Check if session already exists
+                string checkSession = "SELECT COUNT(*) FROM PhotoSessions WHERE SessionGuid = @sessionGuid";
+                bool sessionExists = false;
+                
+                using (var checkCmd = new SQLiteCommand(checkSession, connection))
+                {
+                    checkCmd.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    sessionExists = Convert.ToInt32(checkCmd.ExecuteScalar()) > 0;
+                }
+                
+                if (!sessionExists)
+                {
+                    string insertSession = @"
+                        INSERT INTO PhotoSessions (EventId, TemplateId, SessionName, SessionGuid, StartTime, IsActive)
+                        VALUES (@eventId, @templateId, @sessionName, @sessionGuid, @startTime, 1)";
+                    
+                    using (var command = new SQLiteCommand(insertSession, connection))
+                    {
+                        command.Parameters.AddWithValue("@eventId", eventId);
+                        command.Parameters.AddWithValue("@templateId", templateId);
+                        command.Parameters.AddWithValue("@sessionName", sessionName);
+                        command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                        command.Parameters.AddWithValue("@startTime", startTime);
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+        
+        public void SaveSessionPhoto(string sessionGuid, string fileName, string filePath, long fileSize, string photoType)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                // First get the session ID
+                string getSessionId = "SELECT Id FROM PhotoSessions WHERE SessionGuid = @sessionGuid";
+                int sessionId = 0;
+                
+                using (var getCmd = new SQLiteCommand(getSessionId, connection))
+                {
+                    getCmd.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    var result = getCmd.ExecuteScalar();
+                    if (result != null)
+                    {
+                        sessionId = Convert.ToInt32(result);
+                    }
+                }
+                
+                if (sessionId > 0)
+                {
+                    // Check if photo already exists
+                    string checkPhoto = "SELECT COUNT(*) FROM Photos WHERE SessionId = @sessionId AND FilePath = @filePath";
+                    bool photoExists = false;
+                    
+                    using (var checkCmd = new SQLiteCommand(checkPhoto, connection))
+                    {
+                        checkCmd.Parameters.AddWithValue("@sessionId", sessionId);
+                        checkCmd.Parameters.AddWithValue("@filePath", filePath);
+                        photoExists = Convert.ToInt32(checkCmd.ExecuteScalar()) > 0;
+                    }
+                    
+                    if (!photoExists)
+                    {
+                        string insertPhoto = @"
+                            INSERT INTO Photos (SessionId, FileName, FilePath, FileSize, PhotoType, IsActive, SequenceNumber)
+                            VALUES (@sessionId, @fileName, @filePath, @fileSize, @photoType, 1, 
+                                    (SELECT COALESCE(MAX(SequenceNumber), 0) + 1 FROM Photos WHERE SessionId = @sessionId))";
+                        
+                        using (var command = new SQLiteCommand(insertPhoto, connection))
+                        {
+                            command.Parameters.AddWithValue("@sessionId", sessionId);
+                            command.Parameters.AddWithValue("@fileName", fileName);
+                            command.Parameters.AddWithValue("@filePath", filePath);
+                            command.Parameters.AddWithValue("@fileSize", fileSize);
+                            command.Parameters.AddWithValue("@photoType", photoType);
+                            command.ExecuteNonQuery();
+                        }
+                    }
+                }
+            }
+        }
+        
+        public PhotoSessionData GetPhotoSessionByGuid(string sessionGuid)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string selectSession = @"
+                    SELECT ps.*, e.Name as EventName, t.Name as TemplateName
+                    FROM PhotoSessions ps
+                    LEFT JOIN Events e ON ps.EventId = e.Id
+                    LEFT JOIN Templates t ON ps.TemplateId = t.Id
+                    WHERE ps.SessionGuid = @sessionGuid AND ps.IsActive = 1";
+                    
+                using (var command = new SQLiteCommand(selectSession, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    
+                    using (var reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            return MapReaderToPhotoSessionData(reader);
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+        
+        public int CreatePhotoSession(int eventId, int templateId, string sessionName = null, string sessionGuid = null)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                // Use provided GUID or generate new one if not provided
+                sessionGuid = sessionGuid ?? Guid.NewGuid().ToString();
                 sessionName = sessionName ?? $"Session {DateTime.Now:yyyy-MM-dd HH:mm}";
+                
+                System.Diagnostics.Debug.WriteLine($"TemplateDatabase.CreatePhotoSession: Creating session with GUID {sessionGuid}");
                 
                 string insertSession = @"
                     INSERT INTO PhotoSessions (EventId, TemplateId, SessionName, SessionGuid, StartTime)
@@ -1716,24 +1837,64 @@ namespace Photobooth.Database
             {
                 connection.Open();
                 
-                string updateGalleryUrl = @"
-                    UPDATE PhotoSessions 
-                    SET GalleryUrl = @galleryUrl 
-                    WHERE SessionGuid = @sessionGuid";
-                    
-                using (var command = new SQLiteCommand(updateGalleryUrl, connection))
+                // First, check if the session exists
+                string checkSession = "SELECT COUNT(*) FROM PhotoSessions WHERE SessionGuid = @sessionGuid";
+                bool sessionExists = false;
+                
+                using (var checkCmd = new SQLiteCommand(checkSession, connection))
                 {
-                    command.Parameters.AddWithValue("@galleryUrl", galleryUrl);
-                    command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    checkCmd.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    sessionExists = Convert.ToInt32(checkCmd.ExecuteScalar()) > 0;
+                }
+                
+                if (!sessionExists)
+                {
+                    // Session doesn't exist, create it with minimal required fields
+                    string insertSession = @"
+                        INSERT INTO PhotoSessions (EventId, TemplateId, SessionName, SessionGuid, GalleryUrl, StartTime)
+                        VALUES (
+                            (SELECT Id FROM Events WHERE IsActive = 1 LIMIT 1),  -- Use active event
+                            (SELECT Id FROM Templates LIMIT 1),                  -- Use any template
+                            @sessionName,
+                            @sessionGuid,
+                            @galleryUrl,
+                            CURRENT_TIMESTAMP
+                        )";
                     
-                    int rowsAffected = command.ExecuteNonQuery();
-                    System.Diagnostics.Debug.WriteLine($"Updated GalleryUrl for session {sessionGuid}: {rowsAffected} rows affected");
+                    using (var insertCmd = new SQLiteCommand(insertSession, connection))
+                    {
+                        insertCmd.Parameters.AddWithValue("@sessionName", $"Session {DateTime.Now:yyyy-MM-dd HH:mm}");
+                        insertCmd.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                        insertCmd.Parameters.AddWithValue("@galleryUrl", galleryUrl);
+                        
+                        insertCmd.ExecuteNonQuery();
+                        System.Diagnostics.Debug.WriteLine($"Created new session {sessionGuid} with GalleryUrl: {galleryUrl}");
+                    }
+                }
+                else
+                {
+                    // Session exists, update it
+                    string updateGalleryUrl = @"
+                        UPDATE PhotoSessions 
+                        SET GalleryUrl = @galleryUrl 
+                        WHERE SessionGuid = @sessionGuid";
+                        
+                    using (var command = new SQLiteCommand(updateGalleryUrl, connection))
+                    {
+                        command.Parameters.AddWithValue("@galleryUrl", galleryUrl);
+                        command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                        
+                        int rowsAffected = command.ExecuteNonQuery();
+                        System.Diagnostics.Debug.WriteLine($"Updated GalleryUrl for session {sessionGuid}: {rowsAffected} rows affected");
+                    }
                 }
             }
         }
         
         public string GetPhotoSessionGalleryUrl(string sessionGuid)
         {
+            System.Diagnostics.Debug.WriteLine($"TemplateDatabase.GetPhotoSessionGalleryUrl: Looking up gallery URL for sessionGuid: {sessionGuid}");
+            
             using (var connection = new SQLiteConnection(connectionString))
             {
                 connection.Open();
@@ -1748,7 +1909,23 @@ namespace Photobooth.Database
                     command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
                     
                     var result = command.ExecuteScalar();
-                    return result?.ToString();
+                    string galleryUrl = result?.ToString();
+                    
+                    System.Diagnostics.Debug.WriteLine($"TemplateDatabase.GetPhotoSessionGalleryUrl: Result for {sessionGuid}: {galleryUrl ?? "NULL"}");
+                    
+                    // Also check if the session exists at all
+                    if (string.IsNullOrEmpty(galleryUrl))
+                    {
+                        string checkSession = "SELECT COUNT(*) FROM PhotoSessions WHERE SessionGuid = @sessionGuid";
+                        using (var checkCmd = new SQLiteCommand(checkSession, connection))
+                        {
+                            checkCmd.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                            int count = Convert.ToInt32(checkCmd.ExecuteScalar());
+                            System.Diagnostics.Debug.WriteLine($"TemplateDatabase.GetPhotoSessionGalleryUrl: Session exists in DB: {count > 0} (count: {count})");
+                        }
+                    }
+                    
+                    return galleryUrl;
                 }
             }
         }
@@ -1921,7 +2098,7 @@ namespace Photobooth.Database
             }
         }
         
-        public List<PhotoSessionData> GetPhotoSessions(int? eventId = null)
+        public List<PhotoSessionData> GetPhotoSessions(int? eventId = null, int limit = 100, int offset = 0)
         {
             var sessions = new List<PhotoSessionData>();
             
@@ -1929,6 +2106,7 @@ namespace Photobooth.Database
             {
                 connection.Open();
                 
+                // Optimized query with limit and offset for pagination
                 string selectSessions = @"
                     SELECT ps.*, e.Name as EventName, t.Name as TemplateName,
                            (SELECT COUNT(*) FROM Photos p WHERE p.SessionId = ps.Id AND p.IsActive = 1) as ActualPhotoCount,
@@ -1937,12 +2115,15 @@ namespace Photobooth.Database
                     LEFT JOIN Events e ON ps.EventId = e.Id
                     LEFT JOIN Templates t ON ps.TemplateId = t.Id
                     WHERE ps.IsActive = 1" + (eventId.HasValue ? " AND ps.EventId = @eventId" : "") + @"
-                    ORDER BY ps.StartTime DESC";
+                    ORDER BY ps.StartTime DESC
+                    LIMIT @limit OFFSET @offset";
                 
                 using (var command = new SQLiteCommand(selectSessions, connection))
                 {
                     if (eventId.HasValue)
                         command.Parameters.AddWithValue("@eventId", eventId.Value);
+                    command.Parameters.AddWithValue("@limit", limit);
+                    command.Parameters.AddWithValue("@offset", offset);
                     
                     using (var reader = command.ExecuteReader())
                     {
@@ -2047,9 +2228,9 @@ namespace Photobooth.Database
                 TemplateId = Convert.ToInt32(reader["TemplateId"]),
                 SessionName = reader.IsDBNull(reader.GetOrdinal("SessionName")) ? null : reader.GetString(reader.GetOrdinal("SessionName")),
                 SessionGuid = reader.IsDBNull(reader.GetOrdinal("SessionGuid")) ? null : reader.GetString(reader.GetOrdinal("SessionGuid")),
-                PhotosTaken = Convert.ToInt32(reader["PhotosTaken"]),
-                ActualPhotoCount = Convert.ToInt32(reader["ActualPhotoCount"]),
-                ComposedImageCount = Convert.ToInt32(reader["ComposedImageCount"]),
+                PhotosTaken = reader.IsDBNull(reader.GetOrdinal("PhotosTaken")) ? 0 : Convert.ToInt32(reader["PhotosTaken"]),
+                ActualPhotoCount = reader.IsDBNull(reader.GetOrdinal("ActualPhotoCount")) ? 0 : Convert.ToInt32(reader["ActualPhotoCount"]),
+                ComposedImageCount = reader.IsDBNull(reader.GetOrdinal("ComposedImageCount")) ? 0 : Convert.ToInt32(reader["ComposedImageCount"]),
                 StartTime = Convert.ToDateTime(reader["StartTime"]),
                 EndTime = reader.IsDBNull(reader.GetOrdinal("EndTime")) ? (DateTime?)null : Convert.ToDateTime(reader["EndTime"]),
                 EventName = reader.IsDBNull(reader.GetOrdinal("EventName")) ? null : reader.GetString(reader.GetOrdinal("EventName")),

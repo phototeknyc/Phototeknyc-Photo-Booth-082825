@@ -114,6 +114,11 @@ namespace Photobooth.Services
                 
                 if (_deviceManager?.SelectedCameraDevice != null)
                 {
+                    // Ensure camera is configured to save to host, not SD card
+                    // This is critical for photo retrieval
+                    _deviceManager.SelectedCameraDevice.CaptureInSdRam = false;
+                    DebugService.LogDebug($"CameraSessionManager: Set CaptureInSdRam to false for host transfer");
+                    
                     DebugService.LogDebug($"CameraSessionManager: Camera ready - {_deviceManager.SelectedCameraDevice.DeviceName}");
                 }
             }

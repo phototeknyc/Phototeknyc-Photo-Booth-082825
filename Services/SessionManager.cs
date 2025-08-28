@@ -29,7 +29,7 @@ namespace Photobooth.Services
         {
             _recentSessions = new List<PhotoSession>();
             _shareService = CloudShareProvider.GetShareService();
-            _queueService = new OfflineQueueService();
+            _queueService = OfflineQueueService.Instance;
             
             // Subscribe to upload completed events
             _queueService.OnUploadCompleted += OnQueuedUploadCompleted;

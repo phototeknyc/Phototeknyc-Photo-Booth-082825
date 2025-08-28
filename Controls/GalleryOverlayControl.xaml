@@ -4,11 +4,16 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:Photobooth.Controls"
+             xmlns:converters="clr-namespace:Photobooth.Converters"
              mc:Ignorable="d" 
              d:DesignHeight="800" d:DesignWidth="1200">
     
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        
+        <!-- Converters for handling null images -->
+        <converters:NullImageSourceConverter x:Key="NullImageSourceConverter"/>
+        <converters:NullToEmptyStringConverter x:Key="NullToEmptyStringConverter"/>
         
         <!-- Session Group Header Style -->
         <Style x:Key="SessionHeaderStyle" TargetType="TextBlock">
@@ -224,7 +229,7 @@
                                                         Tag="{Binding FilePath}">
                                                     <Grid>
                                                         <!-- Photo Thumbnail -->
-                                                        <Image Source="{Binding ThumbnailPath}" 
+                                                        <Image Source="{Binding ThumbnailPath, Converter={StaticResource NullImageSourceConverter}}" 
                                                                Stretch="UniformToFill"/>
                                                         
                                                         <!-- Photo Type Badge -->
@@ -245,11 +250,11 @@
                                                                 VerticalAlignment="Bottom"
                                                                 CornerRadius="0,0,8,8">
                                                             <StackPanel Margin="5">
-                                                                <TextBlock Text="{Binding FileName}" 
+                                                                <TextBlock Text="{Binding FileName, Converter={StaticResource NullToEmptyStringConverter}}" 
                                                                            Foreground="White" 
                                                                            FontSize="11"
                                                                            TextTrimming="CharacterEllipsis"/>
-                                                                <TextBlock Text="{Binding FileSize}" 
+                                                                <TextBlock Text="{Binding FileSize, Converter={StaticResource NullToEmptyStringConverter}}" 
                                                                            Foreground="#AAAAAA" 
                                                                            FontSize="10"/>
                                                             </StackPanel>

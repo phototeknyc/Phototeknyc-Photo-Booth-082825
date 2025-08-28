@@ -79,6 +79,9 @@ namespace Photobooth
             
             // Handle window state changes to fix black screen on restore
             this.StateChanged += Window_StateChanged;
+            
+            // Handle window closing for proper cleanup
+            this.Closing += Window_Closing;
         }
         
         private void SetupDpiAwareness()
@@ -356,6 +359,33 @@ namespace Photobooth
             NavigateToPage(new Pages.EventSelectionPage(), "Select Event");
         }
         
+        private void NavigateToPhotoBoothModern_Click(object sender, MouseButtonEventArgs e)
+        {
+            // Launch Modern Photobooth in a new window
+            try
+            {
+                var modernWindow = new Windows.ModernPhotoboothWindow();
+                modernWindow.Show();
+                
+                // When modern window closes, show Surface window again
+                modernWindow.Closed += (s, args) =>
+                {
+                    this.Show();
+                    this.Activate();
+                };
+                
+                // Hide Surface window while modern UI is open
+                this.Hide();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error launching Modern Photobooth: {ex.Message}", 
+                               "Launch Error", 
+                               MessageBoxButton.OK, 
+                               MessageBoxImage.Error);
+            }
+        }
+        
         private void NavigateToPhotoboothSettings_Click(object sender, MouseButtonEventArgs e)
         {
             // Navigate to Photobooth Settings page
@@ -464,6 +494,45 @@ namespace Photobooth
         private void NavigateToCameraSettings_Click(object sender, MouseButtonEventArgs e)
         {
             NavigateToPage(new CameraSettings(), "Camera Settings");
+        }
+        
+        public void ShowDashboard()
+        {
+            // Clear navigation stack
+            _navigationStack.Clear();
+            
+            // Clear the frame
+            if (ContentFrame != null)
+            {
+                ContentFrame.Content = null;
+            }
+            
+            // Show navigation grid
+            if (NavigationGrid != null)
+            {
+                NavigationGrid.Visibility = Visibility.Visible;
+                NavigationGrid.Opacity = 0;
+                
+                var fadeIn = new DoubleAnimation
+                {
+                    From = 0,
+                    To = 1,
+                    Duration = TimeSpan.FromMilliseconds(300)
+                };
+                NavigationGrid.BeginAnimation(OpacityProperty, fadeIn);
+            }
+            
+            // Hide content container
+            if (ContentContainer != null)
+            {
+                ContentContainer.Visibility = Visibility.Collapsed;
+            }
+            
+            // Update breadcrumb
+            if (BreadcrumbText != null)
+            {
+                BreadcrumbText.Text = "Home";
+            }
         }
         
         public void NavigateToPage(Page page, string title)
@@ -730,6 +799,57 @@ namespace Photobooth
                     // Reset opacity in case it was affected
                     this.Opacity = 1.0;
                 }), DispatcherPriority.Render);
+            }
+        }
+        
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("SurfacePhotoBoothWindow closing - cleaning up resources...");
+                
+                // Stop status timer
+                if (_statusTimer != null)
+                {
+                    _statusTimer.Stop();
+                    _statusTimer = null;
+                }
+                
+                // Stop any live view on current page
+                if (ContentFrame != null && ContentFrame.Content != null)
+                {
+                    // Check if current page is PhotoboothTouchModern
+                    var touchModernPage = ContentFrame.Content as Pages.PhotoboothTouchModern;
+                    if (touchModernPage != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Stopping PhotoboothTouchModern live view...");
+                        touchModernPage.StopLiveView();
+                    }
+                    
+                    // Check if current page is PhotoboothTouchModernRefactored
+                    var refactoredPage = ContentFrame.Content as Pages.PhotoboothTouchModernRefactored;
+                    if (refactoredPage != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Cleaning up PhotoboothTouchModernRefactored...");
+                        refactoredPage.Cleanup();
+                    }
+                }
+                
+                // Unsubscribe from system events
+                SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
+                
+                // Store device manager reference in App for cleanup
+                var deviceManager = Photobooth.Services.CameraSessionManager.Instance.DeviceManager;
+                if (deviceManager != null)
+                {
+                    App.DeviceManager = deviceManager;
+                }
+                
+                System.Diagnostics.Debug.WriteLine("SurfacePhotoBoothWindow cleanup completed");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error during window closing: {ex.Message}");
             }
         }
         

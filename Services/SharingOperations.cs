@@ -52,7 +52,7 @@ namespace Photobooth.Services
         {
             if (_cachedOfflineQueueService == null)
             {
-                _cachedOfflineQueueService = new OfflineQueueService();
+                _cachedOfflineQueueService = OfflineQueueService.Instance;
             }
             return _cachedOfflineQueueService;
         }

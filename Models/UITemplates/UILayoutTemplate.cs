@@ -131,7 +131,8 @@ namespace Photobooth.Models.UITemplates
                         ZIndex = -100,
                         Properties = new Dictionary<string, object>
                         {
-                            ["ImagePath"] = "Resources/Images/default-background.jpg",
+                            ["ImagePath"] = "",  // No default image
+                            ["BackgroundColor"] = "#1A1A2E",  // Dark purple background
                             ["StretchMode"] = "UniformToFill"
                         }
                     },
@@ -151,7 +152,7 @@ namespace Photobooth.Models.UITemplates
                         ZIndex = 10,
                         Properties = new Dictionary<string, object>
                         {
-                            ["ImagePath"] = "Resources/Images/logo.png",
+                            ["ImagePath"] = "",  // No default logo
                             ["PreserveAspectRatio"] = true
                         }
                     },
@@ -296,7 +297,8 @@ namespace Photobooth.Models.UITemplates
                         ZIndex = -100,
                         Properties = new Dictionary<string, object>
                         {
-                            ["ImagePath"] = "Resources/Images/default-background.jpg",
+                            ["ImagePath"] = "",  // No default image
+                            ["BackgroundColor"] = "#1A1A2E",  // Dark purple background
                             ["StretchMode"] = "UniformToFill"
                         }
                     },
@@ -316,7 +318,7 @@ namespace Photobooth.Models.UITemplates
                         ZIndex = 10,
                         Properties = new Dictionary<string, object>
                         {
-                            ["ImagePath"] = "Resources/Images/logo.png",
+                            ["ImagePath"] = "",  // No default logo
                             ["PreserveAspectRatio"] = true
                         }
                     },

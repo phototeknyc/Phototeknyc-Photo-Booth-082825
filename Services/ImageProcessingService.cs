@@ -143,9 +143,33 @@ namespace Photobooth.Services
                         {
                             try
                             {
-                                backgroundColor = ColorTranslator.FromHtml(template.BackgroundColor);
+                                // Parse WPF color format (e.g., #FFRRGGBB or #RRGGBB)
+                                var colorString = template.BackgroundColor;
+                                if (colorString.StartsWith("#") && colorString.Length == 9)
+                                {
+                                    // WPF format with alpha channel (#AARRGGBB)
+                                    var alpha = Convert.ToByte(colorString.Substring(1, 2), 16);
+                                    var red = Convert.ToByte(colorString.Substring(3, 2), 16);
+                                    var green = Convert.ToByte(colorString.Substring(5, 2), 16);
+                                    var blue = Convert.ToByte(colorString.Substring(7, 2), 16);
+                                    backgroundColor = Color.FromArgb(alpha, red, green, blue);
+                                }
+                                else if (colorString.StartsWith("#") && colorString.Length == 7)
+                                {
+                                    // Standard HTML format (#RRGGBB)
+                                    backgroundColor = ColorTranslator.FromHtml(colorString);
+                                }
+                                else
+                                {
+                                    // Try other formats (named colors, etc.)
+                                    backgroundColor = ColorTranslator.FromHtml(colorString);
+                                }
                             }
-                            catch { /* Use default white */ }
+                            catch 
+                            { 
+                                System.Diagnostics.Debug.WriteLine($"Could not parse background color: {template.BackgroundColor}");
+                                /* Use default white */
+                            }
                         }
                         graphics.Clear(backgroundColor);
 
