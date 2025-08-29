@@ -109,6 +109,16 @@ namespace Photobooth.Pages
         private DispatcherTimer _countdownTimer;
         private bool _isDisplayingCapturedPhoto = false; // Flag to prevent live view from overwriting captured photo
         private bool _isCapturing = false; // Flag to track if we're actively capturing a photo
+        private bool _isDisplayingSessionResult = false; // Flag to prevent live view from overwriting session result
+        
+        private void SetDisplayingSessionResult(bool value)
+        {
+            if (_isDisplayingSessionResult != value)
+            {
+                _isDisplayingSessionResult = value;
+                Log.Debug($"★★★ FLAG CHANGED: _isDisplayingSessionResult = {value}");
+            }
+        }
         private ShareResult _currentShareResult;
         
         // Event/Template state for UI display only
@@ -350,6 +360,7 @@ namespace Photobooth.Pages
                 _sessionService.SessionStarted += OnServiceSessionStarted;
                 _sessionService.PhotoProcessed += OnServicePhotoProcessed;
                 _sessionService.SessionCompleted += OnServiceSessionCompleted;
+                Log.Debug($"PhotoboothTouchModernRefactored: Subscribed to SessionCompleted event");
                 _sessionService.SessionError += OnServiceSessionError;
                 _sessionService.SessionCleared += OnServiceSessionCleared;
                 _sessionService.AutoClearTimerExpired += OnServiceAutoClearTimerExpired;
@@ -872,21 +883,31 @@ namespace Photobooth.Pages
         {
             await Dispatcher.InvokeAsync(async () =>
             {
+                Log.Debug($"★★★ OnServiceSessionCompleted CALLED - CompletedSession is {(e.CompletedSession != null ? "NOT NULL" : "NULL")}");
                 Log.Debug("Service session completed");
-                
                 if (e.CompletedSession != null)
                 {
+                    // STOP live view timer to prevent it from overwriting the composed image
+                    _liveViewTimer?.Stop();
+                    SetDisplayingSessionResult(true); // Set flag to prevent live view from restarting
+                    Log.Debug("Stopped live view timer - session complete, set _isDisplayingSessionResult = true");
+
                     // Display composed image in live view if available
                     if (!string.IsNullOrEmpty(e.CompletedSession.ComposedImagePath) && File.Exists(e.CompletedSession.ComposedImagePath))
                     {
-                        Log.Debug($"Displaying composed image: {e.CompletedSession.ComposedImagePath}");
+                        Log.Debug($"★★★ COMPOSED IMAGE PATH EXISTS: {e.CompletedSession.ComposedImagePath}");
+                        Log.Debug($"★★★ Calling _uiService.DisplayImage to show composed image");
                         _uiService.DisplayImage(e.CompletedSession.ComposedImagePath);
                         
                         // Add composed image thumbnail to strip
                         _uiService.AddPhotoThumbnail(e.CompletedSession.ComposedImagePath, -1);
                     }
+                    else
+                    {
+                        Log.Error($"★★★ NO COMPOSED IMAGE! Path: {e.CompletedSession.ComposedImagePath}, Exists: {(!string.IsNullOrEmpty(e.CompletedSession.ComposedImagePath) ? File.Exists(e.CompletedSession.ComposedImagePath).ToString() : "empty")}");
+                    }
                     
-                    // GIF/MP4 will be displayed via OnServiceAnimationReady when ready
+                    // MP4/GIF will be added as thumbnail via OnServiceAnimationReady when ready
                     Log.Debug("Session completed - composed image displayed, waiting for animation");
                     
                     // Show completion UI
@@ -1004,6 +1025,13 @@ namespace Photobooth.Pages
                         Log.Debug($"Display duration: {e.DisplayDuration} seconds");
                         Log.Debug($"Live view timer status: {(_liveViewTimer?.IsEnabled == true ? "RUNNING" : "STOPPED")}");
                         
+                        // Prevent individual photo display when session results are being shown
+                        if (_isDisplayingSessionResult)
+                        {
+                            Log.Debug("★★★ Prevented individual photo display during session results");
+                            return;
+                        }
+                        
                         // Set flag to prevent live view from overwriting the photo
                         _isDisplayingCapturedPhoto = true;
                         
@@ -1042,23 +1070,26 @@ namespace Photobooth.Pages
             Dispatcher.Invoke(() =>
             {
                 Log.Debug("=== PHOTO DISPLAY COMPLETED ===");
-                Log.Debug($"Starting live view timer to resume camera feed");
                 
                 // Clear the flag to allow live view to update again
                 _isDisplayingCapturedPhoto = false;
                 Log.Debug("Cleared _isDisplayingCapturedPhoto flag");
                 
-                // Don't clear the image - let the live view naturally replace it
-                // This ensures the photo stays visible for the full duration
-                // liveViewImage.Source = null; // REMOVED - causes photo to disappear early
-                
-                // Resume live view timer - it will update the image on next tick
-                _liveViewTimer?.Start();
-                
-                Log.Debug("Live view timer restarted - camera feed will replace photo on next tick");
+                // Only restart live view if we're NOT displaying session results
+                if (!_isDisplayingSessionResult)
+                {
+                    Log.Debug($"Starting live view timer to resume camera feed");
+                    // Resume live view timer - it will update the image on next tick
+                    _liveViewTimer?.Start();
+                    Log.Debug("Live view timer restarted - camera feed will replace photo on next tick");
+                }
+                else
+                {
+                    Log.Debug("★★★ NOT restarting live view - session results are being displayed");
+                }
                 
                 // The workflow service has already restarted camera live view
-                // Our timer will pick it up and display it
+                // Our timer will pick it up and display it (only if not showing session results)
             });
         }
         
@@ -1230,7 +1261,13 @@ namespace Photobooth.Pages
                     if (liveViewImage != null)
                     {
                         liveViewImage.Source = bitmap;
-                        Log.Debug($"Image displayed in live view: {e.ImagePath}");
+                        Log.Debug($"★★★ Image SET in live view: {e.ImagePath}");
+                        Log.Debug($"★★★ liveViewImage.Source is now: {liveViewImage.Source?.ToString() ?? "null"}");
+                        Log.Debug($"★★★ _isDisplayingSessionResult flag: {_isDisplayingSessionResult}");
+                    }
+                    else
+                    {
+                        Log.Error($"★★★ liveViewImage is NULL! Cannot display: {e.ImagePath}");
                     }
                 }
                 catch (Exception ex)
@@ -1391,19 +1428,60 @@ namespace Photobooth.Pages
         // The page now responds to service events instead of containing display logic
         
         // Helper method for displaying images from gallery
-        private void DisplayImage(string imagePath)
+        private void DisplayImage(string imagePath, bool isManualClick = false)
         {
             try
             {
                 if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
                 {
+                    // Only prevent automatic cycling, allow manual thumbnail clicks
+                    if (_isDisplayingSessionResult && !isManualClick)
+                    {
+                        Log.Debug($"★★★ Prevented individual photo display during session result: {imagePath}");
+                        return;
+                    }
+                    
+                    // Hide MediaElement if it exists and show Image control
+                    HideMediaElement();
+                    
                     _uiService.DisplayImage(imagePath);
-                    Log.Debug($"Displaying image: {imagePath}");
+                    Log.Debug($"Displaying image: {imagePath}{(isManualClick ? " (manual click)" : "")}");
                 }
             }
             catch (Exception ex)
             {
                 Log.Error($"Error displaying image: {ex.Message}");
+            }
+        }
+        
+        private void HideMediaElement()
+        {
+            try
+            {
+                // Show the Image control
+                if (liveViewImage != null)
+                {
+                    liveViewImage.Visibility = Visibility.Visible;
+                }
+                
+                // Hide and stop MediaElement if it exists
+                var parent = liveViewImage?.Parent as Grid;
+                if (parent != null)
+                {
+                    foreach (var child in parent.Children)
+                    {
+                        if (child is MediaElement mediaElement)
+                        {
+                            mediaElement.Stop();
+                            mediaElement.Visibility = Visibility.Collapsed;
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error hiding MediaElement: {ex.Message}");
             }
         }
         
@@ -1430,20 +1508,83 @@ namespace Photobooth.Pages
                 
                 if (isMP4)
                 {
-                    // For MP4 files, we need to use MediaElement or find a thumbnail
-                    // For now, show a placeholder or first frame if possible
-                    // WPF doesn't natively support MP4 in Image control
-                    Log.Debug("MP4 display requested - showing placeholder");
+                    // For MP4 files, use MediaElement to play the video
+                    Log.Debug($"MP4 display requested - playing video: {gifPath}");
                     
-                    // Try to get a thumbnail or show a placeholder
-                    var placeholderImage = new BitmapImage();
-                    placeholderImage.BeginInit();
-                    // Try to load first frame or use the file path as is
-                    placeholderImage.UriSource = new Uri(gifPath, UriKind.Absolute);
-                    placeholderImage.CacheOption = BitmapCacheOption.OnLoad;
-                    placeholderImage.EndInit();
+                    // Hide the Image control and show MediaElement instead
+                    if (liveViewImage != null)
+                    {
+                        liveViewImage.Visibility = Visibility.Collapsed;
+                    }
                     
-                    liveViewImage.Source = placeholderImage;
+                    // Check if we already have a MediaElement, if not create one
+                    var parent = liveViewImage?.Parent as Grid;
+                    if (parent != null)
+                    {
+                        // Look for existing MediaElement
+                        MediaElement mediaElement = null;
+                        foreach (var child in parent.Children)
+                        {
+                            if (child is MediaElement me)
+                            {
+                                mediaElement = me;
+                                break;
+                            }
+                        }
+                        
+                        // Create MediaElement if it doesn't exist
+                        if (mediaElement == null)
+                        {
+                            mediaElement = new MediaElement
+                            {
+                                Name = "videoPlayer",
+                                LoadedBehavior = MediaState.Manual,
+                                UnloadedBehavior = MediaState.Stop,
+                                Stretch = Stretch.Uniform,
+                                HorizontalAlignment = HorizontalAlignment.Center,
+                                VerticalAlignment = VerticalAlignment.Center
+                                // Note: AreTransportControlsEnabled is not available in WPF, only in UWP
+                                // We would need to create custom controls or use a third-party library
+                            };
+                            
+                            // Configure transport controls (available in WPF 4.5+)
+                            mediaElement.Volume = 0.5; // Set default volume to 50%
+                            mediaElement.IsMuted = false;
+                            
+                            // Add it to the same parent as liveViewImage
+                            parent.Children.Add(mediaElement);
+                            
+                            // Handle when video ends - loop it
+                            mediaElement.MediaEnded += (s, e) =>
+                            {
+                                mediaElement.Position = TimeSpan.Zero;
+                                mediaElement.Play();
+                            };
+                            
+                            // Add error handling
+                            mediaElement.MediaFailed += (s, e) =>
+                            {
+                                Log.Error($"Failed to play MP4: {e.ErrorException?.Message}");
+                                // Fall back to showing composed image
+                                HideMediaElement();
+                                if (_sessionService?.ComposedImagePath != null)
+                                {
+                                    DisplayImage(_sessionService.ComposedImagePath);
+                                }
+                            };
+                        }
+                        
+                        // Set the video source and play
+                        mediaElement.Visibility = Visibility.Visible;
+                        mediaElement.Source = new Uri(gifPath, UriKind.Absolute);
+                        mediaElement.Play();
+                        
+                        Log.Debug($"MP4 video playing in MediaElement");
+                    }
+                    else
+                    {
+                        Log.Error("Cannot find parent container for MediaElement");
+                    }
                     
                     // Show a message that MP4 is ready
                     _uiService.UpdateStatus("MP4 animation ready - Click Print or Share to use");
@@ -1538,7 +1679,7 @@ namespace Photobooth.Pages
                 // Add click handler to display composed image
                 border.MouseLeftButtonUp += (s, e) =>
                 {
-                    DisplayImage(composedPath);
+                    DisplayImage(composedPath, isManualClick: true);
                 };
                 
                 // Add to photo strip
@@ -1578,13 +1719,53 @@ namespace Photobooth.Pages
                     Margin = new Thickness(5)
                 };
                 
-                // Create thumbnail image (for MP4, we'll show first frame if possible)
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.UriSource = new Uri(gifPath);
-                bitmap.DecodePixelWidth = 150;
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.EndInit();
+                // Create thumbnail image 
+                BitmapImage bitmap = null;
+                
+                if (isMP4)
+                {
+                    // For MP4, use the first photo from the session as thumbnail
+                    Log.Debug($"★★★ MP4 detected, looking for first photo to use as thumbnail");
+                    if (_sessionService?.CapturedPhotoPaths?.Count > 0)
+                    {
+                        string firstPhotoPath = _sessionService.CapturedPhotoPaths[0];
+                        Log.Debug($"★★★ Using first photo as MP4 thumbnail: {firstPhotoPath}");
+                        if (File.Exists(firstPhotoPath))
+                        {
+                            bitmap = new BitmapImage();
+                            bitmap.BeginInit();
+                            bitmap.UriSource = new Uri(firstPhotoPath);
+                            bitmap.DecodePixelWidth = 150;
+                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                            bitmap.EndInit();
+                        }
+                        else
+                        {
+                            Log.Error($"★★★ First photo not found: {firstPhotoPath}");
+                        }
+                    }
+                    else
+                    {
+                        Log.Error($"★★★ No captured photos available for MP4 thumbnail");
+                    }
+                }
+                else
+                {
+                    // For GIF, show the GIF directly
+                    bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.UriSource = new Uri(gifPath);
+                    bitmap.DecodePixelWidth = 150;
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.EndInit();
+                }
+                
+                // Only create UI elements if we have a bitmap
+                if (bitmap == null)
+                {
+                    Log.Error($"★★★ Failed to create thumbnail for {labelText}");
+                    return;
+                }
                 
                 var image = new Image
                 {
@@ -1618,10 +1799,12 @@ namespace Photobooth.Pages
                     Cursor = Cursors.Hand
                 };
                 
-                // Add click handler to display GIF when clicked
+                // Add click handler to display GIF when clicked (MP4s are always clickable)
                 border.MouseLeftButtonUp += (s, e) =>
                 {
+                    // MP4s should always be playable regardless of session result display state
                     DisplayGifInLiveView(gifPath);
+                    Log.Debug($"★★★ MP4/GIF clicked - playing: {gifPath}");
                 };
                 
                 // Add to photo container
@@ -1649,6 +1832,11 @@ namespace Photobooth.Pages
             Dispatcher.Invoke(() =>
             {
                 Log.Debug("=== SESSION CLEARED - RESETTING FOR NEW SESSION ===");
+                
+                // Clear display flags
+                SetDisplayingSessionResult(false);
+                _isDisplayingCapturedPhoto = false;
+                Log.Debug("Display flags cleared - live view can resume");
                 
                 // Stop timers
                 _countdownTimer?.Stop();
@@ -1704,14 +1892,18 @@ namespace Photobooth.Pages
                 // Hide stop button when session is cleared
                 if (stopSessionButton != null) stopSessionButton.Visibility = Visibility.Collapsed;
                 
-                // Restart live view based on idle setting
+                // Restart live view based on idle setting (but not if displaying session results)
                 if (DeviceManager?.SelectedCameraDevice != null)
                 {
-                    if (Properties.Settings.Default.EnableIdleLiveView)
+                    if (Properties.Settings.Default.EnableIdleLiveView && !_isDisplayingSessionResult)
                     {
                         DeviceManager.SelectedCameraDevice.StartLiveView();
                         _liveViewTimer?.Start();
                         Log.Debug("Live view restarted after session clear (idle live view enabled)");
+                    }
+                    else if (_isDisplayingSessionResult)
+                    {
+                        Log.Debug("★★★ NOT restarting live view - session result is being displayed");
                     }
                     else
                     {
@@ -1767,13 +1959,13 @@ namespace Photobooth.Pages
                         string fileType = Path.GetExtension(e.AnimationPath).ToLower() == ".mp4" ? "MP4" : "GIF";
                         Log.Debug($"★★★ {fileType} ready, adding to UI: {e.AnimationPath}");
                         
-                        // Add to thumbnail strip
-                        Log.Debug($"★★★ Adding {fileType} thumbnail to strip...");
+                        // Add MP4/GIF to thumbnail strip ONLY (composed image stays in live view)
+                        Log.Debug($"★★★ Adding {fileType} thumbnail to strip (not displaying in live view)...");
                         _uiService.AddGifThumbnail(e.AnimationPath);
+                        Log.Debug($"★★★ Successfully called AddGifThumbnail for {fileType} at: {e.AnimationPath}");
                         
-                        // Display in live view immediately
-                        Log.Debug($"★★★ Displaying {fileType} in live view...");
-                        _uiService.DisplayGifInLiveView(e.AnimationPath);
+                        // DO NOT display MP4 in live view - composed image should remain visible
+                        // The composed image is already displayed in OnServiceSessionCompleted
                         
                         // Update status to show it's ready
                         _uiService.UpdateStatus($"{fileType} ready!");
@@ -1992,8 +2184,8 @@ namespace Photobooth.Pages
         {
             try
             {
-                // Don't update live view if we're displaying a captured photo
-                if (_isDisplayingCapturedPhoto)
+                // Don't update live view if we're displaying a captured photo or session is complete
+                if (_isDisplayingCapturedPhoto || _isDisplayingSessionResult)
                 {
                     return;
                 }
@@ -2513,6 +2705,10 @@ namespace Photobooth.Pages
         {
             try
             {
+                // Clear display flags when done
+                SetDisplayingSessionResult(false);
+                _isDisplayingCapturedPhoto = false;
+                
                 if (_isInGalleryMode)
                 {
                     // Done with gallery session - use existing gallery logic
@@ -2786,7 +2982,7 @@ namespace Photobooth.Pages
                     Cursor = Cursors.Hand
                 };
                 
-                image.MouseLeftButtonDown += (s, e) => DisplayImage(imagePath);
+                image.MouseLeftButtonDown += (s, e) => DisplayImage(imagePath, isManualClick: true);
                 
                 var border = new Border
                 {
@@ -2822,9 +3018,17 @@ namespace Photobooth.Pages
             // Legacy UI updates for elements not yet in service
             photosContainer.Children.Clear();
             
-            // Restart live view
-            DeviceManager?.SelectedCameraDevice?.StartLiveView();
-            _liveViewTimer.Start();
+            // Restart live view (but not if displaying session results)
+            if (!_isDisplayingSessionResult)
+            {
+                DeviceManager?.SelectedCameraDevice?.StartLiveView();
+                _liveViewTimer.Start();
+                Log.Debug("Live view restarted in ResetForNewSession");
+            }
+            else
+            {
+                Log.Debug("★★★ NOT restarting live view in ResetForNewSession - session result displayed");
+            }
         }
 
         private void LoadExistingSession(PhotoSessionData session)
