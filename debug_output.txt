@@ -1,0 +1,785 @@
+[DEBUG] Initializing clean services architecture...
+[DEBUG] ===== PhotoboothWorkflowService INITIALIZED =====
+[DEBUG] Camera manager: Available
+[DEBUG] Session service: Available
+[DEBUG] Camera capture handler: SET
+[DEBUG] SharingUIService: Initialized with parent container type: Grid
+[DEBUG] PhotoboothQueueService: Database initialized successfully
+[DEBUG] PhotoboothQueueService: Initialized with clean architecture pattern
+[DEBUG] PhotoboothTouchModernRefactored: Subscribed to SessionCompleted event
+[DEBUG] Service event handlers wired up
+[DEBUG] Clean services architecture initialized successfully
+[ERROR] Wia initialized
+[DEBUG] New canon camera found !
+[DEBUG] Pas 1
+[DEBUG] Pas 2
+[DEBUG] Error get EC
+[DEBUG] Exception: Canon.Eos.Framework.EosPropertyException: Properties Unavailable.
+Failed to get property integer data: propertyId 1032
+   at Canon.Eos.Framework.EosCamera.OnError(Exception exception) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\Canon.Eos.Framework\EosCamera.cs:line 417
+   at Canon.Eos.Framework.EosCamera.ExecuteGetter[TResult](Func`1 function) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\Canon.Eos.Framework\EosCamera.cs:line 352
+   at Canon.Eos.Framework.EosObject.GetPropertyIntegerData(UInt32 propertyId) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\Canon.Eos.Framework\EosObject.cs:line 193
+   at Canon.Eos.Framework.EosCamera.GetProperty(UInt32 propertyId) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\Canon.Eos.Framework\EosCamera.cs:line 458
+   at CameraControl.Devices.Canon.CanonSDKBase.InitFlahEc() in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\CameraControl.Devices\Canon\CanonSDKBase.cs:line 503
+[ERROR] Error initialize EOS camera object 
+[ERROR] Exception: Canon.Eos.Framework.EosPropertyException: Properties Unavailable.
+Failed to get property integer data: propertyId 1032
+   at Canon.Eos.Framework.EosCamera.OnError(Exception exception) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\Canon.Eos.Framework\EosCamera.cs:line 417
+   at Canon.Eos.Framework.EosCamera.ExecuteGetter[TResult](Func`1 function) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\Canon.Eos.Framework\EosCamera.cs:line 352
+   at Canon.Eos.Framework.EosObject.GetPropertyIntegerData(UInt32 propertyId) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\Canon.Eos.Framework\EosObject.cs:line 193
+   at Canon.Eos.Framework.EosCamera.GetProperty(UInt32 propertyId) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\Canon.Eos.Framework\EosCamera.cs:line 458
+   at CameraControl.Devices.Canon.CanonSDKBase.AddAditionalProps() in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\CameraControl.Devices\Canon\CanonSDKBase.cs:line 469
+   at CameraControl.Devices.Canon.CanonSDKBase.LoadProperties() in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\CameraControl.Devices\Canon\CanonSDKBase.cs:line 443
+   at CameraControl.Devices.Canon.CanonSDKBase.Init(EosCamera camera) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\CameraControl.Devices\Canon\CanonSDKBase.cs:line 391
+[DEBUG] Pas 3
+[DEBUG] Pas 4
+[DEBUG] Pas 5
+[DEBUG] ===========Camera is connected==============
+[DEBUG] USB : VID=04a9, PID=32b4
+[DEBUG] Driver :CanonSDKBase
+[DEBUG] Name :Canon EOS Rebel T6
+[DEBUG] Manufacturer :Canon Inc.
+[DEBUG] New canon camera found done!
+[DEBUG] Sony USB: Initializing Sony SDK...
+[DEBUG] Sony SDK version: 2.0.00
+[DEBUG] Sony USB: SDK initialized successfully
+[DEBUG] Sony USB: Attempting direct FX3 camera creation...
+[DEBUG] Sony USB: DEBUG - About to call GetSonyUSBSerialNumbers()
+[DEBUG] Sony USB: Starting USB device detection...
+[DEBUG] Sony USB: Creating WMI searcher...
+[DEBUG] Sony USB: Executing WMI query...
+[DEBUG] Sony USB: WMI query returned 2 devices
+[DEBUG] Sony USB: Processing device: HID-compliant device - HID\VID_054C&PID_0D68\7&161B3C8D&0&0000
+[DEBUG] Sony USB: Found Sony device: HID-compliant device - HID\VID_054C&PID_0D68\7&161B3C8D&0&0000
+[DEBUG] Sony USB: Device ID parts: HID | VID_054C&PID_0D68 | 7&161B3C8D&0&0000
+[DEBUG] Sony USB: Serial part: '7&161B3C8D&0&0000'
+[DEBUG] Sony USB: Skipping serial part (contains & or empty): '7&161B3C8D&0&0000'
+[DEBUG] Sony USB: Processing device: USB Input Device - USB\VID_054C&PID_0D68\6&1D7CB94B&0&7
+[DEBUG] Sony USB: Found Sony device: USB Input Device - USB\VID_054C&PID_0D68\6&1D7CB94B&0&7
+[DEBUG] Sony USB: Device ID parts: USB | VID_054C&PID_0D68 | 6&1D7CB94B&0&7
+[DEBUG] Sony USB: Serial part: '6&1D7CB94B&0&7'
+[DEBUG] Sony USB: Skipping serial part (contains & or empty): '6&1D7CB94B&0&7'
+[DEBUG] Sony USB: USB detection completed. Found 0 serial numbers total
+[DEBUG] Sony USB: DEBUG - GetSonyUSBSerialNumbers() returned
+[DEBUG] Sony USB: Found 0 Sony USB devices
+[DEBUG] Sony USB: No Sony devices detected via USB enumeration
+[DEBUG] Connection device start
+[DEBUG] Sony USB: Attempting direct FX3 camera creation...
+[DEBUG] Sony USB: DEBUG - About to call GetSonyUSBSerialNumbers()
+[DEBUG] Sony USB: Starting USB device detection...
+[DEBUG] Sony USB: Creating WMI searcher...
+[DEBUG] Sony USB: Executing WMI query...
+[DEBUG] Sony USB: WMI query returned 2 devices
+[DEBUG] Sony USB: Processing device: HID-compliant device - HID\VID_054C&PID_0D68\7&161B3C8D&0&0000
+[DEBUG] Sony USB: Found Sony device: HID-compliant device - HID\VID_054C&PID_0D68\7&161B3C8D&0&0000
+[DEBUG] Sony USB: Device ID parts: HID | VID_054C&PID_0D68 | 7&161B3C8D&0&0000
+[DEBUG] Sony USB: Serial part: '7&161B3C8D&0&0000'
+[DEBUG] Sony USB: Skipping serial part (contains & or empty): '7&161B3C8D&0&0000'
+[DEBUG] Sony USB: Processing device: USB Input Device - USB\VID_054C&PID_0D68\6&1D7CB94B&0&7
+[DEBUG] Sony USB: Found Sony device: USB Input Device - USB\VID_054C&PID_0D68\6&1D7CB94B&0&7
+[DEBUG] Sony USB: Device ID parts: USB | VID_054C&PID_0D68 | 6&1D7CB94B&0&7
+[DEBUG] Sony USB: Serial part: '6&1D7CB94B&0&7'
+[DEBUG] Sony USB: Skipping serial part (contains & or empty): '6&1D7CB94B&0&7'
+[DEBUG] Sony USB: USB detection completed. Found 0 serial numbers total
+[DEBUG] Sony USB: DEBUG - GetSonyUSBSerialNumbers() returned
+[DEBUG] Sony USB: Found 0 Sony USB devices
+[DEBUG] Sony USB: No Sony devices detected via USB enumeration
+[DEBUG] Connection device \\?\usb#vid_04a9&pid_32b4#7&fe211d9&0&2#{6ac27878-a6fa-4155-ba85-f98f491d4f33}
+[DEBUG] Connection device \\?\swd#wpdbusenum#{1c7aedf9-7a35-11f0-8f10-010101010000}#0000000000100000#{6ac27878-a6fa-4155-ba85-f98f491d4f33}
+[DEBUG] PhotoboothTouchModernViewModel: Photographer mode disabled or DeviceManager null. Mode=False, DeviceManager=True
+[DEBUG] Sony USB: Attempting direct FX3 camera creation...
+[DEBUG] Sony USB: DEBUG - About to call GetSonyUSBSerialNumbers()
+[DEBUG] Sony USB: Starting USB device detection...
+[DEBUG] Sony USB: Creating WMI searcher...
+[DEBUG] Sony USB: Executing WMI query...
+[DEBUG] Sony USB: WMI query returned 2 devices
+[DEBUG] Sony USB: Processing device: HID-compliant device - HID\VID_054C&PID_0D68\7&161B3C8D&0&0000
+[DEBUG] Sony USB: Found Sony device: HID-compliant device - HID\VID_054C&PID_0D68\7&161B3C8D&0&0000
+[DEBUG] Sony USB: Device ID parts: HID | VID_054C&PID_0D68 | 7&161B3C8D&0&0000
+[DEBUG] Sony USB: Serial part: '7&161B3C8D&0&0000'
+[DEBUG] Sony USB: Skipping serial part (contains & or empty): '7&161B3C8D&0&0000'
+[DEBUG] Sony USB: Processing device: USB Input Device - USB\VID_054C&PID_0D68\6&1D7CB94B&0&7
+[DEBUG] Sony USB: Found Sony device: USB Input Device - USB\VID_054C&PID_0D68\6&1D7CB94B&0&7
+[DEBUG] Sony USB: Device ID parts: USB | VID_054C&PID_0D68 | 6&1D7CB94B&0&7
+[DEBUG] Sony USB: Serial part: '6&1D7CB94B&0&7'
+[DEBUG] Sony USB: Skipping serial part (contains & or empty): '6&1D7CB94B&0&7'
+[DEBUG] Sony USB: USB detection completed. Found 0 serial numbers total
+[DEBUG] Sony USB: DEBUG - GetSonyUSBSerialNumbers() returned
+[DEBUG] Sony USB: Found 0 Sony USB devices
+[DEBUG] Sony USB: No Sony devices detected via USB enumeration
+[DEBUG] Connection device start
+[DEBUG] Sony USB: Attempting direct FX3 camera creation...
+[DEBUG] Sony USB: DEBUG - About to call GetSonyUSBSerialNumbers()
+[DEBUG] Sony USB: Starting USB device detection...
+[DEBUG] Sony USB: Creating WMI searcher...
+[DEBUG] Sony USB: Executing WMI query...
+[DEBUG] Sony USB: WMI query returned 2 devices
+[DEBUG] Sony USB: Processing device: HID-compliant device - HID\VID_054C&PID_0D68\7&161B3C8D&0&0000
+[DEBUG] Sony USB: Found Sony device: HID-compliant device - HID\VID_054C&PID_0D68\7&161B3C8D&0&0000
+[DEBUG] Sony USB: Device ID parts: HID | VID_054C&PID_0D68 | 7&161B3C8D&0&0000
+[DEBUG] Sony USB: Serial part: '7&161B3C8D&0&0000'
+[DEBUG] Sony USB: Skipping serial part (contains & or empty): '7&161B3C8D&0&0000'
+[DEBUG] Sony USB: Processing device: USB Input Device - USB\VID_054C&PID_0D68\6&1D7CB94B&0&7
+[DEBUG] Sony USB: Found Sony device: USB Input Device - USB\VID_054C&PID_0D68\6&1D7CB94B&0&7
+[DEBUG] Sony USB: Device ID parts: USB | VID_054C&PID_0D68 | 6&1D7CB94B&0&7
+[DEBUG] Sony USB: Serial part: '6&1D7CB94B&0&7'
+[DEBUG] Sony USB: Skipping serial part (contains & or empty): '6&1D7CB94B&0&7'
+[DEBUG] Sony USB: USB detection completed. Found 0 serial numbers total
+[DEBUG] Sony USB: DEBUG - GetSonyUSBSerialNumbers() returned
+[DEBUG] Sony USB: Found 0 Sony USB devices
+[DEBUG] Sony USB: No Sony devices detected via USB enumeration
+[DEBUG] PhotoboothUIService: Updating camera status - Connected: Canon EOS Rebel T6
+[DEBUG] PhotoboothUIService: Updating status - Connected: Canon EOS Rebel T6
+[DEBUG] InitializeCamera: Idle live view disabled, not starting
+[DEBUG] SetupEventHandlers: Subscribed to camera events (except PhotoCaptured - handled by workflow)
+[DEBUG] LoadInitialEventTemplate: Starting event/template loading
+[DEBUG] LoadInitialEventTemplate: CurrentEvent = null
+[DEBUG] LoadInitialEventTemplate: CurrentTemplate = null
+[DEBUG] LoadInitialEventTemplate: No current event or template, showing event selection
+[DEBUG] ShowEventSelectionOverlay: Loading available events
+[DEBUG] EventTemplateService: Loaded 1 active events
+[DEBUG] ShowEventSelectionOverlay: Found 1 events
+[DEBUG] ShowEventSelectionOverlay: Showing event selection UI
+[DEBUG] PhotoboothUIService: Updating camera status - Connected: Connected
+[DEBUG] PhotoboothUIService: Updating status - Connected: Connected
+[DEBUG] PhotoboothUIService: Showing start button
+[DEBUG] Connection device \\?\usb#vid_04a9&pid_32b4#7&fe211d9&0&2#{6ac27878-a6fa-4155-ba85-f98f491d4f33}
+[ERROR] Unable to connect to cameras 
+[ERROR] Exception: System.ArgumentNullException: Value cannot be null.
+Parameter name: id
+   at PortableDeviceLib.PortableDeviceCollection.GetPortableDeviceById(String id) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\PortableDeviceLib\PortableDeviceCollection.cs:line 135
+   at PortableDeviceLib.PortableDeviceCollection.<get_Devices>d__17.MoveNext() in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\PortableDeviceLib\PortableDeviceCollection.cs:line 108
+   at CameraControl.Devices.CameraDeviceManager.ConnectDevices() in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\CameraControl.Devices\CameraDeviceManager.cs:line 640
+[DEBUG] EventItem_Click: Selected event '082825' (ID: 1)
+[DEBUG] EventTemplateService: Loaded 1 templates for event 1
+[DEBUG] EventTemplateService: Selected event 082825
+[DEBUG] EventItem_Click: Initializing template selection for event ID 1
+[DEBUG] TemplateSelectionService.InitializeForEvent: Starting initialization for event: 082825 (ID: 1)
+[DEBUG] TemplateSelectionService: Loaded 1 templates for event 1
+[DEBUG]   - Template: '082825 Template' (ID: 1, Size: 600x1800)
+[DEBUG]     Canvas items: 2 - Placeholder, Placeholder
+[DEBUG] TemplateSelectionService: Initialized for event '082825' with 1 templates
+[DEBUG]   HasMultipleTemplates: False, HasSingleTemplate: True, HasNoTemplates: False
+[DEBUG] TemplateSelectionService: Single template available - auto-selecting
+[DEBUG] TemplateSelectionService: Selected template '082825 Template'
+[DEBUG] Template selection overlay hidden
+[DEBUG] TemplateSelectionUIService: Template selection hidden
+[DEBUG] PhotoboothUIService: Updating status - 082825 - 082825 Template
+[DEBUG] Single template selected: '082825 Template'. Showing start button for user interaction.
+[DEBUG] === STARTING PHOTO SESSION USING CLEAN SERVICES ===
+[DEBUG] PhotoboothSessionService: Template aspect ratio: 0.333, Is2x6: True
+[DEBUG] DatabaseOperations: Created session 6 with GUID a01e3ed6-bb71-4d8e-94da-087672abdf51
+[DEBUG] ??? Session marked as active - SessionId: a01e3ed6-bb71-4d8e-94da-087672abdf51, _isSessionActive: True
+[DEBUG] Service session started: a01e3ed6-bb71-4d8e-94da-087672abdf51
+[DEBUG] PhotoboothUIService: Updating status - Session started for 082825
+[DEBUG] PhotoboothUIService: Showing session controls
+[DEBUG] PhotoboothUIService: Hiding start button
+[DEBUG] Start button hidden - session in progress
+[DEBUG] Live view started for photo session
+[DEBUG] PhotoboothSessionService: Session started - ID: a01e3ed6-bb71-4d8e-94da-087672abdf51, Photos: 2
+[DEBUG] ===== STARTING PHOTO CAPTURE WORKFLOW =====
+[DEBUG] PhotoboothWorkflowService: Camera = Canon EOS Rebel T6, Connected = True
+[DEBUG] PhotoboothWorkflowService: Session Active = True
+[DEBUG] PhotoboothWorkflowService: Ensuring camera event subscription...
+[DEBUG] PhotoboothWorkflowService: Ensured camera PhotoCaptured event subscription
+[DEBUG] PhotoboothUIService: Updating status - Preparing capture...
+[DEBUG] PhotoboothWorkflowService: Starting countdown from 5
+[DEBUG] Service countdown started: 5
+[DEBUG] PhotoboothUIService: Showing countdown - 5
+[DEBUG] Stop button shown - countdown in progress
+[DEBUG] PhotoboothUIService: Showing countdown - 4
+[DEBUG] PhotoboothUIService: Showing countdown - 3
+[DEBUG] PhotoboothUIService: Showing countdown - 2
+[DEBUG] PhotoboothUIService: Showing countdown - 1
+[DEBUG] Service countdown completed
+[DEBUG] PhotoboothUIService: Hiding countdown
+[DEBUG] Stop button hidden - countdown completed
+[DEBUG] PhotoboothWorkflowService: Executing photo capture
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='801cd120-3fdf-45c1-ad39-6c9965a0fc2d', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 801cd120-3fdf-45c1-ad39-6c9965a0fc2d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='89c35694-3c08-4948-987b-d1c14fd95ddd', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 89c35694-3c08-4948-987b-d1c14fd95ddd
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='0f18adbb-54ee-40ee-a3b5-fd0a9a4746fe', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 0f18adbb-54ee-40ee-a3b5-fd0a9a4746fe
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='a693f9e4-66fb-475d-8fb0-71ea207cd8c4', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: a693f9e4-66fb-475d-8fb0-71ea207cd8c4
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='4ce16a50-8e53-40dd-84dd-d031c7b4015a', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 4ce16a50-8e53-40dd-84dd-d031c7b4015a
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='aade6450-19b1-47ad-ad11-93d8389cd206', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: aade6450-19b1-47ad-ad11-93d8389cd206
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='e1d5afd4-6dfb-4a58-89d2-555bb87b8079', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: e1d5afd4-6dfb-4a58-89d2-555bb87b8079
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='991f5cf6-2a5c-4e9a-886c-1af1b01e00c9', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 991f5cf6-2a5c-4e9a-886c-1af1b01e00c9
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='40733ca6-97eb-4d6c-9d1a-880d059395dd', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 40733ca6-97eb-4d6c-9d1a-880d059395dd
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='4126298a-1aed-4e85-8089-36b55995f320', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 4126298a-1aed-4e85-8089-36b55995f320
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='20320647-abfc-4e52-8515-ef20a409392a', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 20320647-abfc-4e52-8515-ef20a409392a
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='038e3266-7252-4436-8d74-6885d0f148be', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 038e3266-7252-4436-8d74-6885d0f148be
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='96581bf2-1ed4-4346-a750-d159308b6903', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 96581bf2-1ed4-4346-a750-d159308b6903
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='aee4131b-685c-4f57-927c-fc6e696acc29', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: aee4131b-685c-4f57-927c-fc6e696acc29
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='280b15c9-4e65-42b2-99c7-2fc4b54ec822', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 280b15c9-4e65-42b2-99c7-2fc4b54ec822
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='ef4bac4a-a600-45c6-9d70-605422b9d07d', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: ef4bac4a-a600-45c6-9d70-605422b9d07d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='db3d62c4-ab59-4f73-ac9a-c807c478f041', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: db3d62c4-ab59-4f73-ac9a-c807c478f041
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='f7e18dc0-07b0-45f9-b8a7-27a9101d648f', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: f7e18dc0-07b0-45f9-b8a7-27a9101d648f
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='77efec9e-5585-4a50-892c-80e76488ed2d', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 77efec9e-5585-4a50-892c-80e76488ed2d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='a3f92574-de37-4a84-b8d0-ee1041ccac15', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: a3f92574-de37-4a84-b8d0-ee1041ccac15
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='d40e1091-cee5-4ac9-83a6-4d0dceab2f26', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: d40e1091-cee5-4ac9-83a6-4d0dceab2f26
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] Service capture started: Photo 1 of 2
+[DEBUG] Live view timer stopped for capture
+[DEBUG] PhotoboothUIService: Updating status - Capturing...
+[DEBUG] PhotoboothUIService: Updating status - Capturing...
+[DEBUG] PhotoboothWorkflowService: About to call camera.CapturePhoto()
+[DEBUG] PhotoboothWorkflowService: Camera event handler is: SET
+[DEBUG] EOS capture start
+[DEBUG] EOS capture end
+[DEBUG] PhotoboothWorkflowService: Photo capture initiated for photo 1
+Canon event 520
+[DEBUG] Picture taken event received typeCanon.Eos.Framework.Eventing.EosMemoryImageEventArgs
+[DEBUG] ===== CAMERA PHOTO CAPTURED EVENT FIRED =====
+[DEBUG] PhotoboothWorkflowService: Photo captured by camera - File: IMG_0001.JPG
+[DEBUG] PhotoboothWorkflowService: File exists: False
+[DEBUG] ===== WORKFLOW: OnCaptureCompleted CALLED =====
+[DEBUG] PhotoboothWorkflowService: Photo capture completed - File: IMG_0001.JPG
+[DEBUG] PhotoboothWorkflowService: File exists: False
+[DEBUG] Service capture completed: IMG_0001.JPG
+[DEBUG] PhotoboothUIService: Updating status - Processing photo...
+[DEBUG] ??? PhotoboothWorkflowService: About to call ProcessCapturedPhotoAsync ???
+[DEBUG]   Photo path: IMG_0001.JPG
+[DEBUG]   File exists: False
+[DEBUG] PhotoboothSessionService: Processing photo 1 of 2
+[DEBUG] PhotoCaptureService: Generated event-based path C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_0.JPG
+[DEBUG] PhotoCaptureService: Starting transfer to C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_0.JPG
+[DEBUG] PhotoCaptureService: EventArgs - Handle=2396559095888, FileName=IMG_0001.JPG
+[DEBUG] PhotoCaptureService: CameraDevice=CanonSDKBase
+[DEBUG] Pointer file transfer started
+[DEBUG] Camera.PauseLiveview();
+[DEBUG] TransportAsFileName
+[DEBUG] TransportAsFileName DONE
+[DEBUG] Camera.ResumeLiveview(); DONE
+[DEBUG] PhotoCaptureService: Transfer completed - File size: 1714563 bytes
+[DEBUG] PhotoCaptureService: Camera resources released
+[DEBUG] PhotoCaptureService: Added photo 1 to list
+[DEBUG] DatabaseOperations: Saved photo 8 to session 6
+[DEBUG] PhotoboothWorkflowService: Photo 1 of 2 processed
+[DEBUG] PhotoboothUIService: Updating status - Photo 1 captured! Get ready for photo 2...
+[DEBUG] PhotoboothSessionService: Photo 1 processed successfully
+[DEBUG] ??? PhotoboothWorkflowService: Photo processed successfully ???
+[DEBUG] PhotoboothWorkflowService: Using processed photo path for display: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_0.JPG
+[DEBUG] PhotoboothWorkflowService: Cleared _isCapturing flag
+[DEBUG] PhotoboothWorkflowService: Calling DisplayCapturedPhotoAsync with processed path: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_0.JPG
+[DEBUG] PhotoboothWorkflowService: Requesting photo display for 4 seconds
+[DEBUG] Current time: 17:53:14.501
+[DEBUG] Service photo processed: 1 of 2
+[DEBUG] PhotoboothUIService: Adding photo thumbnail - C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_0.JPG (suppressEvents: False)
+[DEBUG] ??? OnServiceThumbnailRequested: Type=Photo, Path=C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_0.JPG
+[DEBUG] ??? Adding regular photo thumbnail via event: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_0.JPG
+[DEBUG] AddPhotoThumbnail: Adding thumbnail for C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_0.JPG
+[DEBUG] AddPhotoThumbnail: Successfully added thumbnail. Container now has 1 children
+[DEBUG] AddPhotoThumbnail: photosContainer visibility=Visible, parent visibility=Visible
+[DEBUG] PhotoboothUIService: Updating photo counter - 1 / 2
+[DEBUG] PhotoboothUIService: Updating status - Photo 1 captured! Get ready for photo 2...
+[DEBUG] Waiting 4 seconds before next photo
+[DEBUG] Camera live view stopped
+[DEBUG] === PHOTO DISPLAY REQUESTED ===
+[DEBUG] Photo path: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_0.JPG
+[DEBUG] Display duration: 4 seconds
+[DEBUG] Live view timer status: STOPPED
+[DEBUG] Photo displayed successfully, should remain visible for 4 seconds
+[DEBUG] Set _isDisplayingCapturedPhoto flag to true
+[DEBUG] PhotoDisplayRequested event fired at 17:53:14.801
+[DEBUG] Starting 4 second wait...
+[DEBUG] Starting capture workflow for photo 2 of 2
+[DEBUG] ===== STARTING PHOTO CAPTURE WORKFLOW =====
+[DEBUG] PhotoboothWorkflowService: Camera = Canon EOS Rebel T6, Connected = True
+[DEBUG] PhotoboothWorkflowService: Session Active = True
+[DEBUG] PhotoboothWorkflowService: Ensuring camera event subscription...
+[DEBUG] PhotoboothWorkflowService: Ensured camera PhotoCaptured event subscription
+[DEBUG] PhotoboothUIService: Updating status - Preparing capture...
+[DEBUG] PhotoboothWorkflowService: Starting countdown from 5
+[DEBUG] Service countdown started: 5
+[DEBUG] PhotoboothUIService: Showing countdown - 5
+[DEBUG] Stop button shown - countdown in progress
+[DEBUG] Wait complete at 17:53:18.802
+[DEBUG] === PHOTO DISPLAY COMPLETED ===
+[DEBUG] Starting live view timer to resume camera feed
+[DEBUG] Cleared _isDisplayingCapturedPhoto flag
+[DEBUG] Live view timer restarted - camera feed will replace photo on next tick
+[DEBUG] PhotoDisplayCompleted event fired
+[DEBUG] Camera live view restarted
+[DEBUG] PhotoboothWorkflowService: More photos needed (1 of 2)
+[DEBUG] PhotoboothWorkflowService: Starting next photo capture
+[DEBUG] PhotoboothUIService: Updating status - Preparing for photo 2 of 2...
+[DEBUG] PhotoboothUIService: Showing countdown - 4
+[DEBUG] PhotoboothWorkflowService: Capture already in progress
+[DEBUG] PhotoboothWorkflowService: DisplayCapturedPhotoAsync completed
+[DEBUG] PhotoboothWorkflowService: Live view will resume after photo display completes
+[DEBUG] PhotoboothUIService: Showing countdown - 3
+[DEBUG] PhotoboothUIService: Showing countdown - 2
+[DEBUG] PhotoboothUIService: Showing countdown - 1
+[DEBUG] Service countdown completed
+[DEBUG] PhotoboothUIService: Hiding countdown
+[DEBUG] Stop button hidden - countdown completed
+[DEBUG] PhotoboothWorkflowService: Executing photo capture
+[DEBUG] Service capture started: Photo 2 of 2
+[DEBUG] Live view timer stopped for capture
+[DEBUG] PhotoboothUIService: Updating status - Capturing...
+[DEBUG] PhotoboothUIService: Updating status - Capturing...
+[DEBUG] PhotoboothWorkflowService: About to call camera.CapturePhoto()
+[DEBUG] PhotoboothWorkflowService: Camera event handler is: SET
+[DEBUG] EOS capture start
+[DEBUG] EOS capture end
+[DEBUG] PhotoboothWorkflowService: Photo capture initiated for photo 2
+Canon event 520
+[DEBUG] Picture taken event received typeCanon.Eos.Framework.Eventing.EosMemoryImageEventArgs
+[DEBUG] ===== CAMERA PHOTO CAPTURED EVENT FIRED =====
+[DEBUG] PhotoboothWorkflowService: Photo captured by camera - File: IMG_0002.JPG
+[DEBUG] PhotoboothWorkflowService: File exists: False
+[DEBUG] ===== WORKFLOW: OnCaptureCompleted CALLED =====
+[DEBUG] PhotoboothWorkflowService: Photo capture completed - File: IMG_0002.JPG
+[DEBUG] PhotoboothWorkflowService: File exists: False
+[DEBUG] Service capture completed: IMG_0002.JPG
+[DEBUG] PhotoboothUIService: Updating status - Processing photo...
+[DEBUG] ??? PhotoboothWorkflowService: About to call ProcessCapturedPhotoAsync ???
+[DEBUG]   Photo path: IMG_0002.JPG
+[DEBUG]   File exists: False
+[DEBUG] PhotoboothSessionService: Processing photo 2 of 2
+[DEBUG] PhotoCaptureService: Generated event-based path C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0002_1.JPG
+[DEBUG] PhotoCaptureService: Starting transfer to C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0002_1.JPG
+[DEBUG] PhotoCaptureService: EventArgs - Handle=2396559089936, FileName=IMG_0002.JPG
+[DEBUG] PhotoCaptureService: CameraDevice=CanonSDKBase
+[DEBUG] Pointer file transfer started
+[DEBUG] Camera.PauseLiveview();
+[DEBUG] TransportAsFileName
+[DEBUG] TransportAsFileName DONE
+[DEBUG] Camera.ResumeLiveview(); DONE
+[DEBUG] PhotoCaptureService: Transfer completed - File size: 1700515 bytes
+[DEBUG] PhotoCaptureService: Camera resources released
+[DEBUG] PhotoCaptureService: Added photo 2 to list
+[DEBUG] DatabaseOperations: Saved photo 9 to session 6
+[DEBUG] PhotoboothWorkflowService: Photo 2 of 2 processed
+[DEBUG] PhotoboothUIService: Updating status - All photos captured! Processing...
+[DEBUG] PhotoboothSessionService: Photo 2 processed successfully
+[DEBUG] ??? SESSION PHOTOS COMPLETE: Starting ProcessSessionPhotosAsync ???
+[DEBUG]   Photo index: 2, Total required: 2
+[DEBUG] Service photo processed: 2 of 2
+[DEBUG] PhotoboothUIService: Adding photo thumbnail - C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0002_1.JPG (suppressEvents: False)
+[DEBUG] ??? OnServiceThumbnailRequested: Type=Photo, Path=C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0002_1.JPG
+[DEBUG] ??? Adding regular photo thumbnail via event: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0002_1.JPG
+[DEBUG] AddPhotoThumbnail: Adding thumbnail for C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0002_1.JPG
+[DEBUG] PhotoboothSessionService: Processing session photos
+[DEBUG] ??? PhotoboothSessionService: Starting animated GIF/MP4 generation in background. Captured photos count: 2
+[DEBUG] ??? EnableGifGeneration setting: True
+[DEBUG] PhotoboothSessionService: Template composition will be handled by the page
+[DEBUG] PhotoboothSessionService: All photos captured, waiting for composition before completing
+[DEBUG] ??? PhotoboothWorkflowService: Photo processed successfully ???
+[DEBUG] PhotoboothWorkflowService: Using processed photo path for display: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0002_1.JPG
+[DEBUG] PhotoboothWorkflowService: Cleared _isCapturing flag
+[DEBUG] PhotoboothWorkflowService: Calling DisplayCapturedPhotoAsync with processed path: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0002_1.JPG
+[DEBUG] PhotoboothWorkflowService: Requesting photo display for 4 seconds
+[DEBUG] Current time: 17:53:25.055
+[DEBUG] ??? Background task started for animation generation
+[DEBUG] PhotoboothSessionService: Attempting MP4 generation
+[DEBUG] AddPhotoThumbnail: Successfully added thumbnail. Container now has 2 children
+[DEBUG] AddPhotoThumbnail: photosContainer visibility=Visible, parent visibility=Visible
+[DEBUG] PhotoboothUIService: Updating photo counter - 2 / 2
+[DEBUG] All photos captured, composing template before completing session
+[DEBUG] PhotoboothUIService: Updating status - Processing your photos...
+[DEBUG] Animation generation started in background - UI will update when ready
+[DEBUG] PhotoboothUIService: Updating status - Composing final image...
+[DEBUG] Composition started for session a01e3ed6-bb71-4d8e-94da-087672abdf51
+[DEBUG] PhotoboothUIService: Updating status - Composing 082825 Template...
+[DEBUG] ComposeTemplateWithPhotos: Starting composition with 2 photos
+[DEBUG] ComposeTemplateWithPhotos: Template ID=1, Name=082825 Template
+[DEBUG] ComposeTemplateWithPhotos: Processing 2 canvas items
+[DEBUG] Drawing item - Type=Placeholder, Name=Placeholder 1, ZIndex=0
+[DEBUG] Inserting photo into placeholder 1 from C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_0.JPG
+[DEBUG] Successfully drew photo into placeholder 1
+[DEBUG] Drawing item - Type=Placeholder, Name=Placeholder 2, ZIndex=1
+[DEBUG] Inserting photo into placeholder 2 from C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0002_1.JPG
+[DEBUG] PhotoboothSessionService: MP4 generated successfully at C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[ERROR] DatabaseOperations: Failed to generate thumbnail: No imaging component suitable to complete this operation was found.
+[DEBUG] DatabaseOperations: Saved composed image 10 to session 6
+[DEBUG] DatabaseOperations: Saved MP4 animation to session 6
+[DEBUG] PhotoboothSessionService: Saved MP4 to database: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[DEBUG] ??? PhotoboothSessionService: Animation generated in background: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[DEBUG] ??? Firing AnimationReady event for: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[DEBUG] ??? OnServiceAnimationReady: Animation ready at C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[DEBUG] Successfully drew photo into placeholder 2
+[DEBUG] Saved composed image to C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] Is2x6Template: Checking dimensions 600x1800
+[DEBUG] Is2x6Template: Checking against 150 DPI - Expected: 300x900
+[DEBUG] Is2x6Template: Checking against 300 DPI - Expected: 600x1800
+[DEBUG] Is2x6Template: MATCH FOUND! This is a 2x6 template at 300 DPI
+[DEBUG] ??? HandleTemplateForPrinting START ???
+[DEBUG]   - Template dimensions: 600x1800
+[DEBUG]   - is2x6Template: True
+[DEBUG]   - duplicate2x6To4x6 setting: True
+[DEBUG]   - Original outputPath: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG]   - ? WILL CREATE 4x6 DUPLICATE
+[DEBUG] Saved composed image to C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\print\082825_20250828_175325_4x6_print.jpg
+[DEBUG]   - Created 4x6 at: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\print\082825_20250828_175325_4x6_print.jpg
+[DEBUG]   - Verified 4x6 dimensions: 1200x1800
+[DEBUG] ??? HandleTemplateForPrinting END - Returning 4x6: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\print\082825_20250828_175325_4x6_print.jpg ???
+[DEBUG] ComposeTemplateWithPhotos: outputPath = C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] ComposeTemplateWithPhotos: printPath = C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\print\082825_20250828_175325_4x6_print.jpg
+[DEBUG] ComposeTemplateWithPhotos: Are paths different? True
+[DEBUG] ComposeTemplateWithPhotos: Print file verified - dimensions: 1200x1800
+[DEBUG] Is2x6Template: Checking dimensions 600x1800
+[DEBUG] Is2x6Template: Checking against 150 DPI - Expected: 300x900
+[DEBUG] Is2x6Template: Checking against 300 DPI - Expected: 600x1800
+[DEBUG] Is2x6Template: MATCH FOUND! This is a 2x6 template at 300 DPI
+[DEBUG] ??? TEMPLATE FORMAT DEBUG: templateWidth=600, templateHeight=1800, is2x6Template=True, outputFormat='2x6' ???
+[DEBUG] ComposeTemplateWithPhotos: Completed. Output: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] Composition completed: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] PhotoboothUIService: Requesting image display in live view: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] Image displayed in live view: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] ??? SetComposedImagePaths CALLED ???
+[DEBUG]   - displayPath: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG]   - printPath: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\print\082825_20250828_175325_4x6_print.jpg
+[DEBUG]   - Paths are different: True
+[DEBUG]   - STORED _composedImagePath: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG]   - STORED _composedImagePrintPath: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\print\082825_20250828_175325_4x6_print.jpg
+[DEBUG]   - _isCurrentTemplate2x6: True
+[DEBUG] DatabaseOperations: Saved composed image 11 to session 6
+[DEBUG]   - Saved display version to database with format: 2x6
+[DEBUG] DatabaseOperations: Saved composed image 12 to session 6
+[DEBUG]   - Also saved print version (4x6 duplicate) for reprints
+[DEBUG] Completing session to trigger MP4 generation and auto-upload
+[DEBUG] ??? CompleteSessionAsync called - _isSessionActive: True, SessionId: a01e3ed6-bb71-4d8e-94da-087672abdf51
+[DEBUG] ??? PhotoboothSessionService: Completing session a01e3ed6-bb71-4d8e-94da-087672abdf51 with 2 photos
+[DEBUG] ??? PhotoboothSessionService: About to fire SessionCompleted event - Subscribers: 2
+[DEBUG] PhotoboothWorkflowService: Session completed
+[DEBUG] PhotoboothUIService: Updating status - Session complete!
+[DEBUG] PhotoboothSessionService: Session completed successfully
+[DEBUG] ??? MP4 ready, adding to UI: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[DEBUG] ??? Adding MP4 thumbnail to strip (not displaying in live view)...
+[DEBUG] PhotoboothUIService: Adding GIF thumbnail to photo strip: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4 (suppressEvents: False)
+[DEBUG] ??? OnServiceThumbnailRequested: Type=GIF, Path=C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[DEBUG] ??? Adding GIF/MP4 thumbnail via event: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[DEBUG] ??? AddGifThumbnail called with path: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[DEBUG] ??? Adding MP4 thumbnail to photo strip
+[ERROR] ??? AddGifThumbnail error: No imaging component suitable to complete this operation was found.
+[ERROR] ??? Stack trace:    at System.Windows.Media.Imaging.BitmapDecoder.SetupDecoderFromUriOrStream(Uri uri, Stream stream, BitmapCacheOption cacheOption, Guid& clsId, Boolean& isOriginalWritable, Stream& uriStream, UnmanagedMemoryStream& unmanagedMemoryStream, SafeFileHandle& safeFilehandle)
+   at System.Windows.Media.Imaging.BitmapDecoder.CreateFromUriOrStream(Uri baseUri, Uri uri, Stream stream, BitmapCreateOptions createOptions, BitmapCacheOption cacheOption, RequestCachePolicy uriCachePolicy, Boolean insertInDecoderCache)
+   at System.Windows.Media.Imaging.BitmapImage.FinalizeCreation()
+   at System.Windows.Media.Imaging.BitmapImage.EndInit()
+   at Photobooth.Pages.PhotoboothTouchModernRefactored.AddGifThumbnail(String gifPath) in C:\Users\rakes\OneDrive\Desktop\phototeknycbooth_clone\Pages\PhotoboothTouchModernRefactored.xaml.cs:line 1592
+[DEBUG] ??? Successfully called AddGifThumbnail for MP4 at: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[DEBUG] PhotoboothUIService: Updating status - MP4 ready!
+[DEBUG] ??? AnimationReady event fired
+[DEBUG] ??? OnServiceSessionCompleted CALLED - CompletedSession is NOT NULL
+[DEBUG] Service session completed
+[DEBUG] Stopped live view timer - session complete
+[DEBUG] Displaying composed image: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] PhotoboothUIService: Requesting image display in live view: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] Image displayed in live view: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] PhotoboothUIService: Adding photo thumbnail - C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg (suppressEvents: False)
+[DEBUG] ??? OnServiceThumbnailRequested: Type=Photo, Path=C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] ??? Adding regular photo thumbnail via event: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] AddPhotoThumbnail: Adding thumbnail for C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_175325_composed.jpg
+[DEBUG] AddPhotoThumbnail: Successfully added thumbnail. Container now has 3 children
+[DEBUG] AddPhotoThumbnail: photosContainer visibility=Visible, parent visibility=Visible
+[DEBUG] Session completed - composed image displayed, waiting for animation
+[DEBUG] PhotoboothUIService: Updating status - Session complete!
+[DEBUG] PhotoboothUIService: Showing completion controls
+[DEBUG] Showing action buttons panel after session completion
+[DEBUG] Starting auto-clear timer for 30 seconds
+[DEBUG] Camera live view stopped
+[DEBUG] === PHOTO DISPLAY REQUESTED ===
+[DEBUG] Photo path: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0002_1.JPG
+[DEBUG] Display duration: 4 seconds
+[DEBUG] Live view timer status: STOPPED
+[DEBUG] Photo displayed successfully, should remain visible for 4 seconds
+[DEBUG] Set _isDisplayingCapturedPhoto flag to true
+[DEBUG] PhotoDisplayRequested event fired at 17:53:25.673
+[DEBUG] Starting 4 second wait...
+[DEBUG] AutoUploadSessionPhotos: Starting auto-upload for session GUID: a01e3ed6-bb71-4d8e-94da-087672abdf51
+[DEBUG] PhotoboothUIService: Updating status - Uploading...
+[DEBUG] AutoUploadSessionPhotos: Added 2 original photos
+[DEBUG] AutoUploadSessionPhotos: Added composed image: 082825_20250828_175325_composed.jpg
+[DEBUG] AutoUploadSessionPhotos: Added animation: animated_20250828_175325_a01e3ed6-bb71-4d8e-94da-087672abdf51.mp4
+[DEBUG] AutoUploadSessionPhotos: Uploading 4 total files
+[DEBUG] Auto-clear timer: 1/30 seconds
+[DEBUG] Auto-clear timer: 2/30 seconds
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='801cd120-3fdf-45c1-ad39-6c9965a0fc2d', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 801cd120-3fdf-45c1-ad39-6c9965a0fc2d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='89c35694-3c08-4948-987b-d1c14fd95ddd', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 89c35694-3c08-4948-987b-d1c14fd95ddd
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='0f18adbb-54ee-40ee-a3b5-fd0a9a4746fe', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 0f18adbb-54ee-40ee-a3b5-fd0a9a4746fe
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='a693f9e4-66fb-475d-8fb0-71ea207cd8c4', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: a693f9e4-66fb-475d-8fb0-71ea207cd8c4
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='4ce16a50-8e53-40dd-84dd-d031c7b4015a', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 4ce16a50-8e53-40dd-84dd-d031c7b4015a
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='aade6450-19b1-47ad-ad11-93d8389cd206', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: aade6450-19b1-47ad-ad11-93d8389cd206
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='e1d5afd4-6dfb-4a58-89d2-555bb87b8079', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: e1d5afd4-6dfb-4a58-89d2-555bb87b8079
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='991f5cf6-2a5c-4e9a-886c-1af1b01e00c9', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 991f5cf6-2a5c-4e9a-886c-1af1b01e00c9
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='40733ca6-97eb-4d6c-9d1a-880d059395dd', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 40733ca6-97eb-4d6c-9d1a-880d059395dd
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='4126298a-1aed-4e85-8089-36b55995f320', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 4126298a-1aed-4e85-8089-36b55995f320
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='20320647-abfc-4e52-8515-ef20a409392a', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 20320647-abfc-4e52-8515-ef20a409392a
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='038e3266-7252-4436-8d74-6885d0f148be', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 038e3266-7252-4436-8d74-6885d0f148be
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='96581bf2-1ed4-4346-a750-d159308b6903', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 96581bf2-1ed4-4346-a750-d159308b6903
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='aee4131b-685c-4f57-927c-fc6e696acc29', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: aee4131b-685c-4f57-927c-fc6e696acc29
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='280b15c9-4e65-42b2-99c7-2fc4b54ec822', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 280b15c9-4e65-42b2-99c7-2fc4b54ec822
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='ef4bac4a-a600-45c6-9d70-605422b9d07d', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: ef4bac4a-a600-45c6-9d70-605422b9d07d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='db3d62c4-ab59-4f73-ac9a-c807c478f041', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: db3d62c4-ab59-4f73-ac9a-c807c478f041
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='f7e18dc0-07b0-45f9-b8a7-27a9101d648f', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: f7e18dc0-07b0-45f9-b8a7-27a9101d648f
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='77efec9e-5585-4a50-892c-80e76488ed2d', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 77efec9e-5585-4a50-892c-80e76488ed2d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='a3f92574-de37-4a84-b8d0-ee1041ccac15', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: a3f92574-de37-4a84-b8d0-ee1041ccac15
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='d40e1091-cee5-4ac9-83a6-4d0dceab2f26', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: d40e1091-cee5-4ac9-83a6-4d0dceab2f26
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] Gallery URL saved to database for session a01e3ed6-bb71-4d8e-94da-087672abdf51: https://tinyurl.com/2y3fuv9e
+[DEBUG] PhotoboothUIService: Updating status - Upload complete!
+[DEBUG] Auto-clear timer: 3/30 seconds
+[DEBUG] Auto-clear timer: 4/30 seconds
+[DEBUG] Wait complete at 17:53:29.684
+[DEBUG] === PHOTO DISPLAY COMPLETED ===
+[DEBUG] Starting live view timer to resume camera feed
+[DEBUG] Cleared _isDisplayingCapturedPhoto flag
+[DEBUG] Live view timer restarted - camera feed will replace photo on next tick
+[DEBUG] PhotoDisplayCompleted event fired
+[DEBUG] Camera live view restarted
+[DEBUG] PhotoboothWorkflowService: All photos captured (2 of 2)
+[DEBUG] PhotoboothWorkflowService: DisplayCapturedPhotoAsync completed
+[DEBUG] PhotoboothWorkflowService: Live view will resume after photo display completes
+[DEBUG] Auto-clear timer: 5/30 seconds
+[DEBUG] Auto-clear timer: 6/30 seconds
+[DEBUG] Auto-clear timer: 7/30 seconds
+[DEBUG] Auto-clear timer: 8/30 seconds
+[DEBUG] Auto-clear timer: 9/30 seconds
+[DEBUG] Auto-clear timer: 10/30 seconds
+[DEBUG] Auto-clear timer: 11/30 seconds
+[DEBUG] Auto-clear timer: 12/30 seconds
+[DEBUG] Auto-clear timer: 13/30 seconds
+[DEBUG] Auto-clear timer: 14/30 seconds
+[DEBUG] Auto-clear timer: 15/30 seconds
+[DEBUG] Auto-clear timer: 16/30 seconds
+[DEBUG] Auto-clear timer: 17/30 seconds
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='801cd120-3fdf-45c1-ad39-6c9965a0fc2d', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 801cd120-3fdf-45c1-ad39-6c9965a0fc2d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='89c35694-3c08-4948-987b-d1c14fd95ddd', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 89c35694-3c08-4948-987b-d1c14fd95ddd
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='0f18adbb-54ee-40ee-a3b5-fd0a9a4746fe', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 0f18adbb-54ee-40ee-a3b5-fd0a9a4746fe
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='a693f9e4-66fb-475d-8fb0-71ea207cd8c4', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: a693f9e4-66fb-475d-8fb0-71ea207cd8c4
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='4ce16a50-8e53-40dd-84dd-d031c7b4015a', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 4ce16a50-8e53-40dd-84dd-d031c7b4015a
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='aade6450-19b1-47ad-ad11-93d8389cd206', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: aade6450-19b1-47ad-ad11-93d8389cd206
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='e1d5afd4-6dfb-4a58-89d2-555bb87b8079', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: e1d5afd4-6dfb-4a58-89d2-555bb87b8079
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='991f5cf6-2a5c-4e9a-886c-1af1b01e00c9', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 991f5cf6-2a5c-4e9a-886c-1af1b01e00c9
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='40733ca6-97eb-4d6c-9d1a-880d059395dd', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 40733ca6-97eb-4d6c-9d1a-880d059395dd
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='4126298a-1aed-4e85-8089-36b55995f320', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 4126298a-1aed-4e85-8089-36b55995f320
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='20320647-abfc-4e52-8515-ef20a409392a', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 20320647-abfc-4e52-8515-ef20a409392a
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='038e3266-7252-4436-8d74-6885d0f148be', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 038e3266-7252-4436-8d74-6885d0f148be
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='96581bf2-1ed4-4346-a750-d159308b6903', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 96581bf2-1ed4-4346-a750-d159308b6903
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='aee4131b-685c-4f57-927c-fc6e696acc29', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: aee4131b-685c-4f57-927c-fc6e696acc29
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='280b15c9-4e65-42b2-99c7-2fc4b54ec822', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 280b15c9-4e65-42b2-99c7-2fc4b54ec822
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='ef4bac4a-a600-45c6-9d70-605422b9d07d', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: ef4bac4a-a600-45c6-9d70-605422b9d07d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='db3d62c4-ab59-4f73-ac9a-c807c478f041', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: db3d62c4-ab59-4f73-ac9a-c807c478f041
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='f7e18dc0-07b0-45f9-b8a7-27a9101d648f', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: f7e18dc0-07b0-45f9-b8a7-27a9101d648f
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='77efec9e-5585-4a50-892c-80e76488ed2d', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 77efec9e-5585-4a50-892c-80e76488ed2d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='a3f92574-de37-4a84-b8d0-ee1041ccac15', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: a3f92574-de37-4a84-b8d0-ee1041ccac15
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='d40e1091-cee5-4ac9-83a6-4d0dceab2f26', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: d40e1091-cee5-4ac9-83a6-4d0dceab2f26
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] Auto-clear timer: 18/30 seconds
+[DEBUG] Auto-clear timer: 19/30 seconds
+[DEBUG] Auto-clear timer: 20/30 seconds
+[DEBUG] Auto-clear timer: 21/30 seconds
+[DEBUG] Auto-clear timer: 22/30 seconds
+[DEBUG] Auto-clear timer: 23/30 seconds
+[DEBUG] Auto-clear timer: 24/30 seconds
+[DEBUG] Auto-clear timer: 25/30 seconds
+[DEBUG] Auto-clear timer: 26/30 seconds
+[DEBUG] Auto-clear timer: 27/30 seconds
+[DEBUG] Auto-clear timer: 28/30 seconds
+[DEBUG] Done button clicked - clearing session and returning to start
+[DEBUG] ??? PhotoboothSessionService: ClearSession called - Current SessionId: a01e3ed6-bb71-4d8e-94da-087672abdf51, _isSessionActive: True
+[DEBUG] PhotoboothSessionService: Clearing session
+[DEBUG] Stopping auto-clear timer
+[DEBUG] PhotoCaptureService: Session reset
+[DEBUG] === SESSION CLEARED - RESETTING FOR NEW SESSION ===
+[DEBUG] Photo strip cleared
+[DEBUG] Keeping template for next session: 082825 Template
+[DEBUG] Action buttons panel hidden after session clear
+[DEBUG] Live view stopped after session clear (idle live view disabled)
+[DEBUG] PhotoboothUIService: Resetting UI to initial state
+[DEBUG] PhotoboothUIService: Hiding countdown
+[DEBUG] PhotoboothUIService: Showing start button
+[DEBUG] PhotoboothUIService: Updating status - Touch START to begin
+[DEBUG] PhotoboothUIService: Updating status - Ready to start
+[DEBUG] Start button shown - ready for new session
+[DEBUG] Session fully cleared - ready for new session
+[DEBUG] PhotoboothSessionService: Session cleared
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='801cd120-3fdf-45c1-ad39-6c9965a0fc2d', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 801cd120-3fdf-45c1-ad39-6c9965a0fc2d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='89c35694-3c08-4948-987b-d1c14fd95ddd', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 89c35694-3c08-4948-987b-d1c14fd95ddd
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='0f18adbb-54ee-40ee-a3b5-fd0a9a4746fe', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 0f18adbb-54ee-40ee-a3b5-fd0a9a4746fe
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='a693f9e4-66fb-475d-8fb0-71ea207cd8c4', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: a693f9e4-66fb-475d-8fb0-71ea207cd8c4
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='4ce16a50-8e53-40dd-84dd-d031c7b4015a', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 4ce16a50-8e53-40dd-84dd-d031c7b4015a
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='aade6450-19b1-47ad-ad11-93d8389cd206', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: aade6450-19b1-47ad-ad11-93d8389cd206
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='e1d5afd4-6dfb-4a58-89d2-555bb87b8079', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: e1d5afd4-6dfb-4a58-89d2-555bb87b8079
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='991f5cf6-2a5c-4e9a-886c-1af1b01e00c9', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 991f5cf6-2a5c-4e9a-886c-1af1b01e00c9
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='40733ca6-97eb-4d6c-9d1a-880d059395dd', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 40733ca6-97eb-4d6c-9d1a-880d059395dd
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='4126298a-1aed-4e85-8089-36b55995f320', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 4126298a-1aed-4e85-8089-36b55995f320
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='20320647-abfc-4e52-8515-ef20a409392a', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 20320647-abfc-4e52-8515-ef20a409392a
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='038e3266-7252-4436-8d74-6885d0f148be', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 038e3266-7252-4436-8d74-6885d0f148be
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='96581bf2-1ed4-4346-a750-d159308b6903', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 96581bf2-1ed4-4346-a750-d159308b6903
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='aee4131b-685c-4f57-927c-fc6e696acc29', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: aee4131b-685c-4f57-927c-fc6e696acc29
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='280b15c9-4e65-42b2-99c7-2fc4b54ec822', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: 280b15c9-4e65-42b2-99c7-2fc4b54ec822
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='ef4bac4a-a600-45c6-9d70-605422b9d07d', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: ef4bac4a-a600-45c6-9d70-605422b9d07d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='db3d62c4-ab59-4f73-ac9a-c807c478f041', isGallerySession=False
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: db3d62c4-ab59-4f73-ac9a-c807c478f041
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='f7e18dc0-07b0-45f9-b8a7-27a9101d648f', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: f7e18dc0-07b0-45f9-b8a7-27a9101d648f
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='77efec9e-5585-4a50-892c-80e76488ed2d', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: 77efec9e-5585-4a50-892c-80e76488ed2d
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='a3f92574-de37-4a84-b8d0-ee1041ccac15', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: a3f92574-de37-4a84-b8d0-ee1041ccac15
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: sessionId='d40e1091-cee5-4ac9-83a6-4d0dceab2f26', isGallerySession=True
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: d40e1091-cee5-4ac9-83a6-4d0dceab2f26
+[DEBUG] PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: NULL
+[DEBUG] RemoveEventHandlers: Unsubscribed from camera events
+[DEBUG] Sony USB: Releasing SDK...
+[DEBUG] Sony USB: SDK released

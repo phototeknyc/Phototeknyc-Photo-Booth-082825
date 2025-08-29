@@ -1,0 +1,25 @@
+[DEBUG] PhotoboothTouchModernRefactored: Subscribed to SessionCompleted event
+[DEBUG] ??? PhotoboothSessionService: Starting animated GIF/MP4 generation in background. Captured photos count: 2
+[DEBUG] PhotoboothSessionService: Attempting MP4 generation
+[DEBUG] PhotoboothSessionService: MP4 generated successfully at C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_181607_7bc44926-34eb-4fc5-ac2f-641f9d61801e.mp4
+[DEBUG] DatabaseOperations: Saved MP4 animation to session 9
+[DEBUG] PhotoboothSessionService: Saved MP4 to database: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_181607_7bc44926-34eb-4fc5-ac2f-641f9d61801e.mp4
+[DEBUG] ??? Firing AnimationReady event for: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_181607_7bc44926-34eb-4fc5-ac2f-641f9d61801e.mp4
+[DEBUG] ??? OnServiceAnimationReady: Animation ready at C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_181607_7bc44926-34eb-4fc5-ac2f-641f9d61801e.mp4
+[DEBUG] ??? liveViewImage.Source is now: file:///C:/Users/rakes/OneDrive/Pictures/Photobooth/082825/composed/082825_20250828_181607_composed.jpg
+[DEBUG] Completing session to trigger MP4 generation and auto-upload
+[DEBUG] ??? PhotoboothSessionService: About to fire SessionCompleted event - Subscribers: 2
+[DEBUG] ??? MP4 ready, adding to UI: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_181607_7bc44926-34eb-4fc5-ac2f-641f9d61801e.mp4
+[DEBUG] ??? Adding MP4 thumbnail to strip (not displaying in live view)...
+[DEBUG] ??? Adding GIF/MP4 thumbnail via event: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_181607_7bc44926-34eb-4fc5-ac2f-641f9d61801e.mp4
+[DEBUG] ??? Adding MP4 thumbnail to photo strip
+[DEBUG] ??? MP4 detected, looking for first photo to use as thumbnail
+[DEBUG] ??? Using first photo as MP4 thumbnail: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\originals\IMG_0001_3.JPG
+[DEBUG] ??? MP4 thumbnail successfully added to photo strip: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_181607_7bc44926-34eb-4fc5-ac2f-641f9d61801e.mp4
+[DEBUG] ??? Successfully called AddGifThumbnail for MP4 at: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\animation\animated_20250828_181607_7bc44926-34eb-4fc5-ac2f-641f9d61801e.mp4
+[DEBUG] PhotoboothUIService: Updating status - MP4 ready!
+[DEBUG] ??? AnimationReady event fired
+[DEBUG] ??? OnServiceSessionCompleted CALLED - CompletedSession is NOT NULL
+[DEBUG] ??? COMPOSED IMAGE PATH EXISTS: C:\Users\rakes\OneDrive\Pictures\Photobooth\082825\composed\082825_20250828_181607_composed.jpg
+[DEBUG] ??? Calling _uiService.DisplayImage to show composed image
+[DEBUG] ??? liveViewImage.Source is now: file:///C:/Users/rakes/OneDrive/Pictures/Photobooth/082825/composed/082825_20250828_181607_composed.jpg

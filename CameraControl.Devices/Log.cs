@@ -52,6 +52,11 @@ namespace CameraControl.Devices
 
         public static void Debug(object message, Exception exception)
         {
+            // Also write to console for debugging
+            Console.WriteLine($"[DEBUG] {message}");
+            if (exception != null)
+                Console.WriteLine($"[DEBUG] Exception: {exception}");
+            
             if (LogDebug != null)
                 LogDebug(new LogEventArgs() {Exception = exception, Message = message});
         }
@@ -63,6 +68,11 @@ namespace CameraControl.Devices
 
         public static void Error(object message, Exception exception)
         {
+            // Also write to console for debugging
+            Console.WriteLine($"[ERROR] {message}");
+            if (exception != null)
+                Console.WriteLine($"[ERROR] Exception: {exception}");
+            
             if (LogError != null)
                 LogError(new LogEventArgs() {Exception = exception, Message = message});
         }

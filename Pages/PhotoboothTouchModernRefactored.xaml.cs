@@ -626,8 +626,18 @@ namespace Photobooth.Pages
                         {
                             case "GIF":
                             case "MP4":
-                                // Call local method directly to ensure click handler is attached
-                                AddGifThumbnail(photo.FilePath);
+                                // For gallery sessions, we need to pass original photos for MP4 thumbnail
+                                // Get the first original photo for MP4 thumbnail
+                                string firstPhotoPath = null;
+                                if (photo.PhotoType == "MP4")
+                                {
+                                    var firstOrigPhoto = e.Photos.FirstOrDefault(p => p.PhotoType == "ORIG" && File.Exists(p.FilePath));
+                                    firstPhotoPath = firstOrigPhoto?.FilePath;
+                                    Log.Debug($"  Using first original photo for MP4 thumbnail: {firstPhotoPath}");
+                                }
+                                
+                                // Call method with gallery context
+                                AddGifThumbnailForGallery(photo.FilePath, firstPhotoPath);
                                 Log.Debug($"  Added {photo.PhotoType} thumbnail with click handler: {photo.FilePath}");
                                 break;
                             case "COMP":
@@ -1690,6 +1700,121 @@ namespace Photobooth.Pages
             catch (Exception ex)
             {
                 Log.Error($"Error adding composed thumbnail: {ex.Message}");
+            }
+        }
+        
+        private void AddGifThumbnailForGallery(string gifPath, string thumbnailPhotoPath = null)
+        {
+            try
+            {
+                Log.Debug($"★★★ AddGifThumbnailForGallery called with path: {gifPath}, thumbnail: {thumbnailPhotoPath}");
+                
+                if (string.IsNullOrEmpty(gifPath) || !File.Exists(gifPath))
+                {
+                    Log.Error($"AddGifThumbnailForGallery: Invalid path or file not found: {gifPath}");
+                    return;
+                }
+                
+                // Determine if it's a GIF or MP4
+                string fileExtension = Path.GetExtension(gifPath).ToLower();
+                bool isMP4 = fileExtension == ".mp4";
+                string labelText = isMP4 ? "MP4" : "GIF";
+                
+                Log.Debug($"★★★ Adding {labelText} thumbnail to photo strip (gallery context)");
+                
+                // Create a thumbnail with appropriate label
+                var stackPanel = new StackPanel
+                {
+                    Orientation = Orientation.Vertical,
+                    Margin = new Thickness(5)
+                };
+                
+                // Create thumbnail image 
+                BitmapImage bitmap = null;
+                
+                if (isMP4 && !string.IsNullOrEmpty(thumbnailPhotoPath) && File.Exists(thumbnailPhotoPath))
+                {
+                    // For MP4, use provided thumbnail photo
+                    Log.Debug($"★★★ Using provided photo as MP4 thumbnail: {thumbnailPhotoPath}");
+                    bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.UriSource = new Uri(thumbnailPhotoPath);
+                    bitmap.DecodePixelWidth = 150;
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.EndInit();
+                }
+                else if (!isMP4)
+                {
+                    // For GIF, show the GIF directly
+                    bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.UriSource = new Uri(gifPath);
+                    bitmap.DecodePixelWidth = 150;
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.EndInit();
+                }
+                else
+                {
+                    // Fallback for MP4 without thumbnail - create a placeholder
+                    Log.Debug($"★★★ No thumbnail available for MP4, creating placeholder");
+                    // Create a simple placeholder bitmap
+                    bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.UriSource = new Uri("pack://application:,,,/Images/video_placeholder.png", UriKind.Absolute);
+                    bitmap.DecodePixelWidth = 150;
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.EndInit();
+                }
+                
+                var image = new Image
+                {
+                    Source = bitmap,
+                    Width = 120,
+                    Height = 80,
+                    Stretch = Stretch.UniformToFill
+                };
+                
+                // Add appropriate label
+                var label = new TextBlock
+                {
+                    Text = labelText,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Colors.Green),
+                    FontSize = 12,
+                    Margin = new Thickness(0, 2, 0, 0)
+                };
+                
+                stackPanel.Children.Add(image);
+                stackPanel.Children.Add(label);
+                
+                var border = new Border
+                {
+                    BorderBrush = new SolidColorBrush(Colors.Green),
+                    BorderThickness = new Thickness(2),
+                    CornerRadius = new CornerRadius(5),
+                    Margin = new Thickness(2),
+                    Child = stackPanel,
+                    Cursor = Cursors.Hand
+                };
+                
+                // Add click handler to display GIF/MP4 when clicked
+                border.MouseLeftButtonUp += (s, e) =>
+                {
+                    DisplayGifInLiveView(gifPath);
+                    Log.Debug($"★★★ MP4/GIF clicked from gallery - playing: {gifPath}");
+                };
+                
+                // Add to photo container
+                photosContainer.Children.Add(border);
+                
+                Log.Debug($"★★★ {labelText} thumbnail successfully added to photo strip (gallery): {gifPath}");
+                Log.Debug($"★★★ Photo container now has {photosContainer.Children.Count} children");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"★★★ AddGifThumbnailForGallery error: {ex.Message}");
+                Log.Error($"★★★ Stack trace: {ex.StackTrace}");
             }
         }
         
@@ -2850,12 +2975,40 @@ namespace Photobooth.Pages
             {
                 if (_isInGalleryMode && _currentGallerySession != null)
                 {
-                    // Gallery mode - use GalleryActionService
-                    bool success = await _galleryActionService.PrintSessionAsync(_isInGalleryMode, _currentGallerySession);
+                    // Gallery mode - print the composed image from the gallery session
+                    var composedPhoto = _currentGallerySession.Photos
+                        ?.FirstOrDefault(p => p.PhotoType == "COMP" && File.Exists(p.FilePath));
                     
-                    if (!success)
+                    if (composedPhoto != null && _printingService != null)
                     {
-                        _uiService.UpdateStatus("Print failed");
+                        // Check if this is a 2x6 template with improved detection
+                        string fileName = composedPhoto.FileName?.ToLower() ?? "";
+                        string filePath = composedPhoto.FilePath?.ToLower() ?? "";
+                        bool is2x6Template = fileName.Contains("2x6") || fileName.Contains("2_6") || fileName.Contains("2-6") ||
+                                           filePath.Contains("2x6") || filePath.Contains("2_6") || filePath.Contains("2-6") ||
+                                           composedPhoto.PhotoType?.ToLower().Contains("2x6") == true;
+                        
+                        Log.Debug($"★★★ UNIFIED PRINT (Gallery): Composed image: {composedPhoto.FileName}");
+                        Log.Debug($"★★★ UNIFIED PRINT (Gallery): Is 2x6 template: {is2x6Template}");
+                        
+                        bool success = await _printingService.PrintImageAsync(
+                            composedPhoto.FilePath,
+                            _currentGallerySession.SessionFolder,
+                            is2x6Template // This will trigger 2x6 duplication to 4x6 if true
+                        );
+                        
+                        if (success)
+                        {
+                            _uiService.UpdateStatus("Photos sent to printer!");
+                        }
+                        else
+                        {
+                            _uiService.UpdateStatus("Print failed");
+                        }
+                    }
+                    else
+                    {
+                        _uiService.UpdateStatus("No composed image to print");
                     }
                 }
                 else if (_sessionService.IsSessionActive)
@@ -3262,9 +3415,16 @@ namespace Photobooth.Pages
                     try
                     {
                         // Use PrintImageAsync from PrintingService with proper 2x6 routing
-                        // Check if this is a 2x6 template by looking at the file path or photo type
-                        bool is2x6Template = composedPhoto.PhotoType?.Contains("2x6") == true ||
-                                           composedPhoto.FileName?.Contains("2x6") == true;
+                        // Check if this is a 2x6 template by looking at the file path, photo type, or template name
+                        // Also check for "2_6", "2-6", "2X6" variations
+                        string fileName = composedPhoto.FileName?.ToLower() ?? "";
+                        string filePath = composedPhoto.FilePath?.ToLower() ?? "";
+                        bool is2x6Template = fileName.Contains("2x6") || fileName.Contains("2_6") || fileName.Contains("2-6") ||
+                                           filePath.Contains("2x6") || filePath.Contains("2_6") || filePath.Contains("2-6") ||
+                                           composedPhoto.PhotoType?.ToLower().Contains("2x6") == true;
+                        
+                        Log.Debug($"★★★ GALLERY PRINT: Composed image: {composedPhoto.FileName}");
+                        Log.Debug($"★★★ GALLERY PRINT: Is 2x6 template: {is2x6Template}");
                         
                         bool printSuccess = await _printingService.PrintImageAsync(
                             composedPhoto.FilePath,

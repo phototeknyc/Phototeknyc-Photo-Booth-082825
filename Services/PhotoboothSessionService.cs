@@ -116,6 +116,7 @@ namespace Photobooth.Services
                 _currentSessionId = _databaseOperations.CurrentSessionGuid?.ToString();
 
                 _isSessionActive = true;
+                Log.Debug($"★★★ Session marked as active - SessionId: {_currentSessionId}, _isSessionActive: {_isSessionActive}");
 
                 // Notify session started
                 SessionStarted?.Invoke(this, new SessionStartedEventArgs
@@ -479,6 +480,7 @@ namespace Photobooth.Services
         /// </summary>
         public void ClearSession()
         {
+            Log.Debug($"★★★ PhotoboothSessionService: ClearSession called - Current SessionId: {_currentSessionId}, _isSessionActive: {_isSessionActive}");
             Log.Debug("PhotoboothSessionService: Clearing session");
             
             // Stop auto-clear timer
@@ -562,13 +564,15 @@ namespace Photobooth.Services
         {
             try
             {
+                Log.Debug($"★★★ CompleteSessionAsync called - _isSessionActive: {_isSessionActive}, SessionId: {_currentSessionId}");
+                
                 if (!_isSessionActive)
                 {
-                    Log.Debug("PhotoboothSessionService: No active session to complete");
+                    Log.Debug("★★★ PhotoboothSessionService: No active session to complete - returning");
                     return true;
                 }
 
-                Log.Debug($"PhotoboothSessionService: Completing session {_currentSessionId} with {_capturedPhotoPaths.Count} photos");
+                Log.Debug($"★★★ PhotoboothSessionService: Completing session {_currentSessionId} with {_capturedPhotoPaths.Count} photos");
 
                 var completedSession = new CompletedSessionData
                 {
@@ -582,6 +586,14 @@ namespace Photobooth.Services
                 };
 
                 // Notify completion first (before clearing state so listeners can access session data)
+                var subscribers = SessionCompleted?.GetInvocationList()?.Length ?? 0;
+                Log.Debug($"★★★ PhotoboothSessionService: About to fire SessionCompleted event - Subscribers: {subscribers}");
+                
+                if (subscribers == 0)
+                {
+                    Log.Error("★★★ WARNING: No subscribers for SessionCompleted event!");
+                }
+                
                 SessionCompleted?.Invoke(this, new SessionCompletedEventArgs
                 {
                     CompletedSession = completedSession
