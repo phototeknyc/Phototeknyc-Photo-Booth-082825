@@ -701,29 +701,41 @@ namespace Photobooth.Pages
         
         private void ShowGalleryNavigationButtons(int currentIndex, int totalSessions)
         {
-            // Show unified action buttons panel for gallery mode
-            if (actionButtonsPanel != null)
+            // Ensure we're on the UI thread
+            Dispatcher.Invoke(() =>
             {
-                actionButtonsPanel.Visibility = Visibility.Visible;
-                _isInGalleryMode = true;
-                Log.Debug("Showing action buttons panel for gallery session");
-            }
-            else
-            {
-                Log.Error("actionButtonsPanel is null - cannot show gallery navigation buttons");
-            }
-            
-            // Hide the Touch to Start button when in gallery mode
-            if (startButtonOverlay != null)
-            {
-                startButtonOverlay.Visibility = Visibility.Collapsed;
-                Log.Debug("Hiding Touch to Start button for gallery mode");
-            }
-            
-            // Hide other UI elements that might interfere
-            // TODO: Implement HideActionButtons if needed
-            
-            Log.Debug($"Gallery action buttons shown for session {currentIndex + 1} of {totalSessions}");
+                // Show unified action buttons panel for gallery mode
+                if (actionButtonsPanel != null)
+                {
+                    actionButtonsPanel.Visibility = Visibility.Visible;
+                    _isInGalleryMode = true;
+                    Log.Debug($"★★★ ShowGalleryNavigationButtons: Showing action buttons panel for gallery session (Visibility: {actionButtonsPanel.Visibility})");
+                    
+                    // Also log individual button visibility
+                    if (printButton != null)
+                        Log.Debug($"  - Print button visibility: {printButton.Visibility}");
+                    if (shareButton != null)
+                        Log.Debug($"  - Share button visibility: {shareButton.Visibility}");
+                    if (emailButton != null)
+                        Log.Debug($"  - Email button visibility: {emailButton.Visibility}");
+                }
+                else
+                {
+                    Log.Error("★★★ actionButtonsPanel is null - cannot show gallery navigation buttons");
+                }
+                
+                // Hide the Touch to Start button when in gallery mode
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = Visibility.Collapsed;
+                    Log.Debug("Hiding Touch to Start button for gallery mode");
+                }
+                
+                // Hide other UI elements that might interfere
+                // TODO: Implement HideActionButtons if needed
+                
+                Log.Debug($"Gallery action buttons shown for session {currentIndex + 1} of {totalSessions}");
+            });
         }
         #endregion
 
@@ -3915,6 +3927,29 @@ namespace Photobooth.Pages
                     if (startButtonOverlay != null)
                     {
                         startButtonOverlay.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    // Explicitly show the action buttons panel for gallery mode
+                    // Add a small delay to ensure the session is fully loaded
+                    await Task.Delay(100);
+                    
+                    if (actionButtonsPanel != null)
+                    {
+                        actionButtonsPanel.Visibility = Visibility.Visible;
+                        Log.Debug($"★★★ Showing action buttons panel after loading gallery session (Visibility: {actionButtonsPanel.Visibility})");
+                        
+                        // Force UI update
+                        actionButtonsPanel.UpdateLayout();
+                        
+                        // Log button states
+                        if (printButton != null)
+                            Log.Debug($"  - Print button exists and visibility: {printButton.Visibility}");
+                        else
+                            Log.Error("  - Print button is null!");
+                    }
+                    else
+                    {
+                        Log.Error("★★★ actionButtonsPanel is null when trying to show gallery buttons!");
                     }
                 }
             }
