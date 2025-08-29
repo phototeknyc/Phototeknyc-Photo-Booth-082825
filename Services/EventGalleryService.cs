@@ -402,31 +402,57 @@ namespace Photobooth.Services
                     }
                 }
                 
-                // Add composed images and GIFs (excluding 4x6_print which is only for backend)
-                foreach (var composed in composedImages.Where(c => c.OutputFormat != "4x6_print"))
+                // Add composed images and GIFs (including 4x6_print for printing)
+                foreach (var composed in composedImages)
                 {
-                    if (File.Exists(composed.FilePath))
+                    string effectivePath = composed.FilePath;
+                    
+                    // If the file doesn't exist at the stored path, try to find it in the current photo directory
+                    if (!File.Exists(effectivePath))
                     {
-                        string photoType = "COMP";
-                        if (composed.OutputFormat == "GIF" || composed.FileName.EndsWith(".gif", StringComparison.OrdinalIgnoreCase))
-                        {
-                            photoType = "GIF";
-                        }
-                        else if (composed.OutputFormat == "MP4" || composed.FileName.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
-                        {
-                            photoType = "MP4";
-                        }
+                        // Try to reconstruct the path using the current PhotoDirectory
+                        string fileName = Path.GetFileName(effectivePath);
+                        string[] possibleSubDirs = { "composed", "print", "animation" };
                         
-                        System.Diagnostics.Debug.WriteLine($"EventGalleryService: Adding composed: {composed.FileName} (Type: {photoType})");
-                        sessionData.Photos.Add(new PhotoGalleryData
+                        foreach (var subDir in possibleSubDirs)
                         {
-                            FilePath = composed.FilePath,
-                            FileName = composed.FileName,
-                            FileSize = composed.FileSize?.ToString("N0") + " bytes" ?? "Unknown",
-                            ThumbnailPath = composed.ThumbnailPath ?? composed.FilePath,
-                            PhotoType = photoType
-                        });
+                            // Look for the file in various possible locations
+                            string attemptPath = Path.Combine(PhotoDirectory, dbSession.SessionGuid, subDir, fileName);
+                            if (File.Exists(attemptPath))
+                            {
+                                effectivePath = attemptPath;
+                                System.Diagnostics.Debug.WriteLine($"EventGalleryService: Found file at alternate path: {attemptPath}");
+                                break;
+                            }
+                        }
                     }
+                    
+                    // Always add to Photos collection even if file doesn't exist (needed for database-based printing)
+                    string photoType = "COMP";
+                    
+                    // Set the correct PhotoType based on OutputFormat
+                    if (composed.OutputFormat == "4x6_print")
+                    {
+                        photoType = "4x6_print"; // Mark as 4x6_print so print logic can find it
+                    }
+                    else if (composed.OutputFormat == "GIF" || composed.FileName.EndsWith(".gif", StringComparison.OrdinalIgnoreCase))
+                    {
+                        photoType = "GIF";
+                    }
+                    else if (composed.OutputFormat == "MP4" || composed.FileName.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                    {
+                        photoType = "MP4";
+                    }
+                    
+                    System.Diagnostics.Debug.WriteLine($"EventGalleryService: Adding composed: {composed.FileName} (Type: {photoType}, OutputFormat: {composed.OutputFormat}, Exists: {File.Exists(effectivePath)})");
+                    sessionData.Photos.Add(new PhotoGalleryData
+                    {
+                        FilePath = effectivePath,
+                        FileName = composed.FileName,
+                        FileSize = composed.FileSize?.ToString("N0") + " bytes" ?? "Unknown",
+                        ThumbnailPath = composed.ThumbnailPath ?? effectivePath,
+                        PhotoType = photoType
+                    });
                 }
                 
                 sessionData.PhotoCount = sessionData.Photos.Count;
