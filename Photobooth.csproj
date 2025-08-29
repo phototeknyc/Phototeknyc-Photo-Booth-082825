@@ -218,6 +218,7 @@
     <Compile Include="Services\MagickGifService.cs" />
     <Compile Include="Services\VideoGenerationService.cs" />
     <Compile Include="Services\PrintService.cs" />
+    <Compile Include="Services\PrintSettingsService.cs" />
     <Compile Include="Services\PrinterPoolService.cs" />
     <Compile Include="Services\PrinterMonitorService.cs" />
     <Compile Include="Services\SharingOperations.cs" />

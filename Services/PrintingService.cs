@@ -27,6 +27,7 @@ namespace Photobooth.Services
     {
         private readonly PrintService printService;
         private readonly PrinterMonitorService printerMonitor;
+        private readonly PrintSettingsService _settingsService;
         
         // Track last printed items for UI state
         private string lastProcessedImagePath;
@@ -48,6 +49,7 @@ namespace Photobooth.Services
         {
             printService = PrintService.Instance;
             printerMonitor = PrinterMonitorService.Instance;
+            _settingsService = PrintSettingsService.Instance;
         }
         
         /// <summary>
@@ -58,7 +60,7 @@ namespace Photobooth.Services
         {
             try
             {
-                return Properties.Settings.Default.EnablePrinting && printService.IsPrinterReady();
+                return _settingsService.EnablePrinting && printService.IsPrinterReady();
             }
             catch
             {
@@ -316,10 +318,10 @@ namespace Photobooth.Services
             try
             {
                 // Check if dual printer routing is enabled
-                bool dualRoutingEnabled = Properties.Settings.Default.AutoRoutePrinter;
+                bool dualRoutingEnabled = _settingsService.AutoRoutePrinter;
                 
                 // Check if print system is fully enabled
-                bool printingEnabled = Properties.Settings.Default.EnablePrinting;
+                bool printingEnabled = _settingsService.EnablePrinting;
                 
                 return dualRoutingEnabled && printingEnabled;
             }

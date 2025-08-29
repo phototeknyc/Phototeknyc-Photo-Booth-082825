@@ -21,6 +21,7 @@ namespace Photobooth.Services
         private string databasePath;
         private Dictionary<string, PrintSessionInfo> sessionPrintTracking;
         private int totalEventPrints;
+        private PrintSettingsService _settingsService;
 
         public static PrintService Instance
         {
@@ -42,6 +43,7 @@ namespace Photobooth.Services
 
         private PrintService()
         {
+            _settingsService = PrintSettingsService.Instance;
             printDocument = new PrintDocument();
             printDocument.PrintPage += PrintDocument_PrintPage;
             imagesToPrint = new List<string>();
@@ -146,16 +148,16 @@ namespace Photobooth.Services
         public bool CanPrint(string sessionId, int requestedCopies)
         {
             // Check if printing is enabled
-            if (!Properties.Settings.Default.EnablePrinting)
+            if (!_settingsService.EnablePrinting)
                 return false;
             
             // Check event limit
-            int maxEventPrints = Properties.Settings.Default.MaxEventPrints;
+            int maxEventPrints = _settingsService.MaxEventPrints;
             if (maxEventPrints > 0 && totalEventPrints + requestedCopies > maxEventPrints)
                 return false;
             
             // Check session limit
-            int maxSessionPrints = Properties.Settings.Default.MaxSessionPrints;
+            int maxSessionPrints = _settingsService.MaxSessionPrints;
             if (maxSessionPrints > 0)
             {
                 int currentSessionPrints = GetSessionPrintCount(sessionId);
@@ -175,7 +177,7 @@ namespace Photobooth.Services
 
         public int GetRemainingSessionPrints(string sessionId)
         {
-            int maxSessionPrints = Properties.Settings.Default.MaxSessionPrints;
+            int maxSessionPrints = _settingsService.MaxSessionPrints;
             if (maxSessionPrints <= 0)
                 return int.MaxValue; // Unlimited
             
@@ -185,7 +187,7 @@ namespace Photobooth.Services
 
         public int GetRemainingEventPrints()
         {
-            int maxEventPrints = Properties.Settings.Default.MaxEventPrints;
+            int maxEventPrints = _settingsService.MaxEventPrints;
             if (maxEventPrints <= 0)
                 return int.MaxValue; // Unlimited
             
@@ -203,9 +205,9 @@ namespace Photobooth.Services
             
             // DEBUG: Log the critical parameters
             System.Diagnostics.Debug.WriteLine($"★★★ PRINT DEBUG START ★★★");
-            System.Diagnostics.Debug.WriteLine($"=== PRINT DEBUG: isOriginal2x6Format={isOriginal2x6Format}, AutoRoutePrinter={Properties.Settings.Default.AutoRoutePrinter}, Printer2x6Name='{Properties.Settings.Default.Printer2x6Name}'");
-            System.Diagnostics.Debug.WriteLine($"=== PRINT DEBUG: Primary PrinterName='{Properties.Settings.Default.PrinterName}'");
-            System.Diagnostics.Debug.WriteLine($"=== PRINT DEBUG: EnablePrinting={Properties.Settings.Default.EnablePrinting}");
+            System.Diagnostics.Debug.WriteLine($"=== PRINT DEBUG: isOriginal2x6Format={isOriginal2x6Format}, AutoRoutePrinter={_settingsService.AutoRoutePrinter}, Printer2x6Name='{_settingsService.Printer2x6Name}'");
+            System.Diagnostics.Debug.WriteLine($"=== PRINT DEBUG: Primary PrinterName='{_settingsService.PrinterName}'");
+            System.Diagnostics.Debug.WriteLine($"=== PRINT DEBUG: EnablePrinting={_settingsService.EnablePrinting}");
             System.Diagnostics.Debug.WriteLine($"★★★ PRINT DEBUG END ★★★");
             
             // Validate print allowance
@@ -238,7 +240,7 @@ namespace Photobooth.Services
                 printDocument.PrinterSettings.Copies = 1; // We handle copies manually
                 
                 // Store orientation setting to apply AFTER DEVMODE
-                bool desiredLandscapeOrientation = Properties.Settings.Default.PrintLandscape;
+                bool desiredLandscapeOrientation = _settingsService.PrintLandscape;
                 bool isDuplicated4x6 = false;
                 
                 // Determine orientation based on format and duplication
@@ -285,12 +287,12 @@ namespace Photobooth.Services
                 string printerName;
                 bool isStripFormat = isOriginal2x6Format;
                 
-                System.Diagnostics.Debug.WriteLine($"=== PRINTER ROUTING: isOriginal2x6Format={isOriginal2x6Format}, AutoRoutePrinter={Properties.Settings.Default.AutoRoutePrinter}");
+                System.Diagnostics.Debug.WriteLine($"=== PRINTER ROUTING: isOriginal2x6Format={isOriginal2x6Format}, AutoRoutePrinter={_settingsService.AutoRoutePrinter}");
                 
-                if (isOriginal2x6Format && Properties.Settings.Default.AutoRoutePrinter)
+                if (isOriginal2x6Format && _settingsService.AutoRoutePrinter)
                 {
                     // Use the 2x6 printer for original 2x6 templates
-                    string configured2x6Printer = Properties.Settings.Default.Printer2x6Name;
+                    string configured2x6Printer = _settingsService.Printer2x6Name;
                     System.Diagnostics.Debug.WriteLine($"=== 2x6 ROUTING: Configured 2x6 printer = '{configured2x6Printer}'");
                     
                     if (!string.IsNullOrEmpty(configured2x6Printer))
@@ -306,13 +308,13 @@ namespace Photobooth.Services
                         isStripFormat = true;
                         
                         // Use default printer but ensure it's treated as a strip format
-                        printerName = Properties.Settings.Default.PrinterName;
+                        printerName = _settingsService.PrinterName;
                         System.Diagnostics.Debug.WriteLine($"Using default printer with strip format for 2x6 template: {printerName}");
                     }
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"❌ NOT using 2x6 routing - isOriginal2x6Format={isOriginal2x6Format}, AutoRoutePrinter={Properties.Settings.Default.AutoRoutePrinter}");
+                    System.Diagnostics.Debug.WriteLine($"❌ NOT using 2x6 routing - isOriginal2x6Format={isOriginal2x6Format}, AutoRoutePrinter={_settingsService.AutoRoutePrinter}");
                     
                     // Determine printer based on actual image size
                     printerName = DeterminePrinterByImageSize(photoPaths);
@@ -339,7 +341,7 @@ namespace Photobooth.Services
                 {
                     // Only use pooled printer if this is NOT a 2x6 format with auto-routing enabled
                     // We preserve 2x6 routing even when no specific 2x6 printer is configured
-                    if (!(isOriginal2x6Format && Properties.Settings.Default.AutoRoutePrinter))
+                    if (!(isOriginal2x6Format && _settingsService.AutoRoutePrinter))
                     {
                         System.Diagnostics.Debug.WriteLine($"Using pooled printer: {pooledPrinter}");
                         printerName = pooledPrinter;
@@ -363,7 +365,7 @@ namespace Photobooth.Services
                     string savedDriverSettings = "";
                     
                     // Check if we're using auto-routing and have format-specific settings
-                    if (Properties.Settings.Default.AutoRoutePrinter)
+                    if (_settingsService.AutoRoutePrinter)
                     {
                         // Use the isOriginal2x6Format flag if provided, otherwise check actual image
                         bool is2x6Format = isOriginal2x6Format;
@@ -385,13 +387,13 @@ namespace Photobooth.Services
                         // Use appropriate DEVMODE for the format
                         if (is2x6Format)
                         {
-                            savedDriverSettings = Properties.Settings.Default.Printer2x6DriverSettings;
+                            savedDriverSettings = _settingsService.Printer2x6DriverSettings;
                             System.Diagnostics.Debug.WriteLine($"DEVMODE: Selected 2x6 printer DEVMODE settings (isOriginal2x6Format={isOriginal2x6Format})");
                             System.Diagnostics.Debug.WriteLine($"DEVMODE: 2x6 settings length: {savedDriverSettings?.Length ?? 0} bytes");
                         }
                         else
                         {
-                            savedDriverSettings = Properties.Settings.Default.Printer4x6DriverSettings;
+                            savedDriverSettings = _settingsService.Printer4x6DriverSettings;
                             System.Diagnostics.Debug.WriteLine($"DEVMODE: Selected 4x6 printer DEVMODE settings (isOriginal2x6Format={isOriginal2x6Format})");
                             System.Diagnostics.Debug.WriteLine($"DEVMODE: 4x6 settings length: {savedDriverSettings?.Length ?? 0} bytes");
                         }
@@ -400,7 +402,7 @@ namespace Photobooth.Services
                     // Fallback to legacy single DEVMODE if format-specific not available
                     if (string.IsNullOrEmpty(savedDriverSettings))
                     {
-                        savedDriverSettings = Properties.Settings.Default.PrinterDriverSettings;
+                        savedDriverSettings = _settingsService.PrinterDriverSettings;
                         System.Diagnostics.Debug.WriteLine("Using legacy printer DEVMODE settings");
                     }
                     
@@ -442,7 +444,7 @@ namespace Photobooth.Services
                     }
                     
                     // Additionally, if DNP 2-inch cut is enabled, set appropriate paper size
-                    if (printerName.ToLower().Contains("dnp") && Properties.Settings.Default.Dnp2InchCut)
+                    if (printerName.ToLower().Contains("dnp") && _settingsService.Dnp2InchCut)
                     {
                         System.Diagnostics.Debug.WriteLine($"Ensuring DNP 2-inch cut is enabled for printer: {printerName}");
                         
@@ -469,8 +471,8 @@ namespace Photobooth.Services
                     printDocument.PrinterSettings.PrinterName = fallbackPrinter;
                     
                     // Update settings with new selection
-                    Properties.Settings.Default.PrinterName = fallbackPrinter;
-                    Properties.Settings.Default.Save();
+                    _settingsService.PrinterName = fallbackPrinter;
+                    _settingsService.SaveSettings();
                     System.Diagnostics.Debug.WriteLine($"Printer not available, switched to: {fallbackPrinter}");
                 }
                 else if (string.IsNullOrEmpty(printerName))
@@ -478,13 +480,13 @@ namespace Photobooth.Services
                     // No printer configured, auto-select USB printer
                     string autoSelectedPrinter = AutoSelectUSBPrinter();
                     printDocument.PrinterSettings.PrinterName = autoSelectedPrinter;
-                    Properties.Settings.Default.PrinterName = autoSelectedPrinter;
-                    Properties.Settings.Default.Save();
+                    _settingsService.PrinterName = autoSelectedPrinter;
+                    _settingsService.SaveSettings();
                     System.Diagnostics.Debug.WriteLine($"No printer configured, auto-selected: {autoSelectedPrinter}");
                 }
                 
                 // Set paper size if configured
-                string paperSize = Properties.Settings.Default.PrintPaperSize;
+                string paperSize = _settingsService.PrintPaperSize;
                 if (!string.IsNullOrEmpty(paperSize))
                 {
                     foreach (PaperSize size in printDocument.PrinterSettings.PaperSizes)
@@ -655,17 +657,17 @@ namespace Photobooth.Services
         private string DeterminePrinterByImageSize(List<string> photoPaths)
         {
             // Check if auto-routing is enabled
-            if (!Properties.Settings.Default.AutoRoutePrinter)
+            if (!_settingsService.AutoRoutePrinter)
             {
                 // Use legacy single printer selection
-                return Properties.Settings.Default.PrinterName;
+                return _settingsService.PrinterName;
             }
             
             // Get the first image to determine size
             if (photoPaths == null || photoPaths.Count == 0)
             {
                 System.Diagnostics.Debug.WriteLine("No photos to determine printer");
-                return Properties.Settings.Default.PrinterName;
+                return _settingsService.PrinterName;
             }
             
             try
@@ -688,11 +690,11 @@ namespace Photobooth.Services
                     
                     if (isPhotoStrip)
                     {
-                        string stripPrinter = Properties.Settings.Default.Printer2x6Name;
+                        string stripPrinter = _settingsService.Printer2x6Name;
                         System.Diagnostics.Debug.WriteLine($"Detected photo strip format - using strip printer: {stripPrinter}");
                         
                         // Ensure 2-inch cut is enabled for strip prints
-                        Properties.Settings.Default.Dnp2InchCut = true;
+                        _settingsService.Dnp2InchCut = true;
                         
                         return stripPrinter;
                     }
@@ -714,7 +716,7 @@ namespace Photobooth.Services
                         System.Diagnostics.Debug.WriteLine($"Detected {detectedSize} format - using default printer: {defaultPrinter}");
                         
                         // Disable 2-inch cut for standard photos
-                        Properties.Settings.Default.Dnp2InchCut = false;
+                        _settingsService.Dnp2InchCut = false;
                         
                         return defaultPrinter;
                     }
@@ -724,7 +726,7 @@ namespace Photobooth.Services
             {
                 System.Diagnostics.Debug.WriteLine($"Error determining image size: {ex.Message}");
                 // Fallback to default printer
-                return Properties.Settings.Default.PrinterName;
+                return _settingsService.PrinterName;
             }
         }
         
@@ -806,8 +808,8 @@ namespace Photobooth.Services
                         // Determine which alignment settings to use
                         bool is2x6Printer = false;
                         string currentPrinter = printDocument.PrinterSettings.PrinterName;
-                        if (currentPrinter == Properties.Settings.Default.Printer2x6Name && 
-                            !string.IsNullOrEmpty(Properties.Settings.Default.Printer2x6Name))
+                        if (currentPrinter == _settingsService.Printer2x6Name && 
+                            !string.IsNullOrEmpty(_settingsService.Printer2x6Name))
                         {
                             // Use 2x6 printer alignment settings (for 4x6 output)
                             alignmentScaleX = Properties.Settings.Default.Printer2x6ScaleX;
@@ -922,7 +924,7 @@ namespace Photobooth.Services
         public string GetCurrentPrinterName()
         {
             // Get the currently configured printer name
-            string printerName = Properties.Settings.Default.PrinterName;
+            string printerName = _settingsService.PrinterName;
             
             // If no printer configured or invalid, get auto-selected USB printer
             if (string.IsNullOrEmpty(printerName) || !IsValidPrinter(printerName))
@@ -1289,14 +1291,15 @@ namespace Photobooth.Services
         {
             try
             {
-                string currentPrinter = Properties.Settings.Default.PrinterName;
+                string currentPrinter = PrintSettingsService.Instance.PrinterName;
                 string autoSelectedPrinter = AutoSelectUSBPrinter();
                 
                 // Auto-update if no printer is set or current printer is not available
                 if (string.IsNullOrEmpty(currentPrinter) || !IsValidPrinter(currentPrinter))
                 {
-                    Properties.Settings.Default.PrinterName = autoSelectedPrinter;
-                    Properties.Settings.Default.Save();
+                    
+                    PrintSettingsService.Instance.PrinterName = autoSelectedPrinter;
+                    PrintSettingsService.Instance.SaveSettings();
                     System.Diagnostics.Debug.WriteLine($"Auto-updated printer to: {autoSelectedPrinter}");
                 }
             }
