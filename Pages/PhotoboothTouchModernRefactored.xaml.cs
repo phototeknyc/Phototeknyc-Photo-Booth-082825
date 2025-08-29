@@ -621,6 +621,13 @@ namespace Photobooth.Pages
                             continue;
                         }
                         
+                        // Skip displaying 4x6_print thumbnails in gallery (but keep them in session for printing)
+                        if (photo.PhotoType == "4x6_print")
+                        {
+                            Log.Debug($"  Skipping 4x6_print thumbnail display (keeping for print): {photo.FilePath}");
+                            continue;
+                        }
+                        
                         // For gallery loading, call local methods directly to ensure click handlers are attached
                         switch (photo.PhotoType)
                         {
@@ -641,6 +648,7 @@ namespace Photobooth.Pages
                                 Log.Debug($"  Added {photo.PhotoType} thumbnail with click handler: {photo.FilePath}");
                                 break;
                             case "COMP":
+                            case "2x6":  // Handle 2x6 composed images
                                 // Call local method directly to ensure proper display
                                 AddComposedThumbnail(photo.FilePath);
                                 Log.Debug($"  Added composed thumbnail: {photo.FilePath}");
