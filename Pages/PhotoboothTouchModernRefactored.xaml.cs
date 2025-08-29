@@ -2976,25 +2976,35 @@ namespace Photobooth.Pages
                 if (_isInGalleryMode && _currentGallerySession != null)
                 {
                     // Gallery mode - print the composed image from the gallery session
-                    var composedPhoto = _currentGallerySession.Photos
-                        ?.FirstOrDefault(p => p.PhotoType == "COMP" && File.Exists(p.FilePath));
+                    // First look for the 4x6_print version (duplicated 2x6), then fall back to regular composed
+                    var printPhoto = _currentGallerySession.Photos
+                        ?.FirstOrDefault(p => p.PhotoType == "4x6_print" && File.Exists(p.FilePath));
                     
-                    if (composedPhoto != null && _printingService != null)
+                    // If no 4x6_print version, look for regular composed image
+                    if (printPhoto == null)
+                    {
+                        printPhoto = _currentGallerySession.Photos
+                            ?.FirstOrDefault(p => p.PhotoType == "COMP" && File.Exists(p.FilePath));
+                    }
+                    
+                    if (printPhoto != null && _printingService != null)
                     {
                         // Check if this is a 2x6 template with improved detection
-                        string fileName = composedPhoto.FileName?.ToLower() ?? "";
-                        string filePath = composedPhoto.FilePath?.ToLower() ?? "";
-                        bool is2x6Template = fileName.Contains("2x6") || fileName.Contains("2_6") || fileName.Contains("2-6") ||
+                        string fileName = printPhoto.FileName?.ToLower() ?? "";
+                        string filePath = printPhoto.FilePath?.ToLower() ?? "";
+                        bool is2x6Template = printPhoto.PhotoType == "4x6_print" || // 4x6_print means it's a duplicated 2x6
+                                           fileName.Contains("2x6") || fileName.Contains("2_6") || fileName.Contains("2-6") ||
                                            filePath.Contains("2x6") || filePath.Contains("2_6") || filePath.Contains("2-6") ||
-                                           composedPhoto.PhotoType?.ToLower().Contains("2x6") == true;
+                                           fileName.Contains("4x6_print"); // Also check for 4x6_print in filename
                         
-                        Log.Debug($"★★★ UNIFIED PRINT (Gallery): Composed image: {composedPhoto.FileName}");
+                        Log.Debug($"★★★ UNIFIED PRINT (Gallery): Print photo: {printPhoto.FileName}");
+                        Log.Debug($"★★★ UNIFIED PRINT (Gallery): PhotoType: {printPhoto.PhotoType}");
                         Log.Debug($"★★★ UNIFIED PRINT (Gallery): Is 2x6 template: {is2x6Template}");
                         
                         bool success = await _printingService.PrintImageAsync(
-                            composedPhoto.FilePath,
+                            printPhoto.FilePath,
                             _currentGallerySession.SessionFolder,
-                            is2x6Template // This will trigger 2x6 duplication to 4x6 if true
+                            is2x6Template // This will trigger proper printer routing
                         );
                         
                         if (success)
@@ -3008,6 +3018,11 @@ namespace Photobooth.Pages
                     }
                     else
                     {
+                        Log.Debug($"★★★ No print photo found in gallery session");
+                        if (_currentGallerySession.Photos != null)
+                        {
+                            Log.Debug($"★★★ Available photo types: {string.Join(", ", _currentGallerySession.Photos.Select(p => p.PhotoType))}");
+                        }
                         _uiService.UpdateStatus("No composed image to print");
                     }
                 }
@@ -3406,28 +3421,37 @@ namespace Photobooth.Pages
                 Log.Debug("Gallery print button clicked");
                 _uiService.UpdateStatus("Printing photos...");
                 
-                // Use printing service to print photos
-                var composedPhoto = _currentGallerySession.Photos
-                    .FirstOrDefault(p => p.PhotoType == "COMP" && File.Exists(p.FilePath));
+                // First look for the 4x6_print version (duplicated 2x6), then fall back to regular composed
+                var printPhoto = _currentGallerySession.Photos
+                    .FirstOrDefault(p => p.PhotoType == "4x6_print" && File.Exists(p.FilePath));
+                
+                // If no 4x6_print version, look for regular composed image
+                if (printPhoto == null)
+                {
+                    printPhoto = _currentGallerySession.Photos
+                        .FirstOrDefault(p => p.PhotoType == "COMP" && File.Exists(p.FilePath));
+                }
                     
-                if (composedPhoto != null && _printingService != null)
+                if (printPhoto != null && _printingService != null)
                 {
                     try
                     {
                         // Use PrintImageAsync from PrintingService with proper 2x6 routing
                         // Check if this is a 2x6 template by looking at the file path, photo type, or template name
                         // Also check for "2_6", "2-6", "2X6" variations
-                        string fileName = composedPhoto.FileName?.ToLower() ?? "";
-                        string filePath = composedPhoto.FilePath?.ToLower() ?? "";
-                        bool is2x6Template = fileName.Contains("2x6") || fileName.Contains("2_6") || fileName.Contains("2-6") ||
+                        string fileName = printPhoto.FileName?.ToLower() ?? "";
+                        string filePath = printPhoto.FilePath?.ToLower() ?? "";
+                        bool is2x6Template = printPhoto.PhotoType == "4x6_print" || // 4x6_print means it's a duplicated 2x6
+                                           fileName.Contains("2x6") || fileName.Contains("2_6") || fileName.Contains("2-6") ||
                                            filePath.Contains("2x6") || filePath.Contains("2_6") || filePath.Contains("2-6") ||
-                                           composedPhoto.PhotoType?.ToLower().Contains("2x6") == true;
+                                           fileName.Contains("4x6_print"); // Also check for 4x6_print in filename
                         
-                        Log.Debug($"★★★ GALLERY PRINT: Composed image: {composedPhoto.FileName}");
+                        Log.Debug($"★★★ GALLERY PRINT: Print photo: {printPhoto.FileName}");
+                        Log.Debug($"★★★ GALLERY PRINT: PhotoType: {printPhoto.PhotoType}");
                         Log.Debug($"★★★ GALLERY PRINT: Is 2x6 template: {is2x6Template}");
                         
                         bool printSuccess = await _printingService.PrintImageAsync(
-                            composedPhoto.FilePath,
+                            printPhoto.FilePath,
                             _currentGallerySession.SessionFolder, // sessionId
                             is2x6Template
                         );
