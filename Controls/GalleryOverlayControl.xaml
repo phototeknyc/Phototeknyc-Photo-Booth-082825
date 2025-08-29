@@ -386,5 +386,8 @@
                 </Border>
             </Grid>
         </Grid>
+        
+        <!-- Print Copies Modal -->
+        <local:PrintCopiesModal x:Name="printCopiesModal" />
     </Grid>
 </UserControl>

@@ -128,6 +128,12 @@
     <Setting Name="DefaultPrintCopies" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">1</Value>
     </Setting>
+    <Setting Name="ShowPrintCopiesModal" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="MaxCopiesInModal" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">5</Value>
+    </Setting>
     <Setting Name="PrinterDriverSettings" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>

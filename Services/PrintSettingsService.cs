@@ -322,6 +322,42 @@ namespace Photobooth.Services
 
         #endregion
 
+        #region Print Modal Settings
+
+        /// <summary>
+        /// Whether to show the print copies selection modal
+        /// </summary>
+        public bool ShowPrintCopiesModal
+        {
+            get => Properties.Settings.Default.ShowPrintCopiesModal;
+            set
+            {
+                if (Properties.Settings.Default.ShowPrintCopiesModal != value)
+                {
+                    Properties.Settings.Default.ShowPrintCopiesModal = value;
+                    SaveSettings();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Maximum copies available in print selection modal
+        /// </summary>
+        public int MaxCopiesInModal
+        {
+            get => Properties.Settings.Default.MaxCopiesInModal;
+            set
+            {
+                if (Properties.Settings.Default.MaxCopiesInModal != value)
+                {
+                    Properties.Settings.Default.MaxCopiesInModal = Math.Max(1, Math.Min(10, value));
+                    SaveSettings();
+                }
+            }
+        }
+
+        #endregion
+
         #region Utility Methods
 
         /// <summary>

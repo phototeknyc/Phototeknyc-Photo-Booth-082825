@@ -183,6 +183,9 @@
     <Compile Include="Controls\PrintDialog.xaml.cs">
       <DependentUpon>PrintDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\PrintCopiesModal.xaml.cs">
+      <DependentUpon>PrintCopiesModal.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\SessionSelectionModal.xaml.cs">
       <DependentUpon>SessionSelectionModal.xaml</DependentUpon>
     </Compile>
@@ -373,6 +376,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\PrintDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\PrintCopiesModal.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

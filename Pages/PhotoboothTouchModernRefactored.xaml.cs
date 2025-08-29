@@ -135,6 +135,11 @@ namespace Photobooth.Pages
         private int _currentGallerySessionIndex;
         private Services.SessionGalleryData _currentGallerySession;
         private bool _isInGalleryMode;
+        
+        // Pending print modal parameters
+        private string _pendingPrintPath;
+        private string _pendingPrintSessionId;
+        private bool _pendingPrintIs2x6Template;
         #endregion
 
         #region Properties
@@ -3025,19 +3030,36 @@ namespace Photobooth.Pages
                         Log.Debug($"★★★ UNIFIED PRINT (Gallery): PhotoType: {printPhoto.PhotoType}");
                         Log.Debug($"★★★ UNIFIED PRINT (Gallery): Is 2x6 template: {is2x6Template}");
                         
-                        bool success = await _printingService.PrintImageAsync(
-                            printPhoto.FilePath,
-                            _currentGallerySession.SessionFolder,
-                            is2x6Template // This will trigger proper printer routing
-                        );
+                        // Check if we should show print copies modal for gallery printing
+                        var printSettings = PrintSettingsService.Instance;
+                        bool bypassPrintDialog = Properties.Settings.Default.ShowPrintDialog == false;
+                        bool showCopiesModal = printSettings.ShowPrintCopiesModal;
                         
-                        if (success)
+                        System.Diagnostics.Debug.WriteLine($"🔍 GALLERY PRINT: bypassPrintDialog={bypassPrintDialog}, showCopiesModal={showCopiesModal}");
+                        
+                        if (bypassPrintDialog && showCopiesModal)
                         {
-                            _uiService.UpdateStatus("Photos sent to printer!");
+                            // Show print copies modal for gallery session instead of printing directly
+                            System.Diagnostics.Debug.WriteLine($"🔍 SHOWING GALLERY PRINT MODAL");
+                            ShowPrintCopiesModalForGalleryPrint(printPhoto.FilePath, _currentGallerySession.SessionFolder, is2x6Template);
                         }
                         else
                         {
-                            _uiService.UpdateStatus("Print failed");
+                            // Print directly as before
+                            bool success = await _printingService.PrintImageAsync(
+                                printPhoto.FilePath,
+                                _currentGallerySession.SessionFolder,
+                                is2x6Template // This will trigger proper printer routing
+                            );
+                            
+                            if (success)
+                            {
+                                _uiService.UpdateStatus("Photos sent to printer!");
+                            }
+                            else
+                            {
+                                _uiService.UpdateStatus("Print failed");
+                            }
                         }
                     }
                     else
@@ -3082,19 +3104,36 @@ namespace Photobooth.Pages
                             Log.Debug($"  - ⚠️ Using same image for display and print");
                         }
                         
-                        bool printSuccess = await _printingService.PrintImageAsync(
-                            imageToPrint,
-                            _sessionService.CurrentSessionId,
-                            _sessionService.IsCurrentTemplate2x6 // Use proper 2x6 flag from session service
-                        );
+                        // Check if we should show print copies modal
+                        var printSettings = PrintSettingsService.Instance;
+                        bool bypassPrintDialog = Properties.Settings.Default.ShowPrintDialog == false;
+                        bool showCopiesModal = printSettings.ShowPrintCopiesModal;
                         
-                        if (printSuccess)
+                        System.Diagnostics.Debug.WriteLine($"🔍 REFACTORED PRINT: bypassPrintDialog={bypassPrintDialog}, showCopiesModal={showCopiesModal}");
+                        
+                        if (bypassPrintDialog && showCopiesModal)
                         {
-                            _uiService.UpdateStatus("Photo sent to printer!");
+                            // Show print copies modal instead of printing directly
+                            System.Diagnostics.Debug.WriteLine($"🔍 SHOWING PRINT MODAL in refactored");
+                            ShowPrintCopiesModalForMainPrint(imageToPrint, _sessionService.CurrentSessionId, _sessionService.IsCurrentTemplate2x6);
                         }
                         else
                         {
-                            _uiService.UpdateStatus("Print failed");
+                            // Print directly as before
+                            bool printSuccess = await _printingService.PrintImageAsync(
+                                imageToPrint,
+                                _sessionService.CurrentSessionId,
+                                _sessionService.IsCurrentTemplate2x6 // Use proper 2x6 flag from session service
+                            );
+                        
+                            if (printSuccess)
+                            {
+                                _uiService.UpdateStatus("Photo sent to printer!");
+                            }
+                            else
+                            {
+                                _uiService.UpdateStatus("Print failed");
+                            }
                         }
                     }
                     else
@@ -3113,6 +3152,199 @@ namespace Photobooth.Pages
                 _uiService.UpdateStatus("Print failed");
             }
         }
+
+        private void ShowPrintCopiesModalForMainPrint(string imagePath, string sessionId, bool is2x6Template)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"🔍 ShowPrintCopiesModalForMainPrint CALLED");
+                System.Diagnostics.Debug.WriteLine($"🔍 Image path: {imagePath}");
+                System.Diagnostics.Debug.WriteLine($"🔍 Session ID: {sessionId}");
+                System.Diagnostics.Debug.WriteLine($"🔍 Is 2x6 Template: {is2x6Template}");
+
+                // Store print parameters for use when user selects copies
+                _pendingPrintPath = imagePath;
+                _pendingPrintSessionId = sessionId;
+                _pendingPrintIs2x6Template = is2x6Template;
+
+                // Subscribe to modal events
+                printCopiesModal.CopiesSelected += OnMainPrintCopiesSelected;
+                printCopiesModal.SelectionCancelled += OnMainPrintSelectionCancelled;
+
+                System.Diagnostics.Debug.WriteLine($"🔍 Modal visibility before Show(): {printCopiesModal.Visibility}");
+                printCopiesModal.Show();
+                System.Diagnostics.Debug.WriteLine($"🔍 Modal visibility after Show(): {printCopiesModal.Visibility}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error showing print copies modal: {ex.Message}");
+                _uiService?.UpdateStatus("Failed to show print options");
+            }
+        }
+
+        private async void OnMainPrintCopiesSelected(object sender, int copies)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"OnMainPrintCopiesSelected: User selected {copies} copies");
+                
+                // Unsubscribe from events
+                printCopiesModal.CopiesSelected -= OnMainPrintCopiesSelected;
+                printCopiesModal.SelectionCancelled -= OnMainPrintSelectionCancelled;
+
+                if (!string.IsNullOrEmpty(_pendingPrintPath))
+                {
+                    // Print the specified number of copies
+                    for (int i = 0; i < copies; i++)
+                    {
+                        bool printSuccess = await _printingService.PrintImageAsync(
+                            _pendingPrintPath,
+                            _pendingPrintSessionId,
+                            _pendingPrintIs2x6Template
+                        );
+
+                        if (!printSuccess)
+                        {
+                            Log.Error($"Failed to print copy {i + 1} of {copies}");
+                            break;
+                        }
+                    }
+
+                    _uiService?.UpdateStatus($"{copies} copies sent to printer!");
+                    System.Diagnostics.Debug.WriteLine($"Print completed: {copies} copies of {_pendingPrintPath}");
+                }
+
+                // Clear pending print parameters
+                _pendingPrintPath = null;
+                _pendingPrintSessionId = null;
+                _pendingPrintIs2x6Template = false;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error handling print copies selection: {ex.Message}");
+                _uiService?.UpdateStatus("Print failed");
+            }
+        }
+
+        private void OnMainPrintSelectionCancelled(object sender, EventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("OnMainPrintSelectionCancelled: User cancelled print");
+                
+                // Unsubscribe from events
+                printCopiesModal.CopiesSelected -= OnMainPrintCopiesSelected;
+                printCopiesModal.SelectionCancelled -= OnMainPrintSelectionCancelled;
+
+                // Clear pending print parameters
+                _pendingPrintPath = null;
+                _pendingPrintSessionId = null;
+                _pendingPrintIs2x6Template = false;
+
+                _uiService?.UpdateStatus("Print cancelled");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error handling print selection cancellation: {ex.Message}");
+            }
+        }
+
+        private void ShowPrintCopiesModalForGalleryPrint(string imagePath, string sessionId, bool is2x6Template)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"🔍 ShowPrintCopiesModalForGalleryPrint CALLED");
+                System.Diagnostics.Debug.WriteLine($"🔍 Image path: {imagePath}");
+                System.Diagnostics.Debug.WriteLine($"🔍 Session ID: {sessionId}");
+                System.Diagnostics.Debug.WriteLine($"🔍 Is 2x6 Template: {is2x6Template}");
+
+                // Store print parameters for use when user selects copies
+                _pendingPrintPath = imagePath;
+                _pendingPrintSessionId = sessionId;
+                _pendingPrintIs2x6Template = is2x6Template;
+
+                // Subscribe to modal events (reuse the same event handlers)
+                printCopiesModal.CopiesSelected += OnGalleryPrintCopiesSelected;
+                printCopiesModal.SelectionCancelled += OnGalleryPrintSelectionCancelled;
+
+                System.Diagnostics.Debug.WriteLine($"🔍 Gallery Modal visibility before Show(): {printCopiesModal.Visibility}");
+                printCopiesModal.Show();
+                System.Diagnostics.Debug.WriteLine($"🔍 Gallery Modal visibility after Show(): {printCopiesModal.Visibility}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error showing gallery print copies modal: {ex.Message}");
+                _uiService?.UpdateStatus("Failed to show print options");
+            }
+        }
+
+        private async void OnGalleryPrintCopiesSelected(object sender, int copies)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"OnGalleryPrintCopiesSelected: User selected {copies} copies");
+                
+                // Unsubscribe from events
+                printCopiesModal.CopiesSelected -= OnGalleryPrintCopiesSelected;
+                printCopiesModal.SelectionCancelled -= OnGalleryPrintSelectionCancelled;
+
+                if (!string.IsNullOrEmpty(_pendingPrintPath))
+                {
+                    // Print the specified number of copies
+                    for (int i = 0; i < copies; i++)
+                    {
+                        bool printSuccess = await _printingService.PrintImageAsync(
+                            _pendingPrintPath,
+                            _pendingPrintSessionId,
+                            _pendingPrintIs2x6Template
+                        );
+
+                        if (!printSuccess)
+                        {
+                            Log.Error($"Failed to print gallery copy {i + 1} of {copies}");
+                            break;
+                        }
+                    }
+
+                    _uiService?.UpdateStatus($"{copies} copies sent to printer!");
+                    System.Diagnostics.Debug.WriteLine($"Gallery Print completed: {copies} copies of {_pendingPrintPath}");
+                }
+
+                // Clear pending print parameters
+                _pendingPrintPath = null;
+                _pendingPrintSessionId = null;
+                _pendingPrintIs2x6Template = false;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error handling gallery print copies selection: {ex.Message}");
+                _uiService?.UpdateStatus("Print failed");
+            }
+        }
+
+        private void OnGalleryPrintSelectionCancelled(object sender, EventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("OnGalleryPrintSelectionCancelled: User cancelled gallery print");
+                
+                // Unsubscribe from events
+                printCopiesModal.CopiesSelected -= OnGalleryPrintCopiesSelected;
+                printCopiesModal.SelectionCancelled -= OnGalleryPrintSelectionCancelled;
+
+                // Clear pending print parameters
+                _pendingPrintPath = null;
+                _pendingPrintSessionId = null;
+                _pendingPrintIs2x6Template = false;
+
+                _uiService?.UpdateStatus("Print cancelled");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error handling gallery print selection cancellation: {ex.Message}");
+            }
+        }
+        
         #endregion
 
         #region UI Management

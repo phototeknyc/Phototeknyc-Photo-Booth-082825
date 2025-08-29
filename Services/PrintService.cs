@@ -563,7 +563,18 @@ namespace Photobooth.Services
                 }
                 
                 // Print the documents
-                printDocument.Print();
+                System.Diagnostics.Debug.WriteLine($"🖨️ ABOUT TO PRINT: Printer='{printDocument.PrinterSettings.PrinterName}', Valid={printDocument.PrinterSettings.IsValid}");
+                
+                try 
+                {
+                    printDocument.Print();
+                    System.Diagnostics.Debug.WriteLine("✅ PRINT COMMAND COMPLETED SUCCESSFULLY");
+                }
+                catch (Exception printEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"❌ PRINT FAILED: {printEx.Message}");
+                    throw; // Re-throw to be handled by outer catch
+                }
                 
                 // Record print history
                 RecordPrintHistory(photoPaths, sessionId, copies);
@@ -732,6 +743,8 @@ namespace Photobooth.Services
         
         private void PrintDocument_PrintPage(object sender, PrintPageEventArgs e)
         {
+            System.Diagnostics.Debug.WriteLine($"🖨️ PrintDocument_PrintPage CALLED: Index={currentPrintIndex}, ImageCount={imagesToPrint?.Count ?? 0}");
+            
             if (currentPrintIndex < imagesToPrint.Count)
             {
                 try
@@ -876,8 +889,11 @@ namespace Photobooth.Services
             }
             else
             {
+                System.Diagnostics.Debug.WriteLine($"🖨️ PrintDocument_PrintPage: NO MORE IMAGES (Index={currentPrintIndex}, Count={imagesToPrint?.Count ?? 0})");
                 e.HasMorePages = false;
             }
+            
+            System.Diagnostics.Debug.WriteLine($"🖨️ PrintDocument_PrintPage COMPLETED: HasMorePages={e.HasMorePages}");
         }
 
         public void ResetDailyLimits()

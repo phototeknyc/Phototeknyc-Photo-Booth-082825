@@ -45,6 +45,10 @@ namespace Photobooth.Controls
             loadTimer = new DispatcherTimer();
             loadTimer.Interval = TimeSpan.FromMilliseconds(50);
             loadTimer.Tick += LoadThumbnailBatch;
+            
+            // Subscribe to print modal events
+            printCopiesModal.CopiesSelected += OnPrintCopiesSelected;
+            printCopiesModal.SelectionCancelled += OnPrintCopiesCancel;
         }
 
         public async void LoadPhotos()
@@ -358,6 +362,7 @@ namespace Photobooth.Controls
 
         private void PrintButton_Click(object sender, RoutedEventArgs e)
         {
+            System.Diagnostics.Debug.WriteLine("🔍 PrintButton_Click CALLED in GalleryOverlayControl");
             try
             {
                 // Check if printing is enabled
@@ -374,15 +379,57 @@ namespace Photobooth.Controls
                     return;
                 }
 
-                // Show print selection dialog
-                var printDialog = new PrintDialog(sessions);
-                printDialog.Owner = Window.GetWindow(this);
-                var result = printDialog.ShowDialog();
+                // Check if we should show print copies modal
+                var printSettings = PrintSettingsService.Instance;
+                bool bypassPrintDialog = Properties.Settings.Default.ShowPrintDialog == false;
+                bool showCopiesModal = printSettings.ShowPrintCopiesModal;
                 
-                if (result == true)
+                System.Diagnostics.Debug.WriteLine($"🔍 PRINT MODAL DEBUG: bypassPrintDialog={bypassPrintDialog}, showCopiesModal={showCopiesModal}");
+                System.Diagnostics.Debug.WriteLine($"🔍 SETTINGS: ShowPrintDialog={Properties.Settings.Default.ShowPrintDialog}, ShowPrintCopiesModal={printSettings.ShowPrintCopiesModal}");
+                
+                if (bypassPrintDialog && showCopiesModal)
                 {
-                    // Print was successful, maybe update the status
-                    statusText.Text = "Photos printed successfully";
+                    // Show print copies modal
+                    var firstSession = sessions.FirstOrDefault();
+                    if (firstSession != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"🔍 SHOWING PRINT MODAL for session: {firstSession.SessionName}");
+                        ShowPrintCopiesModal(firstSession);
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"🔍 NO SESSION FOUND for print modal");
+                    }
+                }
+                else if (bypassPrintDialog)
+                {
+                    // Print directly without showing any dialog - use first session and default copies
+                    var firstSession = sessions.FirstOrDefault();
+                    if (firstSession != null)
+                    {
+                        var photosToPrint = firstSession.Photos.ToList();
+                        var defaultCopies = Properties.Settings.Default.DefaultPrintCopies;
+                        
+                        // Print directly using PrintService
+                        var printService = PrintService.Instance;
+                        var photoPaths = photosToPrint.Select(p => p.FilePath).ToList();
+                        var printResult = printService.PrintPhotos(photoPaths, firstSession.SessionName, defaultCopies);
+                        
+                        System.Diagnostics.Debug.WriteLine($"Direct print result: {printResult.Success}, {printResult.Message}");
+                    }
+                }
+                else
+                {
+                    // Show print selection dialog
+                    var printDialog = new PrintDialog(sessions);
+                    printDialog.Owner = Window.GetWindow(this);
+                    var result = printDialog.ShowDialog();
+                    
+                    if (result == true)
+                    {
+                        // Print was successful, maybe update the status
+                        statusText.Text = "Photos printed successfully";
+                    }
                 }
             }
             catch (Exception ex)
@@ -491,6 +538,55 @@ namespace Photobooth.Controls
             }
             return photosBySession;
         }
+
+        #region Print Copies Modal
+
+        private SessionGroup _currentPrintSession;
+
+        private void ShowPrintCopiesModal(SessionGroup session)
+        {
+            System.Diagnostics.Debug.WriteLine($"🔍 ShowPrintCopiesModal CALLED for session: {session.SessionName}");
+            _currentPrintSession = session;
+            System.Diagnostics.Debug.WriteLine($"🔍 Modal visibility before Show(): {printCopiesModal.Visibility}");
+            printCopiesModal.Show();
+            System.Diagnostics.Debug.WriteLine($"🔍 Modal visibility after Show(): {printCopiesModal.Visibility}");
+            System.Diagnostics.Debug.WriteLine($"🔍 Modal IsVisible: {printCopiesModal.IsVisible}");
+        }
+
+        private void OnPrintCopiesSelected(object sender, int copies)
+        {
+            System.Diagnostics.Debug.WriteLine($"OnPrintCopiesSelected: User selected {copies} copies");
+            
+            if (_currentPrintSession != null)
+            {
+                var photosToPrint = _currentPrintSession.Photos.ToList();
+                var printService = PrintService.Instance;
+                var photoPaths = photosToPrint.Select(p => p.FilePath).ToList();
+                var printResult = printService.PrintPhotos(photoPaths, _currentPrintSession.SessionName, copies);
+                
+                System.Diagnostics.Debug.WriteLine($"Print result: {printResult.Success}, {printResult.Message}");
+                
+                if (printResult.Success)
+                {
+                    statusText.Text = $"Successfully printed {copies} copies";
+                }
+                else
+                {
+                    statusText.Text = $"Print failed: {printResult.Message}";
+                }
+            }
+            
+            _currentPrintSession = null;
+        }
+
+        private void OnPrintCopiesCancel(object sender, EventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine("OnPrintCopiesCancel: User cancelled print");
+            _currentPrintSession = null;
+        }
+
+        #endregion
+
     }
 
     // Data Models

@@ -430,6 +430,18 @@ namespace Photobooth.Pages
                     
                 if (defaultCopiesTextBox != null && int.TryParse(defaultCopiesTextBox.Text, out int defaultCopies))
                     Properties.Settings.Default.DefaultPrintCopies = Math.Max(1, defaultCopies);
+
+                // Save print copies modal settings using PrintSettingsService
+                if (showPrintCopiesModalCheckBox != null)
+                    PrintSettingsService.Instance.ShowPrintCopiesModal = showPrintCopiesModalCheckBox.IsChecked ?? false;
+
+                if (maxCopiesComboBox != null && maxCopiesComboBox.SelectedItem is ComboBoxItem selectedItem)
+                {
+                    if (int.TryParse(selectedItem.Content.ToString(), out int maxCopies))
+                    {
+                        PrintSettingsService.Instance.MaxCopiesInModal = maxCopies;
+                    }
+                }
                 
                 // Save advanced driver settings
                 /*if (colorModeComboBox?.SelectedItem is ComboBoxItem colorModeItem)
@@ -709,6 +721,25 @@ namespace Photobooth.Pages
                     
                 if (defaultCopiesTextBox != null)
                     defaultCopiesTextBox.Text = Properties.Settings.Default.DefaultPrintCopies.ToString();
+
+                // Load print copies modal settings from PrintSettingsService
+                if (showPrintCopiesModalCheckBox != null)
+                {
+                    showPrintCopiesModalCheckBox.IsChecked = PrintSettingsService.Instance.ShowPrintCopiesModal;
+                }
+
+                if (maxCopiesComboBox != null)
+                {
+                    int maxCopies = PrintSettingsService.Instance.MaxCopiesInModal;
+                    foreach (ComboBoxItem item in maxCopiesComboBox.Items)
+                    {
+                        if (item.Content.ToString() == maxCopies.ToString())
+                        {
+                            maxCopiesComboBox.SelectedItem = item;
+                            break;
+                        }
+                    }
+                }
                 
                 // Load advanced driver settings with null checks
                 /*if (colorModeComboBox != null)

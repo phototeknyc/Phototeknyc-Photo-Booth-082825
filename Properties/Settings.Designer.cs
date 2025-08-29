@@ -1354,5 +1354,29 @@ namespace Photobooth.Properties {
                 this["ShowFlipbookButton"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool ShowPrintCopiesModal {
+            get {
+                return ((bool)(this["ShowPrintCopiesModal"]));
+            }
+            set {
+                this["ShowPrintCopiesModal"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("5")]
+        public int MaxCopiesInModal {
+            get {
+                return ((int)(this["MaxCopiesInModal"]));
+            }
+            set {
+                this["MaxCopiesInModal"] = value;
+            }
+        }
     }
 }

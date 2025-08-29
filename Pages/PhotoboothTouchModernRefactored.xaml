@@ -1046,5 +1046,8 @@
                 </Grid>
             </Border>
         </Grid>
+        
+        <!-- Print Copies Modal -->
+        <controls:PrintCopiesModal x:Name="printCopiesModal" />
     </Grid>
 </Page>
