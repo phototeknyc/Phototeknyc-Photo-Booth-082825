@@ -631,7 +631,7 @@ namespace Photobooth.Pages
                                 string firstPhotoPath = null;
                                 if (photo.PhotoType == "MP4")
                                 {
-                                    var firstOrigPhoto = e.Photos.FirstOrDefault(p => p.PhotoType == "ORIG" && File.Exists(p.FilePath));
+                                    var firstOrigPhoto = e.Photos.FirstOrDefault(p => (p.PhotoType == "ORIG" || p.PhotoType == "Original") && File.Exists(p.FilePath));
                                     firstPhotoPath = firstOrigPhoto?.FilePath;
                                     Log.Debug($"  Using first original photo for MP4 thumbnail: {firstPhotoPath}");
                                 }
@@ -646,6 +646,7 @@ namespace Photobooth.Pages
                                 Log.Debug($"  Added composed thumbnail: {photo.FilePath}");
                                 break;
                             case "ORIG":
+                            case "Original":
                             default:
                                 // Call local method for original photos
                                 AddPhotoThumbnail(photo.FilePath);
