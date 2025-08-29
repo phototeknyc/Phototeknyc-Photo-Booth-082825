@@ -163,9 +163,9 @@ namespace Photobooth.Services
                     
                     // Add composed images - group by type to avoid duplicates
                     // Only add ONE of each type (COMP, GIF, MP4) to prevent duplicates
-                    // EXCLUDE 4x6_print versions as they're only for backend printing
+                    // INCLUDE 4x6_print versions for printing from gallery
                     var composedByType = composedImages
-                                                       .Where(c => c.OutputFormat != "4x6_print") // Exclude print duplicates
+                                                       
                                                        .GroupBy(c => c.OutputFormat ?? "COMP")
                                                        .Select(g => g.OrderByDescending(c => c.CreatedDate).First());
                     
@@ -327,9 +327,9 @@ namespace Photobooth.Services
                 
                 // Add composed images and GIFs - group by type to avoid duplicates
                 // Only add ONE of each type (COMP, GIF, MP4) to prevent duplicates
-                // EXCLUDE 4x6_print versions as they're only for backend printing
+                // INCLUDE 4x6_print versions for printing from gallery
                 var composedByType = composedImages
-                    .Where(c => c.OutputFormat != "4x6_print") // Exclude print duplicates from gallery
+                     
                     .GroupBy(c => {
                         if (c.OutputFormat == "GIF" || c.OutputFormat == "MP4" || 
                             c.FileName.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) ||

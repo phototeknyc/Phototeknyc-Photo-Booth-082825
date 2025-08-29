@@ -711,13 +711,22 @@ namespace Photobooth.Pages
                     _isInGalleryMode = true;
                     Log.Debug($"★★★ ShowGalleryNavigationButtons: Showing action buttons panel for gallery session (Visibility: {actionButtonsPanel.Visibility})");
                     
-                    // Also log individual button visibility
+                    // Also log individual button visibility and set them to Visible
                     if (printButton != null)
+                    {
+                        printButton.Visibility = Visibility.Visible;
                         Log.Debug($"  - Print button visibility: {printButton.Visibility}");
+                    }
                     if (shareButton != null)
+                    {
+                        shareButton.Visibility = Visibility.Visible;
                         Log.Debug($"  - Share button visibility: {shareButton.Visibility}");
+                    }
                     if (emailButton != null)
+                    {
+                        emailButton.Visibility = Visibility.Visible;
                         Log.Debug($"  - Email button visibility: {emailButton.Visibility}");
+                    }
                 }
                 else
                 {
@@ -1767,15 +1776,9 @@ namespace Photobooth.Pages
                 }
                 else
                 {
-                    // Fallback for MP4 without thumbnail - create a placeholder
-                    Log.Debug($"★★★ No thumbnail available for MP4, creating placeholder");
-                    // Create a simple placeholder bitmap
-                    bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.UriSource = new Uri("pack://application:,,,/Images/video_placeholder.png", UriKind.Absolute);
-                    bitmap.DecodePixelWidth = 150;
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.EndInit();
+                    // Fallback for MP4 without thumbnail - don't add thumbnail
+                    Log.Debug($"★★★ No thumbnail available for MP4, skipping thumbnail creation");
+                    return;
                 }
                 
                 var image = new Image
