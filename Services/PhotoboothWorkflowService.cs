@@ -128,15 +128,22 @@ namespace Photobooth.Services
                 _isCapturing = true;
                 StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Preparing capture..." });
 
-                // Check if photographer mode (skip countdown for subsequent photos)
-                bool skipCountdown = Properties.Settings.Default.PhotographerMode && _sessionService.CurrentPhotoIndex > 0;
+                // Check if photographer mode (skip countdown for ALL photos in photographer mode)
+                bool photographerMode = Properties.Settings.Default.PhotographerMode;
 
-                if (skipCountdown)
+                if (photographerMode)
                 {
-                    await WaitForPhotographerTriggerAsync();
+                    // In photographer mode, wait for manual trigger
+                    Log.Debug("PhotoboothWorkflowService: Photographer mode - waiting for manual trigger");
+                    StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Press camera trigger when ready" });
+                    
+                    // Don't capture here - wait for the trigger to fire PhotoCaptured event
+                    // The _cameraCaptureHandler will process it when trigger is pressed
+                    // Just keep the workflow active and waiting
                 }
                 else
                 {
+                    // Normal mode - do countdown then capture
                     await StartCountdownAsync();
                 }
 

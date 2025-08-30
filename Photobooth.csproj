@@ -218,6 +218,7 @@
     <Compile Include="Services\PhotoFilterServiceMagick.cs" />
     <Compile Include="Services\PhotoFilterServiceHybrid.cs" />
     <Compile Include="Services\GifGenerationService.cs" />
+    <Compile Include="Services\GallerySessionService.cs" />
     <Compile Include="Services\MagickGifService.cs" />
     <Compile Include="Services\VideoGenerationService.cs" />
     <Compile Include="Services\PrintService.cs" />
@@ -565,6 +566,7 @@
     <Compile Include="Services\PhotoboothUIService.cs" />
     <Compile Include="Services\PhotoCompositionService.cs" />
     <Compile Include="Services\EventGalleryService.cs" />
+    <Compile Include="Services\FileValidationService.cs" />
     <Compile Include="Services\GalleryActionService.cs" />
     <Compile Include="Services\SharingUIService.cs" />
     <Compile Include="Services\PhotoboothQueueService.cs" />

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using CameraControl.Devices;
@@ -330,5 +331,250 @@ namespace Photobooth.Services
                 return false;
             }
         }
+        
+        /// <summary>
+        /// Process print request for gallery session with all business logic
+        /// Handles photo selection, 2x6 detection, and modal/direct printing
+        /// </summary>
+        public async Task<PrintRequestResult> ProcessGalleryPrintRequestAsync(SessionGalleryData gallerySession)
+        {
+            try
+            {
+                if (gallerySession?.Photos == null)
+                {
+                    return new PrintRequestResult { Success = false, Message = "No gallery session provided" };
+                }
+
+                // Business logic: Find the best photo to print
+                var printPhoto = FindBestPhotoToPrint(gallerySession.Photos);
+                if (printPhoto == null)
+                {
+                    Log.Debug("No suitable print photo found in gallery session");
+                    return new PrintRequestResult { Success = false, Message = "No composed image to print" };
+                }
+
+                // Business logic: Determine if this is a 2x6 template
+                bool is2x6Template = DetermineIf2x6Template(printPhoto);
+                
+                Log.Debug($"★★★ GALLERY PRINT: {printPhoto.FileName}, PhotoType: {printPhoto.PhotoType}, Is2x6: {is2x6Template}");
+
+                // Business logic: Check print modal settings
+                var shouldShowModal = ShouldShowPrintModal();
+                
+                if (shouldShowModal)
+                {
+                    // Return result indicating modal should be shown
+                    return new PrintRequestResult 
+                    { 
+                        Success = true, 
+                        ShowModal = true, 
+                        ImagePath = printPhoto.FilePath, 
+                        SessionId = gallerySession.SessionFolder, 
+                        Is2x6Template = is2x6Template,
+                        Message = "Show print modal"
+                    };
+                }
+                else
+                {
+                    // Print directly
+                    bool success = await PrintImageAsync(printPhoto.FilePath, gallerySession.SessionFolder, is2x6Template);
+                    return new PrintRequestResult 
+                    { 
+                        Success = success, 
+                        ShowModal = false,
+                        Message = success ? "Photos sent to printer!" : "Print failed" 
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error processing gallery print request: {ex.Message}");
+                return new PrintRequestResult { Success = false, Message = $"Print failed: {ex.Message}" };
+            }
+        }
+
+        /// <summary>
+        /// Process print request for active session with all business logic
+        /// Handles image path selection, dimension analysis, and modal/direct printing
+        /// </summary>
+        public async Task<PrintRequestResult> ProcessSessionPrintRequestAsync(PhotoboothSessionService sessionService)
+        {
+            try
+            {
+                if (sessionService?.IsSessionActive != true)
+                {
+                    return new PrintRequestResult { Success = false, Message = "No active session" };
+                }
+
+                // Business logic: Determine which image to print
+                var printImageInfo = DeterminePrintImagePath(sessionService);
+                if (string.IsNullOrEmpty(printImageInfo.ImagePath))
+                {
+                    return new PrintRequestResult { Success = false, Message = "No photo to print" };
+                }
+
+                // Business logic: Analyze image properties (for logging/debugging)
+                AnalyzePrintImageProperties(printImageInfo.ImagePath, printImageInfo.IsUsingPrintSpecificPath);
+
+                Log.Debug($"★★★ SESSION PRINT: {printImageInfo.ImagePath}, Is2x6: {sessionService.IsCurrentTemplate2x6}");
+
+                // Business logic: Check print modal settings
+                var shouldShowModal = ShouldShowPrintModal();
+                
+                if (shouldShowModal)
+                {
+                    // Return result indicating modal should be shown
+                    return new PrintRequestResult 
+                    { 
+                        Success = true, 
+                        ShowModal = true, 
+                        ImagePath = printImageInfo.ImagePath, 
+                        SessionId = sessionService.CurrentSessionId, 
+                        Is2x6Template = sessionService.IsCurrentTemplate2x6,
+                        Message = "Show print modal"
+                    };
+                }
+                else
+                {
+                    // Print directly
+                    bool success = await PrintImageAsync(printImageInfo.ImagePath, sessionService.CurrentSessionId, sessionService.IsCurrentTemplate2x6);
+                    return new PrintRequestResult 
+                    { 
+                        Success = success, 
+                        ShowModal = false,
+                        Message = success ? "Photo sent to printer!" : "Print failed" 
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error processing session print request: {ex.Message}");
+                return new PrintRequestResult { Success = false, Message = $"Print failed: {ex.Message}" };
+            }
+        }
+
+        #region Private Business Logic Methods
+
+        /// <summary>
+        /// Business logic: Find the best photo to print from gallery session
+        /// Priority: 4x6_print > COMP, with file existence check
+        /// </summary>
+        private PhotoGalleryData FindBestPhotoToPrint(List<PhotoGalleryData> photos)
+        {
+            // First look for the 4x6_print version (duplicated 2x6)
+            var printPhoto = photos?.FirstOrDefault(p => p.PhotoType == "4x6_print" && File.Exists(p.FilePath));
+            
+            // If no 4x6_print version, look for regular composed image
+            if (printPhoto == null)
+            {
+                printPhoto = photos?.FirstOrDefault(p => p.PhotoType == "COMP" && File.Exists(p.FilePath));
+            }
+
+            return printPhoto;
+        }
+
+        /// <summary>
+        /// Business logic: Determine if photo represents a 2x6 template
+        /// Uses multiple detection methods: PhotoType, filename, filepath
+        /// </summary>
+        private bool DetermineIf2x6Template(PhotoGalleryData photo)
+        {
+            if (photo == null) return false;
+
+            string fileName = photo.FileName?.ToLower() ?? "";
+            string filePath = photo.FilePath?.ToLower() ?? "";
+            
+            return photo.PhotoType == "4x6_print" || // 4x6_print means it's a duplicated 2x6
+                   fileName.Contains("2x6") || fileName.Contains("2_6") || fileName.Contains("2-6") ||
+                   filePath.Contains("2x6") || filePath.Contains("2_6") || filePath.Contains("2-6") ||
+                   fileName.Contains("4x6_print"); // Also check for 4x6_print in filename
+        }
+
+        /// <summary>
+        /// Business logic: Determine print image path and whether using print-specific version
+        /// Priority: ComposedImagePrintPath > ComposedImagePath
+        /// </summary>
+        private (string ImagePath, bool IsUsingPrintSpecificPath) DeterminePrintImagePath(PhotoboothSessionService sessionService)
+        {
+            Log.Debug($"★★★ PRINT PATH SELECTION ★★★");
+            Log.Debug($"  - ComposedImagePath (display): {sessionService.ComposedImagePath}");
+            Log.Debug($"  - ComposedImagePrintPath (print): {sessionService.ComposedImagePrintPath}");
+            Log.Debug($"  - IsCurrentTemplate2x6: {sessionService.IsCurrentTemplate2x6}");
+
+            string imagePath = !string.IsNullOrEmpty(sessionService.ComposedImagePrintPath) ? 
+                sessionService.ComposedImagePrintPath : sessionService.ComposedImagePath;
+            
+            bool isUsingPrintSpecific = imagePath == sessionService.ComposedImagePrintPath;
+            
+            Log.Debug($"  - SELECTED imageToPrint: {imagePath}");
+            
+            // Verify file exists
+            if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
+            {
+                return (imagePath, isUsingPrintSpecific);
+            }
+
+            return (null, false);
+        }
+
+        /// <summary>
+        /// Business logic: Analyze print image properties for logging
+        /// Checks dimensions and logs diagnostic information
+        /// </summary>
+        private void AnalyzePrintImageProperties(string imagePath, bool isUsingPrintSpecificPath)
+        {
+            try
+            {
+                using (var img = System.Drawing.Image.FromFile(imagePath))
+                {
+                    Log.Debug($"  - Image dimensions: {img.Width}x{img.Height}");
+                    bool is4x6Duplicate = img.Width == 1200 && img.Height == 1800;
+                    Log.Debug($"  - Is 4x6 duplicate: {is4x6Duplicate}");
+                }
+
+                if (isUsingPrintSpecificPath)
+                {
+                    Log.Debug($"  - ✅ Using 4x6 duplicate for printing (different from display)");
+                }
+                else
+                {
+                    Log.Debug($"  - ⚠️ Using same image for display and print");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error analyzing print image properties: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Business logic: Determine if print modal should be shown
+        /// Based on print settings configuration
+        /// </summary>
+        private bool ShouldShowPrintModal()
+        {
+            bool bypassPrintDialog = Properties.Settings.Default.ShowPrintDialog == false;
+            bool showCopiesModal = _settingsService.ShowPrintCopiesModal;
+            
+            System.Diagnostics.Debug.WriteLine($"🔍 PRINT MODAL CHECK: bypassPrintDialog={bypassPrintDialog}, showCopiesModal={showCopiesModal}");
+            
+            return bypassPrintDialog && showCopiesModal;
+        }
+
+        #endregion
+    }
+
+    /// <summary>
+    /// Result of print request processing operation
+    /// Contains success status, modal display flag, and print parameters
+    /// </summary>
+    public class PrintRequestResult
+    {
+        public bool Success { get; set; }
+        public bool ShowModal { get; set; }
+        public string ImagePath { get; set; }
+        public string SessionId { get; set; }
+        public bool Is2x6Template { get; set; }
+        public string Message { get; set; }
     }
 }

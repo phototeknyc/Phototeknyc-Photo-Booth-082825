@@ -22,6 +22,7 @@ using static Photobooth.Services.PhotoboothSessionService;
 using static Photobooth.Services.PhotoboothWorkflowService;
 using static Photobooth.Services.PhotoboothUIService;
 using static Photobooth.Services.PhotoCompositionService;
+using static Photobooth.Services.GallerySessionService;
 
 namespace Photobooth.Pages
 {
@@ -248,10 +249,7 @@ namespace Photobooth.Pages
             _moduleManager = ModuleManager.Instance;
             
             // Initialize modules when camera is ready
-            var outputFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                "Photobooth"
-            );
+            var outputFolder = FileValidationService.Instance.GetDefaultPhotoOutputFolder("Photobooth");
             
             // Initialize will be called later when camera is ready
             if (DeviceManager?.SelectedCameraDevice != null)
@@ -281,10 +279,7 @@ namespace Photobooth.Pages
             // Initialize modules with camera
             if (DeviceManager?.SelectedCameraDevice != null)
             {
-                var outputFolder = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                    "Photobooth"
-                );
+                var outputFolder = FileValidationService.Instance.GetDefaultPhotoOutputFolder("Photobooth");
                 _moduleManager.Initialize(DeviceManager.SelectedCameraDevice, outputFolder);
             }
             
@@ -351,9 +346,9 @@ namespace Photobooth.Pages
             {
                 DeviceManager.CameraSelected += DeviceManager_CameraSelected;
                 DeviceManager.CameraConnected += DeviceManager_CameraConnected; 
-                // REMOVED: DeviceManager.PhotoCaptured - Let workflow service handle this
+                // Don't subscribe to PhotoCaptured - workflow service handles this
                 DeviceManager.CameraDisconnected += DeviceManager_CameraDisconnected;
-                Log.Debug("SetupEventHandlers: Subscribed to camera events (except PhotoCaptured - handled by workflow)");
+                Log.Debug("SetupEventHandlers: Subscribed to camera events (PhotoCaptured handled by workflow)");
             }
         }
         
@@ -461,7 +456,7 @@ namespace Photobooth.Pages
             {
                 DeviceManager.CameraSelected -= DeviceManager_CameraSelected;
                 DeviceManager.CameraConnected -= DeviceManager_CameraConnected;
-                // REMOVED: DeviceManager.PhotoCaptured - Not subscribed anymore
+                // PhotoCaptured not subscribed
                 DeviceManager.CameraDisconnected -= DeviceManager_CameraDisconnected;
                 Log.Debug("RemoveEventHandlers: Unsubscribed from camera events");
             }
@@ -592,101 +587,75 @@ namespace Photobooth.Pages
             {
                 try
                 {
-                    if (e.Session == null || e.Photos == null)
-                    {
-                        Log.Debug("Invalid session data for loading");
-                        return;
-                    }
+                    // Use GallerySessionService to prepare session
+                    var loadResult = GallerySessionService.Instance.PrepareSessionForLoading(e.Session, e.Photos);
+                    if (loadResult == null) return;
                     
                     // Store current gallery session
                     _currentGallerySession = e.Session;
                     
-                    // Clear current photos in the strip
-                    if (photosContainer != null)
-                    {
-                        int beforeClear = photosContainer.Children.Count;
-                        photosContainer.Children.Clear();
-                        Log.Debug($"OnServiceSessionLoadRequested: Cleared {beforeClear} existing items from photosContainer");
-                    }
-                    else
-                    {
-                        Log.Error("OnServiceSessionLoadRequested: photosContainer is null!");
-                    }
+                    // Clear photos container
+                    ClearPhotosContainer();
                     
-                    // Load session photos using UI service (business logic)
-                    Log.Debug($"OnServiceSessionLoadRequested: Loading {e.Photos.Count} photos into photo strip using UI service:");
-                    
-                    foreach (var photo in e.Photos)
+                    // Process each photo action from service
+                    string lastComposedPath = null;
+                    foreach (var action in loadResult.PhotoActions)
                     {
-                        Log.Debug($"  Photo: {photo.FileName} (Type: {photo.PhotoType}) - Path: {photo.FilePath}");
+                        ProcessPhotoLoadAction(action);
                         
-                        if (!File.Exists(photo.FilePath))
+                        // Track composed image for auto-display
+                        if (action.Action == "AddComposed")
                         {
-                            Log.Debug($"  File not found: {photo.FilePath}, skipping");
-                            continue;
-                        }
-                        
-                        // Skip displaying 4x6_print thumbnails in gallery (but keep them in session for printing)
-                        if (photo.PhotoType == "4x6_print")
-                        {
-                            Log.Debug($"  Skipping 4x6_print thumbnail display (keeping for print): {photo.FilePath}");
-                            continue;
-                        }
-                        
-                        // For gallery loading, call local methods directly to ensure click handlers are attached
-                        switch (photo.PhotoType)
-                        {
-                            case "GIF":
-                            case "MP4":
-                                // For gallery sessions, we need to pass original photos for MP4 thumbnail
-                                // Get the first original photo for MP4 thumbnail
-                                string firstPhotoPath = null;
-                                if (photo.PhotoType == "MP4")
-                                {
-                                    var firstOrigPhoto = e.Photos.FirstOrDefault(p => (p.PhotoType == "ORIG" || p.PhotoType == "Original") && File.Exists(p.FilePath));
-                                    firstPhotoPath = firstOrigPhoto?.FilePath;
-                                    Log.Debug($"  Using first original photo for MP4 thumbnail: {firstPhotoPath}");
-                                }
-                                
-                                // Call method with gallery context
-                                AddGifThumbnailForGallery(photo.FilePath, firstPhotoPath);
-                                Log.Debug($"  Added {photo.PhotoType} thumbnail with click handler: {photo.FilePath}");
-                                break;
-                            case "COMP":
-                            case "2x6":  // Handle 2x6 composed images
-                                // Call local method directly to ensure proper display
-                                AddComposedThumbnail(photo.FilePath);
-                                Log.Debug($"  Added composed thumbnail: {photo.FilePath}");
-                                break;
-                            case "ORIG":
-                            case "Original":
-                            default:
-                                // Call local method for original photos
-                                AddPhotoThumbnail(photo.FilePath);
-                                Log.Debug($"  Added photo thumbnail: {photo.FilePath}");
-                                break;
+                            lastComposedPath = action.FilePath;
                         }
                     }
                     
-                    // Check how many are actually in the container
-                    int containerCount = photosContainer?.Children.Count ?? 0;
-                    Log.Debug($"Photos in container after loading: {containerCount} (expected: {e.Photos.Count})");
+                    // Auto-display composed image in live view if available
+                    if (!string.IsNullOrEmpty(lastComposedPath))
+                    {
+                        _uiService.DisplayImage(lastComposedPath);
+                        Log.Debug($"Auto-displaying composed image: {lastComposedPath}");
+                    }
                     
-                    // Update status with session info
-                    _uiService.UpdateStatus($"Viewing: {e.Session.SessionName} ({e.Photos.Count} photos)");
+                    // Update UI with status
+                    _uiService.UpdateStatus(loadResult.StatusMessage);
                     
-                    // Show gallery navigation buttons with proper index
-                    var sessionIndex = _currentGallerySessionIndex;
-                    var totalSessions = _gallerySessions?.Count ?? 1;
-                    ShowGalleryNavigationButtons(sessionIndex, totalSessions);
+                    // Show gallery navigation
+                    ShowGalleryNavigationButtons(_currentGallerySessionIndex, _gallerySessions?.Count ?? 1);
                     
-                    Log.Debug($"Loaded session {e.Session.SessionName} with {e.Photos.Count} photos");
+                    Log.Debug($"Session loaded: {loadResult.PhotosLoaded} photos displayed, {loadResult.PhotosSkipped} skipped");
                 }
                 catch (Exception ex)
                 {
-                    Log.Error($"Error loading session into view: {ex.Message}");
+                    Log.Error($"Error loading session: {ex.Message}");
                 }
             });
+        }
+        
+        private void ClearPhotosContainer()
+        {
+            if (photosContainer != null)
+            {
+                int beforeClear = photosContainer.Children.Count;
+                photosContainer.Children.Clear();
+                Log.Debug($"Cleared {beforeClear} items from photos container");
+            }
+        }
+        
+        private void ProcessPhotoLoadAction(PhotoLoadAction action)
+        {
+            switch (action.Action)
+            {
+                case "AddGif":
+                    AddGifThumbnailForGallery(action.FilePath, action.ThumbnailPath);
+                    break;
+                case "AddComposed":
+                    AddComposedThumbnail(action.FilePath);
+                    break;
+                case "AddPhoto":
+                    AddPhotoThumbnail(action.FilePath);
+                    break;
+            }
         }
         
         /// <summary>
@@ -807,8 +776,9 @@ namespace Photobooth.Pages
             }));
         }
 
-        // REMOVED: DeviceManager_PhotoCaptured - This was causing duplicate processing
-        // The workflow service now handles all photo capture events directly
+        // REMOVED: DeviceManager_PhotoCaptured - Workflow service handles all photo captures
+        // In photographer mode, when trigger is pressed, the workflow service's 
+        // PhotoCaptured handler processes it directly
 
         #endregion
 
@@ -847,81 +817,91 @@ namespace Photobooth.Pages
             {
                 Log.Debug($"Service photo processed: {e.PhotoIndex} of {e.TotalPhotos}");
                 
-                // Add thumbnail using UI service
-                _uiService.AddPhotoThumbnail(e.PhotoPath, e.PhotoIndex);
-                
-                // Update photo counter
-                _uiService.UpdatePhotoCounter(e.PhotoIndex, e.TotalPhotos);
+                // Update UI with thumbnail and counter
+                UpdatePhotoUI(e.PhotoPath, e.PhotoIndex, e.TotalPhotos);
                 
                 if (!e.IsComplete)
                 {
-                    _uiService.UpdateStatus($"Photo {e.PhotoIndex} captured! Get ready for photo {e.PhotoIndex + 1}...");
-                    
-                    // Check if photographer mode is enabled
-                    bool photographerMode = Properties.Settings.Default.PhotographerMode;
-                    
-                    if (photographerMode)
-                    {
-                        // In photographer mode, wait for manual trigger
-                        Log.Debug($"Photographer mode enabled - waiting for manual trigger for photo {e.PhotoIndex + 1}");
-                        _uiService.UpdateStatus($"Ready for photo {e.PhotoIndex + 1} - Press camera trigger when ready");
-                        
-                        // Start the workflow in photographer mode (it will wait for manual trigger)
-                        await _workflowService.StartPhotoCaptureWorkflowAsync();
-                    }
-                    else
-                    {
-                        // Use configurable delay between photos
-                        int delaySeconds = Properties.Settings.Default.DelayBetweenPhotos;
-                        Log.Debug($"Waiting {delaySeconds} seconds before next photo");
-                        
-                        await Task.Delay(delaySeconds * 1000);
-                        
-                        // Start the next photo capture workflow
-                        Log.Debug($"Starting capture workflow for photo {e.PhotoIndex + 1} of {e.TotalPhotos}");
-                        await _workflowService.StartPhotoCaptureWorkflowAsync();
-                    }
+                    // Continue capturing photos
+                    await HandleNextPhotoCapture(e.PhotoIndex, e.TotalPhotos);
                 }
                 else
                 {
-                    // All photos captured - compose template and complete session
-                    Log.Debug("All photos captured, composing template before completing session");
-                    _uiService.UpdateStatus("Processing your photos...");
-                    
-                    // Animation generation will happen in background via ProcessSessionPhotos()
-                    // and UI will be updated via OnServiceAnimationReady event
-                    Log.Debug("Animation generation started in background - UI will update when ready");
-                    
-                    // Compose template if available
-                    if (_currentTemplate != null && _sessionService.CapturedPhotoPaths?.Count > 0)
-                    {
-                        _uiService.UpdateStatus("Composing final image...");
-                        var completedData = new CompletedSessionData
-                        {
-                            SessionId = _sessionService.CurrentSessionId,
-                            Event = _sessionService.CurrentEvent,
-                            Template = _sessionService.CurrentTemplate,
-                            PhotoPaths = _sessionService.CapturedPhotoPaths
-                        };
-                        
-                        string composedPath = await _compositionService.ComposeTemplateAsync(completedData);
-                        if (!string.IsNullOrEmpty(composedPath))
-                        {
-                            // Get both paths from the composition service
-                            string displayPath = _compositionService.LastDisplayPath ?? composedPath;
-                            string printPath = _compositionService.LastPrintPath ?? composedPath;
-                            
-                            
-                            // Set the composed image paths in the session
-                            _sessionService.SetComposedImagePaths(displayPath, printPath);
-                        }
-                    }
-                    
-                    // Complete the session to trigger MP4 generation and auto-upload
-                    Log.Debug("Completing session to trigger MP4 generation and auto-upload");
-                    await _sessionService.CompleteSessionAsync();
+                    // All photos captured - complete session
+                    await HandleSessionCompletion();
                 }
             });
+        }
+        
+        private void UpdatePhotoUI(string photoPath, int photoIndex, int totalPhotos)
+        {
+            _uiService.AddPhotoThumbnail(photoPath, photoIndex);
+            _uiService.UpdatePhotoCounter(photoIndex, totalPhotos);
+        }
+        
+        private async Task HandleNextPhotoCapture(int photoIndex, int totalPhotos)
+        {
+            _uiService.UpdateStatus($"Photo {photoIndex} captured! Get ready for photo {photoIndex + 1}...");
+            
+            if (Properties.Settings.Default.PhotographerMode)
+            {
+                // Photographer mode - just update status
+                Log.Debug($"Photographer mode - waiting for manual trigger for photo {photoIndex + 1}");
+                _uiService.UpdateStatus($"Ready for photo {photoIndex + 1} - Press camera trigger when ready");
+                
+                // The workflow is already active and waiting for the next trigger
+                // Don't need to do anything else
+            }
+            else
+            {
+                // Auto mode - delay then capture
+                int delaySeconds = Properties.Settings.Default.DelayBetweenPhotos;
+                Log.Debug($"Auto mode - waiting {delaySeconds} seconds before next photo");
+                await Task.Delay(delaySeconds * 1000);
+                
+                Log.Debug($"Starting capture workflow for photo {photoIndex + 1} of {totalPhotos}");
+                await _workflowService.StartPhotoCaptureWorkflowAsync();
+            }
+        }
+        
+        private async Task HandleSessionCompletion()
+        {
+            Log.Debug("All photos captured, processing session");
+            _uiService.UpdateStatus("Processing your photos...");
+            
+            // Compose template if available
+            await ComposeSessionTemplate();
+            
+            // Complete session (triggers MP4 generation and auto-upload)
+            Log.Debug("Completing session to trigger MP4 generation and auto-upload");
+            await _sessionService.CompleteSessionAsync();
+        }
+        
+        private async Task ComposeSessionTemplate()
+        {
+            if (_currentTemplate == null || _sessionService.CapturedPhotoPaths?.Count == 0)
+            {
+                Log.Debug("No template or photos available for composition");
+                return;
+            }
+            
+            _uiService.UpdateStatus("Composing final image...");
+            
+            var completedData = new CompletedSessionData
+            {
+                SessionId = _sessionService.CurrentSessionId,
+                Event = _sessionService.CurrentEvent,
+                Template = _sessionService.CurrentTemplate,
+                PhotoPaths = _sessionService.CapturedPhotoPaths
+            };
+            
+            string composedPath = await _compositionService.ComposeTemplateAsync(completedData);
+            if (!string.IsNullOrEmpty(composedPath))
+            {
+                string displayPath = _compositionService.LastDisplayPath ?? composedPath;
+                string printPath = _compositionService.LastPrintPath ?? composedPath;
+                _sessionService.SetComposedImagePaths(displayPath, printPath);
+            }
         }
         
         private async void OnServiceSessionCompleted(object sender, Services.SessionCompletedEventArgs e)
@@ -938,7 +918,7 @@ namespace Photobooth.Pages
                     Log.Debug("Stopped live view timer - session complete, set _isDisplayingSessionResult = true");
 
                     // Display composed image in live view if available
-                    if (!string.IsNullOrEmpty(e.CompletedSession.ComposedImagePath) && File.Exists(e.CompletedSession.ComposedImagePath))
+                    if (FileValidationService.Instance.ValidateFilePath(e.CompletedSession.ComposedImagePath))
                     {
                         Log.Debug($"★★★ COMPOSED IMAGE PATH EXISTS: {e.CompletedSession.ComposedImagePath}");
                         Log.Debug($"★★★ Calling _uiService.DisplayImage to show composed image");
@@ -949,7 +929,8 @@ namespace Photobooth.Pages
                     }
                     else
                     {
-                        Log.Error($"★★★ NO COMPOSED IMAGE! Path: {e.CompletedSession.ComposedImagePath}, Exists: {(!string.IsNullOrEmpty(e.CompletedSession.ComposedImagePath) ? File.Exists(e.CompletedSession.ComposedImagePath).ToString() : "empty")}");
+                        bool pathValid = FileValidationService.Instance.ValidateFilePathWithLogging(e.CompletedSession.ComposedImagePath, "SessionCompleted");
+                        Log.Error($"★★★ NO COMPOSED IMAGE! Path: {e.CompletedSession.ComposedImagePath}, Valid: {pathValid}");
                     }
                     
                     // MP4/GIF will be added as thumbnail via OnServiceAnimationReady when ready
@@ -1063,7 +1044,7 @@ namespace Photobooth.Pages
             {
                 try
                 {
-                    if (!string.IsNullOrEmpty(e.PhotoPath) && System.IO.File.Exists(e.PhotoPath))
+                    if (FileValidationService.Instance.ValidateFilePath(e.PhotoPath))
                     {
                         Log.Debug($"=== PHOTO DISPLAY REQUESTED ===");
                         Log.Debug($"Photo path: {e.PhotoPath}");
@@ -1101,7 +1082,8 @@ namespace Photobooth.Pages
                     }
                     else
                     {
-                        Log.Error($"Cannot display photo - Path: {e.PhotoPath}, Exists: {System.IO.File.Exists(e.PhotoPath)}");
+                        bool pathValid = FileValidationService.Instance.ValidateFilePathWithLogging(e.PhotoPath, "CaptureCompleted");
+                        Log.Error($"Cannot display photo - Path: {e.PhotoPath}, Valid: {pathValid}");
                     }
                 }
                 catch (Exception ex)
@@ -1291,7 +1273,7 @@ namespace Photobooth.Pages
             {
                 try
                 {
-                    if (string.IsNullOrEmpty(e.ImagePath) || !File.Exists(e.ImagePath))
+                    if (!FileValidationService.Instance.ValidateFilePath(e.ImagePath))
                     {
                         Log.Error($"Invalid image path for display: {e.ImagePath}");
                         return;
@@ -1328,14 +1310,14 @@ namespace Photobooth.Pages
             {
                 try
                 {
-                    if (string.IsNullOrEmpty(e.GifPath) || !File.Exists(e.GifPath))
+                    if (!FileValidationService.Instance.ValidateFilePath(e.GifPath))
                     {
                         Log.Error($"Invalid file path for display: {e.GifPath}");
                         return;
                     }
 
-                    string fileExtension = Path.GetExtension(e.GifPath).ToLower();
-                    bool isMP4 = fileExtension == ".mp4";
+                    string fileExtension = FileValidationService.Instance.GetFileExtension(e.GifPath);
+                    bool isMP4 = fileExtension == "mp4";
                     
                     Log.Debug($"Displaying {(isMP4 ? "MP4" : "GIF")} in live view: {e.GifPath}");
                     
@@ -1374,7 +1356,7 @@ namespace Photobooth.Pages
         {
             try
             {
-                if (string.IsNullOrEmpty(videoPath) || !File.Exists(videoPath))
+                if (!FileValidationService.Instance.ValidateFilePath(videoPath))
                 {
                     Log.Error($"DisplayVideoInLiveView: Video file not found: {videoPath}");
                     return;
@@ -1477,7 +1459,7 @@ namespace Photobooth.Pages
         {
             try
             {
-                if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
+                if (FileValidationService.Instance.ValidateFilePath(imagePath))
                 {
                     // Only prevent automatic cycling, allow manual thumbnail clicks
                     if (_isDisplayingSessionResult && !isManualClick)
@@ -1537,14 +1519,13 @@ namespace Photobooth.Pages
         {
             try
             {
-                if (string.IsNullOrEmpty(gifPath) || !File.Exists(gifPath))
+                if (!FileValidationService.Instance.ValidateFilePath(gifPath))
                 {
                     Log.Error($"DisplayGifInLiveView: Invalid path or file not found: {gifPath}");
                     return;
                 }
                 
-                string fileExtension = Path.GetExtension(gifPath).ToLower();
-                bool isMP4 = fileExtension == ".mp4";
+                bool isMP4 = FileValidationService.Instance.IsVideoFile(gifPath);
                 
                 Log.Debug($"Displaying {(isMP4 ? "MP4" : "GIF")} in live view: {gifPath}");
                 
@@ -1668,7 +1649,7 @@ namespace Photobooth.Pages
         {
             try
             {
-                if (string.IsNullOrEmpty(composedPath) || !File.Exists(composedPath))
+                if (!FileValidationService.Instance.ValidateFilePath(composedPath))
                 {
                     Log.Error($"AddComposedThumbnail: Invalid path or file not found: {composedPath}");
                     return;
@@ -1744,15 +1725,14 @@ namespace Photobooth.Pages
             {
                 Log.Debug($"★★★ AddGifThumbnailForGallery called with path: {gifPath}, thumbnail: {thumbnailPhotoPath}");
                 
-                if (string.IsNullOrEmpty(gifPath) || !File.Exists(gifPath))
+                if (!FileValidationService.Instance.ValidateFilePath(gifPath))
                 {
                     Log.Error($"AddGifThumbnailForGallery: Invalid path or file not found: {gifPath}");
                     return;
                 }
                 
                 // Determine if it's a GIF or MP4
-                string fileExtension = Path.GetExtension(gifPath).ToLower();
-                bool isMP4 = fileExtension == ".mp4";
+                bool isMP4 = FileValidationService.Instance.IsVideoFile(gifPath);
                 string labelText = isMP4 ? "MP4" : "GIF";
                 
                 Log.Debug($"★★★ Adding {labelText} thumbnail to photo strip (gallery context)");
@@ -1767,7 +1747,7 @@ namespace Photobooth.Pages
                 // Create thumbnail image 
                 BitmapImage bitmap = null;
                 
-                if (isMP4 && !string.IsNullOrEmpty(thumbnailPhotoPath) && File.Exists(thumbnailPhotoPath))
+                if (isMP4 && FileValidationService.Instance.ValidateFilePath(thumbnailPhotoPath))
                 {
                     // For MP4, use provided thumbnail photo
                     Log.Debug($"★★★ Using provided photo as MP4 thumbnail: {thumbnailPhotoPath}");
@@ -1853,15 +1833,14 @@ namespace Photobooth.Pages
             {
                 Log.Debug($"★★★ AddGifThumbnail called with path: {gifPath}");
                 
-                if (string.IsNullOrEmpty(gifPath) || !File.Exists(gifPath))
+                if (!FileValidationService.Instance.ValidateFilePath(gifPath))
                 {
                     Log.Error($"AddGifThumbnail: Invalid path or file not found: {gifPath}");
                     return;
                 }
                 
                 // Determine if it's a GIF or MP4
-                string fileExtension = Path.GetExtension(gifPath).ToLower();
-                bool isMP4 = fileExtension == ".mp4";
+                bool isMP4 = FileValidationService.Instance.IsVideoFile(gifPath);
                 string labelText = isMP4 ? "MP4" : "GIF";
                 
                 Log.Debug($"★★★ Adding {labelText} thumbnail to photo strip");
@@ -1884,7 +1863,7 @@ namespace Photobooth.Pages
                     {
                         string firstPhotoPath = _sessionService.CapturedPhotoPaths[0];
                         Log.Debug($"★★★ Using first photo as MP4 thumbnail: {firstPhotoPath}");
-                        if (File.Exists(firstPhotoPath))
+                        if (FileValidationService.Instance.ValidateFilePath(firstPhotoPath))
                         {
                             bitmap = new BitmapImage();
                             bitmap.BeginInit();
@@ -2108,9 +2087,9 @@ namespace Photobooth.Pages
             {
                 try
                 {
-                    if (!string.IsNullOrEmpty(e.AnimationPath) && File.Exists(e.AnimationPath))
+                    if (FileValidationService.Instance.ValidateFilePath(e.AnimationPath))
                     {
-                        string fileType = Path.GetExtension(e.AnimationPath).ToLower() == ".mp4" ? "MP4" : "GIF";
+                        string fileType = FileValidationService.Instance.IsVideoFile(e.AnimationPath) ? "MP4" : "GIF";
                         Log.Debug($"★★★ {fileType} ready, adding to UI: {e.AnimationPath}");
                         
                         // Add MP4/GIF to thumbnail strip ONLY (composed image stays in live view)
@@ -2379,32 +2358,19 @@ namespace Photobooth.Pages
         {
             try
             {
-                // Check common camera folders for the latest photo
-                var possibleFolders = new[]
+                // Use service to scan for recent images
+                var recentFiles = FileValidationService.Instance.ScanForRecentImages(
+                    FileValidationService.Instance.GetStandardPhotoFolders()
+                );
+                
+                // Get the most recent file from last 2 minutes
+                var filteredFiles = FileValidationService.Instance.FilterFilesByCreationTime(recentFiles, 2);
+                var latestFile = filteredFiles.FirstOrDefault();
+                    
+                if (!string.IsNullOrEmpty(latestFile))
                 {
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Photobooth"),
-                    @"C:\Users\Public\Pictures",
-                    Path.GetTempPath()
-                };
-
-                foreach (var folder in possibleFolders)
-                {
-                    if (!Directory.Exists(folder)) continue;
-
-                    var recentFiles = Directory.GetFiles(folder, "*.jpg")
-                        .Concat(Directory.GetFiles(folder, "*.jpeg"))
-                        .Concat(Directory.GetFiles(folder, "*.png"))
-                        .Where(f => File.GetCreationTime(f) > DateTime.Now.AddMinutes(-2))
-                        .OrderByDescending(f => File.GetCreationTime(f))
-                        .Take(1);
-
-                    var latestFile = recentFiles.FirstOrDefault();
-                    if (!string.IsNullOrEmpty(latestFile))
-                    {
-                        Log.Debug($"Found latest captured photo: {latestFile}");
-                        return latestFile;
-                    }
+                    Log.Debug($"Found latest captured photo: {latestFile}");
+                    return latestFile;
                 }
             }
             catch (Exception ex)
@@ -2668,61 +2634,94 @@ namespace Photobooth.Pages
             {
                 Log.Debug("=== STARTING PHOTO SESSION USING CLEAN SERVICES ===");
                 
-                // Check if we need to select a template first
-                if (_currentTemplate == null)
-                {
-                    Log.Debug("No template selected, checking for templates");
-                    
-                    // Try to reload from static properties
-                    _currentTemplate = PhotoboothService.CurrentTemplate;
-                    
-                    if (_currentTemplate == null && _currentEvent != null)
-                    {
-                        // Initialize template selection for current event
-                        Log.Debug($"Initializing template selection for event: {_currentEvent.Name}");
-                        _templateSelectionService.InitializeForEvent(_currentEvent);
-                        return; // Template selection will handle the rest
-                    }
-                    else if (_currentTemplate != null)
-                    {
-                        _eventTemplateService.SelectTemplate(_currentTemplate);
-                        Log.Debug($"Reloaded template: {_currentTemplate.Name}");
-                    }
-                }
+                // Ensure template and event are loaded
+                if (!await EnsureTemplateAndEvent())
+                    return;
                 
-                // Also check event
-                if (_currentEvent == null)
-                {
-                    Log.Debug("Event was null, reloading from static properties");
-                    _currentEvent = PhotoboothService.CurrentEvent;
-                    if (_currentEvent != null)
-                    {
-                        _eventTemplateService.SelectEvent(_currentEvent);
-                        Log.Debug($"Reloaded event: {_currentEvent.Name}");
-                    }
-                }
-                
-                // Start session using clean service (this will trigger events that hide the button)
-                bool sessionStarted = await _sessionService.StartSessionAsync(_currentEvent, _currentTemplate, GetTotalPhotosNeeded());
+                // Start session using clean service
+                bool sessionStarted = await _sessionService.StartSessionAsync(
+                    _currentEvent, 
+                    _currentTemplate, 
+                    GetTotalPhotosNeeded());
                 
                 if (sessionStarted)
                 {
-                    // Start photo capture workflow using clean service
+                    // Start the workflow for both modes
+                    // In photographer mode, it will wait for trigger instead of countdown
                     await _workflowService.StartPhotoCaptureWorkflowAsync();
+                    
+                    if (Properties.Settings.Default.PhotographerMode)
+                    {
+                        // Stop live view to release camera for trigger
+                        try
+                        {
+                            Log.Debug("Stopping live view to release camera trigger");
+                            DeviceManager.SelectedCameraDevice?.StopLiveView();
+                            _liveViewTimer.Stop();
+                            
+                            // Reset IsBusy flag to allow trigger
+                            if (DeviceManager.SelectedCameraDevice != null)
+                            {
+                                DeviceManager.SelectedCameraDevice.IsBusy = false;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Debug($"Error stopping live view for photographer mode: {ex.Message}");
+                        }
+                    }
                 }
                 else
                 {
-                    Log.Error("Failed to start session");
-                    _uiService.UpdateStatus("Failed to start session");
-                    startButtonOverlay.Visibility = Visibility.Visible;
+                    HandleSessionStartFailure("Failed to start session");
                 }
             }
             catch (Exception ex)
             {
                 Log.Error($"StartPhotoSession error: {ex.Message}");
-                _uiService.UpdateStatus("Session start failed - Please try again");
-                startButtonOverlay.Visibility = Visibility.Visible;
+                HandleSessionStartFailure("Session start failed - Please try again");
             }
+        }
+        
+        private async Task<bool> EnsureTemplateAndEvent()
+        {
+            // Load template if missing
+            if (_currentTemplate == null)
+            {
+                _currentTemplate = PhotoboothService.CurrentTemplate;
+                
+                if (_currentTemplate == null && _currentEvent != null)
+                {
+                    Log.Debug($"Initializing template selection for event: {_currentEvent.Name}");
+                    _templateSelectionService.InitializeForEvent(_currentEvent);
+                    return false; // Template selection will handle the rest
+                }
+                else if (_currentTemplate != null)
+                {
+                    _eventTemplateService.SelectTemplate(_currentTemplate);
+                    Log.Debug($"Reloaded template: {_currentTemplate.Name}");
+                }
+            }
+            
+            // Load event if missing
+            if (_currentEvent == null)
+            {
+                _currentEvent = PhotoboothService.CurrentEvent;
+                if (_currentEvent != null)
+                {
+                    _eventTemplateService.SelectEvent(_currentEvent);
+                    Log.Debug($"Reloaded event: {_currentEvent.Name}");
+                }
+            }
+            
+            return _currentTemplate != null;
+        }
+        
+        private void HandleSessionStartFailure(string message)
+        {
+            Log.Error(message);
+            _uiService.UpdateStatus(message);
+            startButtonOverlay.Visibility = Visibility.Visible;
         }
         
         private int GetTotalPhotosNeeded()
@@ -2773,14 +2772,14 @@ namespace Photobooth.Pages
                 }
                 
                 // Add composed image if it exists
-                if (!string.IsNullOrEmpty(completedSession.ComposedImagePath) && File.Exists(completedSession.ComposedImagePath))
+                if (FileValidationService.Instance.ValidateFilePath(completedSession.ComposedImagePath))
                 {
                     allFiles.Add(completedSession.ComposedImagePath);
                     Log.Debug($"AutoUploadSessionPhotos: Added composed image: {Path.GetFileName(completedSession.ComposedImagePath)}");
                 }
                 
                 // Add GIF/MP4 if it exists
-                if (!string.IsNullOrEmpty(completedSession.GifPath) && File.Exists(completedSession.GifPath))
+                if (FileValidationService.Instance.ValidateFilePath(completedSession.GifPath))
                 {
                     allFiles.Add(completedSession.GifPath);
                     Log.Debug($"AutoUploadSessionPhotos: Added animation: {Path.GetFileName(completedSession.GifPath)}");
@@ -2950,23 +2949,16 @@ namespace Photobooth.Pages
             Log.Debug($"  - outputPath (display): {outputPath}");
             Log.Debug($"  - printPath (for printing): {printPath}");
             
-            // Check if paths are different (indicating 2x6 -> 4x6 duplication)
-            if (outputPath != printPath)
+            // Use service to analyze print paths
+            var pathAnalysis = FileValidationService.Instance.ComparePrintPaths(outputPath, printPath);
+            
+            if (pathAnalysis.PathsDiffer)
             {
                 Log.Debug($"  - PATHS DIFFER: 2x6 duplicated to 4x6");
-                
-                // Verify the print file exists and check dimensions
-                if (System.IO.File.Exists(printPath))
+                if (pathAnalysis.PrintImageInfo != null)
                 {
-                    using (var img = System.Drawing.Image.FromFile(printPath))
-                    {
-                        Log.Debug($"  - Print file dimensions: {img.Width}x{img.Height}");
-                        Log.Debug($"  - Is this 4x6 duplicate? {img.Width == 1200 && img.Height == 1800}");
-                    }
-                }
-                else
-                {
-                    Log.Error($"  - ERROR: Print path does not exist!");
+                    Log.Debug($"  - Print file dimensions: {pathAnalysis.PrintImageInfo.Width}x{pathAnalysis.PrintImageInfo.Height}");
+                    Log.Debug($"  - Is this 4x6 duplicate? {pathAnalysis.PrintImageInfo.Is4x6Duplicate}");
                 }
             }
             else
@@ -3002,149 +2994,39 @@ namespace Photobooth.Pages
         {
             try
             {
+                PrintRequestResult result;
+                
                 if (_isInGalleryMode && _currentGallerySession != null)
                 {
-                    // Gallery mode - print the composed image from the gallery session
-                    // First look for the 4x6_print version (duplicated 2x6), then fall back to regular composed
-                    var printPhoto = _currentGallerySession.Photos
-                        ?.FirstOrDefault(p => p.PhotoType == "4x6_print" && File.Exists(p.FilePath));
-                    
-                    // If no 4x6_print version, look for regular composed image
-                    if (printPhoto == null)
-                    {
-                        printPhoto = _currentGallerySession.Photos
-                            ?.FirstOrDefault(p => p.PhotoType == "COMP" && File.Exists(p.FilePath));
-                    }
-                    
-                    if (printPhoto != null && _printingService != null)
-                    {
-                        // Check if this is a 2x6 template with improved detection
-                        string fileName = printPhoto.FileName?.ToLower() ?? "";
-                        string filePath = printPhoto.FilePath?.ToLower() ?? "";
-                        bool is2x6Template = printPhoto.PhotoType == "4x6_print" || // 4x6_print means it's a duplicated 2x6
-                                           fileName.Contains("2x6") || fileName.Contains("2_6") || fileName.Contains("2-6") ||
-                                           filePath.Contains("2x6") || filePath.Contains("2_6") || filePath.Contains("2-6") ||
-                                           fileName.Contains("4x6_print"); // Also check for 4x6_print in filename
-                        
-                        Log.Debug($"★★★ UNIFIED PRINT (Gallery): Print photo: {printPhoto.FileName}");
-                        Log.Debug($"★★★ UNIFIED PRINT (Gallery): PhotoType: {printPhoto.PhotoType}");
-                        Log.Debug($"★★★ UNIFIED PRINT (Gallery): Is 2x6 template: {is2x6Template}");
-                        
-                        // Check if we should show print copies modal for gallery printing
-                        var printSettings = PrintSettingsService.Instance;
-                        bool bypassPrintDialog = Properties.Settings.Default.ShowPrintDialog == false;
-                        bool showCopiesModal = printSettings.ShowPrintCopiesModal;
-                        
-                        System.Diagnostics.Debug.WriteLine($"🔍 GALLERY PRINT: bypassPrintDialog={bypassPrintDialog}, showCopiesModal={showCopiesModal}");
-                        
-                        if (bypassPrintDialog && showCopiesModal)
-                        {
-                            // Show print copies modal for gallery session instead of printing directly
-                            System.Diagnostics.Debug.WriteLine($"🔍 SHOWING GALLERY PRINT MODAL");
-                            ShowPrintCopiesModalForGalleryPrint(printPhoto.FilePath, _currentGallerySession.SessionFolder, is2x6Template);
-                        }
-                        else
-                        {
-                            // Print directly as before
-                            bool success = await _printingService.PrintImageAsync(
-                                printPhoto.FilePath,
-                                _currentGallerySession.SessionFolder,
-                                is2x6Template // This will trigger proper printer routing
-                            );
-                            
-                            if (success)
-                            {
-                                _uiService.UpdateStatus("Photos sent to printer!");
-                            }
-                            else
-                            {
-                                _uiService.UpdateStatus("Print failed");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        Log.Debug($"★★★ No print photo found in gallery session");
-                        if (_currentGallerySession.Photos != null)
-                        {
-                            Log.Debug($"★★★ Available photo types: {string.Join(", ", _currentGallerySession.Photos.Select(p => p.PhotoType))}");
-                        }
-                        _uiService.UpdateStatus("No composed image to print");
-                    }
+                    // Route to printing service for gallery print processing
+                    result = await _printingService.ProcessGalleryPrintRequestAsync(_currentGallerySession);
                 }
                 else if (_sessionService.IsSessionActive)
                 {
-                    // Active session mode - use the print-specific path if available
-                    Log.Debug($"★★★ PRINT PATH SELECTION ★★★");
-                    Log.Debug($"  - ComposedImagePath (display): {_sessionService.ComposedImagePath}");
-                    Log.Debug($"  - ComposedImagePrintPath (print): {_sessionService.ComposedImagePrintPath}");
-                    Log.Debug($"  - IsCurrentTemplate2x6: {_sessionService.IsCurrentTemplate2x6}");
-                    
-                    string imageToPrint = !string.IsNullOrEmpty(_sessionService.ComposedImagePrintPath) ? 
-                        _sessionService.ComposedImagePrintPath : _sessionService.ComposedImagePath;
-                    
-                    Log.Debug($"  - SELECTED imageToPrint: {imageToPrint}");
-                    
-                    if (!string.IsNullOrEmpty(imageToPrint) && File.Exists(imageToPrint))
-                    {
-                        // Verify dimensions of selected image
-                        using (var img = System.Drawing.Image.FromFile(imageToPrint))
-                        {
-                            Log.Debug($"  - Image dimensions: {img.Width}x{img.Height}");
-                            bool is4x6Duplicate = img.Width == 1200 && img.Height == 1800;
-                            Log.Debug($"  - Is 4x6 duplicate: {is4x6Duplicate}");
-                        }
-                        
-                        if (imageToPrint != _sessionService.ComposedImagePath)
-                        {
-                            Log.Debug($"  - ✅ Using 4x6 duplicate for printing (different from display)");
-                        }
-                        else
-                        {
-                            Log.Debug($"  - ⚠️ Using same image for display and print");
-                        }
-                        
-                        // Check if we should show print copies modal
-                        var printSettings = PrintSettingsService.Instance;
-                        bool bypassPrintDialog = Properties.Settings.Default.ShowPrintDialog == false;
-                        bool showCopiesModal = printSettings.ShowPrintCopiesModal;
-                        
-                        System.Diagnostics.Debug.WriteLine($"🔍 REFACTORED PRINT: bypassPrintDialog={bypassPrintDialog}, showCopiesModal={showCopiesModal}");
-                        
-                        if (bypassPrintDialog && showCopiesModal)
-                        {
-                            // Show print copies modal instead of printing directly
-                            System.Diagnostics.Debug.WriteLine($"🔍 SHOWING PRINT MODAL in refactored");
-                            ShowPrintCopiesModalForMainPrint(imageToPrint, _sessionService.CurrentSessionId, _sessionService.IsCurrentTemplate2x6);
-                        }
-                        else
-                        {
-                            // Print directly as before
-                            bool printSuccess = await _printingService.PrintImageAsync(
-                                imageToPrint,
-                                _sessionService.CurrentSessionId,
-                                _sessionService.IsCurrentTemplate2x6 // Use proper 2x6 flag from session service
-                            );
-                        
-                            if (printSuccess)
-                            {
-                                _uiService.UpdateStatus("Photo sent to printer!");
-                            }
-                            else
-                            {
-                                _uiService.UpdateStatus("Print failed");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        _uiService.UpdateStatus("No photo to print");
-                    }
+                    // Route to printing service for session print processing
+                    result = await _printingService.ProcessSessionPrintRequestAsync(_sessionService);
                 }
                 else
                 {
-                    _uiService.UpdateStatus("No active session or gallery");
+                    result = new PrintRequestResult { Success = false, Message = "No active session or gallery" };
                 }
+
+                // Handle the result from printing service
+                if (result.Success && result.ShowModal)
+                {
+                    // Show appropriate modal based on context
+                    if (_isInGalleryMode)
+                    {
+                        ShowPrintCopiesModalForGalleryPrint(result.ImagePath, result.SessionId, result.Is2x6Template);
+                    }
+                    else
+                    {
+                        ShowPrintCopiesModalForMainPrint(result.ImagePath, result.SessionId, result.Is2x6Template);
+                    }
+                }
+                
+                // Update UI with result message
+                _uiService.UpdateStatus(result.Message);
             }
             catch (Exception ex)
             {
@@ -3465,7 +3347,7 @@ namespace Photobooth.Pages
             var photos = _database.GetSessionPhotos(session.Id);
             foreach (var photo in photos)
             {
-                if (File.Exists(photo.FilePath))
+                if (FileValidationService.Instance.ValidatePhotoFile(photo))
                 {
                     AddPhotoThumbnail(photo.FilePath);
                 }
@@ -3628,10 +3510,8 @@ namespace Photobooth.Pages
                 _uiService.UpdateStatus("Sharing session...");
                 
                 // Use share service to share photos
-                var photoPaths = _currentGallerySession.Photos
-                    .Where(p => File.Exists(p.FilePath))
-                    .Select(p => p.FilePath)
-                    .ToList();
+                var validPhotos = FileValidationService.Instance.GetValidPhotos(_currentGallerySession.Photos);
+                var photoPaths = validPhotos.Select(p => p.FilePath).ToList();
                     
                 if (photoPaths.Any() && _shareService != null)
                 {
@@ -3678,15 +3558,11 @@ namespace Photobooth.Pages
                 _uiService.UpdateStatus("Printing photos...");
                 
                 // First look for the 4x6_print version (duplicated 2x6), then fall back to regular composed
-                var printPhoto = _currentGallerySession.Photos
-                    .FirstOrDefault(p => p.PhotoType == "4x6_print" && File.Exists(p.FilePath));
-                
-                // If no 4x6_print version, look for regular composed image
-                if (printPhoto == null)
-                {
-                    printPhoto = _currentGallerySession.Photos
-                        .FirstOrDefault(p => p.PhotoType == "COMP" && File.Exists(p.FilePath));
-                }
+                var printPhoto = FileValidationService.Instance.FindFirstValidPhotoByTypes(
+                    _currentGallerySession.Photos, 
+                    "4x6_print", 
+                    "COMP"
+                );
                     
                 if (printPhoto != null && _printingService != null)
                 {
@@ -3730,10 +3606,8 @@ namespace Photobooth.Pages
                 else
                 {
                     // Print individual photos if no composed image
-                    var photoPaths = _currentGallerySession.Photos
-                        .Where(p => p.PhotoType == "ORIG" && File.Exists(p.FilePath))
-                        .Select(p => p.FilePath)
-                        .ToList();
+                    var origPhotos = FileValidationService.Instance.GetValidPhotosByType(_currentGallerySession.Photos, "ORIG");
+                    var photoPaths = origPhotos.Select(p => p.FilePath).ToList();
                     
                     if (photoPaths.Any() && _printingService != null)
                     {
@@ -3781,10 +3655,8 @@ namespace Photobooth.Pages
                 _uiService.UpdateStatus("Preparing email...");
                 
                 // Show email modal using UI service
-                var photoPaths = _currentGallerySession.Photos
-                    .Where(p => File.Exists(p.FilePath))
-                    .Select(p => p.FilePath)
-                    .ToList();
+                var validPhotos = FileValidationService.Instance.GetValidPhotos(_currentGallerySession.Photos);
+                var photoPaths = validPhotos.Select(p => p.FilePath).ToList();
                     
                 if (photoPaths.Any())
                 {

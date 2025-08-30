@@ -597,4 +597,5 @@ namespace Photobooth.Services
         public DateTime LastUpdated { get; set; }
     }
     #endregion
+
 }

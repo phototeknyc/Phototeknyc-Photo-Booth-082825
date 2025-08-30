@@ -776,6 +776,8 @@ namespace CameraControl.Devices.Canon
                 {
                     if (!string.IsNullOrEmpty(memory.FileName))
                         args.FileName = Path.GetFileName(memory.FileName);
+                    // For memory images, set Handle to the memory event args directly
+                    args.Handle = memory;
                 }
                 OnPhotoCapture(this, args);
                 OnCaptureCompleted(this, new EventArgs());
@@ -1630,14 +1632,35 @@ namespace CameraControl.Devices.Canon
                     Log.Debug("Memory file transfer started");
                     try
                     {
-                        using (FileStream fileStream = File.Create(filename, (int) memory.ImageData.Length))
+                        // Check if ImageData is already available
+                        if (memory.ImageData != null && memory.ImageData.Length > 0)
                         {
-                            fileStream.Write(memory.ImageData, 0, memory.ImageData.Length);
+                            Log.Debug("Memory transfer: Using existing ImageData");
+                            using (FileStream fileStream = File.Create(filename, (int) memory.ImageData.Length))
+                            {
+                                fileStream.Write(memory.ImageData, 0, memory.ImageData.Length);
+                            }
+                        }
+                        // If ImageData is null but we have a Pointer, use it to transfer
+                        else if (memory.Pointer != IntPtr.Zero)
+                        {
+                            Log.Debug("Memory transfer: Using Pointer to transfer image");
+                            Camera.PauseLiveview();
+                            var transporter = new EosImageTransporter();
+                            transporter.ProgressEvent += (i) => TransferProgress = (uint) i;
+                            transporter.TransportAsFileName(memory.Pointer, filename, Camera.Handle);
+                            Camera.ResumeLiveview();
+                        }
+                        else
+                        {
+                            Log.Error("Memory transfer: No ImageData or Pointer available");
+                            throw new InvalidOperationException("Cannot transfer memory image: no data available");
                         }
                     }
                     catch (Exception exception)
                     {
                         Log.Error("Error transfer memory file", exception);
+                        File.Delete(filename);
                     }
                 }
                 string fil = o as string;

@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+
+## Project Directory
+**Full Path**: `C:\Users\rakes\OneDrive\Desktop\photeteknycbooth_clone`
+**WSL Path**: `/mnt/c/Users/rakes/OneDrive/Desktop/photeteknycbooth_clone`
+
+## Tool Notes
+**Read Tool Issue**: The Read tool has issues with this project. Use `cat` or `grep` commands instead for reading files.
 ## Project Overview
 This is a WPF photobooth application written in C# that provides a visual designer canvas for creating photo layouts with camera integration and advanced printing capabilities. The solution is built on .NET Framework 4.8 and includes extensive touch support for touchscreen kiosks.
 
