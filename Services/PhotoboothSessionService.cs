@@ -30,6 +30,7 @@ namespace Photobooth.Services
         private readonly PhotoCaptureService _photoCaptureService;
         private readonly DatabaseOperations _databaseOperations;
         private readonly SessionManager _sessionManager;
+        private readonly PhotoFilterServiceHybrid _filterService;
         #endregion
 
         #region State
@@ -46,6 +47,9 @@ namespace Photobooth.Services
         
         // Template format tracking for proper printer routing
         private bool _isCurrentTemplate2x6;
+        
+        // Filter selection
+        private FilterType _selectedFilter = FilterType.None;
         
         // Auto-clear timer
         private DispatcherTimer _autoClearTimer;
@@ -64,6 +68,7 @@ namespace Photobooth.Services
         public bool IsCurrentTemplate2x6 => _isCurrentTemplate2x6;
         public string ComposedImagePath => _composedImagePath;
         public string ComposedImagePrintPath => _composedImagePrintPath; // Path to use for printing (may be 4x6 duplicate)
+        public FilterType SelectedFilter => _selectedFilter;
         #endregion
 
         public PhotoboothSessionService()
@@ -71,6 +76,7 @@ namespace Photobooth.Services
             _databaseOperations = new DatabaseOperations();
             _photoCaptureService = new PhotoCaptureService(_databaseOperations);
             _sessionManager = new SessionManager();
+            _filterService = new PhotoFilterServiceHybrid();
             _capturedPhotoPaths = new List<string>();
             
             // Initialize auto-clear timer
@@ -159,6 +165,16 @@ namespace Photobooth.Services
                 {
                     throw new Exception("PhotoCaptureService returned empty path");
                 }
+                
+                // Apply Beauty Mode if enabled (before adding to session)
+                if (Properties.Settings.Default.BeautyModeEnabled)
+                {
+                    Log.Debug($"Applying Beauty Mode to photo with intensity {Properties.Settings.Default.BeautyModeIntensity}");
+                    BeautyModeService.Instance.ApplyBeautyMode(
+                        processedPhotoPath, 
+                        processedPhotoPath, 
+                        Properties.Settings.Default.BeautyModeIntensity);
+                }
 
                 // Add to session tracking
                 _capturedPhotoPaths.Add(processedPhotoPath);
@@ -206,8 +222,8 @@ namespace Photobooth.Services
             {
                 Log.Debug("PhotoboothSessionService: Processing session photos");
                 
-                // Note: Filter selection and retake options are handled by the UI layer
-                // The service focuses on composition and GIF generation
+                // Note: Filter selection is handled by the UI layer before composition
+                // The service focuses on GIF generation after photos are processed
                 
                 // Generate GIF/MP4 in background if enabled (non-blocking)
                 if (Properties.Settings.Default.EnableGifGeneration && _capturedPhotoPaths.Count > 1)
@@ -476,6 +492,64 @@ namespace Photobooth.Services
         }
         
         /// <summary>
+        /// Set the selected filter for the current session
+        /// </summary>
+        public void SetSelectedFilter(FilterType filter)
+        {
+            Log.Debug($"PhotoboothSessionService: Setting filter to {filter}");
+            _selectedFilter = filter;
+        }
+        
+        /// <summary>
+        /// Apply the selected filter to captured photos
+        /// </summary>
+        public async Task<List<string>> ApplyFilterToPhotosAsync()
+        {
+            try
+            {
+                if (_selectedFilter == FilterType.None || !Properties.Settings.Default.EnableFilters)
+                {
+                    Log.Debug("PhotoboothSessionService: No filter selected or filters disabled");
+                    return _capturedPhotoPaths;
+                }
+                
+                Log.Debug($"PhotoboothSessionService: Applying {_selectedFilter} filter to {_capturedPhotoPaths.Count} photos");
+                
+                var filteredPaths = new List<string>();
+                foreach (var photoPath in _capturedPhotoPaths)
+                {
+                    if (!File.Exists(photoPath))
+                    {
+                        Log.Error($"Photo not found: {photoPath}");
+                        filteredPaths.Add(photoPath);
+                        continue;
+                    }
+                    
+                    // Generate output path for filtered image
+                    string outputDir = Path.GetDirectoryName(photoPath);
+                    string outputFileName = $"{Path.GetFileNameWithoutExtension(photoPath)}_{_selectedFilter}.jpg";
+                    string outputPath = Path.Combine(outputDir, outputFileName);
+                    
+                    // Apply filter using the filter service
+                    string result = await Task.Run(() => 
+                        _filterService.ApplyFilterToFile(photoPath, outputPath, _selectedFilter));
+                    
+                    filteredPaths.Add(result);
+                    Log.Debug($"Applied filter to {photoPath} -> {result}");
+                }
+                
+                // Update captured photo paths with filtered versions
+                _capturedPhotoPaths = filteredPaths;
+                return filteredPaths;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PhotoboothSessionService: Failed to apply filters: {ex.Message}");
+                return _capturedPhotoPaths; // Return original photos if filter fails
+            }
+        }
+        
+        /// <summary>
         /// Clear/reset the current session
         /// </summary>
         public void ClearSession()
@@ -498,6 +572,7 @@ namespace Photobooth.Services
             _composedImagePrintPath = null;
             _gifPath = null;
             _isCurrentTemplate2x6 = false;
+            _selectedFilter = FilterType.None;
             
             // Reset photo capture service
             _photoCaptureService?.ResetSession();

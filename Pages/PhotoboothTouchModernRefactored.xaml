@@ -1049,5 +1049,174 @@
         
         <!-- Print Copies Modal -->
         <controls:PrintCopiesModal x:Name="printCopiesModal" />
+        
+        <!-- Filter Selection Overlay -->
+        <Grid x:Name="filterSelectionOverlay" 
+              Grid.RowSpan="3"
+              Grid.ColumnSpan="3"
+              Background="#E6000000"
+              Visibility="Collapsed">
+            
+            <Border MaxWidth="1600" MaxHeight="900" Margin="40"
+                    Background="#1E1E1E"
+                    CornerRadius="15">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Header -->
+                    <Border Grid.Row="0" Background="#2D2D30" CornerRadius="15,15,0,0" Padding="20">
+                        <Grid>
+                            <TextBlock Text="Select Photo Filter" 
+                                       FontSize="28" 
+                                       FontWeight="Bold" 
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"/>
+                            <Button x:Name="closeFilterSelection" 
+                                    Content="✕" 
+                                    FontSize="24"
+                                    Width="40" 
+                                    Height="40"
+                                    HorizontalAlignment="Right"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Foreground="White"
+                                    Click="CloseFilterSelection_Click"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Filter Options Grid -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="20">
+                        <ItemsControl x:Name="filterItemsControl">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Width="320" 
+                                            Height="400" 
+                                            Margin="15"
+                                            Background="#2D2D30"
+                                            BorderBrush="#007ACC"
+                                            BorderThickness="2"
+                                            Click="FilterButton_Click"
+                                            Tag="{Binding FilterType}"
+                                            Cursor="Hand">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border Background="{TemplateBinding Background}"
+                                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                                    CornerRadius="12">
+                                                                <Border.Effect>
+                                                                    <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="4" Opacity="0.3"/>
+                                                                </Border.Effect>
+                                                                <Grid>
+                                                                    <Grid.RowDefinitions>
+                                                                        <RowDefinition Height="*"/>
+                                                                        <RowDefinition Height="50"/>
+                                                                    </Grid.RowDefinitions>
+                                                                    
+                                                                    <!-- Filter Preview Image -->
+                                                                    <Border Grid.Row="0" 
+                                                                            Margin="8"
+                                                                            CornerRadius="8"
+                                                                            ClipToBounds="True">
+                                                                        <Image Source="{Binding PreviewImage}" 
+                                                                               Stretch="UniformToFill"
+                                                                               RenderOptions.BitmapScalingMode="HighQuality">
+                                                                            <Image.Style>
+                                                                                <Style TargetType="Image">
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding PreviewImage}" Value="{x:Null}">
+                                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </Image.Style>
+                                                                        </Image>
+                                                                    </Border>
+                                                                    
+                                                                    <!-- Loading indicator when no preview -->
+                                                                    <TextBlock Grid.Row="0"
+                                                                               Text="Loading..."
+                                                                               FontSize="14"
+                                                                               Foreground="#808080"
+                                                                               HorizontalAlignment="Center"
+                                                                               VerticalAlignment="Center">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding PreviewImage}" Value="{x:Null}">
+                                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                    
+                                                                    <!-- Filter Name -->
+                                                                    <Border Grid.Row="1" 
+                                                                            Background="#1A1A1A" 
+                                                                            CornerRadius="0,0,12,12">
+                                                                        <TextBlock Text="{Binding Name}"
+                                                                                   HorizontalAlignment="Center"
+                                                                                   VerticalAlignment="Center"
+                                                                                   Foreground="White"
+                                                                                   FontSize="16"
+                                                                                   FontWeight="SemiBold"/>
+                                                                    </Border>
+                                                                </Grid>
+                                                            </Border>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="#3D3D40"/>
+                                                        <Setter Property="BorderBrush" Value="#00A0E4"/>
+                                                        <Setter Property="BorderThickness" Value="3"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter Property="Background" Value="#4D4D50"/>
+                                                        <Setter Property="BorderBrush" Value="#00C0FF"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    
+                    <!-- Action Buttons -->
+                    <StackPanel Grid.Row="2" 
+                                Orientation="Horizontal" 
+                                HorizontalAlignment="Center"
+                                Margin="20">
+                        <Button x:Name="applyNoFilterButton"
+                                Content="Continue Without Filter"
+                                Width="200"
+                                Height="50"
+                                Margin="10"
+                                FontSize="16"
+                                Background="#404040"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Click="ApplyNoFilter_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Page>

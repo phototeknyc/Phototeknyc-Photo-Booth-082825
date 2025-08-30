@@ -63,7 +63,7 @@
       <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="DefaultFilter" Type="System.Int32" Scope="User">
-      <Value Profile="(Default)">0</Value>
+      <Value Profile="(Default)">2</Value>
     </Setting>
     <Setting Name="FilterIntensity" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">100</Value>
@@ -78,7 +78,16 @@
       <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="EnabledFilters" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">BlackWhite,Sepia,Vintage</Value>
+    </Setting>
+    <Setting Name="AutoApplyFilter" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="BeautyModeEnabled" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="BeautyModeIntensity" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">50</Value>
     </Setting>
     <Setting Name="EnablePrinting" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">True</Value>

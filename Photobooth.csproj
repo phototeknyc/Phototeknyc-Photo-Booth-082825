@@ -219,6 +219,8 @@
     <Compile Include="Services\PhotoFilterServiceHybrid.cs" />
     <Compile Include="Services\GifGenerationService.cs" />
     <Compile Include="Services\GallerySessionService.cs" />
+    <Compile Include="Services\FilterSelectionService.cs" />
+    <Compile Include="Services\BeautyModeService.cs" />
     <Compile Include="Services\MagickGifService.cs" />
     <Compile Include="Services\VideoGenerationService.cs" />
     <Compile Include="Services\PrintService.cs" />

@@ -86,6 +86,7 @@ namespace Photobooth.Pages
         private Services.GalleryBrowserService _galleryBrowserService;
         private Services.GalleryActionService _galleryActionService;
         private Services.SharingUIService _sharingUIService;
+        private Services.FilterSelectionService _filterSelectionService;
         
         // Supporting services - using existing services from Services folder
         private EventTemplateService _eventTemplateService;
@@ -211,6 +212,7 @@ namespace Photobooth.Pages
             _uiLayoutService = new UILayoutService();
             _templateSelectionService = new Services.TemplateSelectionService();
             _templateSelectionUIService = new Services.TemplateSelectionUIService();
+            _filterSelectionService = new Services.FilterSelectionService();
             
             // View model will be created in Page_Loaded to avoid stack overflow
             // _viewModel = new PhotoboothTouchModernViewModel();
@@ -418,6 +420,14 @@ namespace Photobooth.Pages
                 _templateSelectionUIService.TemplateCardClicked += OnTemplateCardClicked;
                 _templateSelectionUIService.ShowOverlayRequested += OnShowOverlayRequested;
                 _templateSelectionUIService.HideOverlayRequested += OnHideOverlayRequested;
+            }
+            
+            if (_filterSelectionService != null)
+            {
+                _filterSelectionService.FilterSelected += OnServiceFilterSelected;
+                _filterSelectionService.FilterSelectionCancelled += OnServiceFilterSelectionCancelled;
+                _filterSelectionService.ShowFilterSelectionRequested += OnServiceShowFilterSelectionRequested;
+                _filterSelectionService.HideFilterSelectionRequested += OnServiceHideFilterSelectionRequested;
             }
             
             Log.Debug("Service event handlers wired up");
@@ -869,6 +879,46 @@ namespace Photobooth.Pages
             Log.Debug("All photos captured, processing session");
             _uiService.UpdateStatus("Processing your photos...");
             
+            // Check if filters are enabled
+            if (Properties.Settings.Default.EnableFilters)
+            {
+                // Check for auto-apply filter
+                var autoFilter = _filterSelectionService.GetAutoApplyFilter();
+                
+                if (autoFilter.HasValue)
+                {
+                    // Auto-apply filter without showing UI
+                    Log.Debug($"Auto-applying filter: {autoFilter.Value}");
+                    _sessionService.SetSelectedFilter(autoFilter.Value);
+                    
+                    // Apply filter to photos
+                    await _sessionService.ApplyFilterToPhotosAsync();
+                    
+                    // Proceed with composition
+                    await ProceedWithComposition();
+                }
+                else if (_filterSelectionService.ShouldShowFilterSelection())
+                {
+                    // Show filter selection UI
+                    Log.Debug("Showing filter selection UI");
+                    _filterSelectionService.RequestFilterSelection();
+                    // The filter will be applied in the OnServiceFilterSelected event handler
+                }
+                else
+                {
+                    // Filters disabled or not allowed to change - proceed directly
+                    await ProceedWithComposition();
+                }
+            }
+            else
+            {
+                // No filters - proceed directly to composition
+                await ProceedWithComposition();
+            }
+        }
+        
+        private async Task ProceedWithComposition()
+        {
             // Compose template if available
             await ComposeSessionTemplate();
             
@@ -2248,6 +2298,103 @@ namespace Photobooth.Pages
             Log.Debug("Template selection overlay hidden");
         }
         
+        #endregion
+        
+        #region Filter Selection Event Handlers
+        /// <summary>
+        /// Handle filter selected event - apply filter and proceed with composition
+        /// </summary>
+        private async void OnServiceFilterSelected(object sender, Services.FilterSelectedEventArgs e)
+        {
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                Log.Debug($"Filter selected: {e.SelectedFilter}");
+                
+                // Apply the selected filter to photos
+                if (e.SelectedFilter != FilterType.None)
+                {
+                    _sessionService.SetSelectedFilter(e.SelectedFilter);
+                    await _sessionService.ApplyFilterToPhotosAsync();
+                }
+                
+                // Proceed with composition after filter is applied
+                await ProceedWithComposition();
+            });
+        }
+        
+        /// <summary>
+        /// Handle filter selection cancelled - proceed without filter
+        /// </summary>
+        private async void OnServiceFilterSelectionCancelled(object sender, EventArgs e)
+        {
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                Log.Debug("Filter selection cancelled - proceeding without filter");
+                await ProceedWithComposition();
+            });
+        }
+        
+        /// <summary>
+        /// Show filter selection overlay
+        /// </summary>
+        private async void OnServiceShowFilterSelectionRequested(object sender, EventArgs e)
+        {
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                // Populate filter options
+                var filters = _filterSelectionService.GetEnabledFilters();
+                filterItemsControl.ItemsSource = filters;
+                
+                // Show the overlay
+                filterSelectionOverlay.Visibility = Visibility.Visible;
+                
+                // Generate preview thumbnails using the last captured photo
+                if (_sessionService?.CapturedPhotoPaths?.Count > 0)
+                {
+                    string lastPhoto = _sessionService.CapturedPhotoPaths.Last();
+                    await _filterSelectionService.GenerateFilterPreviewsAsync(lastPhoto);
+                }
+            });
+        }
+        
+        /// <summary>
+        /// Hide filter selection overlay
+        /// </summary>
+        private void OnServiceHideFilterSelectionRequested(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                filterSelectionOverlay.Visibility = Visibility.Collapsed;
+            });
+        }
+        
+        /// <summary>
+        /// Handle filter button click - UI event routing only
+        /// </summary>
+        private void FilterButton_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as Button;
+            if (button?.Tag is FilterType filter)
+            {
+                _filterSelectionService.SelectFilter(filter);
+            }
+        }
+        
+        /// <summary>
+        /// Handle close filter selection button - UI event routing only
+        /// </summary>
+        private void CloseFilterSelection_Click(object sender, RoutedEventArgs e)
+        {
+            _filterSelectionService.CancelFilterSelection();
+        }
+        
+        /// <summary>
+        /// Handle apply no filter button - UI event routing only
+        /// </summary>
+        private void ApplyNoFilter_Click(object sender, RoutedEventArgs e)
+        {
+            _filterSelectionService.ApplyNoFilter();
+        }
         #endregion
         
         #region Camera Management

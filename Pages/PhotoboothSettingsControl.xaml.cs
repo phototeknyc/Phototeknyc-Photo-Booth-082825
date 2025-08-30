@@ -163,12 +163,17 @@ namespace Photobooth.Pages
                 retakeTimeoutSlider.Value = Properties.Settings.Default.RetakeTimeout;
                 allowMultipleRetakesCheckBox.IsChecked = Properties.Settings.Default.AllowMultipleRetakes;
                 
+                // Load beauty mode settings
+                beautyModeEnabledCheckBox.IsChecked = Properties.Settings.Default.BeautyModeEnabled;
+                beautyModeIntensitySlider.Value = Properties.Settings.Default.BeautyModeIntensity;
+                
                 // Load filter settings
                 enableFiltersCheckBox.IsChecked = Properties.Settings.Default.EnableFilters;
                 defaultFilterComboBox.SelectedIndex = Properties.Settings.Default.DefaultFilter;
                 filterIntensitySlider.Value = Properties.Settings.Default.FilterIntensity;
                 allowFilterChangeCheckBox.IsChecked = Properties.Settings.Default.AllowFilterChange;
                 showFilterPreviewCheckBox.IsChecked = Properties.Settings.Default.ShowFilterPreview;
+                autoApplyFilterCheckBox.IsChecked = Properties.Settings.Default.AutoApplyFilter;
                 
                 // Load enabled filters (default to all enabled if setting doesn't exist)
                 LoadEnabledFilters();
@@ -263,6 +268,12 @@ namespace Photobooth.Pages
             if (filterIntensityValueText != null)
                 filterIntensityValueText.Text = $"{(int)e.NewValue}%";
         }
+        
+        private void BeautyModeIntensitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (beautyModeIntensityText != null)
+                beautyModeIntensityText.Text = $"{(int)e.NewValue}%";
+        }
 
         private void BrowsePhotoLocation_Click(object sender, RoutedEventArgs e)
         {
@@ -352,12 +363,17 @@ namespace Photobooth.Pages
                 Properties.Settings.Default.RetakeTimeout = (int)retakeTimeoutSlider.Value;
                 Properties.Settings.Default.AllowMultipleRetakes = allowMultipleRetakesCheckBox.IsChecked ?? true;
                 
+                // Save beauty mode settings
+                Properties.Settings.Default.BeautyModeEnabled = beautyModeEnabledCheckBox.IsChecked ?? false;
+                Properties.Settings.Default.BeautyModeIntensity = (int)beautyModeIntensitySlider.Value;
+                
                 // Save filter settings
                 Properties.Settings.Default.EnableFilters = enableFiltersCheckBox.IsChecked ?? true;
                 Properties.Settings.Default.DefaultFilter = defaultFilterComboBox.SelectedIndex;
                 Properties.Settings.Default.FilterIntensity = (int)filterIntensitySlider.Value;
                 Properties.Settings.Default.AllowFilterChange = allowFilterChangeCheckBox.IsChecked ?? true;
                 Properties.Settings.Default.ShowFilterPreview = showFilterPreviewCheckBox.IsChecked ?? true;
+                Properties.Settings.Default.AutoApplyFilter = autoApplyFilterCheckBox.IsChecked ?? false;
                 Properties.Settings.Default.EnabledFilters = GetEnabledFilters();
                 
                 // Save GIF animation settings
@@ -496,11 +512,14 @@ namespace Photobooth.Pages
             enableRetakeCheckBox.IsChecked = false;
             retakeTimeoutSlider.Value = 15;
             allowMultipleRetakesCheckBox.IsChecked = true;
+            beautyModeEnabledCheckBox.IsChecked = false;
+            beautyModeIntensitySlider.Value = 50;
             enableFiltersCheckBox.IsChecked = true;
             defaultFilterComboBox.SelectedIndex = 0; // None
             filterIntensitySlider.Value = 100;
             allowFilterChangeCheckBox.IsChecked = true;
             showFilterPreviewCheckBox.IsChecked = true;
+            autoApplyFilterCheckBox.IsChecked = false;
             
             UpdateSliderTexts();
         }
@@ -519,7 +538,6 @@ namespace Photobooth.Pages
                 filterCoolCheckBox.IsChecked = true;
                 filterWarmCheckBox.IsChecked = true;
                 filterHighContrastCheckBox.IsChecked = true;
-                filterSoftCheckBox.IsChecked = true;
                 filterVividCheckBox.IsChecked = true;
             }
             else
@@ -533,7 +551,6 @@ namespace Photobooth.Pages
                 filterCoolCheckBox.IsChecked = filters.Contains("Cool");
                 filterWarmCheckBox.IsChecked = filters.Contains("Warm");
                 filterHighContrastCheckBox.IsChecked = filters.Contains("HighContrast");
-                filterSoftCheckBox.IsChecked = filters.Contains("Soft");
                 filterVividCheckBox.IsChecked = filters.Contains("Vivid");
             }
         }
@@ -556,8 +573,6 @@ namespace Photobooth.Pages
                 enabledFilters.Add("Warm");
             if (filterHighContrastCheckBox.IsChecked == true)
                 enabledFilters.Add("HighContrast");
-            if (filterSoftCheckBox.IsChecked == true)
-                enabledFilters.Add("Soft");
             if (filterVividCheckBox.IsChecked == true)
                 enabledFilters.Add("Vivid");
                 
@@ -573,7 +588,6 @@ namespace Photobooth.Pages
             filterCoolCheckBox.IsChecked = true;
             filterWarmCheckBox.IsChecked = true;
             filterHighContrastCheckBox.IsChecked = true;
-            filterSoftCheckBox.IsChecked = true;
             filterVividCheckBox.IsChecked = true;
         }
         
@@ -586,7 +600,6 @@ namespace Photobooth.Pages
             filterCoolCheckBox.IsChecked = false;
             filterWarmCheckBox.IsChecked = false;
             filterHighContrastCheckBox.IsChecked = false;
-            filterSoftCheckBox.IsChecked = false;
             filterVividCheckBox.IsChecked = false;
         }
         

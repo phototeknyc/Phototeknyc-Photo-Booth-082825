@@ -1302,6 +1302,50 @@
                 </Expander.HeaderTemplate>
                 <StackPanel Margin="20,15,20,20">
                     
+                    <!-- Beauty Mode Settings -->
+                    <TextBlock Text="✨ Beauty Mode (Global Enhancement)" Style="{StaticResource SectionTitleStyle}" Margin="0,0,0,15"/>
+                    <Border Style="{StaticResource GlassSectionStyle}" Margin="0,0,0,20">
+                        <StackPanel>
+                            <CheckBox x:Name="beautyModeEnabledCheckBox" 
+                                      Content="Enable Beauty Mode for all photos" 
+                                      IsChecked="False"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"
+                                      ToolTip="Applies skin smoothing and enhancement to all captured photos"/>
+                            
+                            <TextBlock Text="Beauty intensity:" 
+                                       Style="{StaticResource SettingsTextStyle}"
+                                       Margin="0,15,0,5"
+                                       IsEnabled="{Binding IsChecked, ElementName=beautyModeEnabledCheckBox}"/>
+                            <Grid IsEnabled="{Binding IsChecked, ElementName=beautyModeEnabledCheckBox}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="60"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="beautyModeIntensitySlider" 
+                                        Grid.Column="0"
+                                        Minimum="0" 
+                                        Maximum="100" 
+                                        Value="50"
+                                        TickFrequency="10"
+                                        TickPlacement="BottomRight"
+                                        ValueChanged="BeautyModeIntensitySlider_ValueChanged"/>
+                                <TextBlock x:Name="beautyModeIntensityText" 
+                                           Grid.Column="1"
+                                           Text="50%"
+                                           Style="{StaticResource SettingsTextStyle}"
+                                           HorizontalAlignment="Right"
+                                           Margin="10,0,0,0"/>
+                            </Grid>
+                            
+                            <TextBlock Text="💡 Beauty Mode applies soft skin smoothing, subtle glow, and enhancement to all photos" 
+                                       Style="{StaticResource SettingsTextStyle}"
+                                       FontSize="12"
+                                       Opacity="0.8"
+                                       TextWrapping="Wrap"
+                                       Margin="0,10,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    
                     <!-- Photo Filters Settings -->
                     <TextBlock Text="Photo Filters" Style="{StaticResource SectionTitleStyle}" Margin="0,0,0,15"/>
                     <Border Style="{StaticResource GlassSectionStyle}">
@@ -1328,7 +1372,6 @@
                         <ComboBoxItem Content="Cool"/>
                         <ComboBoxItem Content="Warm"/>
                         <ComboBoxItem Content="High Contrast"/>
-                        <ComboBoxItem Content="Soft Focus"/>
                         <ComboBoxItem Content="Vivid"/>
                     </ComboBox>
                     
@@ -1364,6 +1407,12 @@
                     <CheckBox x:Name="showFilterPreviewCheckBox" 
                               Content="Show live filter preview" 
                               IsChecked="True"
+                              Style="{StaticResource SettingsCheckBoxStyle}"
+                              IsEnabled="{Binding IsChecked, ElementName=enableFiltersCheckBox}"/>
+                    
+                    <CheckBox x:Name="autoApplyFilterCheckBox" 
+                              Content="Auto-apply filters (single filter = apply automatically, multiple = random selection)" 
+                              IsChecked="False"
                               Style="{StaticResource SettingsCheckBoxStyle}"
                               IsEnabled="{Binding IsChecked, ElementName=enableFiltersCheckBox}"/>
                     
@@ -1429,11 +1478,6 @@
                                                   Margin="8,5"/>
                                         <CheckBox x:Name="filterHighContrastCheckBox" 
                                                   Content="⚡ High Contrast" 
-                                                  IsChecked="True"
-                                                  Style="{StaticResource SettingsCheckBoxStyle}"
-                                                  Margin="8,5"/>
-                                        <CheckBox x:Name="filterSoftCheckBox" 
-                                                  Content="☁️ Soft Focus" 
                                                   IsChecked="True"
                                                   Style="{StaticResource SettingsCheckBoxStyle}"
                                                   Margin="8,5"/>

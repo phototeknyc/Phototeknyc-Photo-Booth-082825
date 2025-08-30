@@ -265,7 +265,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int DefaultFilter {
             get {
                 return ((int)(this["DefaultFilter"]));
@@ -325,13 +325,49 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        [global::System.Configuration.DefaultSettingValueAttribute("BlackWhite,Sepia,Vintage")]
         public string EnabledFilters {
             get {
                 return ((string)(this["EnabledFilters"]));
             }
             set {
                 this["EnabledFilters"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool AutoApplyFilter {
+            get {
+                return ((bool)(this["AutoApplyFilter"]));
+            }
+            set {
+                this["AutoApplyFilter"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool BeautyModeEnabled {
+            get {
+                return ((bool)(this["BeautyModeEnabled"]));
+            }
+            set {
+                this["BeautyModeEnabled"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("50")]
+        public int BeautyModeIntensity {
+            get {
+                return ((int)(this["BeautyModeIntensity"]));
+            }
+            set {
+                this["BeautyModeIntensity"] = value;
             }
         }
         
@@ -577,7 +613,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int DefaultPoolStrategy {
             get {
                 return ((int)(this["DefaultPoolStrategy"]));
@@ -637,7 +673,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int StripPoolStrategy {
             get {
                 return ((int)(this["StripPoolStrategy"]));
@@ -781,7 +817,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int DnpPrintDensity {
             get {
                 return ((int)(this["DnpPrintDensity"]));
@@ -793,7 +829,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int DnpCyanRed {
             get {
                 return ((int)(this["DnpCyanRed"]));
@@ -805,7 +841,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int DnpMagentaGreen {
             get {
                 return ((int)(this["DnpMagentaGreen"]));
@@ -817,7 +853,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int DnpYellowBlue {
             get {
                 return ((int)(this["DnpYellowBlue"]));
@@ -937,7 +973,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int DefaultPrinterOffsetX {
             get {
                 return ((int)(this["DefaultPrinterOffsetX"]));
@@ -949,7 +985,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int DefaultPrinterOffsetY {
             get {
                 return ((int)(this["DefaultPrinterOffsetY"]));
@@ -985,7 +1021,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int Printer2x6OffsetX {
             get {
                 return ((int)(this["Printer2x6OffsetX"]));
@@ -997,7 +1033,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int Printer2x6OffsetY {
             get {
                 return ((int)(this["Printer2x6OffsetY"]));
@@ -1033,7 +1069,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public int AutoLockTimeout {
             get {
                 return ((int)(this["AutoLockTimeout"]));
@@ -1285,7 +1321,7 @@ namespace Photobooth.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
         public string VideoExposureCompensation {
             get {
                 return ((string)(this["VideoExposureCompensation"]));
