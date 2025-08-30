@@ -27,7 +27,7 @@ namespace Photobooth.Services
         #endregion
 
         #region Services
-        private readonly PhotoCaptureService _photoCaptureService;
+        private PhotoCaptureService _photoCaptureService;
         private readonly DatabaseOperations _databaseOperations;
         private readonly SessionManager _sessionManager;
         private readonly PhotoFilterServiceHybrid _filterService;
@@ -47,6 +47,7 @@ namespace Photobooth.Services
         
         // Template format tracking for proper printer routing
         private bool _isCurrentTemplate2x6;
+        private bool _animationGenerationStarted = false; // Track if MP4/GIF generation already started
         
         // Filter selection
         private FilterType _selectedFilter = FilterType.None;
@@ -54,15 +55,33 @@ namespace Photobooth.Services
         // Auto-clear timer
         private DispatcherTimer _autoClearTimer;
         private int _autoClearElapsedSeconds;
+        
+        // Retake tracking
+        private string _lastRetakePhotoPath;
+        private int _lastRetakeIndex = -1;
         #endregion
 
         #region Properties
         public string CurrentSessionId => _currentSessionId;
         public List<string> CapturedPhotoPaths => new List<string>(_capturedPhotoPaths);
+        
+        /// <summary>
+        /// Replace a photo at a specific index (for retakes)
+        /// </summary>
+        public void ReplacePhotoAtIndex(int index, string newPhotoPath)
+        {
+            if (index >= 0 && index < _capturedPhotoPaths.Count)
+            {
+                Log.Debug($"PhotoboothSessionService: Replacing photo at index {index} with {newPhotoPath}");
+                _capturedPhotoPaths[index] = newPhotoPath;
+            }
+        }
         public List<string> AllSessionFiles => GetAllSessionFiles();
         public int CurrentPhotoIndex => _currentPhotoIndex;
         public int TotalPhotosRequired => _totalPhotosRequired;
         public bool IsSessionActive => _isSessionActive;
+        public string LastRetakePhotoPath => _lastRetakePhotoPath;
+        public int LastRetakeIndex => _lastRetakeIndex;
         public EventData CurrentEvent => _currentEvent;
         public TemplateData CurrentTemplate => _currentTemplate;
         public bool IsCurrentTemplate2x6 => _isCurrentTemplate2x6;
@@ -92,6 +111,18 @@ namespace Photobooth.Services
         /// <summary>
         /// Start a new photo session
         /// </summary>
+        /// <summary>
+        /// Set a shared PhotoCaptureService instance to ensure retake state is preserved
+        /// </summary>
+        public void SetPhotoCaptureService(PhotoCaptureService photoCaptureService)
+        {
+            if (photoCaptureService != null)
+            {
+                _photoCaptureService = photoCaptureService;
+                Log.Debug("PhotoboothSessionService: Using shared PhotoCaptureService instance");
+            }
+        }
+
         public async Task<bool> StartSessionAsync(EventData eventData, TemplateData templateData, int totalPhotos)
         {
             try
@@ -156,7 +187,22 @@ namespace Photobooth.Services
                     throw new InvalidOperationException("No active session");
                 }
 
-                Log.Debug($"PhotoboothSessionService: Processing photo {_currentPhotoIndex + 1} of {_totalPhotosRequired}");
+                // Check if this is a retake
+                bool isRetake = _photoCaptureService.IsRetakingPhoto && _photoCaptureService.PhotoIndexToRetake >= 0;
+                int retakeIndex = _photoCaptureService.PhotoIndexToRetake;
+                
+                Log.Debug($"PhotoboothSessionService: Retake check - IsRetaking={_photoCaptureService.IsRetakingPhoto}, Index={_photoCaptureService.PhotoIndexToRetake}");
+                
+                if (isRetake)
+                {
+                    Log.Debug($"PhotoboothSessionService: Processing RETAKE for photo {retakeIndex + 1}");
+                    Log.Debug($"PhotoboothSessionService: Current photo list count BEFORE: {_capturedPhotoPaths.Count}");
+                }
+                else
+                {
+                    Log.Debug($"PhotoboothSessionService: Processing NORMAL photo {_currentPhotoIndex + 1} of {_totalPhotosRequired}");
+                    Log.Debug($"PhotoboothSessionService: Current photo list count BEFORE: {_capturedPhotoPaths.Count}");
+                }
 
                 // Use PhotoCaptureService to process the photo with event context for proper folder structure
                 string processedPhotoPath = _photoCaptureService.ProcessCapturedPhoto(photoEventArgs, _currentEvent);
@@ -176,24 +222,58 @@ namespace Photobooth.Services
                         Properties.Settings.Default.BeautyModeIntensity);
                 }
 
-                // Add to session tracking
-                _capturedPhotoPaths.Add(processedPhotoPath);
-                _currentPhotoIndex++;
-
-                // Notify photo processed
-                PhotoProcessed?.Invoke(this, new PhotoProcessedEventArgs
+                // Add to session tracking or replace for retake
+                if (isRetake && retakeIndex >= 0 && retakeIndex < _capturedPhotoPaths.Count)
                 {
-                    SessionId = _currentSessionId,
-                    PhotoPath = processedPhotoPath,
-                    PhotoIndex = _currentPhotoIndex,
-                    TotalPhotos = _totalPhotosRequired,
-                    IsComplete = _currentPhotoIndex >= _totalPhotosRequired
-                });
+                    Log.Debug($"PhotoboothSessionService: REPLACING photo at index {retakeIndex} with {processedPhotoPath}");
+                    string oldPath = _capturedPhotoPaths[retakeIndex];
+                    _capturedPhotoPaths[retakeIndex] = processedPhotoPath;
+                    Log.Debug($"PhotoboothSessionService: Replaced {oldPath} -> {processedPhotoPath}");
+                    Log.Debug($"PhotoboothSessionService: Photo list count AFTER replace: {_capturedPhotoPaths.Count}");
+                    // Don't increment index for retakes
+                    
+                    // Store the last retake path so the page can get it
+                    _lastRetakePhotoPath = processedPhotoPath;
+                    _lastRetakeIndex = retakeIndex;
+                    
+                    // DON'T reset the retake state here
+                    // It will be reset when:
+                    // 1. A new retake is started (StartRetake will handle it)
+                    // 2. Or when the retake process is complete
+                    Log.Debug("PhotoboothSessionService: Keeping retake state for now (will reset on next retake or completion)");
+                }
+                else
+                {
+                    // Normal capture - add to list
+                    Log.Debug($"PhotoboothSessionService: ADDING new photo to list: {processedPhotoPath}");
+                    _capturedPhotoPaths.Add(processedPhotoPath);
+                    _currentPhotoIndex++;
+                    Log.Debug($"PhotoboothSessionService: Photo list count AFTER add: {_capturedPhotoPaths.Count}");
+                }
+
+                // Notify photo processed - but NOT for retakes!
+                // Retakes are handled by the retake workflow, not the normal photo capture flow
+                if (!isRetake)
+                {
+                    PhotoProcessed?.Invoke(this, new PhotoProcessedEventArgs
+                    {
+                        SessionId = _currentSessionId,
+                        PhotoPath = processedPhotoPath,
+                        PhotoIndex = _currentPhotoIndex,
+                        TotalPhotos = _totalPhotosRequired,
+                        IsComplete = _currentPhotoIndex >= _totalPhotosRequired
+                    });
+                }
+                else
+                {
+                    Log.Debug($"PhotoboothSessionService: Skipping PhotoProcessed event for retake (index {retakeIndex})");
+                }
 
                 Log.Debug($"PhotoboothSessionService: Photo {_currentPhotoIndex} processed successfully");
 
-                // Check if session is complete
-                if (_currentPhotoIndex >= _totalPhotosRequired)
+                // Check if session is complete (but NOT during retakes!)
+                // During retakes, we're replacing photos, not adding new ones
+                if (!isRetake && _currentPhotoIndex >= _totalPhotosRequired)
                 {
                     Log.Debug($"★★★ SESSION PHOTOS COMPLETE: Starting ProcessSessionPhotosAsync ★★★");
                     Log.Debug($"  Photo index: {_currentPhotoIndex}, Total required: {_totalPhotosRequired}");
@@ -201,6 +281,10 @@ namespace Photobooth.Services
                     await ProcessSessionPhotosAsync();
                     // Don't complete yet - wait for page to compose template first
                     Log.Debug("PhotoboothSessionService: All photos captured, waiting for composition before completing");
+                }
+                else if (isRetake)
+                {
+                    Log.Debug($"PhotoboothSessionService: Retake processed - not checking for completion (retake workflow will handle it)");
                 }
 
                 return true;
@@ -226,10 +310,14 @@ namespace Photobooth.Services
                 // The service focuses on GIF generation after photos are processed
                 
                 // Generate GIF/MP4 in background if enabled (non-blocking)
-                if (Properties.Settings.Default.EnableGifGeneration && _capturedPhotoPaths.Count > 1)
+                // Check if already started to prevent duplicate generation
+                if (Properties.Settings.Default.EnableGifGeneration && _capturedPhotoPaths.Count > 1 && !_animationGenerationStarted)
                 {
                     Log.Debug($"★★★ PhotoboothSessionService: Starting animated GIF/MP4 generation in background. Captured photos count: {_capturedPhotoPaths.Count}");
                     Log.Debug($"★★★ EnableGifGeneration setting: {Properties.Settings.Default.EnableGifGeneration}");
+                    
+                    // Mark as started to prevent duplicate generation
+                    _animationGenerationStarted = true;
                     
                     // Fire and forget - generate animation in background and notify UI when ready
                     _ = Task.Run(async () => 
@@ -261,6 +349,14 @@ namespace Photobooth.Services
                             Log.Error($"PhotoboothSessionService: Background animation generation failed: {ex.Message}");
                         }
                     });
+                }
+                else if (_animationGenerationStarted)
+                {
+                    Log.Debug("★★★ PhotoboothSessionService: Animation generation already started, skipping duplicate");
+                }
+                else if (_capturedPhotoPaths.Count <= 1)
+                {
+                    Log.Debug("★★★ PhotoboothSessionService: Not enough photos for animation (need > 1)");
                 }
                 
                 // Note: Template composition is handled by PhotoProcessingOperations
@@ -573,6 +669,7 @@ namespace Photobooth.Services
             _gifPath = null;
             _isCurrentTemplate2x6 = false;
             _selectedFilter = FilterType.None;
+            _animationGenerationStarted = false;
             
             // Reset photo capture service
             _photoCaptureService?.ResetSession();
@@ -629,6 +726,32 @@ namespace Photobooth.Services
                 
                 // Clear the session
                 ClearSession();
+            }
+        }
+        
+        /// <summary>
+        /// Check if animation generation has been started
+        /// </summary>
+        public bool IsAnimationGenerationStarted => _animationGenerationStarted;
+        
+        /// <summary>
+        /// Trigger background processing (GIF/MP4 generation) - used after retakes
+        /// </summary>
+        public async Task TriggerBackgroundProcessingAsync()
+        {
+            try
+            {
+                Log.Debug($"PhotoboothSessionService: TriggerBackgroundProcessingAsync called (animation already started: {_animationGenerationStarted})");
+                
+                if (_isSessionActive && _capturedPhotoPaths.Count > 0)
+                {
+                    // Process session photos (generates GIF/MP4 in background) - will skip if already started
+                    await ProcessSessionPhotosAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PhotoboothSessionService: Failed to trigger background processing: {ex.Message}");
             }
         }
         

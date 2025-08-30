@@ -268,9 +268,9 @@ namespace Photobooth.Services
                     CurrentPhotoIndex--;
                 }
                 
-                // Reset retake state
-                IsRetakingPhoto = false;
-                PhotoIndexToRetake = -1;
+                // DON'T reset retake state here - it needs to be preserved for the capture completion handler
+                // The state will be reset by ResetRetakeState() method called from the page
+                Log.Debug($"PhotoCaptureService: Retake state preserved - IsRetaking={IsRetakingPhoto}, Index={PhotoIndexToRetake}");
             }
             else
             {
@@ -332,12 +332,29 @@ namespace Photobooth.Services
         /// </summary>
         public void StartRetake(int photoIndex)
         {
+            // Reset any previous retake state before setting new
+            if (IsRetakingPhoto)
+            {
+                Log.Debug($"PhotoCaptureService: Resetting previous retake state before starting new retake");
+                ResetRetakeState();
+            }
+            
             if (photoIndex >= 0 && photoIndex < CapturedPhotoPaths.Count)
             {
                 IsRetakingPhoto = true;
                 PhotoIndexToRetake = photoIndex;
                 Log.Debug($"PhotoCaptureService: Starting retake for photo {photoIndex + 1}");
             }
+        }
+        
+        /// <summary>
+        /// Reset retake state after processing
+        /// </summary>
+        public void ResetRetakeState()
+        {
+            Log.Debug($"PhotoCaptureService: Resetting retake state (was IsRetaking={IsRetakingPhoto}, Index={PhotoIndexToRetake})");
+            IsRetakingPhoto = false;
+            PhotoIndexToRetake = -1;
         }
     }
 }

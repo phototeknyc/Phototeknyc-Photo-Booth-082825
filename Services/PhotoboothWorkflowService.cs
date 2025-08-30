@@ -161,7 +161,7 @@ namespace Photobooth.Services
         /// <summary>
         /// Start countdown before capture
         /// </summary>
-        private async Task StartCountdownAsync()
+        public async Task StartCountdownAsync()
         {
             try
             {

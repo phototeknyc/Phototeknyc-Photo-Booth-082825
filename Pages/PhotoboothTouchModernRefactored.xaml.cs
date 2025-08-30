@@ -87,6 +87,8 @@ namespace Photobooth.Pages
         private Services.GalleryActionService _galleryActionService;
         private Services.SharingUIService _sharingUIService;
         private Services.FilterSelectionService _filterSelectionService;
+        private Services.RetakeSelectionService _retakeSelectionService;
+        private bool _isProcessingRetakes = false;
         
         // Supporting services - using existing services from Services folder
         private EventTemplateService _eventTemplateService;
@@ -112,6 +114,8 @@ namespace Photobooth.Pages
         private bool _isDisplayingCapturedPhoto = false; // Flag to prevent live view from overwriting captured photo
         private bool _isCapturing = false; // Flag to track if we're actively capturing a photo
         private bool _isDisplayingSessionResult = false; // Flag to prevent live view from overwriting session result
+        private bool _isRetaking = false; // Flag to track if we're doing a retake
+        private int _currentRetakeIndex = -1; // Index of photo being retaken
         
         private void SetDisplayingSessionResult(bool value)
         {
@@ -206,6 +210,8 @@ namespace Photobooth.Pages
             _databaseOps = new DatabaseOperations();
             _database = _databaseOps; // Use same instance
             _photoCaptureService = new PhotoCaptureService(_databaseOps); // Share the instance
+            // Share the PhotoCaptureService instance with SessionService to maintain retake state
+            _sessionService.SetPhotoCaptureService(_photoCaptureService);
             _photoboothService = new PhotoboothService();
             // SharingOperations requires parent page - remove it, use share service instead
             _offlineQueueService = OfflineQueueService.Instance;
@@ -213,6 +219,7 @@ namespace Photobooth.Pages
             _templateSelectionService = new Services.TemplateSelectionService();
             _templateSelectionUIService = new Services.TemplateSelectionUIService();
             _filterSelectionService = new Services.FilterSelectionService();
+            _retakeSelectionService = new Services.RetakeSelectionService();
             
             // View model will be created in Page_Loaded to avoid stack overflow
             // _viewModel = new PhotoboothTouchModernViewModel();
@@ -428,6 +435,17 @@ namespace Photobooth.Pages
                 _filterSelectionService.FilterSelectionCancelled += OnServiceFilterSelectionCancelled;
                 _filterSelectionService.ShowFilterSelectionRequested += OnServiceShowFilterSelectionRequested;
                 _filterSelectionService.HideFilterSelectionRequested += OnServiceHideFilterSelectionRequested;
+            }
+            
+            if (_retakeSelectionService != null)
+            {
+                _retakeSelectionService.RetakeSelected += OnServiceRetakeSelected;
+                _retakeSelectionService.RetakeRequested += OnServiceRetakeRequested;
+                _retakeSelectionService.ShowRetakeSelectionRequested += OnServiceShowRetakeSelectionRequested;
+                _retakeSelectionService.HideRetakeSelectionRequested += OnServiceHideRetakeSelectionRequested;
+                _retakeSelectionService.RetakeTimerTick += OnServiceRetakeTimerTick;
+                _retakeSelectionService.RetakePhotoRequired += OnServiceRetakePhotoRequired;
+                _retakeSelectionService.RetakeProcessCompleted += OnServiceRetakeProcessCompleted;
             }
             
             Log.Debug("Service event handlers wired up");
@@ -827,6 +845,13 @@ namespace Photobooth.Pages
             {
                 Log.Debug($"Service photo processed: {e.PhotoIndex} of {e.TotalPhotos}");
                 
+                // Don't update UI or continue if we're processing retakes
+                if (_isProcessingRetakes)
+                {
+                    Log.Debug("Skipping normal flow - processing retakes");
+                    return;
+                }
+                
                 // Update UI with thumbnail and counter
                 UpdatePhotoUI(e.PhotoPath, e.PhotoIndex, e.TotalPhotos);
                 
@@ -879,59 +904,134 @@ namespace Photobooth.Pages
             Log.Debug("All photos captured, processing session");
             _uiService.UpdateStatus("Processing your photos...");
             
-            // Check if filters are enabled
-            if (Properties.Settings.Default.EnableFilters)
+            // First, check if retake is enabled
+            if (Properties.Settings.Default.EnableRetake)
             {
-                // Check for auto-apply filter
-                var autoFilter = _filterSelectionService.GetAutoApplyFilter();
-                
-                if (autoFilter.HasValue)
+                Log.Debug("Showing retake selection UI");
+                // Initialize retake selection with captured photos
+                var capturedPhotos = _sessionService.CapturedPhotoPaths;
+                _retakeSelectionService.InitializeRetakeSelection(capturedPhotos);
+                _retakeSelectionService.RequestRetakeSelection();
+                // The flow will continue in OnServiceRetakeSelected after retake is complete
+                return;
+            }
+            
+            // If no retake, proceed to filters
+            await CheckAndApplyFilters();
+        }
+        
+        private async Task CheckAndApplyFilters()
+        {
+            Log.Debug("===== CheckAndApplyFilters STARTING =====");
+            Log.Debug($"  EnableFilters: {Properties.Settings.Default.EnableFilters}");
+            Log.Debug($"  Session photos count: {_sessionService.CapturedPhotoPaths?.Count ?? 0}");
+            
+            try
+            {
+                // Check if filters are enabled
+                if (Properties.Settings.Default.EnableFilters)
                 {
-                    // Auto-apply filter without showing UI
-                    Log.Debug($"Auto-applying filter: {autoFilter.Value}");
-                    _sessionService.SetSelectedFilter(autoFilter.Value);
+                    Log.Debug("Filters are enabled, checking for auto-apply filter");
                     
-                    // Apply filter to photos
-                    await _sessionService.ApplyFilterToPhotosAsync();
+                    // Check for auto-apply filter
+                    var autoFilter = _filterSelectionService.GetAutoApplyFilter();
+                    Log.Debug($"Auto filter result: {autoFilter}");
                     
-                    // Proceed with composition
-                    await ProceedWithComposition();
-                }
-                else if (_filterSelectionService.ShouldShowFilterSelection())
-                {
-                    // Show filter selection UI
-                    Log.Debug("Showing filter selection UI");
-                    _filterSelectionService.RequestFilterSelection();
-                    // The filter will be applied in the OnServiceFilterSelected event handler
-                }
-                else
-                {
-                    // Filters disabled or not allowed to change - proceed directly
-                    await ProceedWithComposition();
-                }
+                    if (autoFilter.HasValue)
+                    {
+                        // Auto-apply filter without showing UI
+                        Log.Debug($"Auto-applying filter: {autoFilter.Value}");
+                        _sessionService.SetSelectedFilter(autoFilter.Value);
+                        
+                        // Apply filter to photos
+                        Log.Debug("Applying filter to photos...");
+                        await _sessionService.ApplyFilterToPhotosAsync();
+                        Log.Debug("Filter applied successfully");
+                        
+                        // Proceed with composition
+                        Log.Debug("Proceeding to composition after filter");
+                        await ProceedWithComposition();
+                    }
+                    else if (_filterSelectionService.ShouldShowFilterSelection())
+                    {
+                        // Show filter selection UI only if allowed and should show
+                        Log.Debug("Showing filter selection UI");
+                        _filterSelectionService.RequestFilterSelection();
+                        // The filter will be applied in the OnServiceFilterSelected event handler
+                        Log.Debug("Waiting for filter selection...");
+                        // IMPORTANT: Don't proceed here - wait for OnServiceFilterSelected
+                    }
+                    else
+                    {
+                        // No auto-filter and no selection needed - proceed directly
+                        Log.Debug("No filter to apply, proceeding to composition directly");
+                        await ProceedWithComposition();
+                        Log.Debug("ProceedWithComposition completed (no filter path)");
+                    }
             }
             else
             {
                 // No filters - proceed directly to composition
+                Log.Debug("Filters disabled, proceeding directly to composition");
                 await ProceedWithComposition();
+                Log.Debug("ProceedWithComposition completed (filters disabled path)");
             }
+            
+            Log.Debug("===== CheckAndApplyFilters COMPLETED =====");
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"CheckAndApplyFilters ERROR: {ex.Message}");
+            Log.Error($"Stack trace: {ex.StackTrace}");
+            // Try to continue anyway
+            Log.Error("Attempting to proceed despite error...");
+            await ProceedWithComposition();
+        }
         }
         
         private async Task ProceedWithComposition()
         {
+            Log.Debug("ProceedWithComposition: Starting composition process");
+            
+            // Check if we need to trigger animation generation
+            // This might be needed if retakes happened before all photos were captured
+            bool animationStarted = _sessionService.IsAnimationGenerationStarted;
+            Log.Debug($"ProceedWithComposition: Animation generation already started: {animationStarted}");
+            
+            if (!animationStarted && _sessionService.CurrentPhotoIndex >= _sessionService.TotalPhotosRequired)
+            {
+                Log.Debug("ProceedWithComposition: Triggering animation generation (not yet started)");
+                await _sessionService.TriggerBackgroundProcessingAsync();
+            }
+            else
+            {
+                Log.Debug("ProceedWithComposition: Skipping animation trigger (already started or not enough photos)");
+            }
+            
             // Compose template if available
             await ComposeSessionTemplate();
             
-            // Complete session (triggers MP4 generation and auto-upload)
-            Log.Debug("Completing session to trigger MP4 generation and auto-upload");
-            await _sessionService.CompleteSessionAsync();
+            // Complete session (triggers auto-upload and finalization)
+            Log.Debug("ProceedWithComposition: Completing session to trigger finalization");
+            var completed = await _sessionService.CompleteSessionAsync();
+            
+            if (completed)
+            {
+                Log.Debug("ProceedWithComposition: Session completed successfully");
+            }
+            else
+            {
+                Log.Error("ProceedWithComposition: Session completion failed!");
+            }
         }
         
         private async Task ComposeSessionTemplate()
         {
+            Log.Debug($"ComposeSessionTemplate: Starting - Template={_currentTemplate?.Name}, PhotoCount={_sessionService.CapturedPhotoPaths?.Count}");
+            
             if (_currentTemplate == null || _sessionService.CapturedPhotoPaths?.Count == 0)
             {
-                Log.Debug("No template or photos available for composition");
+                Log.Debug("ComposeSessionTemplate: No template or photos available for composition");
                 return;
             }
             
@@ -990,12 +1090,19 @@ namespace Photobooth.Pages
                     _uiService.UpdateStatus("Session complete!");
                     _uiService.ShowCompletionControls();
                     
+                    // ENSURE we're not in retake mode anymore
+                    _isProcessingRetakes = false;
+                    
                     // Show unified action buttons panel for current session (not gallery mode)
                     _isInGalleryMode = false;
                     if (actionButtonsPanel != null) 
                     {
                         actionButtonsPanel.Visibility = Visibility.Visible;
                         Log.Debug("Showing action buttons panel after session completion");
+                    }
+                    else
+                    {
+                        Log.Error("actionButtonsPanel is NULL - cannot show action buttons!");
                     }
                     
                     // Show Gallery button to view saved sessions
@@ -1085,7 +1192,18 @@ namespace Photobooth.Pages
             Dispatcher.Invoke(() =>
             {
                 Log.Debug($"Service capture completed: {e.PhotoPath}");
-                _uiService.UpdateStatus("Processing photo...");
+                Log.Debug($"PhotoCaptureService retake state: IsRetaking={_photoCaptureService.IsRetakingPhoto}, Index={_photoCaptureService.PhotoIndexToRetake}");
+                
+                // Check if this is a retake capture
+                if (_photoCaptureService.IsRetakingPhoto && _photoCaptureService.PhotoIndexToRetake >= 0)
+                {
+                    Log.Debug($"This is a retake capture for photo index {_photoCaptureService.PhotoIndexToRetake}");
+                    OnRetakePhotoCaptured(e.PhotoPath);
+                }
+                else
+                {
+                    _uiService.UpdateStatus("Processing photo...");
+                }
             });
         }
         private void OnServicePhotoDisplayRequested(object sender, Services.PhotoDisplayEventArgs e)
@@ -2395,6 +2513,258 @@ namespace Photobooth.Pages
         {
             _filterSelectionService.ApplyNoFilter();
         }
+        #endregion
+        
+        #region Retake Event Handlers
+        /// <summary>
+        /// Handle retake selected event - photos have been retaken or skipped
+        /// </summary>
+        private async void OnServiceRetakeSelected(object sender, Services.RetakeSelectedEventArgs e)
+        {
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                if (e.RetakeCompleted)
+                {
+                    Log.Debug($"OnServiceRetakeSelected: Retake process completed with {e.PhotoPaths?.Count ?? 0} photos");
+                    
+                    // Ensure retake flag is cleared
+                    _isProcessingRetakes = false;
+                    
+                    // Reset any lingering retake state now that retakes are complete
+                    if (_photoCaptureService.IsRetakingPhoto)
+                    {
+                        _photoCaptureService.ResetRetakeState();
+                        Log.Debug("OnServiceRetakeSelected: Reset lingering retake state after completion");
+                    }
+                    
+                    // Update the session with the new photo paths if any were retaken
+                    // The service already updated the paths internally
+                    
+                    // IMPORTANT: The session needs to know we're ready for completion
+                    // Since we bypassed the normal photo capture flow, we need to ensure
+                    // the session state is correct
+                    Log.Debug($"Session state: CurrentPhotoIndex={_sessionService.CurrentPhotoIndex}, TotalRequired={_sessionService.TotalPhotosRequired}");
+                    
+                    // Now proceed to filters and composition
+                    Log.Debug("Proceeding to filter check after retakes");
+                    await CheckAndApplyFilters();
+                }
+            });
+        }
+        
+        /// <summary>
+        /// Handle retake requested event - specific photos need to be retaken
+        /// </summary>
+        private async void OnServiceRetakeRequested(object sender, Services.RetakeRequestedEventArgs e)
+        {
+            // This event is now deprecated - the service handles the workflow internally
+            Log.Debug($"RetakeRequested event (deprecated) - photos: {string.Join(", ", e.PhotoIndices)}");
+        }
+        
+        /// <summary>
+        /// Handle when a single retake photo is required
+        /// </summary>
+        private async void OnServiceRetakePhotoRequired(object sender, Services.RetakePhotoEventArgs e)
+        {
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                Log.Debug($"OnServiceRetakePhotoRequired: Retaking photo {e.PhotoNumber} (index {e.PhotoIndex})");
+                
+                // Set flag to indicate we're processing retakes
+                _isProcessingRetakes = true;
+                _currentRetakeIndex = e.PhotoIndex; // Store the current retake index as fallback
+                
+                // Update UI status
+                _uiService.UpdateStatus($"Retaking photo {e.PhotoNumber}...");
+                
+                // Set up photo capture service for retake
+                _photoCaptureService.StartRetake(e.PhotoIndex);
+                Log.Debug($"PhotoCaptureService configured for retake: IsRetaking={_photoCaptureService.IsRetakingPhoto}, Index={_photoCaptureService.PhotoIndexToRetake}");
+                Log.Debug($"Stored fallback retake index: {_currentRetakeIndex}");
+                
+                // Start the workflow with countdown
+                await _workflowService.StartPhotoCaptureWorkflowAsync();
+            });
+        }
+        
+        /// <summary>
+        /// Handle when all retakes are completed
+        /// </summary>
+        private void OnServiceRetakeProcessCompleted(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                Log.Debug("OnServiceRetakeProcessCompleted: All retakes completed, clearing retake flags");
+                _isProcessingRetakes = false;
+                _currentRetakeIndex = -1;
+                // The service will fire RetakeSelected event next to continue the workflow
+            });
+        }
+        
+        /// <summary>
+        /// Handle when a retake photo has been captured
+        /// </summary>
+        private void OnRetakePhotoCaptured(string photoPath)
+        {
+            int photoIndex = -1;
+            
+            // Try to get index from PhotoCaptureService
+            if (_photoCaptureService.IsRetakingPhoto && _photoCaptureService.PhotoIndexToRetake >= 0)
+            {
+                photoIndex = _photoCaptureService.PhotoIndexToRetake;
+                Log.Debug($"OnRetakePhotoCaptured: Using PhotoCaptureService index: {photoIndex}");
+            }
+            // Fallback to stored index if we're processing retakes
+            else if (_isProcessingRetakes && _currentRetakeIndex >= 0)
+            {
+                photoIndex = _currentRetakeIndex;
+                Log.Debug($"OnRetakePhotoCaptured: WARNING - PhotoCaptureService lost retake state!");
+                Log.Debug($"OnRetakePhotoCaptured: Using fallback retake index: {photoIndex}");
+            }
+            
+            if (photoIndex >= 0)
+            {
+                Log.Debug($"OnRetakePhotoCaptured: Processing retake for photo {photoIndex + 1}, path: {photoPath}");
+                
+                // NOTE: We do NOT call ReplacePhotoAtIndex here anymore!
+                // The SessionService.ProcessCapturedPhotoAsync will handle the replacement automatically
+                // since it now checks if PhotoCaptureService.IsRetakingPhoto is true
+                
+                // Clear our tracking
+                _currentRetakeIndex = -1;
+                
+                // Notify retake service that capture is complete 
+                // This will trigger ProcessNextRetake() internally for the next retake in queue
+                // Note: We pass the raw photo path here, the RetakeSelectionService will get the processed path later
+                _retakeSelectionService.OnRetakePhotoCaptured(photoIndex, photoPath);
+                
+                // DON'T reset the retake state here - SessionService needs to use it when ProcessCapturedPhotoAsync is called
+                // SessionService will reset it after processing the retake
+            }
+            else
+            {
+                Log.Error($"OnRetakePhotoCaptured: No valid photo index for retake!");
+                Log.Error($"  - PhotoCaptureService.IsRetaking: {_photoCaptureService.IsRetakingPhoto}");
+                Log.Error($"  - PhotoCaptureService.Index: {_photoCaptureService.PhotoIndexToRetake}");
+                Log.Error($"  - _isProcessingRetakes: {_isProcessingRetakes}");
+                Log.Error($"  - _currentRetakeIndex: {_currentRetakeIndex}");
+            }
+        }
+        
+        /// <summary>
+        /// Show retake selection overlay
+        /// </summary>
+        private void OnServiceShowRetakeSelectionRequested(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                // Bind the retake photos to the UI
+                retakePhotoGrid.ItemsSource = _retakeSelectionService.RetakePhotos;
+                
+                // Update instruction text based on settings
+                if (Properties.Settings.Default.AllowMultipleRetakes)
+                {
+                    retakeInstructionText.Text = "Click photos to select them, then click 'Retake Selected' (multiple selection allowed)";
+                }
+                else
+                {
+                    retakeInstructionText.Text = "Click a photo to select it, then click 'Retake Selected' (single selection only)";
+                }
+                
+                // Initially hide the retake button until photos are selected
+                if (retakeSelectedButton != null)
+                {
+                    retakeSelectedButton.Visibility = Visibility.Collapsed;
+                }
+                
+                // Show the overlay
+                retakeSelectionOverlay.Visibility = Visibility.Visible;
+            });
+        }
+        
+        /// <summary>
+        /// Hide retake selection overlay
+        /// </summary>
+        private void OnServiceHideRetakeSelectionRequested(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                retakeSelectionOverlay.Visibility = Visibility.Collapsed;
+            });
+        }
+        
+        /// <summary>
+        /// Update retake timer display
+        /// </summary>
+        private void OnServiceRetakeTimerTick(object sender, int timeRemaining)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                retakeTimerText.Text = timeRemaining.ToString();
+            });
+        }
+        
+        /// <summary>
+        /// Handle photo click in retake selection
+        /// </summary>
+        private void RetakePhoto_Click(object sender, MouseButtonEventArgs e)
+        {
+            var border = sender as Border;
+            Log.Debug($"RetakePhoto_Click: Border = {border}, Tag = {border?.Tag}");
+            
+            if (border?.Tag is int photoIndex)
+            {
+                Log.Debug($"RetakePhoto_Click: Toggling retake for photo {photoIndex + 1}");
+                
+                // Toggle the retake selection for this photo
+                _retakeSelectionService.TogglePhotoRetake(photoIndex);
+                
+                // Log the current state
+                var photo = _retakeSelectionService.RetakePhotos.FirstOrDefault(p => p.PhotoIndex == photoIndex);
+                if (photo != null)
+                {
+                    Log.Debug($"RetakePhoto_Click: Photo {photoIndex + 1} MarkedForRetake = {photo.MarkedForRetake}");
+                }
+                
+                // Check if any photos are selected and update button visibility
+                var anySelected = _retakeSelectionService.RetakePhotos.Any(p => p.MarkedForRetake);
+                if (retakeSelectedButton != null)
+                {
+                    retakeSelectedButton.Visibility = anySelected ? Visibility.Visible : Visibility.Collapsed;
+                    
+                    // Update button text to show count
+                    var selectedCount = _retakeSelectionService.RetakePhotos.Count(p => p.MarkedForRetake);
+                    retakeSelectedButton.Content = selectedCount > 1 
+                        ? $"Retake {selectedCount} Photos" 
+                        : "Retake Selected Photo";
+                }
+                
+                // Force UI refresh if needed
+                retakePhotoGrid.Items.Refresh();
+            }
+            else
+            {
+                Log.Error($"RetakePhoto_Click: Invalid tag or border - Tag type = {border?.Tag?.GetType()}");
+            }
+        }
+        
+        /// <summary>
+        /// Handle retake selected button click
+        /// </summary>
+        private void RetakeSelected_Click(object sender, RoutedEventArgs e)
+        {
+            _retakeSelectionService.ProcessRetakes();
+        }
+        
+        /// <summary>
+        /// Handle skip retake button click
+        /// </summary>
+        private void SkipRetake_Click(object sender, RoutedEventArgs e)
+        {
+            _retakeSelectionService.SkipRetake();
+        }
+        
+        /// <summary>
         #endregion
         
         #region Camera Management
