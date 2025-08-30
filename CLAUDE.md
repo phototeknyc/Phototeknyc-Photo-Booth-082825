@@ -8,7 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **WSL Path**: `/mnt/c/Users/rakes/OneDrive/Desktop/photeteknycbooth_clone`
 
 ## Tool Notes
-**Read Tool Issue**: The Read tool has issues with this project. Use `cat` or `grep` commands instead for reading files.
+**Read/Edit Tool Path Issues**: 
+- The Read and Edit tools fail with absolute WSL paths (`/mnt/c/...`)
+- **Solution**: Always use RELATIVE paths from the project root for Read/Edit tools
+- **Alternative**: Use bash commands (`cat`, `grep`, `sed`) with absolute paths
+- **Working Directory**: Already set to `/mnt/c/Users/rakes/OneDrive/Desktop/photeteknycbooth_clone`
+- **Search Tools Work Fine**: Glob and Grep tools work correctly with both relative and absolute paths
 ## Project Overview
 This is a WPF photobooth application written in C# that provides a visual designer canvas for creating photo layouts with camera integration and advanced printing capabilities. The solution is built on .NET Framework 4.8 and includes extensive touch support for touchscreen kiosks.
 
