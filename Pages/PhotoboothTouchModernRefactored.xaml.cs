@@ -186,6 +186,16 @@ namespace Photobooth.Pages
             _shareService = CloudShareProvider.GetShareService();
             _sessionManager = new SessionManager();
             
+            // Initialize camera settings service (lazy loading - only when overlay shown)
+            var cameraSettingsService = CameraSettingsService.Instance;
+            cameraSettingsService.RegisterOverlayVisibilityCallback(visible =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    CameraSettingsOverlayControl.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                });
+            });
+            
             // Initialize sharing UI service for modal display management first
             // Pass the MainGrid instead of the page so UI elements can be added properly
             _sharingUIService = new Services.SharingUIService(MainGrid);
@@ -195,6 +205,13 @@ namespace Photobooth.Pages
             _sharingUIService.SmsOverlayClosed += OnSmsOverlayClosed;
             _sharingUIService.SendSmsRequested += OnSendSmsRequested;
             _sharingUIService.ShowSmsFromQrRequested += OnShowSmsFromQrRequested;
+            
+            // Wire event selection overlay events
+            if (EventSelectionOverlayControl != null)
+            {
+                EventSelectionOverlayControl.EventSelected += OnEventSelectionOverlayEventSelected;
+                EventSelectionOverlayControl.SelectionCancelled += OnEventSelectionOverlayCancelled;
+            }
             
             // Initialize unified action service (requires other services including SharingUIService)
             _galleryActionService = new Services.GalleryActionService(
@@ -722,11 +739,12 @@ namespace Photobooth.Pages
                     _isInGalleryMode = true;
                     Log.Debug($"★★★ ShowGalleryNavigationButtons: Showing action buttons panel for gallery session (Visibility: {actionButtonsPanel.Visibility})");
                     
-                    // Also log individual button visibility and set them to Visible
+                    // Also log individual button visibility and set them based on settings
                     if (printButton != null)
                     {
-                        printButton.Visibility = Visibility.Visible;
-                        Log.Debug($"  - Print button visibility: {printButton.Visibility}");
+                        bool showPrintButton = Properties.Settings.Default.ShowPrintButton && Properties.Settings.Default.EnablePrinting;
+                        printButton.Visibility = showPrintButton ? Visibility.Visible : Visibility.Collapsed;
+                        Log.Debug($"  - Print button visibility: {printButton.Visibility} (ShowPrintButton: {Properties.Settings.Default.ShowPrintButton}, EnablePrinting: {Properties.Settings.Default.EnablePrinting})");
                     }
                     if (shareButton != null)
                     {
@@ -2951,30 +2969,20 @@ namespace Photobooth.Pages
 
         private void ShowEventSelectionOverlay()
         {
-            Log.Debug("ShowEventSelectionOverlay: Loading available events");
+            Log.Debug("ShowEventSelectionOverlay: Using new EventSelectionOverlay control");
             
-            // Load events
-            _eventTemplateService.LoadAvailableEvents();
-            
-            Log.Debug($"ShowEventSelectionOverlay: Found {_eventTemplateService.AvailableEvents?.Count ?? 0} events");
-            
-            // Show event selection UI instead of auto-selecting
-            if (_eventTemplateService.AvailableEvents?.Any() == true)
+            // Show the modern event selection overlay
+            if (EventSelectionOverlayControl != null)
             {
-                // Bind events to UI
-                eventsList.ItemsSource = _eventTemplateService.AvailableEvents;
-                eventSelectionOverlay.Visibility = Visibility.Visible;
-                
-                Log.Debug("ShowEventSelectionOverlay: Showing event selection UI");
+                EventSelectionOverlayControl.ShowOverlay();
             }
             else
             {
-                Log.Error("ShowEventSelectionOverlay: No events available!");
+                Log.Error("ShowEventSelectionOverlay: EventSelectionOverlayControl is null!");
                 statusText.Text = "No events available - Please configure events first";
                 
                 // Still show start button for basic photo capture
                 startButtonOverlay.Visibility = Visibility.Visible;
-                Log.Debug("ShowEventSelectionOverlay: Showing start button anyway for basic photo capture");
             }
         }
 
@@ -3023,40 +3031,77 @@ namespace Photobooth.Pages
 
         private void CameraSettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Show camera settings overlay
-            Log.Debug("CameraSettingsButton_Click: Not implemented yet");
+            Log.Debug("CameraSettingsButton_Click: Opening camera settings overlay");
+            
+            // Show the camera settings overlay using the service (lazy loaded)
+            var cameraSettingsService = CameraSettingsService.Instance;
+            cameraSettingsService.ShowOverlay();
         }
 
         private void TimerSettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Show timer settings
-            Log.Debug("TimerSettingsButton_Click: Not implemented yet");
+            Log.Debug("TimerSettingsButton_Click: Opening timer settings overlay");
+            
+            // Show the timer settings overlay
+            if (TimerSettingsOverlayControl != null)
+            {
+                TimerSettingsOverlayControl.ShowOverlay();
+            }
+            else
+            {
+                Log.Error("TimerSettingsButton_Click: TimerSettingsOverlayControl is null");
+            }
         }
 
         private void PrintSettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Show print settings
-            Log.Debug("PrintSettingsButton_Click: Not implemented yet");
+            Log.Debug("PrintSettingsButton_Click: Opening print settings overlay");
+            
+            // Show the print settings overlay
+            if (PrintSettingsOverlayControl != null)
+            {
+                PrintSettingsOverlayControl.ShowOverlay();
+            }
+            else
+            {
+                Log.Error("PrintSettingsButton_Click: PrintSettingsOverlayControl is null");
+            }
         }
         #endregion
 
         #region Event/Template Selection Handlers
-        private void EventItem_Click(object sender, RoutedEventArgs e)
+        private void OnEventSelectionOverlayEventSelected(object sender, EventData selectedEvent)
         {
-            if (sender is FrameworkElement element && element.DataContext is EventData selectedEvent)
+            if (selectedEvent != null)
             {
-                Log.Debug($"EventItem_Click: Selected event '{selectedEvent.Name}' (ID: {selectedEvent.Id})");
+                Log.Debug($"OnEventSelectionOverlayEventSelected: Selected event '{selectedEvent.Name}' (ID: {selectedEvent.Id})");
                 
                 _currentEvent = selectedEvent;
                 _eventTemplateService.SelectEvent(_currentEvent);
                 
-                // Hide event selection
-                eventSelectionOverlay.Visibility = Visibility.Collapsed;
-                
                 // Initialize template selection with the selected event
-                Log.Debug($"EventItem_Click: Initializing template selection for event ID {selectedEvent.Id}");
+                Log.Debug($"OnEventSelectionOverlayEventSelected: Initializing template selection for event ID {selectedEvent.Id}");
                 _templateSelectionService?.InitializeForEvent(selectedEvent);
             }
+        }
+        
+        private void OnEventSelectionOverlayCancelled(object sender, EventArgs e)
+        {
+            Log.Debug("OnEventSelectionOverlayCancelled: Event selection cancelled");
+            
+            // Show start button for basic photo capture if no event selected
+            if (_currentEvent == null)
+            {
+                statusText.Text = "Touch START to begin";
+                startButtonOverlay.Visibility = Visibility.Visible;
+            }
+        }
+        
+        // Legacy handler - keeping for old inline overlay (to be removed)
+        private void EventItem_Click(object sender, RoutedEventArgs e)
+        {
+            // This handler is for the old inline overlay - no longer used
+            Log.Debug("EventItem_Click: Legacy handler called - should not happen with new overlay");
         }
 
         private void TemplateItem_Click(object sender, RoutedEventArgs e)
@@ -3079,19 +3124,21 @@ namespace Photobooth.Pages
             }
         }
 
+        // Legacy handler - no longer needed with new overlay
         private void CloseEventSelection_Click(object sender, RoutedEventArgs e)
         {
-            eventSelectionOverlay.Visibility = Visibility.Collapsed;
-            
-            // Show start button anyway for basic photo capture
-            statusText.Text = "Touch START to begin";
-            startButtonOverlay.Visibility = Visibility.Visible;
+            // This handler is for the old inline overlay - no longer used
+            Log.Debug("CloseEventSelection_Click: Legacy handler called - should not happen with new overlay");
         }
 
         private void BackToEventSelection_Click(object sender, RoutedEventArgs e)
         {
             templateSelectionOverlay.Visibility = Visibility.Collapsed;
-            eventSelectionOverlay.Visibility = Visibility.Visible;
+            // Use the new EventSelectionOverlay control
+            if (EventSelectionOverlayControl != null)
+            {
+                EventSelectionOverlayControl.ShowOverlay();
+            }
         }
 
         private void ShowTemplateSelectionOverlay()

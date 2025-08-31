@@ -606,57 +606,78 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 
-                <!-- Left Panel - Camera Settings -->
+                <!-- Left Panel - Empty for balance -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
-                    <Button Content="📷 Camera" 
-                            Style="{StaticResource TouchButtonStyle}"
-                            Background="#666666"
-                            Width="140" 
-                            Height="50" 
-                            FontSize="16" 
-                            Margin="5"
-                            Click="CameraSettingsButton_Click"/>
-                    <Button Content="⏲️ Timer" 
-                            Style="{StaticResource TouchButtonStyle}"
-                            Background="#666666"
-                            Width="120" 
-                            Height="50" 
-                            FontSize="16" 
-                            Margin="5"
-                            Click="TimerSettingsButton_Click"/>
+                    <!-- Keep empty for visual balance -->
                 </StackPanel>
                 
-                <!-- Center Panel - Primary Actions -->
+                <!-- Center Panel - Empty for balance -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
-                    <Button x:Name="eventSelectionButton"
-                            Content="🎉 Select Event" 
-                            Style="{StaticResource TouchButtonStyle}"
-                            Background="#FF4CAF50"
-                            Width="200" 
-                            Height="60" 
-                            FontSize="18" 
-                            Margin="10,0"
-                            Click="SelectEventButton_Click"/>
+                    <!-- Keep empty for visual balance -->
                 </StackPanel>
                 
-                <!-- Right Panel - System Settings -->
+                <!-- Right Panel - Event, Print, Camera, Timer, Settings -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="🖨️ Print" 
-                            Style="{StaticResource TouchButtonStyle}"
-                            Background="#666666"
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Background="#9C27B0"
                             Width="120" 
                             Height="50" 
-                            FontSize="16" 
                             Margin="5"
-                            Click="PrintSettingsButton_Click"/>
-                    <Button Content="⚙️ Settings" 
-                            Style="{StaticResource TouchButtonStyle}"
-                            Background="#666666"
+                            Click="SelectEventButton_Click"
+                            ToolTip="Select Event">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎉" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock Text="Event" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Background="#4CAF50"
+                            Width="120" 
+                            Height="50" 
+                            Margin="5"
+                            Click="PrintSettingsButton_Click"
+                            ToolTip="Print Settings">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🖨️" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock Text="Print" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Background="#2196F3"
                             Width="140" 
                             Height="50" 
-                            FontSize="16" 
                             Margin="5"
-                            Click="SettingsButton_Click"/>
+                            Click="CameraSettingsButton_Click"
+                            ToolTip="Camera Settings">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📷" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock Text="Camera" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Background="#FF9800"
+                            Width="120" 
+                            Height="50" 
+                            Margin="5"
+                            Click="TimerSettingsButton_Click"
+                            ToolTip="Timer Settings">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⏲️" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock Text="Timer" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Background="#9C27B0"
+                            Width="140" 
+                            Height="50" 
+                            Margin="5"
+                            Click="SettingsButton_Click"
+                            ToolTip="General Settings">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚙️" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock Text="Settings" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -689,90 +710,14 @@
             </StackPanel>
         </Border>
         
-        <!-- Event Selection Overlay -->
+        <!-- Old Event Selection Overlay - Replaced by EventSelectionOverlayControl -->
+        <!-- Commented out to avoid conflicts with new EventSelectionOverlay control
         <Grid x:Name="eventSelectionOverlay" 
               Grid.Row="0" Grid.RowSpan="3" 
               Background="#CC000000" 
               Visibility="Collapsed">
-            
-            <Border Background="#2D2D30" 
-                    CornerRadius="20" 
-                    MaxWidth="800" 
-                    MaxHeight="600" 
-                    HorizontalAlignment="Center" 
-                    VerticalAlignment="Center"
-                    Padding="40">
-                <Border.Effect>
-                    <DropShadowEffect Color="Black" BlurRadius="25" ShadowDepth="10" Opacity="0.7"/>
-                </Border.Effect>
-                
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    
-                    <!-- Header -->
-                    <TextBlock Grid.Row="0" 
-                               Text="Select Event" 
-                               FontSize="32" 
-                               FontWeight="Bold" 
-                               Foreground="White" 
-                               HorizontalAlignment="Center" 
-                               Margin="0,0,0,30"/>
-                    
-                    <!-- Event List -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl x:Name="eventsList" Margin="0,0,0,20">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Background="#404040" 
-                                            CornerRadius="10" 
-                                            Margin="0,0,0,10" 
-                                            Cursor="Hand"
-                                            MouseLeftButtonDown="EventItem_Click">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="#404040"/>
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="#4CAF50"/>
-                                                    </Trigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        
-                                        <StackPanel Orientation="Vertical" Margin="20">
-                                            <TextBlock Text="{Binding Name}" 
-                                                       FontSize="24" 
-                                                       FontWeight="Bold" 
-                                                       Foreground="White"/>
-                                            <TextBlock Text="{Binding Description}" 
-                                                       FontSize="16" 
-                                                       Foreground="#CCCCCC" 
-                                                       Margin="0,5,0,0" 
-                                                       TextWrapping="Wrap"/>
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                    
-                    <!-- Close Button -->
-                    <Button Grid.Row="2" 
-                            Content="Cancel" 
-                            Style="{StaticResource TouchButtonStyle}" 
-                            Background="#666666"
-                            Width="200" 
-                            Height="60" 
-                            FontSize="20" 
-                            HorizontalAlignment="Center" 
-                            Click="CloseEventSelection_Click"/>
-                </Grid>
-            </Border>
         </Grid>
+        -->
         
         <!-- Template Selection Overlay -->
         <Grid x:Name="templateSelectionOverlay" 
@@ -1408,5 +1353,29 @@
                 </Grid>
             </Border>
         </Grid>
+        
+        <!-- Camera Settings Overlay -->
+        <controls:CameraSettingsOverlay x:Name="CameraSettingsOverlayControl" 
+                                         Visibility="Collapsed"
+                                         Grid.RowSpan="10"
+                                         Panel.ZIndex="1000"/>
+        
+        <!-- Timer Settings Overlay -->
+        <controls:TimerSettingsOverlay x:Name="TimerSettingsOverlayControl" 
+                                        Visibility="Collapsed"
+                                        Grid.RowSpan="10"
+                                        Panel.ZIndex="1000"/>
+        
+        <!-- Print Settings Overlay -->
+        <controls:PrintSettingsOverlay x:Name="PrintSettingsOverlayControl" 
+                                        Visibility="Collapsed"
+                                        Grid.RowSpan="10"
+                                        Panel.ZIndex="1000"/>
+        
+        <!-- Event Selection Overlay -->
+        <controls:EventSelectionOverlay x:Name="EventSelectionOverlayControl"
+                                         Visibility="Collapsed"
+                                         Grid.RowSpan="10"
+                                         Panel.ZIndex="1000"/>
     </Grid>
 </Page>

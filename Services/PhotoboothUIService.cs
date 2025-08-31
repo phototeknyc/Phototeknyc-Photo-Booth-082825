@@ -213,11 +213,15 @@ namespace Photobooth.Services
                     Value = Visibility.Visible
                 });
 
+                // Only show print button if enabled in settings
+                bool showPrintButton = Properties.Settings.Default.ShowPrintButton && Properties.Settings.Default.EnablePrinting;
+                Log.Debug($"PhotoboothUIService: ShowPrintButton setting: {Properties.Settings.Default.ShowPrintButton}, EnablePrinting: {Properties.Settings.Default.EnablePrinting}, Will show: {showPrintButton}");
+                
                 UIUpdateRequested?.Invoke(this, new UIUpdateEventArgs
                 {
                     ElementName = "printButton",
                     Property = "Visibility",
-                    Value = Visibility.Visible
+                    Value = showPrintButton ? Visibility.Visible : Visibility.Collapsed
                 });
 
                 UIUpdateRequested?.Invoke(this, new UIUpdateEventArgs

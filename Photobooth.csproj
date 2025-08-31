@@ -171,6 +171,18 @@
     </ApplicationDefinition>
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="Controls\EnhancedColorPickerDialog.cs" />
+    <Compile Include="Controls\CameraSettingsOverlay.xaml.cs">
+      <DependentUpon>CameraSettingsOverlay.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\TimerSettingsOverlay.xaml.cs">
+      <DependentUpon>TimerSettingsOverlay.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\PrintSettingsOverlay.xaml.cs">
+      <DependentUpon>PrintSettingsOverlay.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\EventSelectionOverlay.xaml.cs">
+      <DependentUpon>EventSelectionOverlay.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\PixiEditorColorPickerDialog.xaml.cs">
       <DependentUpon>PixiEditorColorPickerDialog.xaml</DependentUpon>
     </Compile>
@@ -214,6 +226,7 @@
     <Compile Include="Services\PhotoboothService.cs" />
     <Compile Include="Services\ImageProcessingService.cs" />
     <Compile Include="Services\CameraSessionManager.cs" />
+    <Compile Include="Services\CameraSettingsService.cs" />
     <Compile Include="Services\PhotoFilterService.cs" />
     <Compile Include="Services\PhotoFilterServiceMagick.cs" />
     <Compile Include="Services\PhotoFilterServiceHybrid.cs" />
@@ -242,6 +255,7 @@
     <Compile Include="TestGalleryUploader.cs" />
     <Compile Include="Services\PinLockService.cs" />
     <Compile Include="Services\EventTemplateService.cs" />
+    <Compile Include="Services\EventSelectionService.cs" />
     <Compile Include="Services\PhotoCaptureService.cs" />
     <Compile Include="Services\PrintingService.cs" />
     <Compile Include="Services\PrinterSettingsManager.cs" />
@@ -368,6 +382,22 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Pages\PhotoboothSettingsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\CameraSettingsOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\TimerSettingsOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\PrintSettingsOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\EventSelectionOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
