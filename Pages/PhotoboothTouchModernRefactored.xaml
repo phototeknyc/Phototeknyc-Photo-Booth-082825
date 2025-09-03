@@ -260,6 +260,37 @@
                                    HorizontalAlignment="Center"/>
                     </Border>
                     
+                    <!-- Lock Button (Top Left - Non-obtrusive) -->
+                    <Button x:Name="lockButton"
+                            Width="45"
+                            Height="45"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Margin="20,20,0,0"
+                            Background="#33FFFFFF"
+                            BorderThickness="0"
+                            Click="LockButton_Click"
+                            Cursor="Hand"
+                            ToolTip="Lock/Unlock Settings"
+                            Panel.ZIndex="100">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="22.5">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="Black" BlurRadius="5" ShadowDepth="2" Opacity="0.3"/>
+                                    </Border.Effect>
+                                    <TextBlock x:Name="lockIcon"
+                                               Text="🔓"
+                                               FontSize="20"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
                     <!-- Info Panel - Bottom Left -->
                     <Border VerticalAlignment="Bottom" 
                             HorizontalAlignment="Left" 
@@ -395,38 +426,7 @@
                         </StackPanel>
                     </Border>
                     
-                    <!-- Back Button (Bottom Right) -->
-                    <Button x:Name="backButton"
-                            Width="80"
-                            Height="80"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Bottom"
-                            Margin="0,0,20,20"
-                            Background="#CC2196F3"
-                            BorderThickness="0"
-                            Click="BackButton_Click"
-                            Cursor="Hand"
-                            ToolTip="Go Back">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" 
-                                        CornerRadius="40">
-                                    <StackPanel HorizontalAlignment="Center" 
-                                                VerticalAlignment="Center">
-                                        <TextBlock Text="←" 
-                                                   FontSize="32"
-                                                   HorizontalAlignment="Center"
-                                                   Foreground="White"/>
-                                        <TextBlock Text="BACK" 
-                                                   FontSize="14"
-                                                   Margin="0,2,0,0"
-                                                   HorizontalAlignment="Center"
-                                                   Foreground="White"/>
-                                    </StackPanel>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
+                    <!-- Back Button removed from here - moved to bottom control bar -->
                 </Grid>
             </Border>
         </Grid>
@@ -606,9 +606,21 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 
-                <!-- Left Panel - Empty for balance -->
+                <!-- Left Panel - Back Button -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
-                    <!-- Keep empty for visual balance -->
+                    <Button x:Name="backButton"
+                            Style="{StaticResource TouchButtonStyle}"
+                            Background="#2196F3"
+                            Width="120" 
+                            Height="50" 
+                            Margin="5"
+                            Click="BackButton_Click"
+                            ToolTip="Go Back">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="←" FontSize="20" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Back" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
                 
                 <!-- Center Panel - Empty for balance -->
@@ -683,15 +695,15 @@
         </Border>
         
         <!-- Bottom Bar Toggle Button (Chevron) -->
-        <Border Grid.RowSpan="3"
+        <Border Grid.Row="2"
                 VerticalAlignment="Bottom" 
-                HorizontalAlignment="Left" 
+                HorizontalAlignment="Center" 
                 Background="#FF444444" 
-                CornerRadius="0,20,0,0" 
-                Padding="20,15" 
-                Margin="20,0,0,0"
+                CornerRadius="15,15,0,0" 
+                Padding="30,10" 
+                Margin="0,0,0,0"
                 Cursor="Hand"
-                Panel.ZIndex="500"
+                Panel.ZIndex="499"
                 MouseLeftButtonDown="ToggleBottomBar_Click">
             <Border.Effect>
                 <DropShadowEffect Color="Black" BlurRadius="15" ShadowDepth="5" Opacity="0.7"/>
@@ -1377,5 +1389,17 @@
                                          Visibility="Collapsed"
                                          Grid.RowSpan="10"
                                          Panel.ZIndex="1000"/>
+        
+        <!-- Settings Overlay -->
+        <controls:SettingsOverlay x:Name="SettingsOverlayControl"
+                                   Visibility="Collapsed"
+                                   Grid.RowSpan="10"
+                                   Panel.ZIndex="1000"/>
+        
+        <!-- PIN Entry Overlay (highest z-index for security) -->
+        <controls:PinEntryOverlay x:Name="PinEntryOverlayControl"
+                                   Visibility="Collapsed"
+                                   Grid.RowSpan="10"
+                                   Panel.ZIndex="9999"/>
     </Grid>
 </Page>

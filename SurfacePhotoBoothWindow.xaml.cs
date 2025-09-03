@@ -82,6 +82,9 @@ namespace Photobooth
             
             // Handle window closing for proper cleanup
             this.Closing += Window_Closing;
+            
+            // Add deactivation protection when locked
+            this.Deactivated += Window_Deactivated;
         }
         
         private void SetupDpiAwareness()
@@ -715,12 +718,55 @@ namespace Photobooth
         
         private void MinimizeWindow_Click(object sender, RoutedEventArgs e)
         {
+            // Check if locked
+            if (Photobooth.Services.PinLockService.Instance.IsInterfaceLocked)
+            {
+                // Request PIN to minimize
+                Photobooth.Services.PinLockService.Instance.RequestPinForUnlock((success) =>
+                {
+                    if (success)
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            // Unlock temporarily and minimize
+                            this.WindowState = WindowState.Minimized;
+                        });
+                    }
+                });
+                return;
+            }
+            
             // Directly minimize without animation to avoid rendering issues
             this.WindowState = WindowState.Minimized;
         }
         
         private void CloseWindow_Click(object sender, RoutedEventArgs e)
         {
+            // Check if locked
+            if (Photobooth.Services.PinLockService.Instance.IsInterfaceLocked)
+            {
+                // Request PIN to close
+                Photobooth.Services.PinLockService.Instance.RequestPinForUnlock((success) =>
+                {
+                    if (success)
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            // Animate close
+                            var closeAnimation = new DoubleAnimation
+                            {
+                                From = 1.0,
+                                To = 0.0,
+                                Duration = TimeSpan.FromMilliseconds(300)
+                            };
+                            closeAnimation.Completed += (s, args) => this.Close();
+                            this.BeginAnimation(OpacityProperty, closeAnimation);
+                        });
+                    }
+                });
+                return;
+            }
+            
             // Animate close
             var animation = new DoubleAnimation
             {
@@ -766,6 +812,16 @@ namespace Photobooth
         
         private void Window_StateChanged(object sender, EventArgs e)
         {
+            // Check if locked and trying to minimize
+            if (Photobooth.Services.PinLockService.Instance.IsInterfaceLocked && 
+                this.WindowState == WindowState.Minimized)
+            {
+                // Prevent minimizing when locked - restore immediately
+                this.WindowState = WindowState.Maximized;
+                System.Diagnostics.Debug.WriteLine("Blocked minimize - interface is locked");
+                return;
+            }
+            
             // Handle window state changes
             if (this.WindowState == WindowState.Normal || this.WindowState == WindowState.Maximized)
             {
@@ -855,14 +911,74 @@ namespace Photobooth
         
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            // Emergency exit: Ctrl+Shift+X
+            // Check if interface is locked
+            bool isLocked = Photobooth.Services.PinLockService.Instance.IsInterfaceLocked;
+            
+            // Block system keys when locked
+            if (isLocked)
+            {
+                // Block Alt+F4
+                if (e.Key == Key.F4 && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+                {
+                    e.Handled = true;
+                    return;
+                }
+                
+                // Block Windows key combinations
+                if (e.Key == Key.LWin || e.Key == Key.RWin)
+                {
+                    e.Handled = true;
+                    return;
+                }
+                
+                // Block Alt+Tab
+                if (e.Key == Key.Tab && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+                {
+                    e.Handled = true;
+                    return;
+                }
+                
+                // Block Escape (except for PIN dialog)
+                if (e.Key == Key.Escape)
+                {
+                    e.Handled = true;
+                    return;
+                }
+                
+                // Block Ctrl+Esc (Start Menu)
+                if (e.Key == Key.Escape && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+            
+            // Emergency exit: Ctrl+Shift+X (requires PIN if locked)
             if (e.Key == Key.X && 
                 (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control &&
                 (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
             {
-                // Emergency exit - close the application
-                this.Close();
-                Application.Current.Shutdown();
+                if (isLocked)
+                {
+                    // Request PIN for emergency exit
+                    Photobooth.Services.PinLockService.Instance.RequestPinForUnlock((success) =>
+                    {
+                        if (success)
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                this.Close();
+                                Application.Current.Shutdown();
+                            });
+                        }
+                    });
+                }
+                else
+                {
+                    // Emergency exit - close the application
+                    this.Close();
+                    Application.Current.Shutdown();
+                }
                 e.Handled = true;
                 return;
             }
@@ -923,6 +1039,37 @@ namespace Photobooth
             base.OnClosed(e);
         }
         
+        private void Window_Deactivated(object sender, EventArgs e)
+        {
+            // When locked, keep window active and on top
+            if (Photobooth.Services.PinLockService.Instance.IsInterfaceLocked)
+            {
+                // Re-activate window immediately
+                this.Activate();
+                this.Topmost = true;
+                this.Topmost = false; // Reset to respect original setting
+                System.Diagnostics.Debug.WriteLine("Prevented window deactivation - interface is locked");
+            }
+        }
+        
+        protected override void OnStateChanged(EventArgs e)
+        {
+            // Intercept state changes when locked
+            if (Photobooth.Services.PinLockService.Instance.IsInterfaceLocked)
+            {
+                if (this.WindowState == WindowState.Minimized)
+                {
+                    // Immediately restore when trying to minimize while locked
+                    this.WindowState = WindowState.Maximized;
+                    this.Activate();
+                    System.Diagnostics.Debug.WriteLine("OnStateChanged: Blocked minimize - interface is locked");
+                    return; // Don't call base to prevent the minimize
+                }
+            }
+            
+            base.OnStateChanged(e);
+        }
+        
         #endregion
         
         #region Fullscreen and Lock Features
@@ -944,6 +1091,9 @@ namespace Photobooth
         {
             _isLocked = locked;
             UpdateLockUI();
+            
+            // Also update using PinLockService
+            Photobooth.Services.PinLockService.Instance.IsInterfaceLocked = locked;
         }
         
         public bool IsLocked => _isLocked;

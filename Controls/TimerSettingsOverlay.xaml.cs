@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
+using Photobooth.Services;
 
 namespace Photobooth.Controls
 {
@@ -9,10 +10,17 @@ namespace Photobooth.Controls
     {
         private bool _isInitialized = false;
         private bool _autoSaveEnabled = true;
+        private readonly SettingsManagementService _settingsService;
 
         public TimerSettingsOverlay()
         {
             InitializeComponent();
+            
+            // Initialize settings service for sync
+            _settingsService = SettingsManagementService.Instance;
+            _settingsService.SettingChanged += OnSettingChangedFromService;
+            _settingsService.SettingsReset += OnSettingsResetFromService;
+            
             this.Loaded += OnControlLoaded;
         }
 
@@ -74,6 +82,7 @@ namespace Photobooth.Controls
             {
                 Properties.Settings.Default.CountdownSeconds = value;
                 Properties.Settings.Default.Save();
+                _settingsService.LoadSettings();  // Sync with service
             }
         }
 
@@ -98,6 +107,7 @@ namespace Photobooth.Controls
             {
                 Properties.Settings.Default.ShowCountdown = ShowCountdownCheckBox.IsChecked ?? true;
                 Properties.Settings.Default.Save();
+                _settingsService.LoadSettings();  // Sync with service
             }
         }
 
@@ -111,6 +121,7 @@ namespace Photobooth.Controls
             {
                 Properties.Settings.Default.DelayBetweenPhotos = (int)DelayBetweenPhotosSlider.Value;
                 Properties.Settings.Default.Save();
+                _settingsService.LoadSettings();  // Sync with service
             }
         }
 
@@ -136,6 +147,7 @@ namespace Photobooth.Controls
             {
                 Properties.Settings.Default.AutoClearTimeout = value;
                 Properties.Settings.Default.Save();
+                _settingsService.LoadSettings();  // Sync with service
             }
         }
 
@@ -247,6 +259,9 @@ namespace Photobooth.Controls
             catch { }
             
             Properties.Settings.Default.Save();
+            
+            // Refresh settings service to sync with other overlays
+            _settingsService.LoadSettings();
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
@@ -277,5 +292,51 @@ namespace Photobooth.Controls
             var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.3));
             this.BeginAnimation(OpacityProperty, fadeIn);
         }
+        
+        #region Settings Service Event Handlers
+        
+        /// <summary>
+        /// Handle setting changes from the service to keep UI in sync
+        /// </summary>
+        private void OnSettingChangedFromService(object sender, SettingChangedEventArgs e)
+        {
+            try
+            {
+                // Refresh the UI to reflect changes made in other overlays
+                Dispatcher.Invoke(() => 
+                {
+                    _autoSaveEnabled = false;  // Prevent re-saving while updating
+                    LoadCurrentSettings();
+                    _autoSaveEnabled = true;
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TimerSettingsOverlay] Error syncing setting change from service: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Handle settings reset from service
+        /// </summary>
+        private void OnSettingsResetFromService(object sender, EventArgs e)
+        {
+            try
+            {
+                // Refresh the UI to reflect reset settings
+                Dispatcher.Invoke(() => 
+                {
+                    _autoSaveEnabled = false;  // Prevent re-saving while updating
+                    LoadCurrentSettings();
+                    _autoSaveEnabled = true;
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TimerSettingsOverlay] Error syncing settings reset from service: {ex.Message}");
+            }
+        }
+        
+        #endregion
     }
 }

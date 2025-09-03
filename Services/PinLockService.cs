@@ -1,71 +1,133 @@
 using System;
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using CameraControl.Devices.Classes;
-using CameraControl.Devices;
+using Photobooth.Controls;
 
 namespace Photobooth.Services
 {
     /// <summary>
-    /// Handles PIN entry and interface locking functionality
+    /// Generic PIN lock service for interface and settings protection
+    /// Follows clean architecture - handles all PIN-related business logic
     /// </summary>
     public class PinLockService
     {
-        public enum PinPadMode
+        private static PinLockService _instance;
+        private bool _isInterfaceLocked = false;
+        private PinEntryOverlay _pinEntryOverlay;
+        
+        // Events for state changes
+        public event EventHandler<bool> InterfaceLockStateChanged;
+        public event EventHandler<bool> SettingsAccessGranted;
+        public event EventHandler<string> PinChanged;
+        
+        /// <summary>
+        /// Singleton instance
+        /// </summary>
+        public static PinLockService Instance
         {
-            Unlock,
-            PhoneNumber
+            get
+            {
+                if (_instance == null)
+                {
+                    _instance = new PinLockService();
+                }
+                return _instance;
+            }
         }
         
-        private readonly Pages.PhotoboothTouchModern _parent;
-        private string _enteredPin = "";
-        private PinPadMode _currentPinMode = PinPadMode.Unlock;
-        private bool _isLocked = false;
-        
-        // UI Elements
-        private readonly Grid pinEntryOverlay;
-        private readonly TextBlock pinDotsDisplay;
-        private readonly TextBlock pinDisplayBox;
-        private readonly Button lockButton;
-        private readonly StackPanel bottomControlBar;
-        
-        public bool IsLocked => _isLocked;
-        public PinPadMode CurrentMode => _currentPinMode;
-        public string EnteredPin => _enteredPin;
-        
-        public PinLockService(Pages.PhotoboothTouchModern parent)
+        private PinLockService()
         {
-            _parent = parent;
-            
-            // Get UI elements from parent
-            pinEntryOverlay = parent.FindName("pinEntryOverlay") as Grid;
-            pinDotsDisplay = parent.FindName("pinDotsDisplay") as TextBlock;
-            pinDisplayBox = parent.FindName("pinDisplayBox") as TextBlock;
-            lockButton = parent.FindName("lockButton") as Button;
-            bottomControlBar = parent.FindName("bottomControlBar") as StackPanel;
+            // Initialize service
+            LoadSettings();
         }
         
         /// <summary>
-        /// Toggle lock state
+        /// Current lock state of the interface
         /// </summary>
-        public void ToggleLock()
+        public bool IsInterfaceLocked
         {
-            if (!Properties.Settings.Default.EnableLockFeature)
+            get => _isInterfaceLocked;
+            set
             {
-                _parent.ShowSimpleMessage("Lock feature is disabled in settings");
-                return;
+                if (_isInterfaceLocked != value)
+                {
+                    _isInterfaceLocked = value;
+                    InterfaceLockStateChanged?.Invoke(this, value);
+                    System.Diagnostics.Debug.WriteLine($"PinLockService: Interface lock state changed to {value}");
+                }
             }
-            
-            if (_isLocked)
+        }
+        
+        /// <summary>
+        /// Check if PIN protection is enabled
+        /// </summary>
+        public bool IsPinProtectionEnabled => Properties.Settings.Default.EnableLockFeature;
+        
+        /// <summary>
+        /// Get the current PIN (for validation)
+        /// </summary>
+        private string CurrentPin
+        {
+            get
             {
-                // Show PIN entry dialog to unlock
-                ShowPinEntryDialog();
+                string pin = Properties.Settings.Default.LockPin;
+                return string.IsNullOrEmpty(pin) ? "1234" : pin; // Default PIN if not set
             }
-            else
+        }
+        
+        /// <summary>
+        /// Set the PIN entry overlay control
+        /// </summary>
+        public void SetPinEntryOverlay(PinEntryOverlay overlay)
+        {
+            _pinEntryOverlay = overlay;
+        }
+        
+        /// <summary>
+        /// Request settings access with PIN protection
+        /// </summary>
+        public void RequestSettingsAccess(Action<bool> callback)
+        {
+            try
             {
-                // Lock the interface
-                LockInterface();
+                // Check if PIN protection is enabled
+                if (!IsPinProtectionEnabled)
+                {
+                    // No PIN protection, grant access immediately
+                    callback?.Invoke(true);
+                    SettingsAccessGranted?.Invoke(this, true);
+                    return;
+                }
+                
+                // Show PIN entry dialog
+                if (_pinEntryOverlay != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("PinLockService: Showing PIN entry overlay for settings access");
+                    _pinEntryOverlay.ShowOverlay(PinEntryOverlay.PinMode.SettingsAccess, (success) =>
+                    {
+                        callback?.Invoke(success);
+                        SettingsAccessGranted?.Invoke(this, success);
+                        
+                        if (success)
+                        {
+                            System.Diagnostics.Debug.WriteLine("PinLockService: Settings access granted");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine("PinLockService: Settings access denied");
+                        }
+                    });
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("PinLockService: PIN entry overlay not set");
+                    callback?.Invoke(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PinLockService: Error requesting settings access: {ex.Message}");
+                callback?.Invoke(false);
             }
         }
         
@@ -74,284 +136,279 @@ namespace Photobooth.Services
         /// </summary>
         public void LockInterface()
         {
-            _isLocked = true;
-            
-            if (lockButton != null)
-            {
-                lockButton.Content = "🔒";
-                lockButton.ToolTip = "Unlock Interface";
-            }
-            
-            // Disable critical controls
-            DisableCriticalControls();
-            
-            // Hide bottom control bar
-            if (bottomControlBar != null)
-            {
-                bottomControlBar.Visibility = Visibility.Collapsed;
-            }
-            
-            _parent.ShowSimpleMessage("Interface locked");
-            Log.Debug("PinLockService: Interface locked");
-        }
-        
-        /// <summary>
-        /// Unlock the interface
-        /// </summary>
-        public void UnlockInterface()
-        {
-            _isLocked = false;
-            
-            if (lockButton != null)
-            {
-                lockButton.Content = "🔓";
-                lockButton.ToolTip = "Lock Interface";
-            }
-            
-            // Enable critical controls
-            EnableCriticalControls();
-            
-            _parent.ShowSimpleMessage("Interface unlocked");
-            Log.Debug("PinLockService: Interface unlocked");
-        }
-        
-        /// <summary>
-        /// Show PIN entry dialog
-        /// </summary>
-        public void ShowPinEntryDialog()
-        {
-            _currentPinMode = PinPadMode.Unlock;
-            _enteredPin = "";
-            UpdatePinDots();
-            
-            if (pinDisplayBox != null)
-                pinDisplayBox.Text = "Enter PIN to unlock";
-            
-            if (pinEntryOverlay != null)
-                pinEntryOverlay.Visibility = Visibility.Visible;
-            
-            Log.Debug("PinLockService: PIN entry dialog shown");
-        }
-        
-        /// <summary>
-        /// Handle PIN pad button click
-        /// </summary>
-        public void HandlePinPadButton(string digit)
-        {
             try
             {
-                if (_currentPinMode == PinPadMode.Unlock)
+                if (!IsPinProtectionEnabled)
                 {
-                    // PIN mode - max 6 digits
-                    if (_enteredPin.Length < 6)
-                    {
-                        _enteredPin += digit;
-                        UpdatePinDots();
-                    }
-                }
-                else if (_currentPinMode == PinPadMode.PhoneNumber)
-                {
-                    // Phone number mode - different handling
-                    if (_enteredPin.Length < 15)
-                    {
-                        _enteredPin += digit;
-                        UpdatePinDots();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"PinLockService: Error handling PIN pad button: {ex.Message}");
-            }
-        }
-        
-        /// <summary>
-        /// Clear entered PIN
-        /// </summary>
-        public void ClearPin()
-        {
-            _enteredPin = "";
-            UpdatePinDots();
-            Log.Debug("PinLockService: PIN cleared");
-        }
-        
-        /// <summary>
-        /// Submit entered PIN
-        /// </summary>
-        public bool SubmitPin()
-        {
-            try
-            {
-                if (_currentPinMode == PinPadMode.Unlock)
-                {
-                    // Check if PIN is correct
-                    string correctPin = Properties.Settings.Default.LockPin;
-                    
-                    if (string.IsNullOrEmpty(correctPin))
-                    {
-                        correctPin = "1234"; // Default PIN
-                    }
-                    
-                    if (_enteredPin == correctPin)
-                    {
-                        // Unlock the interface
-                        UnlockInterface();
-                        
-                        // Close PIN entry overlay
-                        if (pinEntryOverlay != null)
-                            pinEntryOverlay.Visibility = Visibility.Collapsed;
-                        
-                        return true;
-                    }
-                    else
-                    {
-                        // Wrong PIN
-                        _parent.ShowSimpleMessage("Incorrect PIN");
-                        ClearPin();
-                        return false;
-                    }
-                }
-                else if (_currentPinMode == PinPadMode.PhoneNumber)
-                {
-                    // Phone number mode - validate and return
-                    if (_enteredPin.Length >= 10)
-                    {
-                        // Close overlay
-                        if (pinEntryOverlay != null)
-                            pinEntryOverlay.Visibility = Visibility.Collapsed;
-                        
-                        return true;
-                    }
-                    else
-                    {
-                        _parent.ShowSimpleMessage("Please enter a valid phone number");
-                        return false;
-                    }
+                    System.Diagnostics.Debug.WriteLine("PinLockService: Lock feature is disabled");
+                    return;
                 }
                 
-                return false;
+                IsInterfaceLocked = true;
+                System.Diagnostics.Debug.WriteLine("PinLockService: Interface locked");
             }
             catch (Exception ex)
             {
-                Log.Error($"PinLockService: Error submitting PIN: {ex.Message}");
-                return false;
+                System.Diagnostics.Debug.WriteLine($"PinLockService: Error locking interface: {ex.Message}");
             }
         }
         
         /// <summary>
-        /// Cancel PIN entry
+        /// Request to set a new PIN
         /// </summary>
-        public void CancelPinEntry()
+        public void RequestSetNewPin(Action<bool> callback)
         {
-            _enteredPin = "";
-            UpdatePinDots();
-            
-            if (pinEntryOverlay != null)
-                pinEntryOverlay.Visibility = Visibility.Collapsed;
-            
-            Log.Debug("PinLockService: PIN entry cancelled");
-        }
-        
-        /// <summary>
-        /// Update PIN dots display
-        /// </summary>
-        private void UpdatePinDots()
-        {
-            if (pinDotsDisplay != null)
+            try
             {
-                if (_currentPinMode == PinPadMode.Unlock)
+                if (_pinEntryOverlay != null)
                 {
-                    // Show dots for PIN
-                    pinDotsDisplay.Text = new string('●', _enteredPin.Length);
+                    System.Diagnostics.Debug.WriteLine("PinLockService: Requesting new PIN setup");
+                    _pinEntryOverlay.ShowOverlay(
+                        PinEntryOverlay.PinMode.SetNewPin, 
+                        callback,
+                        "Enter a new 4-digit PIN"
+                    );
                 }
                 else
                 {
-                    // Show formatted phone number
-                    pinDotsDisplay.Text = FormatPhoneNumber(_enteredPin);
+                    System.Diagnostics.Debug.WriteLine("PinLockService: PIN entry overlay not set");
+                    callback?.Invoke(false);
                 }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PinLockService: Error requesting new PIN: {ex.Message}");
+                callback?.Invoke(false);
             }
         }
         
         /// <summary>
-        /// Format phone number for display
+        /// Request PIN to unlock settings
         /// </summary>
-        private string FormatPhoneNumber(string phoneNumber)
+        public void RequestPinForUnlock(Action<bool> callback)
         {
-            if (string.IsNullOrEmpty(phoneNumber))
-                return "";
-            
-            // Remove any non-digit characters
-            string digits = new string(phoneNumber.Where(char.IsDigit).ToArray());
-            
-            // Format based on length
-            if (digits.Length <= 3)
-                return digits;
-            else if (digits.Length <= 6)
-                return $"({digits.Substring(0, 3)}) {digits.Substring(3)}";
-            else if (digits.Length <= 10)
-                return $"({digits.Substring(0, 3)}) {digits.Substring(3, 3)}-{digits.Substring(6)}";
+            try
+            {
+                if (!IsInterfaceLocked)
+                {
+                    callback?.Invoke(true);
+                    return;
+                }
+                
+                // Show PIN entry dialog for unlocking
+                if (_pinEntryOverlay != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("PinLockService: Requesting PIN to unlock settings");
+                    _pinEntryOverlay.ShowOverlay(
+                        PinEntryOverlay.PinMode.UIUnlock, 
+                        callback,
+                        "Enter PIN to unlock settings"
+                    );
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("PinLockService: PIN entry overlay not set");
+                    callback?.Invoke(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PinLockService: Error requesting unlock: {ex.Message}");
+                callback?.Invoke(false);
+            }
+        }
+        
+        /// <summary>
+        /// Request to unlock the interface
+        /// </summary>
+        public void RequestInterfaceUnlock(Action<bool> callback)
+        {
+            try
+            {
+                if (!IsInterfaceLocked)
+                {
+                    callback?.Invoke(true);
+                    return;
+                }
+                
+                // Show PIN entry dialog with custom message from settings
+                if (_pinEntryOverlay != null)
+                {
+                    string customMessage = "Enter PIN to unlock"; // TODO: Properties.Settings.Default.LockMessage;
+                    _pinEntryOverlay.ShowOverlay(PinEntryOverlay.PinMode.UIUnlock, (success) =>
+                    {
+                        if (success)
+                        {
+                            IsInterfaceLocked = false;
+                            System.Diagnostics.Debug.WriteLine("PinLockService: Interface unlocked");
+                        }
+                        
+                        callback?.Invoke(success);
+                    }, customMessage);
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("PinLockService: PIN entry overlay not set");
+                    callback?.Invoke(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PinLockService: Error unlocking interface: {ex.Message}");
+                callback?.Invoke(false);
+            }
+        }
+        
+        /// <summary>
+        /// Toggle interface lock state
+        /// </summary>
+        public void ToggleInterfaceLock(Action<bool> callback = null)
+        {
+            if (IsInterfaceLocked)
+            {
+                RequestInterfaceUnlock(callback);
+            }
             else
-                return $"+{digits.Substring(0, 1)} ({digits.Substring(1, 3)}) {digits.Substring(4, 3)}-{digits.Substring(7)}";
-        }
-        
-        /// <summary>
-        /// Disable critical controls when locked
-        /// </summary>
-        private void DisableCriticalControls()
-        {
-            // Find and disable critical buttons
-            var criticalButtons = new string[] 
-            { 
-                "startButton", "stopSessionButton", "eventSettingsButton", 
-                "cameraSettingsButton", "modernSettingsButton", "exitButton",
-                "galleryButton", "homeButton"
-            };
-            
-            foreach (var buttonName in criticalButtons)
             {
-                var button = _parent.FindName(buttonName) as Button;
-                if (button != null)
-                    button.IsEnabled = false;
+                LockInterface();
+                callback?.Invoke(true);
             }
         }
         
         /// <summary>
-        /// Enable critical controls when unlocked
+        /// Change the PIN
         /// </summary>
-        private void EnableCriticalControls()
+        public void ChangePin(Action<bool> callback)
         {
-            // Find and enable critical buttons
-            var criticalButtons = new string[] 
-            { 
-                "startButton", "stopSessionButton", "eventSettingsButton", 
-                "cameraSettingsButton", "modernSettingsButton", "exitButton",
-                "galleryButton", "homeButton"
-            };
-            
-            foreach (var buttonName in criticalButtons)
+            try
             {
-                var button = _parent.FindName(buttonName) as Button;
-                if (button != null)
-                    button.IsEnabled = true;
-            }
-        }
-        
-        /// <summary>
-        /// Set PIN pad mode
-        /// </summary>
-        public void SetMode(PinPadMode mode)
-        {
-            _currentPinMode = mode;
-            _enteredPin = "";
-            UpdatePinDots();
-            
-            if (pinDisplayBox != null)
-            {
-                if (mode == PinPadMode.Unlock)
-                    pinDisplayBox.Text = "Enter PIN to unlock";
+                // First verify current PIN
+                if (_pinEntryOverlay != null)
+                {
+                    _pinEntryOverlay.ShowOverlay(PinEntryOverlay.PinMode.SettingsAccess, (verified) =>
+                    {
+                        if (verified)
+                        {
+                            // Now let user set new PIN
+                            _pinEntryOverlay.ShowOverlay(PinEntryOverlay.PinMode.SetNewPin, (success) =>
+                            {
+                                if (success)
+                                {
+                                    PinChanged?.Invoke(this, Properties.Settings.Default.LockPin);
+                                    System.Diagnostics.Debug.WriteLine("PinLockService: PIN changed successfully");
+                                }
+                                
+                                callback?.Invoke(success);
+                            });
+                        }
+                        else
+                        {
+                            callback?.Invoke(false);
+                        }
+                    });
+                }
                 else
-                    pinDisplayBox.Text = "Enter Phone Number";
+                {
+                    System.Diagnostics.Debug.WriteLine("PinLockService: PIN entry overlay not set");
+                    callback?.Invoke(false);
+                }
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PinLockService: Error changing PIN: {ex.Message}");
+                callback?.Invoke(false);
+            }
+        }
+        
+        /// <summary>
+        /// Request phone number entry
+        /// </summary>
+        public void RequestPhoneNumber(Action<string> callback)
+        {
+            try
+            {
+                if (_pinEntryOverlay != null)
+                {
+                    _pinEntryOverlay.ShowOverlay(PinEntryOverlay.PinMode.PhoneNumber, (success) =>
+                    {
+                        if (success)
+                        {
+                            string phoneNumber = _pinEntryOverlay.GetPhoneNumber();
+                            callback?.Invoke(phoneNumber);
+                        }
+                        else
+                        {
+                            callback?.Invoke(null);
+                        }
+                    });
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("PinLockService: PIN entry overlay not set");
+                    callback?.Invoke(null);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PinLockService: Error requesting phone number: {ex.Message}");
+                callback?.Invoke(null);
+            }
+        }
+        
+        /// <summary>
+        /// Validate a PIN
+        /// </summary>
+        public bool ValidatePin(string pin)
+        {
+            return pin == CurrentPin;
+        }
+        
+        /// <summary>
+        /// Enable PIN protection
+        /// </summary>
+        public void EnablePinProtection(bool enable)
+        {
+            Properties.Settings.Default.EnableLockFeature = enable;
+            Properties.Settings.Default.Save();
+            
+            if (!enable && IsInterfaceLocked)
+            {
+                // Unlock interface if disabling PIN protection
+                IsInterfaceLocked = false;
+            }
+            
+            System.Diagnostics.Debug.WriteLine($"PinLockService: PIN protection {(enable ? "enabled" : "disabled")}");
+        }
+        
+        /// <summary>
+        /// Load settings
+        /// </summary>
+        private void LoadSettings()
+        {
+            try
+            {
+                // Ensure default PIN is set if none exists
+                if (string.IsNullOrEmpty(Properties.Settings.Default.LockPin))
+                {
+                    Properties.Settings.Default.LockPin = "1234";
+                    Properties.Settings.Default.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PinLockService: Error loading settings: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Reset PIN to default
+        /// </summary>
+        public void ResetToDefaultPin()
+        {
+            Properties.Settings.Default.LockPin = "1234";
+            Properties.Settings.Default.Save();
+            PinChanged?.Invoke(this, "1234");
+            System.Diagnostics.Debug.WriteLine("PinLockService: PIN reset to default");
         }
     }
 }

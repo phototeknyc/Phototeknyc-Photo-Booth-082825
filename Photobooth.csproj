@@ -183,6 +183,12 @@
     <Compile Include="Controls\EventSelectionOverlay.xaml.cs">
       <DependentUpon>EventSelectionOverlay.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\SettingsOverlay.xaml.cs">
+      <DependentUpon>SettingsOverlay.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\PinEntryOverlay.xaml.cs">
+      <DependentUpon>PinEntryOverlay.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\PixiEditorColorPickerDialog.xaml.cs">
       <DependentUpon>PixiEditorColorPickerDialog.xaml</DependentUpon>
     </Compile>
@@ -227,6 +233,7 @@
     <Compile Include="Services\ImageProcessingService.cs" />
     <Compile Include="Services\CameraSessionManager.cs" />
     <Compile Include="Services\CameraSettingsService.cs" />
+    <Compile Include="Services\SettingsManagementService.cs" />
     <Compile Include="Services\PhotoFilterService.cs" />
     <Compile Include="Services\PhotoFilterServiceMagick.cs" />
     <Compile Include="Services\PhotoFilterServiceHybrid.cs" />
@@ -398,6 +405,14 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\EventSelectionOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\SettingsOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\PinEntryOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

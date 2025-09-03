@@ -162,6 +162,9 @@ namespace Photobooth.Pages
             
             Loaded += Page_Loaded;
             Unloaded += Page_Unloaded;
+            
+            // Add keyboard protection
+            this.PreviewKeyDown += Page_PreviewKeyDown;
         }
 
         #region Initialization
@@ -195,6 +198,11 @@ namespace Photobooth.Pages
                     CameraSettingsOverlayControl.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
                 });
             });
+            
+            // Initialize PIN lock service
+            var pinLockService = PinLockService.Instance;
+            pinLockService.SetPinEntryOverlay(PinEntryOverlayControl);
+            pinLockService.InterfaceLockStateChanged += OnInterfaceLockStateChanged;
             
             // Initialize sharing UI service for modal display management first
             // Pass the MainGrid instead of the page so UI elements can be added properly
@@ -299,6 +307,26 @@ namespace Photobooth.Pages
                 DataContext = _viewModel;
             }
             
+            // Initialize lock button state
+            var pinLockService = PinLockService.Instance;
+            UpdateLockButtonAppearance(pinLockService.IsInterfaceLocked);
+            UpdateSettingsAccessibility(!pinLockService.IsInterfaceLocked);
+            
+            // Add window protection against minimize when locked
+            var parentWindow = Window.GetWindow(this);
+            if (parentWindow != null)
+            {
+                // Remove system buttons if not already done
+                parentWindow.WindowStyle = WindowStyle.None;
+                parentWindow.ResizeMode = ResizeMode.NoResize;
+                
+                // Handle window events
+                parentWindow.StateChanged += ParentWindow_StateChanged;
+                parentWindow.Deactivated += ParentWindow_Deactivated;
+                parentWindow.Closing += ParentWindow_Closing;
+                parentWindow.PreviewKeyDown += ParentWindow_PreviewKeyDown;
+            }
+            
             // Initialize camera
             await InitializeCamera();
             
@@ -331,6 +359,16 @@ namespace Photobooth.Pages
 
         private void Page_Unloaded(object sender, RoutedEventArgs e)
         {
+            // Remove window event handlers
+            var parentWindow = Window.GetWindow(this);
+            if (parentWindow != null)
+            {
+                parentWindow.StateChanged -= ParentWindow_StateChanged;
+                parentWindow.Deactivated -= ParentWindow_Deactivated;
+                parentWindow.Closing -= ParentWindow_Closing;
+                parentWindow.PreviewKeyDown -= ParentWindow_PreviewKeyDown;
+            }
+            
             Cleanup();
         }
 
@@ -1070,6 +1108,33 @@ namespace Photobooth.Pages
                 string printPath = _compositionService.LastPrintPath ?? composedPath;
                 _sessionService.SetComposedImagePaths(displayPath, printPath);
             }
+        }
+        
+        private void OnInterfaceLockStateChanged(object sender, bool isLocked)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                // Update UI based on lock state
+                if (isLocked)
+                {
+                    // Disable controls when locked
+                    if (startButtonOverlay != null)
+                        startButtonOverlay.Visibility = Visibility.Collapsed;
+                    if (bottomControlBar != null)
+                        bottomControlBar.Visibility = Visibility.Collapsed;
+                    // Show lock indicator
+                    _uiService.UpdateStatus("Interface Locked 🔒");
+                }
+                else
+                {
+                    // Enable controls when unlocked
+                    if (startButtonOverlay != null)
+                        startButtonOverlay.Visibility = Visibility.Visible;
+                    if (bottomControlBar != null)
+                        bottomControlBar.Visibility = Visibility.Visible;
+                    _uiService.UpdateStatus("Ready");
+                }
+            });
         }
         
         private async void OnServiceSessionCompleted(object sender, Services.SessionCompletedEventArgs e)
@@ -2989,6 +3054,30 @@ namespace Photobooth.Pages
         #region Bottom Control Bar
         private void ToggleBottomBar_Click(object sender, RoutedEventArgs e)
         {
+            // Check if settings are locked
+            var pinLockService = PinLockService.Instance;
+            if (pinLockService.IsInterfaceLocked)
+            {
+                // Request PIN to access settings
+                pinLockService.RequestPinForUnlock((success) =>
+                {
+                    if (success)
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            // Unlock and show the settings bar
+                            pinLockService.IsInterfaceLocked = false;
+                            UpdateLockButtonAppearance(false);
+                            UpdateSettingsAccessibility(true);
+                            bottomControlBar.Visibility = Visibility.Visible;
+                            bottomBarToggleChevron.Text = "⌄"; // Down chevron
+                            Log.Debug("Settings unlocked and bottom bar shown");
+                        });
+                    }
+                });
+                return;
+            }
+            
             if (bottomControlBar.Visibility == Visibility.Collapsed)
             {
                 // Show bottom bar
@@ -3485,7 +3574,40 @@ namespace Photobooth.Pages
         {
             try
             {
-                Log.Debug("Gallery button clicked - showing event gallery");
+                Log.Debug("Gallery button clicked - checking lock state");
+                
+                // Check if interface is locked
+                var pinLockService = PinLockService.Instance;
+                if (pinLockService.IsInterfaceLocked)
+                {
+                    // Request PIN to access gallery
+                    pinLockService.RequestPinForUnlock((success) =>
+                    {
+                        if (success)
+                        {
+                            Dispatcher.Invoke(async () =>
+                            {
+                                // Unlock and show gallery
+                                pinLockService.IsInterfaceLocked = false;
+                                UpdateLockButtonAppearance(false);
+                                UpdateSettingsAccessibility(true);
+                                
+                                // Hide session completion UI
+                                if (doneButton != null)
+                                    doneButton.Visibility = Visibility.Collapsed;
+                                
+                                // Stop live view for gallery mode
+                                _liveViewTimer?.Stop();
+                                
+                                // Show gallery using service
+                                await _galleryService?.ShowGalleryAsync();
+                                
+                                Log.Debug("Gallery unlocked and shown");
+                            });
+                        }
+                    });
+                    return;
+                }
                 
                 // Hide session completion UI
                 if (doneButton != null)
@@ -4033,6 +4155,180 @@ namespace Photobooth.Pages
                 }
             }
         }
+        
+        private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            // Check if interface is locked
+            bool isLocked = PinLockService.Instance.IsInterfaceLocked;
+            
+            // Block system keys when locked
+            if (isLocked)
+            {
+                // Block Alt+F4
+                if (e.Key == Key.F4 && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+                {
+                    e.Handled = true;
+                    Log.Debug("Blocked Alt+F4 - interface is locked");
+                    return;
+                }
+                
+                // Block Windows key combinations
+                if (e.Key == Key.LWin || e.Key == Key.RWin)
+                {
+                    e.Handled = true;
+                    Log.Debug("Blocked Windows key - interface is locked");
+                    return;
+                }
+                
+                // Block Alt+Tab
+                if (e.Key == Key.Tab && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+                {
+                    e.Handled = true;
+                    Log.Debug("Blocked Alt+Tab - interface is locked");
+                    return;
+                }
+                
+                // Block Escape
+                if (e.Key == Key.Escape)
+                {
+                    e.Handled = true;
+                    Log.Debug("Blocked Escape - interface is locked");
+                    return;
+                }
+                
+                // Block Ctrl+Esc (Start Menu)
+                if (e.Key == Key.Escape && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+                {
+                    e.Handled = true;
+                    Log.Debug("Blocked Ctrl+Esc - interface is locked");
+                    return;
+                }
+                
+                // Block Ctrl+Alt+Del (handled at system level but try anyway)
+                if ((e.Key == Key.Delete || e.Key == Key.System) && 
+                    (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control &&
+                    (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+                {
+                    e.Handled = true;
+                    Log.Debug("Blocked Ctrl+Alt+Del attempt - interface is locked");
+                    return;
+                }
+                
+                // Block Ctrl+Shift+Esc (Task Manager)
+                if (e.Key == Key.Escape && 
+                    (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control &&
+                    (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
+                {
+                    e.Handled = true;
+                    Log.Debug("Blocked Ctrl+Shift+Esc (Task Manager) - interface is locked");
+                    return;
+                }
+            }
+        }
+        
+        private void ParentWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            // Cancel close when locked
+            if (PinLockService.Instance.IsInterfaceLocked)
+            {
+                e.Cancel = true;
+                Log.Debug("Blocked window close - interface is locked");
+                
+                // Request PIN to close
+                PinLockService.Instance.RequestPinForUnlock((success) =>
+                {
+                    if (success)
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            // Unlock and close
+                            PinLockService.Instance.IsInterfaceLocked = false;
+                            UpdateLockButtonAppearance(false);
+                            UpdateSettingsAccessibility(true);
+                            
+                            var window = Window.GetWindow(this);
+                            window?.Close();
+                        });
+                    }
+                });
+            }
+        }
+        
+        private void ParentWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            // Additional keyboard protection at window level
+            if (PinLockService.Instance.IsInterfaceLocked)
+            {
+                // Block Alt+F4
+                if (e.Key == Key.F4 && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+                {
+                    e.Handled = true;
+                    Log.Debug("Window blocked Alt+F4 - interface is locked");
+                    return;
+                }
+                
+                // Block Alt+Space (system menu)
+                if (e.Key == Key.Space && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+                {
+                    e.Handled = true;
+                    Log.Debug("Window blocked Alt+Space - interface is locked");
+                    return;
+                }
+            }
+        }
+        
+        private void ParentWindow_StateChanged(object sender, EventArgs e)
+        {
+            var window = sender as Window;
+            if (window != null && PinLockService.Instance.IsInterfaceLocked)
+            {
+                // Prevent ANY state change when locked
+                if (window.WindowState != WindowState.Maximized)
+                {
+                    // Force back to maximized
+                    window.WindowState = WindowState.Maximized;
+                    window.Activate();
+                    window.Focus();
+                    
+                    // Make sure it stays on top temporarily
+                    window.Topmost = true;
+                    
+                    // Reset topmost after a brief moment
+                    var timer = new System.Windows.Threading.DispatcherTimer();
+                    timer.Interval = TimeSpan.FromMilliseconds(100);
+                    timer.Tick += (s, args) =>
+                    {
+                        window.Topmost = false;
+                        timer.Stop();
+                    };
+                    timer.Start();
+                    
+                    Log.Debug($"Blocked window state change to {window.WindowState} - interface is locked");
+                }
+            }
+        }
+        
+        private void ParentWindow_Deactivated(object sender, EventArgs e)
+        {
+            var window = sender as Window;
+            if (window != null && PinLockService.Instance.IsInterfaceLocked)
+            {
+                // Force window to stay active
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    window.Activate();
+                    window.Focus();
+                    
+                    // Ensure it's maximized
+                    if (window.WindowState != WindowState.Maximized)
+                    {
+                        window.WindowState = WindowState.Maximized;
+                    }
+                    
+                    Log.Debug("Forced window reactivation - interface is locked");
+                }), System.Windows.Threading.DispatcherPriority.Send);
+            }
+        }
 
         private void HomeButton_Click(object sender, RoutedEventArgs e)
         {
@@ -4061,7 +4357,126 @@ namespace Photobooth.Pages
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            _viewModel?.OpenSettingsCommand?.Execute(null);
+            Log.Debug("SettingsButton_Click: Opening settings overlay");
+            
+            // Check if settings are locked
+            var pinLockService = PinLockService.Instance;
+            if (pinLockService.IsInterfaceLocked)
+            {
+                // Request PIN to access settings
+                pinLockService.RequestPinForUnlock((success) =>
+                {
+                    if (success)
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            // Unlock and show settings
+                            pinLockService.IsInterfaceLocked = false;
+                            UpdateLockButtonAppearance(false);
+                            UpdateSettingsAccessibility(true);
+                            
+                            if (SettingsOverlayControl != null)
+                            {
+                                SettingsOverlayControl.ShowOverlay(true); // Bypass PIN since we just authenticated
+                            }
+                            Log.Debug("Settings unlocked and overlay shown");
+                        });
+                    }
+                });
+                return;
+            }
+            
+            // Show the comprehensive settings overlay
+            if (SettingsOverlayControl != null)
+            {
+                // Bypass PIN since lock is not active
+                SettingsOverlayControl.ShowOverlay(true);
+            }
+            else
+            {
+                Log.Error("SettingsButton_Click: SettingsOverlayControl is null");
+            }
+        }
+        
+        private void LockButton_Click(object sender, RoutedEventArgs e)
+        {
+            Log.Debug("LockButton_Click: Toggling settings lock");
+            
+            var pinLockService = PinLockService.Instance;
+            
+            // If currently locked, request PIN to unlock
+            if (pinLockService.IsInterfaceLocked)
+            {
+                pinLockService.RequestPinForUnlock((success) =>
+                {
+                    if (success)
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            // Unlock the interface
+                            pinLockService.IsInterfaceLocked = false;
+                            UpdateLockButtonAppearance(false);
+                            UpdateSettingsAccessibility(true);
+                            Log.Debug("Settings unlocked successfully");
+                        });
+                    }
+                });
+            }
+            else
+            {
+                // Lock the interface immediately
+                pinLockService.IsInterfaceLocked = true;
+                UpdateLockButtonAppearance(true);
+                UpdateSettingsAccessibility(false);
+                Log.Debug("Settings locked");
+            }
+        }
+        
+        private void UpdateLockButtonAppearance(bool isLocked)
+        {
+            if (lockButton != null)
+            {
+                var template = lockButton.Template;
+                if (template != null)
+                {
+                    var border = template.FindName("border", lockButton) as Border;
+                    var icon = template.FindName("lockIcon", lockButton) as TextBlock;
+                    
+                    if (isLocked)
+                    {
+                        lockButton.Background = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0x44, 0x44)); // Semi-transparent red
+                        lockButton.ToolTip = "Settings Locked - Click to Unlock";
+                        if (icon != null) icon.Text = "🔒";
+                    }
+                    else
+                    {
+                        lockButton.Background = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)); // Semi-transparent white
+                        lockButton.ToolTip = "Lock Settings";
+                        if (icon != null) icon.Text = "🔓";
+                    }
+                }
+            }
+        }
+        
+        private void UpdateSettingsAccessibility(bool accessible)
+        {
+            // Hide or disable the bottom control bar when locked
+            if (bottomControlBar != null)
+            {
+                bottomControlBar.IsEnabled = accessible;
+                if (!accessible && bottomControlBar.Visibility == Visibility.Visible)
+                {
+                    // Collapse the settings bar if it's open and we're locking
+                    bottomControlBar.Visibility = Visibility.Collapsed;
+                    bottomBarToggleChevron.Text = "⌃";
+                }
+            }
+            
+            // Also disable the settings button if visible
+            if (settingsButton != null)
+            {
+                settingsButton.IsEnabled = accessible;
+            }
         }
         
         // Gallery Action Button Handlers
@@ -4398,6 +4813,38 @@ namespace Photobooth.Pages
         
         private void ExitButton_Click(object sender, RoutedEventArgs e)
         {
+            // Check if interface is locked
+            var pinLockService = PinLockService.Instance;
+            if (pinLockService.IsInterfaceLocked)
+            {
+                // Request PIN to exit
+                pinLockService.RequestPinForUnlock((success) =>
+                {
+                    if (success)
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            // Unlock and proceed with exit
+                            pinLockService.IsInterfaceLocked = false;
+                            UpdateLockButtonAppearance(false);
+                            UpdateSettingsAccessibility(true);
+                            
+                            if (_isInGalleryMode)
+                            {
+                                // Exit gallery mode
+                                ExitGalleryMode();
+                            }
+                            else
+                            {
+                                // Exit current session (same as Done for now)
+                                DoneButton_Click(sender, e);
+                            }
+                        });
+                    }
+                });
+                return;
+            }
+            
             if (_isInGalleryMode)
             {
                 // Exit gallery mode
@@ -4516,7 +4963,36 @@ namespace Photobooth.Pages
         {
             try
             {
-                Log.Debug("Gallery preview clicked - opening gallery browser modal");
+                Log.Debug("Gallery preview clicked - checking lock state");
+                
+                // Check if interface is locked
+                var pinLockService = PinLockService.Instance;
+                if (pinLockService.IsInterfaceLocked)
+                {
+                    // Request PIN to access gallery
+                    pinLockService.RequestPinForUnlock((success) =>
+                    {
+                        if (success)
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                // Unlock and show gallery browser
+                                pinLockService.IsInterfaceLocked = false;
+                                UpdateLockButtonAppearance(false);
+                                UpdateSettingsAccessibility(true);
+                                
+                                // Show the gallery browser modal
+                                if (GalleryBrowserModal != null)
+                                {
+                                    GalleryBrowserModal.ShowModal();
+                                }
+                                
+                                Log.Debug("Gallery browser unlocked and shown");
+                            });
+                        }
+                    });
+                    return;
+                }
                 
                 // Show the gallery browser modal (UI routing only!)
                 if (GalleryBrowserModal != null)

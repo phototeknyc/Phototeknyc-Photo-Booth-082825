@@ -15,6 +15,8 @@ namespace Photobooth.Pages
 {
     public partial class PhotoboothSettingsControl : UserControl
     {
+        private readonly SettingsManagementService _settingsService;
+        
         // Windows API for accessing printer driver settings
         [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern int DocumentProperties(IntPtr hWnd, IntPtr hPrinter, string pDeviceName, IntPtr pDevModeOutput, IntPtr pDevModeInput, int fMode);
@@ -96,6 +98,12 @@ namespace Photobooth.Pages
         public PhotoboothSettingsControl()
         {
             InitializeComponent();
+            
+            // Initialize settings service and subscribe to changes
+            _settingsService = SettingsManagementService.Instance;
+            _settingsService.SettingChanged += OnSettingChangedFromService;
+            _settingsService.SettingsReset += OnSettingsResetFromService;
+            
             LoadSettings();
         }
 
@@ -484,6 +492,9 @@ namespace Photobooth.Pages
                 
                 // Save to disk
                 Properties.Settings.Default.Save();
+                
+                // Refresh settings service to sync with overlays
+                _settingsService.LoadSettings();
         }
 
         private void ResetSettings_Click(object sender, RoutedEventArgs e)
@@ -493,6 +504,10 @@ namespace Photobooth.Pages
                 
             if (result == MessageBoxResult.Yes)
             {
+                // Use the service to reset settings - this will also notify overlays
+                _settingsService.ResetToDefaults();
+                
+                // Also reset local UI elements that aren't managed by the service
                 ResetToDefaults();
             }
         }
@@ -3530,6 +3545,42 @@ namespace Photobooth.Pages
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error updating flipbook duration: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #region Settings Service Event Handlers
+        
+        /// <summary>
+        /// Handle setting changes from the overlay service to keep UI in sync
+        /// </summary>
+        private void OnSettingChangedFromService(object sender, SettingChangedEventArgs e)
+        {
+            try
+            {
+                // Refresh the UI to reflect changes made in overlays
+                Dispatcher.Invoke(() => LoadSettings());
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error syncing setting change from service: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Handle settings reset from service
+        /// </summary>
+        private void OnSettingsResetFromService(object sender, EventArgs e)
+        {
+            try
+            {
+                // Refresh the UI to reflect reset settings
+                Dispatcher.Invoke(() => LoadSettings());
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error syncing settings reset from service: {ex.Message}");
             }
         }
         

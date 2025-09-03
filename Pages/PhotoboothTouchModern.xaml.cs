@@ -161,7 +161,8 @@ namespace Photobooth.Pages
             sharingOperations = new SharingOperations(this);
             cameraOperations = new CameraOperations(this);
             photoProcessingOperations = new PhotoProcessingOperations(this);
-            pinLockService = new PinLockService(this);
+            // TODO: Update to use new PinLockService singleton pattern
+            // pinLockService = new PinLockService(this);
             
             // Initialize video and boomerang modules
             modulesConfig = PhotoboothModulesConfig.Instance;
@@ -1656,7 +1657,7 @@ namespace Photobooth.Pages
                         bottomControlBar.Visibility = Visibility.Visible;
                         bottomBarToggleChevron.Text = "⌄"; // Down chevron
                     };
-                    pinLockService.ShowPinEntryDialog();
+                    // TODO: Update to new PinLockService - pinLockService.ShowPinEntryDialog();
                     return;
                 }
                 
@@ -2332,7 +2333,7 @@ namespace Photobooth.Pages
                     
                     ShowEventSelectionOverlay();
                 };
-                pinLockService.ShowPinEntryDialog();
+                // TODO: Update to new PinLockService - pinLockService.ShowPinEntryDialog();
                 return;
             }
             
@@ -2357,7 +2358,7 @@ namespace Photobooth.Pages
                     Log.Debug("ModernSettingsButton_Click: Opening modern settings overlay in fullscreen");
                     modernSettingsOverlay.Visibility = Visibility.Visible;
                 };
-                pinLockService.ShowPinEntryDialog();
+                // TODO: Update to new PinLockService - pinLockService.ShowPinEntryDialog();
                 return;
             }
             
@@ -2857,7 +2858,7 @@ namespace Photobooth.Pages
                     // Show the overlay
                     cameraSettingsOverlay.Visibility = Visibility.Visible;
                 };
-                pinLockService.ShowPinEntryDialog();
+                // TODO: Update to new PinLockService - pinLockService.ShowPinEntryDialog();
                 return;
             }
             
@@ -4654,7 +4655,7 @@ namespace Photobooth.Pages
         
         private void LockButton_Click(object sender, RoutedEventArgs e)
         {
-            pinLockService.ToggleLock();
+            // TODO: Update to new PinLockService - pinLockService.ToggleLock();
         }
         
         // PIN/Lock functionality moved to PinLockService
@@ -4675,7 +4676,9 @@ namespace Photobooth.Pages
             }
             
             if (!string.IsNullOrEmpty(digit))
-                pinLockService.HandlePinPadButton(digit);
+            {
+                // TODO: Update to new PinLockService - pinLockService.HandlePinPadButton(digit);
+            }
         }
 
         private string FormatPhoneNumber(string phoneNumber)
@@ -4708,7 +4711,7 @@ namespace Photobooth.Pages
                 // PIN mode reset handled by PinLockService
                 
                 // Send SMS with photos
-                await SendSMSWithPhotos(pinLockService.EnteredPin);
+                // TODO: Update to new PinLockService - await SendSMSWithPhotos(pinLockService.EnteredPin);
             }
             catch (Exception ex)
             {
@@ -4788,17 +4791,17 @@ namespace Photobooth.Pages
         
         private void PinClearButton_Click(object sender, RoutedEventArgs e)
         {
-            pinLockService.ClearPin();
+            // TODO: Update to new PinLockService - pinLockService.ClearPin();
         }
         
         private void PinSubmitButton_Click(object sender, RoutedEventArgs e)
         {
-            pinLockService.SubmitPin();
+            // TODO: Update to new PinLockService - pinLockService.SubmitPin();
         }
         
         private void PinCancelButton_Click(object sender, RoutedEventArgs e)
         {
-            pinLockService.CancelPinEntry();
+            // TODO: Update to new PinLockService - pinLockService.CancelPinEntry();
         }
         
         #endregion
@@ -7846,7 +7849,7 @@ namespace Photobooth.Pages
             try
             {
                 // Set PIN pad to phone number mode
-                pinLockService.SetMode(PinLockService.PinPadMode.PhoneNumber);
+                // TODO: Update to new PinLockService - pinLockService.SetMode(PinLockService.PinPadMode.PhoneNumber);
                 
                 // Show PIN pad overlay for phone number input
                 pinEntryOverlay.Visibility = Visibility.Visible;

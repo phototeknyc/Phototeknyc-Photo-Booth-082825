@@ -267,7 +267,13 @@
       <Value Profile="(Default)">1234</Value>
     </Setting>
     <Setting Name="EnableLockFeature" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)">True</Value>
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="LockMessage" Type="System.String" Scope="User">
+      <Value Profile="(Default)">Enter PIN to unlock</Value>
+    </Setting>
+    <Setting Name="LockUIMessage" Type="System.String" Scope="User">
+      <Value Profile="(Default)">Interface is locked. Please contact staff for assistance.</Value>
     </Setting>
     <Setting Name="AutoLockTimeout" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">0</Value>
