@@ -38,6 +38,8 @@ namespace Photobooth.Services
         {
             try
             {
+                Log.Debug($"★★★ DatabaseOperations.CreateSession called: eventId={eventId}, templateId={templateId}");
+                
                 // Generate new session GUID
                 currentSessionGuid = Guid.NewGuid().ToString();
                 
@@ -49,6 +51,8 @@ namespace Photobooth.Services
                     sessionName,
                     currentSessionGuid  // Pass the GUID to ensure consistency
                 );
+                
+                Log.Debug($"★★★ DatabaseOperations.CreateSession completed: sessionId={currentDatabaseSessionId}, guid={currentSessionGuid}");
                 
                 // Clear photo ID list for new session
                 currentSessionPhotoIds.Clear();
