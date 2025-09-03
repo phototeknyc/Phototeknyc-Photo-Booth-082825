@@ -536,6 +536,13 @@ namespace Photobooth.Services
                 // Use queue service to check QR visibility
                 var qrResult = await _queueService.CheckQRVisibilityAsync(sessionGuid, false);
                 
+                // Update button states based on queue service result
+                if (_sharingUIService != null)
+                {
+                    _sharingUIService.SetSmsButtonState(qrResult.EnableSMS, qrResult.SMSMessage);
+                    _sharingUIService.SetQrButtonState(qrResult.IsVisible, qrResult.Message);
+                }
+                
                 if (qrResult.IsVisible && qrResult.QRCodeImage != null)
                 {
                     _uiService.UpdateStatus("QR Code ready");
@@ -587,6 +594,13 @@ namespace Photobooth.Services
                 
                 // Use queue service to check QR visibility for gallery session
                 var qrResult = await _queueService.CheckQRVisibilityAsync(sessionId, true);
+                
+                // Update button states based on queue service result
+                if (_sharingUIService != null)
+                {
+                    _sharingUIService.SetSmsButtonState(qrResult.EnableSMS, qrResult.SMSMessage);
+                    _sharingUIService.SetQrButtonState(qrResult.IsVisible, qrResult.Message);
+                }
                 
                 if (qrResult.IsVisible && qrResult.QRCodeImage != null)
                 {

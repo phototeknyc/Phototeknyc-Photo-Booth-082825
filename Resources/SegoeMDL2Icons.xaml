@@ -85,6 +85,14 @@
     <sys:String x:Key="MDL2_Cloud">&#xE753;</sys:String>
     <sys:String x:Key="MDL2_Shield">&#xE730;</sys:String>
     
+    <!-- Communication and Sharing -->
+    <sys:String x:Key="MDL2_Mail">&#xE715;</sys:String>
+    <sys:String x:Key="MDL2_Message">&#xE8BD;</sys:String>
+    <sys:String x:Key="MDL2_Share">&#xE72D;</sys:String>
+    <sys:String x:Key="MDL2_QRCode">&#xED14;</sys:String>
+    <sys:String x:Key="MDL2_Send">&#xE724;</sys:String>
+    <sys:String x:Key="MDL2_CheckMark">&#xE73E;</sys:String>
+    
     <!-- Styles for Segoe MDL2 Text Blocks -->
     <Style x:Key="MDL2Icon" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource SegoeMDL2}"/>

@@ -17,6 +17,7 @@ namespace Photobooth.Services
     public class SharingUIService
     {
         private readonly FrameworkElement _parentContainer;
+        private readonly PhotoboothSessionService _sessionService;
         private Grid _qrCodeOverlay;
         private Grid _smsPhonePadOverlay;
         private Image _qrCodeImage;
@@ -31,9 +32,16 @@ namespace Photobooth.Services
         public event Action<string> SendSmsRequested;
         public event Action ShowSmsFromQrRequested;
         
-        public SharingUIService(FrameworkElement parentContainer)
+        // SMS button state
+        public event Action<bool, string> UpdateSmsButtonState;
+        
+        // QR button state
+        public event Action<bool, string> UpdateQrButtonState;
+        
+        public SharingUIService(FrameworkElement parentContainer, PhotoboothSessionService sessionService = null)
         {
             _parentContainer = parentContainer ?? throw new ArgumentNullException(nameof(parentContainer));
+            _sessionService = sessionService;
             Log.Debug($"SharingUIService: Initialized with parent container type: {_parentContainer.GetType().Name}");
         }
         
@@ -45,6 +53,13 @@ namespace Photobooth.Services
             try
             {
                 Log.Debug($"SharingUIService.ShowQrCodeOverlay: Showing QR overlay for URL: {galleryUrl}");
+                
+                // Stop auto-clear timer when showing overlay
+                if (_sessionService != null)
+                {
+                    _sessionService.StopAutoClearTimer();
+                    Log.Debug("Stopped auto-clear timer for QR overlay");
+                }
                 
                 // Create overlay if not exists
                 if (_qrCodeOverlay == null)
@@ -85,6 +100,38 @@ namespace Photobooth.Services
         }
         
         /// <summary>
+        /// Update SMS button availability based on queue status
+        /// </summary>
+        public void SetSmsButtonState(bool enabled, string tooltipMessage = null)
+        {
+            try
+            {
+                Log.Debug($"SharingUIService.SetSmsButtonState: Enabled={enabled}, Message={tooltipMessage}");
+                UpdateSmsButtonState?.Invoke(enabled, tooltipMessage ?? (enabled ? "Send SMS" : "SMS not available"));
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SharingUIService.SetSmsButtonState: Error updating SMS button state: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Update QR button availability based on upload status
+        /// </summary>
+        public void SetQrButtonState(bool hasQr, string tooltipMessage = null)
+        {
+            try
+            {
+                Log.Debug($"SharingUIService.SetQrButtonState: HasQR={hasQr}, Message={tooltipMessage}");
+                UpdateQrButtonState?.Invoke(hasQr, tooltipMessage ?? (hasQr ? "Show QR Code" : "QR Code not ready"));
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SharingUIService.SetQrButtonState: Error updating QR button state: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
         /// Hide QR code overlay
         /// </summary>
         public void HideQrCodeOverlay()
@@ -96,6 +143,14 @@ namespace Photobooth.Services
                     _qrCodeOverlay.Visibility = Visibility.Collapsed;
                     Log.Debug("SharingUIService: QR code overlay hidden");
                 }
+                
+                // Resume auto-clear timer when hiding overlay
+                if (_sessionService != null && _sessionService.IsSessionActive)
+                {
+                    _sessionService.StartAutoClearTimer();
+                    Log.Debug("Resumed auto-clear timer after QR overlay closed");
+                }
+                
                 QrCodeOverlayClosed?.Invoke();
             }
             catch (Exception ex)
@@ -112,6 +167,13 @@ namespace Photobooth.Services
             try
             {
                 Log.Debug("SharingUIService.ShowSmsPhonePadOverlay: Showing SMS phone pad");
+                
+                // Stop auto-clear timer when showing overlay
+                if (_sessionService != null)
+                {
+                    _sessionService.StopAutoClearTimer();
+                    Log.Debug("Stopped auto-clear timer for SMS overlay");
+                }
                 
                 // Create overlay if not exists
                 if (_smsPhonePadOverlay == null)
@@ -151,6 +213,14 @@ namespace Photobooth.Services
                     _smsPhonePadOverlay.Visibility = Visibility.Collapsed;
                     Log.Debug("SharingUIService: SMS phone pad overlay hidden");
                 }
+                
+                // Resume auto-clear timer when hiding overlay
+                if (_sessionService != null && _sessionService.IsSessionActive)
+                {
+                    _sessionService.StartAutoClearTimer();
+                    Log.Debug("Resumed auto-clear timer after SMS overlay closed");
+                }
+                
                 SmsOverlayClosed?.Invoke();
             }
             catch (Exception ex)

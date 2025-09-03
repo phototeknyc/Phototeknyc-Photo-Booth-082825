@@ -219,22 +219,18 @@ namespace Photobooth.Services
 
         private ShareResult CreateLocalShareResult(string sessionId, List<string> photoPaths)
         {
-            var localUrl = $"file:///{Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Photobooth", "Sessions", sessionId)}";
+            // CRITICAL: Never create local URLs - always return failure when no cloud service available
+            // This prevents QR codes and SMS from working with invalid local URLs
             
             return new ShareResult
             {
                 SessionId = sessionId,
-                Success = true,
-                GalleryUrl = localUrl,
-                ShortUrl = localUrl,
-                QRCodeImage = GenerateQRCode(localUrl),
-                UploadedPhotos = photoPaths.Select(p => new UploadedPhoto 
-                { 
-                    OriginalPath = p,
-                    WebUrl = p,
-                    ThumbnailUrl = p,
-                    UploadedAt = DateTime.Now
-                }).ToList()
+                Success = false,  // Always fail when using stub - no valid internet URLs
+                GalleryUrl = null,  // No URL - prevents QR code generation
+                ShortUrl = null,
+                QRCodeImage = null,  // No QR code for offline scenarios
+                ErrorMessage = "Cloud upload service not available - check internet connection and AWS configuration",
+                UploadedPhotos = new List<UploadedPhoto>()  // Empty list - no valid uploads
             };
         }
     }

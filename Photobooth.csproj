@@ -619,6 +619,7 @@
     <Compile Include="Services\SharingUIService.cs" />
     <Compile Include="Services\PhotoboothQueueService.cs" />
     <Compile Include="Services\GalleryBrowserService.cs" />
+    <Compile Include="Services\InfoPanelService.cs" />
     <Compile Include="Pages\EventSelectionPage.xaml.cs">
       <DependentUpon>EventSelectionPage.xaml</DependentUpon>
     </Compile>
@@ -737,6 +738,9 @@
       xcopy /Y "$(ProjectDir)sonysdk\external\crsdk\CrAdapter\*.dll" "$(TargetDir)"
       xcopy /Y "$(ProjectDir)EDSDK.dll" "$(TargetDir)"
       xcopy /Y "$(ProjectDir)EdsImage.dll" "$(TargetDir)"
+      REM Ensure AWS SDK DLLs are always copied
+      xcopy /Y "$(ProjectDir)packages\AWSSDK.Core.4.0.0.22\lib\net472\AWSSDK.Core.dll" "$(TargetDir)" 2&gt;nul || echo AWS Core already present
+      xcopy /Y "$(ProjectDir)packages\AWSSDK.S3.4.0.0\lib\net472\AWSSDK.S3.dll" "$(TargetDir)" 2&gt;nul || echo AWS S3 already present
     </PostBuildEvent>
   </PropertyGroup>
 </Project>

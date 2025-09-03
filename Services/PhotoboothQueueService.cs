@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.SQLite;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 using Newtonsoft.Json;
@@ -23,6 +24,10 @@ namespace Photobooth.Services
         private readonly Database.TemplateDatabase _templateDatabase;
         private readonly Timer _processingTimer;
         private readonly object _lockObject = new object();
+        
+        // Cache to reduce database calls for sessions without URLs
+        private readonly Dictionary<string, CachedUrlResult> _urlCache = new Dictionary<string, CachedUrlResult>();
+        private readonly object _cacheLock = new object();
         
         // Singleton pattern for global queue management
         private static PhotoboothQueueService _instance;
@@ -68,9 +73,9 @@ namespace Photobooth.Services
             
             InitializeDatabase();
             
-            // Start background processor (check every 15 seconds for responsiveness)
+            // Start background processor (check every 5 minutes to reduce database load)
             _processingTimer = new Timer(ProcessQueueCallback, null, 
-                TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15));
+                TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(5));
             
             Log.Debug("PhotoboothQueueService: Initialized with clean architecture pattern");
         }
@@ -216,13 +221,25 @@ namespace Photobooth.Services
                     return new QRVisibilityResult
                     {
                         IsVisible = false,
-                        Message = "No session ID provided"
+                        Message = "No session ID provided",
+                        EnableSMS = false,  // No SMS without session
+                        SMSMessage = "No session available"
                     };
                 }
 
                 // Check for valid gallery URL
                 var galleryUrl = GetValidGalleryUrl(sessionId, isGallerySession);
                 bool hasValidUrl = !string.IsNullOrEmpty(galleryUrl);
+                
+                // Log URL validation for debugging
+                if (!hasValidUrl)
+                {
+                    Log.Debug($"PhotoboothQueueService: No gallery URL available yet for session {sessionId}");
+                }
+                else
+                {
+                    Log.Debug($"PhotoboothQueueService: Gallery URL found for session {sessionId}: {galleryUrl}");
+                }
                 
                 // Update visibility tracking
                 await UpdateQRVisibilityTrackingAsync(sessionId, hasValidUrl, galleryUrl, isGallerySession);
@@ -239,7 +256,9 @@ namespace Photobooth.Services
                     IsVisible = hasValidUrl,
                     GalleryUrl = galleryUrl,
                     QRCodeImage = qrImage,
-                    Message = hasValidUrl ? "QR code ready" : "Waiting for photos to upload..."
+                    Message = hasValidUrl ? "QR code ready" : "Waiting for photos to upload...",
+                    EnableSMS = true,  // SMS always enabled - will queue if offline
+                    SMSMessage = hasValidUrl ? "SMS ready to send" : "SMS will be queued for sending"
                 };
 
                 Log.Debug($"PhotoboothQueueService: QR visibility result - Visible: {hasValidUrl}, URL: {galleryUrl ?? "none"}");
@@ -253,7 +272,9 @@ namespace Photobooth.Services
                 return new QRVisibilityResult
                 {
                     IsVisible = false,
-                    Message = $"Error checking QR visibility: {ex.Message}"
+                    Message = $"Error checking QR visibility: {ex.Message}",
+                    EnableSMS = true,  // Still allow SMS queuing on error
+                    SMSMessage = "SMS will be queued for sending"
                 };
             }
         }
@@ -287,31 +308,68 @@ namespace Photobooth.Services
 
         #region URL Validation and Retrieval
         /// <summary>
-        /// Get valid gallery URL for session from database
+        /// Get valid gallery URL for session from database with caching to reduce database load
         /// </summary>
         private string GetValidGalleryUrl(string sessionId, bool isGallerySession)
         {
             try
             {
-                Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: sessionId='{sessionId}', isGallerySession={isGallerySession}");
+                // Create cache key
+                string cacheKey = $"{sessionId}_{isGallerySession}";
+                
+                lock (_cacheLock)
+                {
+                    // Check cache first
+                    if (_urlCache.ContainsKey(cacheKey))
+                    {
+                        var cached = _urlCache[cacheKey];
+                        
+                        // If we have a valid URL, return it
+                        if (!string.IsNullOrEmpty(cached.Url))
+                        {
+                            return cached.Url;
+                        }
+                        
+                        // If it's been less than 30 seconds since we checked for null, return cached null
+                        // But allow more frequent checks so URLs appear faster after upload
+                        if ((DateTime.Now - cached.LastChecked).TotalSeconds < 30)
+                        {
+                            return cached.Url;
+                        }
+                    }
+                }
+                
+                Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: Cache miss - querying database for sessionId='{sessionId}', isGallerySession={isGallerySession}");
                 
                 string galleryUrl = null;
                 if (isGallerySession)
                 {
-                    // For gallery sessions, use session folder as identifier (which should be GUID)
-                    Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for gallery session with ID: {sessionId}");
                     galleryUrl = _templateDatabase.GetPhotoSessionGalleryUrl(sessionId);
-                    Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: Retrieved gallery URL: {galleryUrl ?? "NULL"}");
                 }
                 else
                 {
-                    // For current sessions, need to get session GUID first
-                    var sessionGuid = sessionId; // Assume sessionId is already GUID for current sessions
-                    Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: Retrieving URL for current session with GUID: {sessionGuid}");
-                    galleryUrl = _templateDatabase.GetPhotoSessionGalleryUrl(sessionGuid);
-                    Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: Retrieved current session URL: {galleryUrl ?? "NULL"}");
+                    galleryUrl = _templateDatabase.GetPhotoSessionGalleryUrl(sessionId);
                 }
                 
+                // Update cache
+                lock (_cacheLock)
+                {
+                    _urlCache[cacheKey] = new CachedUrlResult
+                    {
+                        Url = galleryUrl,
+                        LastChecked = DateTime.Now
+                    };
+                    
+                    // Clean old cache entries (older than 10 minutes)
+                    var cutoff = DateTime.Now.AddMinutes(-10);
+                    var keysToRemove = _urlCache.Where(kvp => kvp.Value.LastChecked < cutoff).Select(kvp => kvp.Key).ToList();
+                    foreach (var key in keysToRemove)
+                    {
+                        _urlCache.Remove(key);
+                    }
+                }
+                
+                Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: Retrieved and cached URL: {galleryUrl ?? "NULL"}");
                 return galleryUrl;
             }
             catch (Exception ex)
@@ -322,20 +380,58 @@ namespace Photobooth.Services
         }
 
         /// <summary>
-        /// Validate if URL is external and accessible
+        /// Validate if URL is external and accessible - STRICT validation to prevent local URLs
         /// </summary>
         private bool IsValidExternalUrl(string url)
         {
             if (string.IsNullOrEmpty(url))
                 return false;
 
-            // Check if it's a proper external URL (not pending or localhost)
-            if (url.Contains("pending/") || url.Contains("localhost") || url.Contains("127.0.0.1"))
+            // CRITICAL: Block all local file URLs
+            if (url.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
                 return false;
 
-            // Basic URL validation
-            return Uri.TryCreate(url, UriKind.Absolute, out Uri result) 
-                   && (result.Scheme == Uri.UriSchemeHttp || result.Scheme == Uri.UriSchemeHttps);
+            // Block localhost, local IPs, and development URLs
+            if (url.Contains("localhost") || url.Contains("127.0.0.1") || url.Contains("192.168.") || 
+                url.Contains("10.0.") || url.Contains("172.16.") || url.Contains("pending/"))
+                return false;
+
+            // Must be valid HTTP/HTTPS URL
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri result) || 
+                (result.Scheme != Uri.UriSchemeHttp && result.Scheme != Uri.UriSchemeHttps))
+                return false;
+
+            // Additional validation: Must have proper domain (not IP-based for local networks)
+            if (result.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                result.Host.StartsWith("192.168.") || result.Host.StartsWith("10.0.") || 
+                result.Host.StartsWith("172.16.") || result.Host.Equals("127.0.0.1"))
+                return false;
+
+            // Must be internet-accessible domain
+            return true;
+        }
+        
+        /// <summary>
+        /// Invalidate cache for a specific session when URL is updated
+        /// </summary>
+        public void InvalidateUrlCache(string sessionId, bool isGallerySession = false)
+        {
+            try
+            {
+                string cacheKey = $"{sessionId}_{isGallerySession}";
+                lock (_cacheLock)
+                {
+                    if (_urlCache.ContainsKey(cacheKey))
+                    {
+                        _urlCache.Remove(cacheKey);
+                        Log.Debug($"PhotoboothQueueService: Invalidated URL cache for session {sessionId}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PhotoboothQueueService: Error invalidating cache for session {sessionId}: {ex.Message}");
+            }
         }
         #endregion
 
@@ -465,11 +561,11 @@ namespace Photobooth.Services
                 {
                     conn.Open();
                     
-                    // Get sessions to check
+                    // Get sessions to check - check more frequently for sessions without URLs
                     var cmd = new SQLiteCommand(@"
                         SELECT session_id, is_gallery_session, has_valid_url
                         FROM qr_visibility 
-                        WHERE has_valid_url = 0 OR last_checked < datetime('now', '-1 minute')", conn);
+                        WHERE has_valid_url = 0 OR last_checked < datetime('now', '-30 seconds')", conn);
                     
                     var sessionsToCheck = new List<dynamic>();
                     using (var reader = cmd.ExecuteReader())
@@ -766,6 +862,10 @@ namespace Photobooth.Services
         public string GalleryUrl { get; set; }
         public System.Windows.Media.Imaging.BitmapImage QRCodeImage { get; set; }
         public string Message { get; set; }
+        
+        // SMS can be enabled even offline since it will be queued
+        public bool EnableSMS { get; set; } = true;  // Default to enabled for offline queuing
+        public string SMSMessage { get; set; }
     }
 
     public class PhotoboothQueueStatus
@@ -796,6 +896,12 @@ namespace Photobooth.Services
         public int QRReadyCount { get; set; }
         public string OldestSMSEntry { get; set; }
         public string OldestQREntry { get; set; }
+    }
+
+    public class CachedUrlResult
+    {
+        public string Url { get; set; }
+        public DateTime LastChecked { get; set; }
     }
     #endregion
 }

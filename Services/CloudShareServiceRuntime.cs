@@ -90,6 +90,26 @@ namespace Photobooth.Services
             }
         }
         
+        /// <summary>
+        /// Check if internet connection is available
+        /// </summary>
+        private async Task<bool> IsInternetAvailableAsync()
+        {
+            try
+            {
+                using (var client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromSeconds(5);
+                    var response = await client.GetAsync("https://www.google.com");
+                    return response.IsSuccessStatusCode;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
         private void InitializeAwsClient(string accessKey, string secretKey, string region)
         {
             try
@@ -185,6 +205,28 @@ namespace Photobooth.Services
             
             try
             {
+                // CRITICAL: Check internet connectivity first
+                if (!await IsInternetAvailableAsync())
+                {
+                    System.Diagnostics.Debug.WriteLine("CloudShareServiceRuntime: No internet connection detected");
+                    
+                    // Queue for offline retry immediately
+                    var offlineQueue = OfflineQueueService.Instance;
+                    var queueResult = await offlineQueue.QueuePhotosForUpload(sessionId, photoPaths, eventName);
+                    
+                    if (queueResult.Success)
+                    {
+                        result.ErrorMessage = "No internet connection - photos queued for upload when connection is restored";
+                        System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Queued {photoPaths.Count} photos for offline retry (no internet)");
+                    }
+                    else
+                    {
+                        result.ErrorMessage = "No internet connection and failed to queue for retry";
+                    }
+                    
+                    return result;
+                }
+                
                 // Try to initialize if not already done
                 if (_s3Client == null)
                 {
@@ -410,6 +452,23 @@ namespace Photobooth.Services
             {
                 result.ErrorMessage = ex.Message;
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Gallery creation failed: {ex.Message}");
+                
+                // CRITICAL: Queue for offline retry when AWS upload fails
+                try
+                {
+                    var offlineQueue = OfflineQueueService.Instance;
+                    var queueResult = await offlineQueue.QueuePhotosForUpload(sessionId, photoPaths, eventName);
+                    
+                    if (queueResult.Success)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Queued {photoPaths.Count} photos for offline retry");
+                        result.ErrorMessage += " - Photos queued for retry when connection is restored";
+                    }
+                }
+                catch (Exception queueEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Failed to queue for offline retry: {queueEx.Message}");
+                }
             }
             
             return result;
@@ -481,6 +540,24 @@ namespace Photobooth.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: SMS error: {ex.Message}");
+                
+                // CRITICAL: Queue SMS for offline retry when sending fails
+                try
+                {
+                    var offlineQueue = OfflineQueueService.Instance;
+                    var queueResult = await offlineQueue.QueueSMS(phoneNumber, galleryUrl, "unknown");
+                    
+                    if (queueResult.Success)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: SMS queued for offline retry to {phoneNumber}");
+                        return true; // Return true because it's queued for retry
+                    }
+                }
+                catch (Exception queueEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Failed to queue SMS for offline retry: {queueEx.Message}");
+                }
+                
                 return false;
             }
         }
