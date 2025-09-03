@@ -147,10 +147,13 @@ namespace Photobooth.Services
                     session.Photos = new List<GalleryPhotoInfo>();
                     
                     // Add photos
+                    System.Diagnostics.Debug.WriteLine($"★★★ GalleryBrowserService: Processing {photos.Count} photos from database for session {session.SessionId}");
                     foreach (var photo in photos)
                     {
+                        System.Diagnostics.Debug.WriteLine($"  Checking photo: {photo.FileName} at {photo.FilePath}");
                         if (File.Exists(photo.FilePath))
                         {
+                            System.Diagnostics.Debug.WriteLine($"    ✓ File exists, adding with type: {photo.PhotoType ?? "ORIG"}");
                             session.Photos.Add(new GalleryPhotoInfo
                             {
                                 FilePath = photo.FilePath,
@@ -158,6 +161,10 @@ namespace Photobooth.Services
                                 PhotoType = photo.PhotoType ?? "ORIG",
                                 FileSize = photo.FileSize ?? 0
                             });
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"    ✗ FILE NOT FOUND, skipping: {photo.FilePath}");
                         }
                     }
                     
