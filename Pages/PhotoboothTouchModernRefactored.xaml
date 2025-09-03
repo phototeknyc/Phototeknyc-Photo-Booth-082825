@@ -82,7 +82,7 @@
         </Style>
     </Page.Resources>
 
-    <Grid x:Name="MainGrid">
+    <Grid x:Name="MainGrid" ClipToBounds="False">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -106,7 +106,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             
-            <!-- Gallery Preview Box (Left Side) -->
+            <!-- Gallery Preview Box (Left Side) - Hidden since we have browse button in overlay -->
             <Border x:Name="galleryPreviewBox"
                     Grid.Column="0"
                     Width="200"
@@ -118,7 +118,7 @@
                     MouseLeftButtonDown="GalleryPreviewBox_Click"
                     MouseEnter="GalleryPreviewBox_MouseEnter"
                     MouseLeave="GalleryPreviewBox_MouseLeave"
-                    Visibility="Visible">
+                    Visibility="Collapsed">
                 <Border.Effect>
                     <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="3" Opacity="0.3"/>
                 </Border.Effect>
@@ -158,8 +158,8 @@
                 </Grid>
             </Border>
             
-            <!-- Main View Area -->
-            <Border Grid.Column="1" Background="#2E2E2E" CornerRadius="10" Margin="10,20,20,20">
+            <!-- Main View Area (Full Width - Gallery Preview Hidden) -->
+            <Border Grid.Column="0" Grid.ColumnSpan="2" Background="#2E2E2E" CornerRadius="10" Margin="20,20,20,20">
                 <Grid>
                     <Image x:Name="liveViewImage" 
                            HorizontalAlignment="Center" 
@@ -246,6 +246,45 @@
                         </Button.Template>
                     </Button>
                     
+                    <!-- Cancel Session Button (only visible during active session) -->
+                    <Button x:Name="cancelSessionButton"
+                            Width="120"
+                            Height="45"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,20,20"
+                            Background="#EEFF5252"
+                            BorderThickness="0"
+                            Visibility="Collapsed"
+                            Click="CancelSessionButton_Click"
+                            Cursor="Hand"
+                            ToolTip="Cancel Current Session"
+                            Panel.ZIndex="999">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="22">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="3" Opacity="0.4"/>
+                                    </Border.Effect>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="✕"
+                                                   FontSize="16"
+                                                   FontWeight="Bold"
+                                                   Foreground="White"
+                                                   Margin="0,0,5,0"
+                                                   VerticalAlignment="Center"/>
+                                        <TextBlock Text="Cancel"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="White"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
                     <!-- Status Messages -->
                     <Border VerticalAlignment="Top" 
                             HorizontalAlignment="Center" 
@@ -290,6 +329,59 @@
                             </ControlTemplate>
                         </Button.Template>
                     </Button>
+                    
+                    <!-- Gallery Preview Box (Under Lock Button in Overlay) -->
+                    <Border x:Name="galleryPreviewBoxOverlay"
+                            Width="150"
+                            Height="180"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Margin="20,80,0,0"
+                            Background="#CC3E3E3E"
+                            CornerRadius="10"
+                            Cursor="Hand"
+                            MouseLeftButtonDown="GalleryPreviewBox_Click"
+                            MouseEnter="GalleryPreviewBox_MouseEnter"
+                            MouseLeave="GalleryPreviewBox_MouseLeave"
+                            Panel.ZIndex="99">
+                        <Border.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="3" Opacity="0.4"/>
+                        </Border.Effect>
+                        <Grid>
+                            <!-- Preview Image -->
+                            <Image x:Name="galleryPreviewImageOverlay"
+                                   Stretch="UniformToFill"
+                                   Margin="3"/>
+                            
+                            <!-- Overlay with gallery info -->
+                            <Border VerticalAlignment="Bottom"
+                                    Background="#DD000000"
+                                    CornerRadius="0,0,10,10">
+                                <StackPanel Margin="8,4">
+                                    <TextBlock Text="📸 Gallery"
+                                               Foreground="White"
+                                               FontSize="14"
+                                               FontWeight="Bold"/>
+                                    <TextBlock x:Name="galleryPreviewInfoOverlay"
+                                               Text="No sessions"
+                                               Foreground="#CCCCCC"
+                                               FontSize="11"/>
+                                </StackPanel>
+                            </Border>
+                            
+                            <!-- Hover effect -->
+                            <Border x:Name="galleryPreviewHoverOverlay"
+                                    Background="#44FFFFFF"
+                                    CornerRadius="10"
+                                    Visibility="Collapsed">
+                                <TextBlock Text="Click to browse"
+                                           Foreground="White"
+                                           FontSize="13"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                    </Border>
                     
                     <!-- Info Panel - Bottom Left -->
                     <Border VerticalAlignment="Bottom" 
@@ -360,8 +452,179 @@
                                                    Foreground="#4CAF50"
                                                    VerticalAlignment="Center"/>
                                     </Grid>
+                                    
+                                    <!-- Pending Count (hidden by default) -->
+                                    <TextBlock x:Name="syncPendingCount" 
+                                               Text="0 items pending" 
+                                               FontSize="10" 
+                                               Foreground="#FFA726"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,2,0,0"
+                                               Visibility="Collapsed"/>
+                                    
+                                    <!-- Upload Progress (hidden by default) -->
+                                    <ProgressBar x:Name="syncUploadProgress" 
+                                                 Height="3"
+                                                 Margin="0,3,0,0"
+                                                 Foreground="#00B4D8"
+                                                 Background="#333"
+                                                 Visibility="Collapsed"/>
                                 </StackPanel>
                             </Border>
+                            
+                            <!-- Separator -->
+                            <Border Height="1" 
+                                    Background="#666" 
+                                    Margin="0,10,0,10"/>
+                            
+                            <!-- Printer Status Header -->
+                            <TextBlock Text="PRINTER STATUS" 
+                                       FontSize="11" 
+                                       FontWeight="Bold"
+                                       Foreground="#00B4D8" 
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,5"/>
+                            
+                            <!-- Printer Info -->
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                
+                                <!-- Printer Name and Connection -->
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBlock x:Name="printerNameText" 
+                                               Text="No Printer" 
+                                               FontSize="12" 
+                                               Foreground="White"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="printerConnectionText" 
+                                               Text=" (Offline)" 
+                                               FontSize="12" 
+                                               Foreground="#FF9800"
+                                               FontWeight="Normal"/>
+                                </StackPanel>
+                                
+                                <!-- Printer Status -->
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3,0,0">
+                                    <Border x:Name="printerStatusIndicator" 
+                                            Width="8" 
+                                            Height="8" 
+                                            CornerRadius="4"
+                                            Background="#4CAF50"
+                                            Margin="0,0,5,0"
+                                            VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="printerStatusText" 
+                                               Text="Ready" 
+                                               FontSize="13" 
+                                               Foreground="#4CAF50"
+                                               FontWeight="Normal"/>
+                                </StackPanel>
+                                
+                                <!-- Print Queue and Media Info -->
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3,0,0">
+                                    <TextBlock Text="Queue: " 
+                                               FontSize="11" 
+                                               Foreground="#AAA"/>
+                                    <TextBlock x:Name="printerQueueText" 
+                                               Text="0" 
+                                               FontSize="11" 
+                                               Foreground="White"
+                                               FontWeight="Bold"/>
+                                    <TextBlock Text=" Jobs" 
+                                               FontSize="11" 
+                                               Foreground="#AAA"
+                                               Margin="2,0,0,0"/>
+                                    
+                                    <!-- Media Remaining (inline with queue) -->
+                                    <StackPanel x:Name="mediaRemainingPanel" 
+                                                Orientation="Horizontal" 
+                                                Margin="10,0,0,0"
+                                                Visibility="Collapsed">
+                                        <TextBlock Text="•" 
+                                                   FontSize="11" 
+                                                   Foreground="#666"
+                                                   Margin="0,0,5,0"/>
+                                        <TextBlock x:Name="mediaRemainingText" 
+                                                   Text="400" 
+                                                   FontSize="11" 
+                                                   Foreground="#4CAF50"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock x:Name="mediaTypeText" 
+                                                   Text=" prints left" 
+                                                   FontSize="11" 
+                                                   Foreground="#AAA"
+                                                   Margin="2,0,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                
+                                <!-- Empty Row 3 (was used for media) -->
+                            </Grid>
+                            
+                            <!-- Error Message (if any) -->
+                            <TextBlock x:Name="printerErrorText" 
+                                       Text="" 
+                                       FontSize="11" 
+                                       Foreground="#FF5252"
+                                       HorizontalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Margin="0,5,0,0"
+                                       Visibility="Collapsed"/>
+                            
+                            <!-- Separator for Cloud Status -->
+                            <Border Height="1" 
+                                    Background="#666" 
+                                    Margin="0,10,0,10"/>
+                            
+                            <!-- Cloud Sync Status Header -->
+                            <TextBlock Text="CLOUD SYNC" 
+                                       FontSize="11" 
+                                       FontWeight="Bold"
+                                       Foreground="#00B4D8" 
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,5"/>
+                            
+                            <!-- Cloud Status -->
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock FontFamily="{StaticResource SegoeMDL2}"
+                                           Text="{StaticResource MDL2_Cloud}"
+                                           FontSize="14"
+                                           x:Name="cloudSyncIcon"
+                                           Foreground="#888"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,0"/>
+                                <StackPanel>
+                                    <TextBlock x:Name="cloudSyncStatusText" 
+                                               Text="Not Configured" 
+                                               FontSize="12" 
+                                               Foreground="#FF9800"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="cloudSyncBucketText" 
+                                               Text="Setup in settings" 
+                                               FontSize="10" 
+                                               Foreground="#888"
+                                               Visibility="Visible"/>
+                                </StackPanel>
+                            </StackPanel>
+                            
+                            <!-- Upload Status (shown during uploads) -->
+                            <StackPanel x:Name="cloudUploadStatusPanel" 
+                                        Visibility="Collapsed"
+                                        Margin="0,5,0,0">
+                                <ProgressBar x:Name="cloudUploadProgress" 
+                                             Height="3"
+                                             Margin="0,2"
+                                             Foreground="#4CAF50"
+                                             Background="#333"/>
+                                <TextBlock x:Name="cloudUploadStatusText" 
+                                           Text="Uploading..." 
+                                           FontSize="10" 
+                                           Foreground="#4CAF50"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                     
@@ -443,13 +706,14 @@
         </Grid>
         
         <!-- Action Buttons Area (Row 2) -->
-        <Grid Grid.Row="2" Margin="20,0,20,20">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+        <Grid Grid.Row="2" Margin="20,10,20,20" ClipToBounds="False">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" ClipToBounds="False">
                 
                 <!-- Unified Action Buttons Panel (works for both session completion and gallery) -->
                 <StackPanel x:Name="actionButtonsPanel" 
                            Orientation="Horizontal" 
                            HorizontalAlignment="Center" 
+                           ClipToBounds="False"
                            Visibility="Collapsed">
                     
                     <!-- Share Button -->
@@ -461,10 +725,12 @@
                             Margin="10"
                             ToolTip="Share Photos"
                             Click="ShareButton_Click">
-                        <Viewbox Width="40" Height="40">
-                            <Path Data="M18,16.08C17.24,16.08 16.56,16.38 16.04,16.85L8.91,12.7C8.96,12.47 9,12.24 9,12C9,11.76 8.96,11.53 8.91,11.3L15.96,7.19C16.5,7.69 17.21,8 18,8A3,3 0 0,0 21,5A3,3 0 0,0 18,2A3,3 0 0,0 15,5C15,5.24 15.04,5.47 15.09,5.7L8.04,9.81C7.5,9.31 6.79,9 6,9A3,3 0 0,0 3,12A3,3 0 0,0 6,15C6.79,15 7.5,14.69 8.04,14.19L15.16,18.34C15.11,18.55 15.08,18.77 15.08,19C15.08,20.61 16.39,21.91 18,21.91C19.61,21.91 20.92,20.61 20.92,19A2.92,2.92 0 0,0 18,16.08Z"
-                                  Fill="White"/>
-                        </Viewbox>
+                        <TextBlock Text="{StaticResource MDL2_Share}"
+                                   FontFamily="{StaticResource SegoeMDL2}"
+                                   FontSize="32"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
                     </Button>
                     
                     <!-- Print Button -->
@@ -476,10 +742,12 @@
                             Margin="10"
                             ToolTip="Print Photos"
                             Click="PrintButton_Click">
-                        <Viewbox Width="40" Height="40">
-                            <Path Data="M19,8H5A3,3 0 0,0 2,11V17H6V21A1,1 0 0,0 7,22H17A1,1 0 0,0 18,21V17H22V11A3,3 0 0,0 19,8M16,20H8V15H16V20M19,12A1,1 0 0,1 18,13A1,1 0 0,1 17,12A1,1 0 0,1 18,11A1,1 0 0,1 19,12M18,3H6V7H18V3Z"
-                                  Fill="White"/>
-                        </Viewbox>
+                        <TextBlock Text="{StaticResource MDL2_Print}"
+                                   FontFamily="{StaticResource SegoeMDL2}"
+                                   FontSize="32"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
                     </Button>
                     
                     <!-- Email Button -->
@@ -491,13 +759,15 @@
                             Margin="10"
                             ToolTip="Email Photos"
                             Click="EmailButton_Click">
-                        <Viewbox Width="40" Height="40">
-                            <Path Data="M20,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6C22,4.89 21.1,4 20,4M20,8L12,13L4,8V6L12,11L20,6V8Z"
-                                  Fill="White"/>
-                        </Viewbox>
+                        <TextBlock Text="{StaticResource MDL2_Mail}"
+                                   FontFamily="{StaticResource SegoeMDL2}"
+                                   FontSize="32"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
                     </Button>
                     
-                    <!-- SMS Button -->
+                    <!-- SMS Button with Status Indicator -->
                     <Button x:Name="smsButton"
                             Style="{StaticResource TouchButtonStyle}"
                             Background="#9C27B0"
@@ -506,13 +776,36 @@
                             Margin="10"
                             ToolTip="Send SMS"
                             Click="SmsButton_Click">
-                        <Viewbox Width="40" Height="40">
-                            <Path Data="M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4C22,2.89 21.1,2 20,2Z"
-                                  Fill="White"/>
-                        </Viewbox>
+                        <Grid>
+                            <TextBlock Text="{StaticResource MDL2_Message}"
+                                       FontFamily="{StaticResource SegoeMDL2}"
+                                       FontSize="32"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                            <!-- SMS Status Indicator (inside button) -->
+                            <Border x:Name="smsStatusIndicator"
+                                    Width="16" Height="16"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Margin="0,2,2,0"
+                                    CornerRadius="8"
+                                    Background="#4CAF50"
+                                    Visibility="Collapsed">
+                                <Border.Effect>
+                                    <DropShadowEffect ShadowDepth="1" Opacity="0.5"/>
+                                </Border.Effect>
+                                <Viewbox Margin="2" Stretch="Uniform">
+                                    <Path x:Name="smsStatusIcon"
+                                          Data="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"
+                                          Fill="White"
+                                          Stretch="Uniform"/>
+                                </Viewbox>
+                            </Border>
+                        </Grid>
                     </Button>
                     
-                    <!-- QR Code Button -->
+                    <!-- QR Code Button with Status Indicator -->
                     <Button x:Name="qrButton"
                             Style="{StaticResource TouchButtonStyle}"
                             Background="#607D8B"
@@ -521,10 +814,33 @@
                             Margin="10"
                             ToolTip="Show QR Code"
                             Click="QrButton_Click">
-                        <Viewbox Width="40" Height="40">
-                            <Path Data="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H13V15H15V13H17V15H15V11M1,5H9V13H1V5M3,7V11H7V7H3M15,5H23V13H15V5M17,7V11H21V7H17M1,15H9V23H1V15M3,17V21H7V17H3Z"
-                                  Fill="White"/>
-                        </Viewbox>
+                        <Grid>
+                            <TextBlock Text="{StaticResource MDL2_QRCode}"
+                                       FontFamily="{StaticResource SegoeMDL2}"
+                                       FontSize="32"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                            <!-- QR Status Indicator (inside button) -->
+                            <Border x:Name="qrStatusIndicator"
+                                    Width="16" Height="16"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Margin="0,2,2,0"
+                                    CornerRadius="8"
+                                    Background="#4CAF50"
+                                    Visibility="Collapsed">
+                                <Border.Effect>
+                                    <DropShadowEffect ShadowDepth="1" Opacity="0.5"/>
+                                </Border.Effect>
+                                <Viewbox Margin="2" Stretch="Uniform">
+                                    <Path x:Name="qrStatusIcon"
+                                          Data="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"
+                                          Fill="White"
+                                          Stretch="Uniform"/>
+                                </Viewbox>
+                            </Border>
+                        </Grid>
                     </Button>
                     
                     <!-- Done Button -->
@@ -536,10 +852,12 @@
                             Margin="10"
                             ToolTip="Done"
                             Click="DoneButton_Click">
-                        <Viewbox Width="40" Height="40">
-                            <Path Data="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"
-                                  Fill="White"/>
-                        </Viewbox>
+                        <TextBlock Text="{StaticResource MDL2_CheckMark}"
+                                   FontFamily="{StaticResource SegoeMDL2}"
+                                   FontSize="32"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
                     </Button>
                     
                     <!-- Exit Button (for gallery mode) -->
@@ -552,10 +870,12 @@
                             ToolTip="Exit to Menu"
                             Visibility="Collapsed"
                             Click="ExitButton_Click">
-                        <Viewbox Width="40" Height="40">
-                            <Path Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
-                                  Fill="White"/>
-                        </Viewbox>
+                        <TextBlock Text="{StaticResource MDL2_Cancel}"
+                                   FontFamily="{StaticResource SegoeMDL2}"
+                                   FontSize="32"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
                     </Button>
                 </StackPanel>
                 
@@ -675,31 +995,69 @@
             </Grid>
         </Border>
         
-        <!-- Bottom Bar Toggle Button (Chevron) -->
-        <Border Grid.Row="2"
+        <!-- Bottom Bar Toggle Button (Chevron) - Auto-hide, corner position -->
+        <Border x:Name="bottomBarToggle"
+                Grid.Row="2"
                 VerticalAlignment="Bottom" 
-                HorizontalAlignment="Center" 
-                Background="#FF444444" 
-                CornerRadius="15,15,0,0" 
-                Padding="30,10" 
-                Margin="0,0,0,0"
+                HorizontalAlignment="Right" 
+                Background="#FF2196F3" 
+                CornerRadius="15,0,0,0"
+                Padding="10,5"
                 Cursor="Hand"
+                MouseLeftButtonDown="ToggleBottomBar_Click"
+                TouchDown="ToggleBottomBar_Click"
+                MouseEnter="BottomBarToggle_MouseEnter"
+                MouseLeave="BottomBarToggle_MouseLeave"
+                TouchEnter="BottomBarToggle_TouchEnter"
+                TouchLeave="BottomBarToggle_TouchLeave"
                 Panel.ZIndex="499"
-                MouseLeftButtonDown="ToggleBottomBar_Click">
+                Opacity="0.3"
+                Margin="0,0,20,0">
             <Border.Effect>
-                <DropShadowEffect Color="Black" BlurRadius="15" ShadowDepth="5" Opacity="0.7"/>
+                <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="3" Opacity="0.5"/>
             </Border.Effect>
+            <Border.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform x:Name="toggleScale" ScaleX="0.8" ScaleY="0.8"/>
+                    <TranslateTransform/>
+                </TransformGroup>
+            </Border.RenderTransform>
+            <Border.Triggers>
+                <EventTrigger RoutedEvent="MouseEnter">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                             To="1.0" Duration="0:0:0.2"/>
+                            <DoubleAnimation Storyboard.TargetName="toggleScale"
+                                             Storyboard.TargetProperty="ScaleX"
+                                             To="1.0" Duration="0:0:0.2"/>
+                            <DoubleAnimation Storyboard.TargetName="toggleScale"
+                                             Storyboard.TargetProperty="ScaleY"
+                                             To="1.0" Duration="0:0:0.2"/>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+                <EventTrigger RoutedEvent="MouseLeave">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                             To="0.3" Duration="0:0:0.3"/>
+                            <DoubleAnimation Storyboard.TargetName="toggleScale"
+                                             Storyboard.TargetProperty="ScaleX"
+                                             To="0.8" Duration="0:0:0.3"/>
+                            <DoubleAnimation Storyboard.TargetName="toggleScale"
+                                             Storyboard.TargetProperty="ScaleY"
+                                             To="0.8" Duration="0:0:0.3"/>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+            </Border.Triggers>
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="bottomBarToggleChevron" 
-                           Text="⌃" 
-                           FontSize="24" 
+                           Text="⚙" 
+                           FontSize="20" 
                            Foreground="White" 
-                           FontWeight="Bold"
-                           Margin="0,0,10,0"/>
-                <TextBlock Text="Settings" 
-                           FontSize="14" 
-                           Foreground="White" 
-                           VerticalAlignment="Center"/>
+                           FontWeight="Bold"/>
             </StackPanel>
         </Border>
         

@@ -88,6 +88,7 @@ namespace Photobooth.Pages
         private Services.SharingUIService _sharingUIService;
         private Services.FilterSelectionService _filterSelectionService;
         private Services.RetakeSelectionService _retakeSelectionService;
+        private Services.InfoPanelService _infoPanelService;
         private bool _isProcessingRetakes = false;
         
         // Supporting services - using existing services from Services folder
@@ -142,6 +143,14 @@ namespace Photobooth.Pages
         private Services.SessionGalleryData _currentGallerySession;
         private bool _isInGalleryMode;
         
+        // Gallery auto-clear timer
+        private DispatcherTimer _galleryTimer;
+        private int _galleryTimerElapsed;
+        
+        // Camera reconnect timer
+        private DispatcherTimer _cameraReconnectTimer;
+        private bool _isReconnecting;
+        
         // Pending print modal parameters
         private string _pendingPrintPath;
         private string _pendingPrintSessionId;
@@ -186,6 +195,7 @@ namespace Photobooth.Pages
             _compositionService = new Services.PhotoCompositionService();
             _galleryService = new Services.EventGalleryService();
             _galleryBrowserService = new Services.GalleryBrowserService();
+            _infoPanelService = new Services.InfoPanelService(_cameraManager);
             
             // Initialize existing services from Services folder
             _eventTemplateService = new EventTemplateService();
@@ -210,13 +220,16 @@ namespace Photobooth.Pages
             
             // Initialize sharing UI service for modal display management first
             // Pass the MainGrid instead of the page so UI elements can be added properly
-            _sharingUIService = new Services.SharingUIService(MainGrid);
+            // Also pass the session service for timer management
+            _sharingUIService = new Services.SharingUIService(MainGrid, _sessionService);
             
             // Wire sharing UI service events
             _sharingUIService.QrCodeOverlayClosed += OnQrCodeOverlayClosed;
             _sharingUIService.SmsOverlayClosed += OnSmsOverlayClosed;
             _sharingUIService.SendSmsRequested += OnSendSmsRequested;
             _sharingUIService.ShowSmsFromQrRequested += OnShowSmsFromQrRequested;
+            _sharingUIService.UpdateSmsButtonState += OnUpdateSmsButtonState;
+            _sharingUIService.UpdateQrButtonState += OnUpdateQrButtonState;
             
             // Wire event selection overlay events
             if (EventSelectionOverlayControl != null)
@@ -273,11 +286,156 @@ namespace Photobooth.Pages
                 Interval = TimeSpan.FromSeconds(1)
             };
             _countdownTimer.Tick += CountdownTimer_Tick;
+            
+            // Initialize gallery timer
+            _galleryTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _galleryTimer.Tick += GalleryTimer_Tick;
+            
+            // Initialize camera reconnect timer
+            _cameraReconnectTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(3) // Try to reconnect every 3 seconds
+            };
+            _cameraReconnectTimer.Tick += CameraReconnectTimer_Tick;
         }
         
         private void CountdownTimer_Tick(object sender, EventArgs e)
         {
             // Handled by workflow service now
+        }
+        
+        private void CameraReconnectTimer_Tick(object sender, EventArgs e)
+        {
+            try
+            {
+                Log.Debug("CameraReconnectTimer_Tick: Attempting to reconnect camera...");
+                
+                // Check if camera is now connected
+                if (DeviceManager?.SelectedCameraDevice != null && DeviceManager.SelectedCameraDevice.IsConnected)
+                {
+                    // Camera reconnected successfully
+                    _cameraReconnectTimer.Stop();
+                    _isReconnecting = false;
+                    
+                    UpdateCameraStatus($"Camera reconnected: {DeviceManager.SelectedCameraDevice.DeviceName}");
+                    Log.Debug($"Camera successfully reconnected: {DeviceManager.SelectedCameraDevice.DeviceName}");
+                    
+                    // Restart live view if in session
+                    if (_sessionService?.IsSessionActive == true)
+                    {
+                        _liveViewTimer.Start();
+                    }
+                }
+                else
+                {
+                    // Try to force reconnect using CameraSessionManager
+                    Log.Debug("Camera still disconnected, attempting force reconnect...");
+                    UpdateCameraStatus("Reconnecting camera...");
+                    
+                    // Use the singleton's ForceReconnect method
+                    CameraSessionManager.Instance.ForceReconnect();
+                    
+                    // Check again after reconnect attempt
+                    if (DeviceManager?.SelectedCameraDevice != null && DeviceManager.SelectedCameraDevice.IsConnected)
+                    {
+                        _cameraReconnectTimer.Stop();
+                        _isReconnecting = false;
+                        
+                        UpdateCameraStatus($"Camera reconnected: {DeviceManager.SelectedCameraDevice.DeviceName}");
+                        Log.Debug($"Camera successfully reconnected after force reconnect: {DeviceManager.SelectedCameraDevice.DeviceName}");
+                        
+                        // Restart live view if in session
+                        if (_sessionService?.IsSessionActive == true)
+                        {
+                            _liveViewTimer.Start();
+                        }
+                    }
+                    else
+                    {
+                        Log.Debug("Camera reconnect attempt failed, will retry in 3 seconds...");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error in CameraReconnectTimer_Tick: {ex.Message}");
+                UpdateCameraStatus("Camera reconnection failed - retrying...");
+            }
+        }
+        
+        private void GalleryTimer_Tick(object sender, EventArgs e)
+        {
+            _galleryTimerElapsed++;
+            
+            // Use the same timeout setting as session timeout
+            int timeoutSeconds = Properties.Settings.Default.AutoClearTimeout;
+            
+            if (_galleryTimerElapsed >= timeoutSeconds)
+            {
+                Log.Debug($"Gallery auto-clearing after {timeoutSeconds} seconds");
+                StopGalleryTimer();
+                
+                // Exit gallery mode
+                ExitGalleryMode();
+            }
+        }
+        
+        private void StartGalleryTimer()
+        {
+            if (Properties.Settings.Default.AutoClearSession)
+            {
+                Log.Debug($"Starting gallery timer for {Properties.Settings.Default.AutoClearTimeout} seconds");
+                _galleryTimerElapsed = 0;
+                _galleryTimer?.Start();
+            }
+        }
+        
+        private void StopGalleryTimer()
+        {
+            if (_galleryTimer != null && _galleryTimer.IsEnabled)
+            {
+                Log.Debug("Stopping gallery timer");
+                _galleryTimer.Stop();
+                _galleryTimerElapsed = 0;
+            }
+        }
+        
+        private void ExitGalleryMode()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                // Stop gallery timer
+                StopGalleryTimer();
+                
+                // Clear gallery state
+                _isInGalleryMode = false;
+                _currentGallerySession = null;
+                _gallerySessions = null;
+                _currentGallerySessionIndex = 0;
+                
+                // Hide action buttons
+                if (actionButtonsPanel != null)
+                    actionButtonsPanel.Visibility = Visibility.Collapsed;
+                
+                // Clear photos container
+                ClearPhotosContainer();
+                
+                // Show start button overlay
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = Visibility.Visible;
+                }
+                
+                // Keep gallery browser visible and refresh it
+                LoadGalleryPreview();
+                
+                _uiService?.UpdateStatus("Gallery session closed");
+                
+                Log.Debug("Exited gallery mode - gallery browser remains visible");
+            });
         }
 
         private void InitializeModules()
@@ -381,6 +539,8 @@ namespace Photobooth.Pages
             {
                 _liveViewTimer?.Stop();
                 _countdownTimer?.Stop();
+                _cameraReconnectTimer?.Stop();
+                _isReconnecting = false;
                 
                 // Stop live view through device
                 DeviceManager?.SelectedCameraDevice?.StopLiveView();
@@ -508,6 +668,25 @@ namespace Photobooth.Pages
                 _retakeSelectionService.RetakeProcessCompleted += OnServiceRetakeProcessCompleted;
             }
             
+            if (_infoPanelService != null)
+            {
+                _infoPanelService.PrinterStatusUpdated += OnInfoPanelPrinterStatusUpdated;
+                _infoPanelService.CloudSyncStatusUpdated += OnInfoPanelCloudSyncStatusUpdated;
+                _infoPanelService.CameraStatusUpdated += OnInfoPanelCameraStatusUpdated;
+                _infoPanelService.PhotoCountUpdated += OnInfoPanelPhotoCountUpdated;
+                _infoPanelService.SyncProgressUpdated += OnInfoPanelSyncProgressUpdated;
+            }
+            
+            // Subscribe to queue service events for status indicators
+            var queueService = PhotoboothQueueService.Instance;
+            if (queueService != null)
+            {
+                queueService.OnQueueStatusChanged += OnQueueStatusChanged;
+                queueService.OnQRCodeVisibilityChanged += OnQRCodeVisibilityChanged;
+                queueService.OnSMSProcessed += OnSMSProcessed;
+                Log.Debug("Subscribed to queue service events for status indicators");
+            }
+            
             Log.Debug("Service event handlers wired up");
         }
 
@@ -603,6 +782,25 @@ namespace Photobooth.Pages
                 _galleryService.SessionSaved -= OnServiceSessionSaved;
                 _galleryService.GalleryDisplayRequested -= OnServiceGalleryDisplayRequested;
                 _galleryService.SessionLoadRequested -= OnServiceSessionLoadRequested;
+            }
+            
+            if (_infoPanelService != null)
+            {
+                _infoPanelService.PrinterStatusUpdated -= OnInfoPanelPrinterStatusUpdated;
+                _infoPanelService.CloudSyncStatusUpdated -= OnInfoPanelCloudSyncStatusUpdated;
+                _infoPanelService.CameraStatusUpdated -= OnInfoPanelCameraStatusUpdated;
+                _infoPanelService.PhotoCountUpdated -= OnInfoPanelPhotoCountUpdated;
+                _infoPanelService.SyncProgressUpdated -= OnInfoPanelSyncProgressUpdated;
+                _infoPanelService.Dispose();
+            }
+            
+            // Unsubscribe from queue service events
+            var queueService = PhotoboothQueueService.Instance;
+            if (queueService != null)
+            {
+                queueService.OnQueueStatusChanged -= OnQueueStatusChanged;
+                queueService.OnQRCodeVisibilityChanged -= OnQRCodeVisibilityChanged;
+                queueService.OnSMSProcessed -= OnSMSProcessed;
             }
         }
         
@@ -797,6 +995,33 @@ namespace Photobooth.Pages
                     _isInGalleryMode = true;
                     Log.Debug($"★★★ ShowGalleryNavigationButtons: Showing action buttons panel for gallery session (Visibility: {actionButtonsPanel.Visibility})");
                     
+                    // Start gallery auto-clear timer
+                    StartGalleryTimer();
+                    
+                    // Trigger queue service to update button status indicators for gallery mode
+                    // The status will be updated via QueueStatusUpdated event when buttons are clicked
+                    // For now, ensure the indicators reflect the current connection state
+                    var queueService = PhotoboothQueueService.Instance;
+                    if (queueService != null && _currentGallerySession != null)
+                    {
+                        // Check QR visibility for current gallery session which will trigger status updates
+                        _ = Task.Run(async () => 
+                        {
+                            // Use SessionFolder (GUID) for database lookup, not SessionName (timestamp)
+                            var sessionId = _currentGallerySession.SessionFolder;
+                            var result = await queueService.CheckQRVisibilityAsync(sessionId, true);
+                            Log.Debug($"Gallery mode QR check triggered for session {sessionId} ({_currentGallerySession.SessionName}) - visibility: {result.IsVisible}, message: {result.Message}");
+                            
+                            // Update button enabled states on UI thread
+                            Dispatcher.Invoke(() =>
+                            {
+                                UpdateQRStatusIndicator(result.IsVisible, result.IsVisible ? "QR code ready" : "Processing QR code...");
+                                // Also update SMS status - SMS is always enabled for gallery mode as it will queue if needed
+                                UpdateSMSStatusIndicator(true, "SMS ready");
+                            });
+                        });
+                    }
+                    
                     // Also log individual button visibility and set them based on settings
                     if (printButton != null)
                     {
@@ -853,6 +1078,14 @@ namespace Photobooth.Pages
             // Update UI on main thread
             Dispatcher.BeginInvoke(new Action(() => 
             {
+                // Stop reconnect timer if it's running
+                if (_isReconnecting && _cameraReconnectTimer != null)
+                {
+                    _cameraReconnectTimer.Stop();
+                    _isReconnecting = false;
+                    Log.Debug("Stopped camera reconnect timer - camera is now connected");
+                }
+                
                 UpdateCameraStatus($"Connected: {cameraDevice.DeviceName}");
                 // Start live view if idle live view is enabled and not already started
                 if (!_liveViewTimer.IsEnabled && Properties.Settings.Default.EnableIdleLiveView)
@@ -874,9 +1107,17 @@ namespace Photobooth.Pages
             // Update UI on main thread
             Dispatcher.BeginInvoke(new Action(() => 
             {
-                UpdateCameraStatus("Camera disconnected");
+                UpdateCameraStatus("Camera disconnected - Attempting to reconnect...");
                 _liveViewTimer.Stop();
                 liveViewImage.Source = null;
+                
+                // Start auto-reconnect timer
+                if (!_isReconnecting && _cameraReconnectTimer != null)
+                {
+                    _isReconnecting = true;
+                    _cameraReconnectTimer.Start();
+                    Log.Debug("Started camera reconnect timer");
+                }
             }));
         }
 
@@ -901,6 +1142,13 @@ namespace Photobooth.Pages
                 
                 // Hide gallery preview during session
                 UpdateGalleryPreviewVisibility(true);
+                
+                // Show cancel session button
+                if (cancelSessionButton != null)
+                {
+                    cancelSessionButton.Visibility = Visibility.Visible;
+                    Log.Debug("Cancel session button shown");
+                }
                 
                 // Don't show stop button here - it will be shown when countdown starts
                 // This prevents the button from appearing before the countdown
@@ -1208,12 +1456,69 @@ namespace Photobooth.Pages
                         Log.Error("actionButtonsPanel is NULL - cannot show action buttons!");
                     }
                     
+                    // Check QR and SMS status for current session to update indicators
+                    if (_sessionService?.CurrentSessionId != null)
+                    {
+                        var queueService = PhotoboothQueueService.Instance;
+                        if (queueService != null)
+                        {
+                            // Check QR code status and queue status which will trigger status update via events
+                            _ = Task.Run(async () =>
+                            {
+                                // Try multiple times to get the URL as upload may take time
+                                for (int i = 0; i < 5; i++)
+                                {
+                                    await Task.Delay(2000); // Wait 2 seconds between checks
+                                    
+                                    // Clear cache before checking to ensure we get fresh data
+                                    queueService.InvalidateUrlCache(_sessionService.CurrentSessionId, false);
+                                    
+                                    var qrResult = await queueService.CheckQRVisibilityAsync(_sessionService.CurrentSessionId, false);
+                                    Log.Debug($"Post-session QR check attempt {i+1}: visibility={qrResult.IsVisible}, message={qrResult.Message}");
+                                    
+                                    // Trigger QR visibility event
+                                    Dispatcher.Invoke(() =>
+                                    {
+                                        OnQRCodeVisibilityChanged(_sessionService.CurrentSessionId, qrResult.IsVisible);
+                                    });
+                                    
+                                    // If URL is available, stop checking
+                                    if (qrResult.IsVisible)
+                                    {
+                                        Log.Debug("QR code is ready, stopping checks");
+                                        break;
+                                    }
+                                }
+                                
+                                // Get queue status to update SMS indicator
+                                var queueStatus = queueService.GetQueueStatus();
+                                Dispatcher.Invoke(() =>
+                                {
+                                    OnQueueStatusChanged(queueStatus);
+                                });
+                                
+                                Log.Debug("Post-session status checks completed");
+                            });
+                        }
+                    }
+                    
                     // Gallery button removed - sessions can be accessed through main gallery
                     
                     // Start auto-clear timer through service if enabled
                     if (Properties.Settings.Default.AutoClearSession)
                     {
                         _sessionService.StartAutoClearTimer();
+                    }
+                    
+                    // Show gallery preview after session completes so users can browse
+                    UpdateGalleryPreviewVisibility(false);
+                    Log.Debug("Showing gallery preview after session completion");
+                    
+                    // Hide cancel session button - session is complete
+                    if (cancelSessionButton != null)
+                    {
+                        cancelSessionButton.Visibility = Visibility.Collapsed;
+                        Log.Debug("Cancel session button hidden - session complete");
                     }
                     
                     // Handle auto-upload - always enabled
@@ -2329,6 +2634,12 @@ namespace Photobooth.Pages
                 // Show gallery preview again after session ends
                 UpdateGalleryPreviewVisibility(false);
                 
+                // Hide cancel button if visible
+                if (cancelSessionButton != null)
+                {
+                    cancelSessionButton.Visibility = Visibility.Collapsed;
+                }
+                
                 Log.Debug("Session fully cleared - ready for new session");
             });
         }
@@ -3088,7 +3399,7 @@ namespace Photobooth.Pages
                             UpdateLockButtonAppearance(false);
                             UpdateSettingsAccessibility(true);
                             bottomControlBar.Visibility = Visibility.Visible;
-                            bottomBarToggleChevron.Text = "⌄"; // Down chevron
+                            bottomBarToggleChevron.Text = "⚙"; // Gear icon
                             Log.Debug("Settings unlocked and bottom bar shown");
                         });
                     }
@@ -3100,14 +3411,56 @@ namespace Photobooth.Pages
             {
                 // Show bottom bar
                 bottomControlBar.Visibility = Visibility.Visible;
-                bottomBarToggleChevron.Text = "⌄"; // Down chevron
+                bottomBarToggleChevron.Text = "⚙"; // Gear icon
             }
             else
             {
                 // Hide bottom bar  
                 bottomControlBar.Visibility = Visibility.Collapsed;
-                bottomBarToggleChevron.Text = "⌃"; // Up chevron
+                bottomBarToggleChevron.Text = "⚙"; // Gear icon
             }
+        }
+
+        private void BottomBarToggle_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            // Mouse enter handled by XAML animations
+            Log.Debug("Mouse entered settings toggle");
+        }
+
+        private void BottomBarToggle_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            // Mouse leave handled by XAML animations
+            Log.Debug("Mouse left settings toggle");
+        }
+
+        private void BottomBarToggle_TouchEnter(object sender, System.Windows.Input.TouchEventArgs e)
+        {
+            // Trigger same animation as mouse enter
+            if (bottomBarToggle != null)
+            {
+                bottomBarToggle.Opacity = 1.0;
+                if (toggleScale != null)
+                {
+                    toggleScale.ScaleX = 1.0;
+                    toggleScale.ScaleY = 1.0;
+                }
+            }
+            Log.Debug("Touch entered settings toggle");
+        }
+
+        private void BottomBarToggle_TouchLeave(object sender, System.Windows.Input.TouchEventArgs e)
+        {
+            // Trigger same animation as mouse leave
+            if (bottomBarToggle != null)
+            {
+                bottomBarToggle.Opacity = 0.3;
+                if (toggleScale != null)
+                {
+                    toggleScale.ScaleX = 0.8;
+                    toggleScale.ScaleY = 0.8;
+                }
+            }
+            Log.Debug("Touch left settings toggle");
         }
 
         private void SelectEventButton_Click(object sender, RoutedEventArgs e)
@@ -3535,21 +3888,14 @@ namespace Photobooth.Pages
                 
                 if (_isInGalleryMode)
                 {
-                    // Done with gallery session - use existing gallery logic
-                    Log.Debug("Done with gallery session - clearing and returning to start");
+                    // Done with gallery session - use ExitGalleryMode to keep gallery browser visible
+                    Log.Debug("Done with gallery session - exiting gallery mode");
                     
-                    // Clear current session and prepare for new one
+                    // Use ExitGalleryMode which keeps the gallery browser visible
+                    ExitGalleryMode();
+                    
+                    // Clear the session service
                     _sessionService?.ClearSession();
-                    _isInGalleryMode = false;
-                    _currentGallerySession = null;
-                    
-                    // Hide action buttons panel
-                    if (actionButtonsPanel != null)
-                        actionButtonsPanel.Visibility = Visibility.Collapsed;
-                    
-                    // Clear photo strip
-                    if (photosContainer != null)
-                        photosContainer.Children.Clear();
                     
                     // Start live view if camera is connected
                     if (DeviceManager.SelectedCameraDevice != null)
@@ -3562,13 +3908,6 @@ namespace Photobooth.Pages
                         {
                             Log.Error($"Failed to start live view: {ex.Message}");
                         }
-                    }
-                    
-                    // Show the Touch to Start button again when exiting gallery mode
-                    if (startButtonOverlay != null)
-                    {
-                        startButtonOverlay.Visibility = Visibility.Visible;
-                        Log.Debug("Showing Touch to Start button after exiting gallery mode");
                     }
                     
                     _uiService.UpdateStatus("Ready for new session");
@@ -3763,6 +4102,10 @@ namespace Photobooth.Pages
                 System.Diagnostics.Debug.WriteLine($"🔍 Image path: {imagePath}");
                 System.Diagnostics.Debug.WriteLine($"🔍 Session ID: {sessionId}");
                 System.Diagnostics.Debug.WriteLine($"🔍 Is 2x6 Template: {is2x6Template}");
+                
+                // Stop auto-clear timer when showing print modal
+                _sessionService?.StopAutoClearTimer();
+                Log.Debug("Stopped auto-clear timer for print modal");
 
                 // Store print parameters for use when user selects copies
                 _pendingPrintPath = imagePath;
@@ -3789,6 +4132,13 @@ namespace Photobooth.Pages
             try
             {
                 System.Diagnostics.Debug.WriteLine($"OnMainPrintCopiesSelected: User selected {copies} copies");
+                
+                // Resume auto-clear timer after print modal closed
+                if (_sessionService?.IsSessionActive == true)
+                {
+                    _sessionService.StartAutoClearTimer();
+                    Log.Debug("Resumed auto-clear timer after print modal closed");
+                }
                 
                 // Unsubscribe from events
                 printCopiesModal.CopiesSelected -= OnMainPrintCopiesSelected;
@@ -3834,6 +4184,13 @@ namespace Photobooth.Pages
             {
                 System.Diagnostics.Debug.WriteLine("OnMainPrintSelectionCancelled: User cancelled print");
                 
+                // Resume auto-clear timer after print modal closed
+                if (_sessionService?.IsSessionActive == true)
+                {
+                    _sessionService.StartAutoClearTimer();
+                    Log.Debug("Resumed auto-clear timer after print modal cancelled");
+                }
+                
                 // Unsubscribe from events
                 printCopiesModal.CopiesSelected -= OnMainPrintCopiesSelected;
                 printCopiesModal.SelectionCancelled -= OnMainPrintSelectionCancelled;
@@ -3859,6 +4216,10 @@ namespace Photobooth.Pages
                 System.Diagnostics.Debug.WriteLine($"🔍 Image path: {imagePath}");
                 System.Diagnostics.Debug.WriteLine($"🔍 Session ID: {sessionId}");
                 System.Diagnostics.Debug.WriteLine($"🔍 Is 2x6 Template: {is2x6Template}");
+                
+                // Stop gallery timer when showing print modal
+                StopGalleryTimer();
+                Log.Debug("Stopped gallery timer for print modal");
 
                 // Store print parameters for use when user selects copies
                 _pendingPrintPath = imagePath;
@@ -3885,6 +4246,13 @@ namespace Photobooth.Pages
             try
             {
                 System.Diagnostics.Debug.WriteLine($"OnGalleryPrintCopiesSelected: User selected {copies} copies");
+                
+                // Resume gallery timer after print modal closed
+                if (_isInGalleryMode)
+                {
+                    StartGalleryTimer();
+                    Log.Debug("Resumed gallery timer after print modal closed");
+                }
                 
                 // Unsubscribe from events
                 printCopiesModal.CopiesSelected -= OnGalleryPrintCopiesSelected;
@@ -3930,6 +4298,13 @@ namespace Photobooth.Pages
             {
                 System.Diagnostics.Debug.WriteLine("OnGalleryPrintSelectionCancelled: User cancelled gallery print");
                 
+                // Resume gallery timer after print modal cancelled
+                if (_isInGalleryMode)
+                {
+                    StartGalleryTimer();
+                    Log.Debug("Resumed gallery timer after print modal cancelled");
+                }
+                
                 // Unsubscribe from events
                 printCopiesModal.CopiesSelected -= OnGalleryPrintCopiesSelected;
                 printCopiesModal.SelectionCancelled -= OnGalleryPrintSelectionCancelled;
@@ -3964,8 +4339,10 @@ namespace Photobooth.Pages
             _uiService?.UpdateCameraStatus(status.Contains("Connected"), 
                 status.Replace("Connected: ", ""));
                 
-            // Legacy UI updates for elements not yet in service
-            cameraStatusText.Text = status;
+            // Use InfoPanelService for camera status updates (clean architecture)
+            _infoPanelService?.UpdateCameraStatus(status);
+                
+            // Update sync status based on camera connection
             syncStatusText.Text = status.Contains("Connected") ? "Ready" : "Offline";
             syncStatusIcon.Background = new SolidColorBrush(
                 status.Contains("Connected") ? Colors.Green : Colors.Red);
@@ -4094,6 +4471,47 @@ namespace Photobooth.Pages
         private void StopButton_Click(object sender, RoutedEventArgs e)
         {
             CancelCurrentPhoto();
+        }
+        
+        private void CancelSessionButton_Click(object sender, RoutedEventArgs e)
+        {
+            CancelEntireSession();
+        }
+        
+        /// <summary>
+        /// Cancel the entire session and return to ready state
+        /// </summary>
+        private async void CancelEntireSession()
+        {
+            try
+            {
+                Log.Debug("=== CANCELING ENTIRE SESSION ===");
+                
+                // Stop any active captures
+                _workflowService?.CancelCurrentPhotoCapture();
+                
+                // Clear the session
+                _sessionService?.ClearSession();
+                
+                // Hide cancel button
+                if (cancelSessionButton != null)
+                    cancelSessionButton.Visibility = Visibility.Collapsed;
+                
+                // Show start button
+                _uiService?.ShowStartButton();
+                
+                // Update status
+                _uiService?.UpdateStatus("Session cancelled");
+                
+                // Show gallery preview again
+                UpdateGalleryPreviewVisibility(false);
+                
+                Log.Debug("Session cancelled - ready for new session");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error canceling session: {ex.Message}");
+            }
         }
         
         /// <summary>
@@ -4511,7 +4929,7 @@ namespace Photobooth.Pages
                 {
                     // Collapse the settings bar if it's open and we're locking
                     bottomControlBar.Visibility = Visibility.Collapsed;
-                    bottomBarToggleChevron.Text = "⌃";
+                    bottomBarToggleChevron.Text = "⚙";
                 }
             }
             
@@ -4775,21 +5193,10 @@ namespace Photobooth.Pages
         
         private void ExitGalleryButton_Click(object sender, RoutedEventArgs e)
         {
-            // Exit gallery mode
-            _isInGalleryMode = false;
-            _currentGallerySession = null;
-            _gallerySessions = null;
-            _currentGallerySessionIndex = 0;
+            // Use the centralized ExitGalleryMode method which keeps gallery browser visible
+            ExitGalleryMode();
             
-            // Hide unified action buttons panel
-            if (actionButtonsPanel != null)
-                actionButtonsPanel.Visibility = Visibility.Collapsed;
-            
-            // Clear the photo strip
-            if (photosContainer != null)
-                photosContainer.Children.Clear();
-            
-            // Resume live view
+            // Resume live view if enabled
             if (DeviceManager?.SelectedCameraDevice != null && Properties.Settings.Default.EnableIdleLiveView)
             {
                 DeviceManager.SelectedCameraDevice.StartLiveView();
@@ -4800,10 +5207,7 @@ namespace Photobooth.Pages
             _uiService.ShowStartButton();
             _uiService.UpdateStatus("Ready to start");
             
-            // Show gallery preview again after exiting gallery
-            UpdateGalleryPreviewVisibility(false);
-            
-            Log.Debug("Exited gallery mode");
+            Log.Debug("Exited gallery mode via exit button");
         }
 
         #region Unified Action Button Handlers
@@ -4830,6 +5234,15 @@ namespace Photobooth.Pages
                 
                 // Use GalleryActionService for unified SMS
                 await _galleryActionService.SmsSessionAsync(_isInGalleryMode, _currentGallerySession);
+                
+                // Force status check after SMS action to update indicator
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(500);
+                    // SMS status will be updated via the QueueStatusUpdated event
+                    // triggered by the SMS sending process
+                    Log.Debug("SMS action completed, status will update via queue events");
+                });
             }
             catch (Exception ex)
             {
@@ -4846,6 +5259,22 @@ namespace Photobooth.Pages
                 
                 // Use GalleryActionService for unified QR code generation
                 await _galleryActionService.GenerateQRCodeAsync(_isInGalleryMode, _currentGallerySession);
+                
+                // Force status check after QR action to update indicator
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(100);
+                    var queueService = PhotoboothQueueService.Instance;
+                    if (queueService != null)
+                    {
+                        var sessionId = _isInGalleryMode ? _currentGallerySession?.SessionFolder : _sessionService?.CurrentSessionId;
+                        if (!string.IsNullOrEmpty(sessionId))
+                        {
+                            var qrResult = await queueService.CheckQRVisibilityAsync(sessionId, _isInGalleryMode);
+                            Log.Debug($"QR status check after button click: visibility={qrResult.IsVisible}, message={qrResult.Message}");
+                        }
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -4900,44 +5329,6 @@ namespace Photobooth.Pages
             }
         }
         
-        private void ExitGalleryMode()
-        {
-            // Exit gallery mode
-            _isInGalleryMode = false;
-            _currentGallerySession = null;
-            _gallerySessions = null;
-            _currentGallerySessionIndex = 0;
-            
-            // Hide action buttons panel
-            if (actionButtonsPanel != null)
-                actionButtonsPanel.Visibility = Visibility.Collapsed;
-            
-            // Clear the photo strip
-            if (photosContainer != null)
-                photosContainer.Children.Clear();
-            
-            // Show the Touch to Start button again when exiting gallery mode
-            if (startButtonOverlay != null)
-            {
-                startButtonOverlay.Visibility = Visibility.Visible;
-                Log.Debug("Showing Touch to Start button after exiting gallery mode via Exit button");
-            }
-            
-            // Start live view if camera is connected
-            if (DeviceManager.SelectedCameraDevice != null)
-            {
-                try
-                {
-                    DeviceManager.SelectedCameraDevice.StartLiveView();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error($"Failed to start live view: {ex.Message}");
-                }
-            }
-            
-            _uiService.UpdateStatus("Ready for new session");
-        }
         
         #endregion
         
@@ -4960,45 +5351,65 @@ namespace Photobooth.Pages
                     bitmap.DecodePixelWidth = 200; // Optimize for thumbnail size
                     bitmap.EndInit();
                     
-                    // Update UI elements
+                    // Update UI elements for both original and overlay gallery preview
                     if (galleryPreviewImage != null)
                         galleryPreviewImage.Source = bitmap;
+                    if (galleryPreviewImageOverlay != null)
+                        galleryPreviewImageOverlay.Source = bitmap;
                     
+                    var sessionText = $"{previewData.SessionCount} session{(previewData.SessionCount != 1 ? "s" : "")}";
                     if (galleryPreviewInfo != null)
-                        galleryPreviewInfo.Text = $"{previewData.SessionCount} session{(previewData.SessionCount != 1 ? "s" : "")}";
+                        galleryPreviewInfo.Text = sessionText;
+                    if (galleryPreviewInfoOverlay != null)
+                        galleryPreviewInfoOverlay.Text = sessionText;
                     
+                    // Original gallery box is hidden, only show overlay
                     if (galleryPreviewBox != null)
-                        galleryPreviewBox.Visibility = Visibility.Visible;
+                        galleryPreviewBox.Visibility = Visibility.Collapsed;
+                    if (galleryPreviewBoxOverlay != null)
+                        galleryPreviewBoxOverlay.Visibility = Visibility.Visible;
                 }
                 else
                 {
-                    // No gallery content, hide preview
+                    // No gallery content, hide both previews
                     if (galleryPreviewBox != null)
                         galleryPreviewBox.Visibility = Visibility.Collapsed;
+                    if (galleryPreviewBoxOverlay != null)
+                        galleryPreviewBoxOverlay.Visibility = Visibility.Collapsed;
                 }
             }
             catch (Exception ex)
             {
                 Log.Error($"Error loading gallery preview: {ex.Message}");
+                // Hide on error
                 if (galleryPreviewBox != null)
                     galleryPreviewBox.Visibility = Visibility.Collapsed;
+                if (galleryPreviewBoxOverlay != null)
+                    galleryPreviewBoxOverlay.Visibility = Visibility.Collapsed;
             }
         }
         
         private void UpdateGalleryPreviewVisibility(bool inSession)
         {
-            if (galleryPreviewBox != null)
+            // Update visibility for overlay gallery preview
+            if (galleryPreviewBoxOverlay != null)
             {
                 // Hide during active session or gallery mode
                 if (inSession || _isInGalleryMode)
                 {
-                    galleryPreviewBox.Visibility = Visibility.Collapsed;
+                    galleryPreviewBoxOverlay.Visibility = Visibility.Collapsed;
                 }
                 else
                 {
                     // Show if we have gallery content
                     LoadGalleryPreview();
                 }
+            }
+            
+            // Original gallery box always hidden since we use overlay
+            if (galleryPreviewBox != null)
+            {
+                galleryPreviewBox.Visibility = Visibility.Collapsed;
             }
         }
         
@@ -5065,15 +5476,22 @@ namespace Photobooth.Pages
         
         private void GalleryPreviewBox_MouseEnter(object sender, MouseEventArgs e)
         {
+            // Handle hover for both old and overlay gallery preview
             if (galleryPreviewHover != null)
                 galleryPreviewHover.Visibility = Visibility.Visible;
+            if (galleryPreviewHoverOverlay != null)
+                galleryPreviewHoverOverlay.Visibility = Visibility.Visible;
         }
         
         private void GalleryPreviewBox_MouseLeave(object sender, MouseEventArgs e)
         {
+            // Handle hover for both old and overlay gallery preview
             if (galleryPreviewHover != null)
                 galleryPreviewHover.Visibility = Visibility.Collapsed;
+            if (galleryPreviewHoverOverlay != null)
+                galleryPreviewHoverOverlay.Visibility = Visibility.Collapsed;
         }
+        
         #endregion
 
         #region Modal Handlers
@@ -5234,6 +5652,133 @@ namespace Photobooth.Pages
             }
         }
         
+        private void OnUpdateQrButtonState(bool hasQr, string message)
+        {
+            try
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    // Don't override button states in gallery mode - gallery mode manages its own button states
+                    if (_isInGalleryMode && _currentGallerySession != null)
+                    {
+                        Log.Debug($"Ignoring QR button state update in gallery mode: HasQR={hasQr}, Message={message}");
+                        return;
+                    }
+                    
+                    if (qrButton != null)
+                    {
+                        qrButton.IsEnabled = hasQr;
+                        qrButton.ToolTip = message;
+                        qrButton.Opacity = hasQr ? 1.0 : 0.6;
+                        
+                        // Update visual indicator based on QR availability
+                        if (qrStatusIndicator != null && qrStatusIcon != null)
+                        {
+                            if (hasQr && (message.ToLowerInvariant().Contains("ready") || message.ToLowerInvariant().Contains("available") || message.ToLowerInvariant().Contains("view qr")))
+                            {
+                                // QR ready - green checkmark
+                                qrStatusIndicator.Visibility = System.Windows.Visibility.Visible;
+                                qrStatusIndicator.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 175, 80)); // Green
+                                qrStatusIcon.Data = System.Windows.Media.Geometry.Parse("M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"); // Checkmark
+                            }
+                            else if (message.ToLowerInvariant().Contains("waiting") || message.ToLowerInvariant().Contains("upload") || message.ToLowerInvariant().Contains("processing"))
+                            {
+                                // Waiting for upload - orange cloud upload
+                                qrStatusIndicator.Visibility = System.Windows.Visibility.Visible;
+                                qrStatusIndicator.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 152, 0)); // Orange
+                                qrStatusIcon.Data = System.Windows.Media.Geometry.Parse("M14,13V17H10V13H7L12,8L17,13M19.35,10.03C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.03C2.34,8.36 0,10.9 0,14A6,6 0 0,0 6,20H19A5,5 0 0,0 24,15C24,12.36 21.95,10.22 19.35,10.03Z"); // Cloud upload
+                            }
+                            else if (!hasQr)
+                            {
+                                // No QR available - hide or show offline indicator
+                                if (message.ToLowerInvariant().Contains("offline") || message.ToLowerInvariant().Contains("no connection"))
+                                {
+                                    qrStatusIndicator.Visibility = System.Windows.Visibility.Visible;
+                                    qrStatusIndicator.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(158, 158, 158)); // Gray
+                                    qrStatusIcon.Data = System.Windows.Media.Geometry.Parse("M3.27,4.27L4.27,3.27L21,20L20,21L17.73,18.73C17.19,18.9 16.63,19 16.05,19A5,5 0 0,1 11.05,14C11.05,13.42 11.15,12.86 11.32,12.32L8.73,9.73C7.19,10.43 6.05,11.91 6.05,13.63A3.37,3.37 0 0,0 9.42,17H14.73L10.73,13H10.42A2.62,2.62 0 0,1 7.8,10.38C7.8,9.91 7.95,9.46 8.21,9.1L3.27,4.27M16.05,6A7,7 0 0,1 23.05,13A5,5 0 0,1 18.05,18L16.64,16.59C17.5,16.21 18.11,15.4 18.11,14.44A2.56,2.56 0 0,0 15.55,11.88H14.26L14.05,10.86A5,5 0 0,0 9.23,7.03L7.81,5.61C9.46,4.59 11.44,4 13.55,4C15.9,4 18.06,4.88 19.65,6.35C21.27,7.84 22.17,9.85 22.17,12C22.17,14.12 21.31,16.08 19.85,17.58L18.43,16.16C19.45,15.15 20.05,13.78 20.05,12.31A5.31,5.31 0 0,0 14.74,7A5.33,5.33 0 0,0 10.65,10.1L9.23,8.68C10.64,7.23 12.62,6.31 14.74,6.31C15.78,6.31 16.78,6.57 17.66,7.03L16.05,6Z"); // WiFi off
+                                }
+                                else
+                                {
+                                    qrStatusIndicator.Visibility = System.Windows.Visibility.Collapsed;
+                                }
+                            }
+                            else
+                            {
+                                // Hide indicator if no specific state
+                                qrStatusIndicator.Visibility = System.Windows.Visibility.Collapsed;
+                            }
+                        }
+                        
+                        Log.Debug($"QR button state updated: HasQR={hasQr}, Message={message}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error updating QR button state: {ex.Message}");
+            }
+        }
+        
+        private void OnUpdateSmsButtonState(bool enabled, string message)
+        {
+            try
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    // Don't override button states in gallery mode - gallery mode manages its own button states
+                    if (_isInGalleryMode && _currentGallerySession != null)
+                    {
+                        Log.Debug($"Ignoring SMS button state update in gallery mode: Enabled={enabled}, Message={message}");
+                        return;
+                    }
+                    
+                    if (smsButton != null)
+                    {
+                        smsButton.IsEnabled = enabled;
+                        smsButton.ToolTip = message;
+                        smsButton.Opacity = enabled ? 1.0 : 0.6;
+                        
+                        // Update visual indicator based on message content
+                        if (smsStatusIndicator != null && smsStatusIcon != null)
+                        {
+                            if (message.ToLowerInvariant().Contains("ready") || message.ToLowerInvariant().Contains("available") || (enabled && message.ToLowerInvariant().Contains("sms")))
+                            {
+                                // Online and ready - green checkmark
+                                smsStatusIndicator.Visibility = System.Windows.Visibility.Visible;
+                                smsStatusIndicator.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 175, 80)); // Green
+                                smsStatusIcon.Data = System.Windows.Media.Geometry.Parse("M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"); // Checkmark
+                            }
+                            else if (message.ToLowerInvariant().Contains("queued") || message.ToLowerInvariant().Contains("queue") || message.ToLowerInvariant().Contains("offline"))
+                            {
+                                // Will be queued - orange clock
+                                smsStatusIndicator.Visibility = System.Windows.Visibility.Visible;
+                                smsStatusIndicator.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 152, 0)); // Orange
+                                smsStatusIcon.Data = System.Windows.Media.Geometry.Parse("M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.2,16.2L11,13V7H12.5V12.2L17,14.9L16.2,16.2Z"); // Clock
+                            }
+                            else if (!enabled)
+                            {
+                                // Disabled - red X
+                                smsStatusIndicator.Visibility = System.Windows.Visibility.Visible;
+                                smsStatusIndicator.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(244, 67, 54)); // Red
+                                smsStatusIcon.Data = System.Windows.Media.Geometry.Parse("M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"); // X
+                            }
+                            else
+                            {
+                                // Hide indicator if no specific state
+                                smsStatusIndicator.Visibility = System.Windows.Visibility.Collapsed;
+                            }
+                        }
+                        
+                        Log.Debug($"SMS button state updated: Enabled={enabled}, Message={message}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error updating SMS button state: {ex.Message}");
+            }
+        }
+        
         #endregion
         
         #region Template Selection UI Handlers - THIN
@@ -5249,6 +5794,303 @@ namespace Photobooth.Pages
             // Route to business service
             _templateSelectionService?.CancelSelection();
         }
+        #endregion
+        
+        #region Info Panel Event Handlers - Clean Architecture
+        
+        /// <summary>
+        /// Handle printer status updates from InfoPanelService (UI updates only)
+        /// </summary>
+        private void OnInfoPanelPrinterStatusUpdated(object sender, PrinterStatusUpdatedEventArgs e)
+        {
+            try
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    var status = e.Status;
+                    
+                    // Update printer name
+                    printerNameText.Text = status.Name;
+                    
+                    // Update connection status
+                    printerConnectionText.Text = status.ConnectionText;
+                    printerConnectionText.Foreground = new SolidColorBrush(status.ConnectionColor);
+                    
+                    // Update status
+                    printerStatusText.Text = status.StatusText;
+                    printerStatusIndicator.Background = new SolidColorBrush(status.StatusColor);
+                    printerStatusText.Foreground = new SolidColorBrush(status.StatusColor);
+                    
+                    // Update queue count
+                    printerQueueText.Text = status.QueueCount.ToString();
+                    
+                    // Update media remaining
+                    if (status.ShowMediaRemaining)
+                    {
+                        mediaRemainingPanel.Visibility = Visibility.Visible;
+                        mediaRemainingText.Text = status.MediaRemaining.ToString();
+                        mediaTypeText.Text = status.MediaTypeText;
+                        
+                        // Color based on remaining count
+                        var mediaColor = status.MediaRemaining > 100 ? Colors.LimeGreen 
+                                       : status.MediaRemaining > 50 ? Colors.Orange 
+                                       : Colors.Red;
+                        mediaRemainingText.Foreground = new SolidColorBrush(mediaColor);
+                    }
+                    else
+                    {
+                        mediaRemainingPanel.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    // Update error display
+                    if (status.HasError && !string.IsNullOrEmpty(status.ErrorMessage))
+                    {
+                        printerErrorText.Text = status.ErrorMessage;
+                        printerErrorText.Visibility = Visibility.Visible;
+                    }
+                    else
+                    {
+                        printerErrorText.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    Log.Debug($"UI updated with printer status: {status.Name} - {status.StatusText}");
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error updating printer status UI: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Handle cloud sync status updates from InfoPanelService (UI updates only)
+        /// </summary>
+        private void OnInfoPanelCloudSyncStatusUpdated(object sender, CloudSyncStatusUpdatedEventArgs e)
+        {
+            try
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    var status = e.Status;
+                    
+                    // Update status text and color
+                    cloudSyncStatusText.Text = status.StatusText;
+                    cloudSyncStatusText.Foreground = new SolidColorBrush(status.StatusColor);
+                    
+                    // Update bucket text and color
+                    cloudSyncBucketText.Text = status.BucketText;
+                    cloudSyncBucketText.Foreground = new SolidColorBrush(status.BucketColor);
+                    
+                    // Update icon color
+                    cloudSyncIcon.Foreground = new SolidColorBrush(status.IconColor);
+                    
+                    // Update upload progress visibility
+                    cloudUploadStatusPanel.Visibility = status.ShowUploadProgress ? Visibility.Visible : Visibility.Collapsed;
+                    
+                    Log.Debug($"UI updated with cloud sync status: {status.StatusText}");
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error updating cloud sync status UI: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Handle camera status updates from InfoPanelService (UI updates only)
+        /// </summary>
+        private void OnInfoPanelCameraStatusUpdated(object sender, CameraStatusUpdatedEventArgs e)
+        {
+            try
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    cameraStatusText.Text = e.Status;
+                    
+                    // Color based on connection status
+                    var color = e.IsConnected ? Colors.LimeGreen : Colors.Orange;
+                    cameraStatusText.Foreground = new SolidColorBrush(color);
+                    
+                    Log.Debug($"UI updated with camera status: {e.Status}");
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error updating camera status UI: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Handle photo count updates from InfoPanelService (UI updates only)
+        /// </summary>
+        private void OnInfoPanelPhotoCountUpdated(object sender, PhotoCountUpdatedEventArgs e)
+        {
+            try
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    photoCountText.Text = e.DisplayText;
+                    photoCountText.Visibility = e.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+                    
+                    Log.Debug($"UI updated with photo count: {e.PhotoCount}, visible: {e.IsVisible}");
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error updating photo count UI: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Handle sync progress updates from InfoPanelService (UI updates only)
+        /// </summary>
+        private void OnInfoPanelSyncProgressUpdated(object sender, SyncProgressUpdatedEventArgs e)
+        {
+            try
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    // Update pending count
+                    syncPendingCount.Text = e.PendingText;
+                    syncPendingCount.Visibility = e.ShowPendingCount ? Visibility.Visible : Visibility.Collapsed;
+                    
+                    // Update upload progress
+                    if (e.ShowUploadProgress)
+                    {
+                        syncUploadProgress.Value = e.Progress;
+                        syncUploadProgress.Visibility = Visibility.Visible;
+                        cloudUploadStatusPanel.Visibility = Visibility.Visible;
+                        cloudUploadStatusText.Text = e.UploadStatusText;
+                    }
+                    else
+                    {
+                        syncUploadProgress.Visibility = Visibility.Collapsed;
+                        cloudUploadStatusPanel.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    Log.Debug($"UI updated with sync progress: {e.PendingCount} pending, {e.Progress}% progress");
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error updating sync progress UI: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #region Queue Service Event Handlers
+        
+        private void OnQueueStatusChanged(PhotoboothQueueStatus status)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                Log.Debug($"Queue status changed - Pending SMS: {status.PendingSMSCount}, Waiting for URLs: {status.SessionsWaitingForUrls}");
+                // Only update SMS indicator based on queue status
+                // QR indicator should only be updated by OnQRCodeVisibilityChanged for the specific session
+                UpdateSMSStatusIndicator(status.PendingSMSCount == 0, status.PendingSMSCount > 0 ? "SMS queued" : "SMS ready");
+                
+                // Don't update QR indicator here as it's session-specific
+                // The queue having items doesn't mean THIS session's QR isn't ready
+            });
+        }
+        
+        private void OnQRCodeVisibilityChanged(string sessionId, bool isVisible)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                // Only update indicator if this is for the current session
+                var currentSessionId = _isInGalleryMode ? _currentGallerySession?.SessionName : _sessionService?.CurrentSessionId;
+                
+                if (sessionId == currentSessionId)
+                {
+                    Log.Debug($"QR visibility changed for current session {sessionId}: {isVisible}");
+                    UpdateQRStatusIndicator(isVisible, isVisible ? "QR code ready" : "Processing QR code...");
+                }
+                else
+                {
+                    Log.Debug($"QR visibility changed for different session {sessionId} (current: {currentSessionId}): {isVisible} - ignoring");
+                }
+            });
+        }
+        
+        private void OnSMSProcessed(string sessionId)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                Log.Debug($"SMS processed for session {sessionId}");
+                UpdateSMSStatusIndicator(true, "SMS ready");
+            });
+        }
+        
+        private void UpdateQRStatusIndicator(bool isReady, string message)
+        {
+            if (qrStatusIndicator != null && qrStatusIcon != null)
+            {
+                if (isReady)
+                {
+                    // QR ready - green checkmark
+                    qrStatusIndicator.Visibility = Visibility.Visible;
+                    qrStatusIndicator.Background = new SolidColorBrush(Color.FromRgb(76, 175, 80)); // Green
+                    qrStatusIcon.Data = Geometry.Parse("M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"); // Checkmark
+                }
+                else if (message.ToLowerInvariant().Contains("processing") || message.ToLowerInvariant().Contains("uploading"))
+                {
+                    // Processing - orange cloud upload
+                    qrStatusIndicator.Visibility = Visibility.Visible;
+                    qrStatusIndicator.Background = new SolidColorBrush(Color.FromRgb(255, 152, 0)); // Orange
+                    qrStatusIcon.Data = Geometry.Parse("M14,13V17H10V13H7L12,8L17,13M19.35,10.03C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.03C2.34,8.36 0,10.9 0,14A6,6 0 0,0 6,20H19A5,5 0 0,0 24,15C24,12.36 21.95,10.22 19.35,10.03Z"); // Cloud upload
+                }
+                else
+                {
+                    // Not ready - hide
+                    qrStatusIndicator.Visibility = Visibility.Collapsed;
+                }
+                Log.Debug($"QR indicator updated - Ready: {isReady}, Message: {message}");
+            }
+            
+            // Update button enabled state based on QR readiness
+            if (qrButton != null)
+            {
+                qrButton.IsEnabled = isReady;
+                Log.Debug($"QR button enabled state updated: {isReady}");
+            }
+        }
+        
+        private void UpdateSMSStatusIndicator(bool isReady, string message)
+        {
+            if (smsStatusIndicator != null && smsStatusIcon != null)
+            {
+                if (isReady)
+                {
+                    // SMS ready - green checkmark
+                    smsStatusIndicator.Visibility = Visibility.Visible;
+                    smsStatusIndicator.Background = new SolidColorBrush(Color.FromRgb(76, 175, 80)); // Green
+                    smsStatusIcon.Data = Geometry.Parse("M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"); // Checkmark
+                }
+                else if (message.ToLowerInvariant().Contains("queued") || message.ToLowerInvariant().Contains("offline"))
+                {
+                    // Queued - orange clock
+                    smsStatusIndicator.Visibility = Visibility.Visible;
+                    smsStatusIndicator.Background = new SolidColorBrush(Color.FromRgb(255, 152, 0)); // Orange
+                    smsStatusIcon.Data = Geometry.Parse("M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.2,16.2L11,13V7H12.5V12.2L17,14.9L16.2,16.2Z"); // Clock
+                }
+                else
+                {
+                    // Not ready - hide
+                    smsStatusIndicator.Visibility = Visibility.Collapsed;
+                }
+                Log.Debug($"SMS indicator updated - Ready: {isReady}, Message: {message}");
+            }
+            
+            // Update SMS button enabled state - SMS is always enabled for queuing
+            if (smsButton != null)
+            {
+                smsButton.IsEnabled = true; // SMS always enabled to allow queuing
+                Log.Debug("SMS button enabled state updated: always true (allows queuing)");
+            }
+        }
+        
         #endregion
         
         #endregion
