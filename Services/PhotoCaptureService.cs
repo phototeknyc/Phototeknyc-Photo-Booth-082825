@@ -285,9 +285,15 @@ namespace Photobooth.Services
         /// </summary>
         private void SavePhotoToDatabase(string fileName)
         {
+            Log.Debug($"★★★ SavePhotoToDatabase called: fileName={fileName}, IsRetakingPhoto={IsRetakingPhoto}, databaseOperations={databaseOperations != null}");
             if (!IsRetakingPhoto && databaseOperations != null)
             {
+                Log.Debug($"★★★ Calling databaseOperations.SavePhoto with: {fileName}, Index={CurrentPhotoIndex}, Type='Original'");
                 databaseOperations.SavePhoto(fileName, CurrentPhotoIndex, "Original");
+            }
+            else
+            {
+                Log.Debug($"★★★ NOT saving to database: IsRetakingPhoto={IsRetakingPhoto}, databaseOperations={databaseOperations != null}");
             }
         }
         

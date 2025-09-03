@@ -68,6 +68,7 @@ namespace Photobooth.Services
         {
             try
             {
+                Log.Debug($"★★★ DatabaseOperations.SavePhoto called: filePath={filePath}, sessionId={currentDatabaseSessionId}, fileExists={File.Exists(filePath)}");
                 if (currentDatabaseSessionId.HasValue && File.Exists(filePath))
                 {
                     string fileName = Path.GetFileName(filePath);
@@ -87,12 +88,17 @@ namespace Photobooth.Services
                         CreatedDate = DateTime.Now
                     };
                     
+                    Log.Debug($"★★★ Calling database.SavePhoto with SessionId={currentDatabaseSessionId.Value}, PhotoType={photoType}");
                     int photoId = database.SavePhoto(photoData);
                     
                     // Track photo ID for this session
                     currentSessionPhotoIds.Add(photoId);
                     
-                    Log.Debug($"DatabaseOperations: Saved photo {photoId} to session {currentDatabaseSessionId}");
+                    Log.Debug($"★★★ DatabaseOperations: Successfully saved photo {photoId} to session {currentDatabaseSessionId}");
+                }
+                else
+                {
+                    Log.Error($"★★★ DatabaseOperations.SavePhoto SKIPPED: SessionId={currentDatabaseSessionId.HasValue}, FileExists={File.Exists(filePath)}");
                 }
             }
             catch (Exception ex)
