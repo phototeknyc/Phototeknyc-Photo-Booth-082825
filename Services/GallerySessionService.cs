@@ -58,6 +58,9 @@ namespace Photobooth.Services
                     continue;
                 }
                 
+                // Debug logging for photo types
+                Log.Debug($"  Photo type '{photo.PhotoType}' will be processed");
+                
                 // Determine action based on photo type
                 var action = DeterminePhotoAction(photo, photos);
                 if (action != null)
@@ -106,8 +109,10 @@ namespace Photobooth.Services
                     
                 case "ORIG":
                 case "Original":
+                case "originals":  // Add support for 'originals' type from database
                 default:
                     action.Action = "AddPhoto";
+                    Log.Debug($"  Photo type '{photo.PhotoType}' mapped to AddPhoto action");
                     break;
             }
             

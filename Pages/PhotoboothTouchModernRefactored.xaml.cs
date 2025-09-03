@@ -727,16 +727,24 @@ namespace Photobooth.Pages
         
         private void ProcessPhotoLoadAction(PhotoLoadAction action)
         {
+            Log.Debug($"ProcessPhotoLoadAction: Action={action.Action}, FilePath={action.FilePath}, PhotoType={action.PhotoType}");
+            
             switch (action.Action)
             {
                 case "AddGif":
+                    Log.Debug($"  Adding GIF thumbnail for: {action.FilePath}");
                     AddGifThumbnailForGallery(action.FilePath, action.ThumbnailPath);
                     break;
                 case "AddComposed":
+                    Log.Debug($"  Adding composed thumbnail for: {action.FilePath}");
                     AddComposedThumbnail(action.FilePath);
                     break;
                 case "AddPhoto":
+                    Log.Debug($"  Adding original photo thumbnail for: {action.FilePath}");
                     AddPhotoThumbnail(action.FilePath);
+                    break;
+                default:
+                    Log.Debug($"  Unknown action: {action.Action}");
                     break;
             }
         }
@@ -3950,11 +3958,20 @@ namespace Photobooth.Pages
             {
                 Log.Debug($"AddPhotoThumbnail: Adding thumbnail for {imagePath}");
                 
+                // First check if the file exists
+                if (!File.Exists(imagePath))
+                {
+                    Log.Error($"AddPhotoThumbnail: File does not exist: {imagePath}");
+                    return;
+                }
+                
                 if (photosContainer == null)
                 {
                     Log.Error("AddPhotoThumbnail: photosContainer is null!");
                     return;
                 }
+                
+                Log.Debug($"AddPhotoThumbnail: File exists, creating thumbnail. Container has {photosContainer.Children.Count} children before adding");
                 
                 // Simple UI-only thumbnail creation (business logic moved to services)
                 var bitmap = new BitmapImage();
@@ -3986,7 +4003,7 @@ namespace Photobooth.Pages
                 
                 photosContainer.Children.Add(border);
                 
-                Log.Debug($"AddPhotoThumbnail: Successfully added thumbnail. Container now has {photosContainer.Children.Count} children");
+                Log.Debug($"★★★ AddPhotoThumbnail: Successfully added ORIGINAL photo thumbnail. Container now has {photosContainer.Children.Count} children");
                 
                 // Check visibility
                 var visibility = photosContainer.Visibility;
