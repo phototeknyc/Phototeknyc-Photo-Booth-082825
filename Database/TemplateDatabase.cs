@@ -2100,6 +2100,8 @@ namespace Photobooth.Database
         
         public List<PhotoSessionData> GetPhotoSessions(int? eventId = null, int limit = 100, int offset = 0)
         {
+            System.Diagnostics.Debug.WriteLine($"★★★ GetPhotoSessions called with eventId={eventId}, limit={limit}, offset={offset}");
+            
             var sessions = new List<PhotoSessionData>();
             
             using (var connection = new SQLiteConnection(connectionString))
@@ -2117,6 +2119,8 @@ namespace Photobooth.Database
                     WHERE ps.IsActive = 1" + (eventId.HasValue ? " AND ps.EventId = @eventId" : "") + @"
                     ORDER BY ps.StartTime DESC
                     LIMIT @limit OFFSET @offset";
+                    
+                System.Diagnostics.Debug.WriteLine($"★★★ SQL Query will filter by eventId: {eventId.HasValue}, eventId value: {eventId}");
                 
                 using (var command = new SQLiteCommand(selectSessions, connection))
                 {
@@ -2129,12 +2133,15 @@ namespace Photobooth.Database
                     {
                         while (reader.Read())
                         {
-                            sessions.Add(MapReaderToPhotoSessionData(reader));
+                            var session = MapReaderToPhotoSessionData(reader);
+                            sessions.Add(session);
+                            System.Diagnostics.Debug.WriteLine($"★★★ Found session: Id={session.Id}, EventId={session.EventId}, Name={session.SessionName}");
                         }
                     }
                 }
             }
             
+            System.Diagnostics.Debug.WriteLine($"★★★ GetPhotoSessions returning {sessions.Count} sessions for eventId={eventId}");
             return sessions;
         }
         

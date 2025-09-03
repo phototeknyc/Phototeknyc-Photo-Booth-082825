@@ -90,9 +90,13 @@ namespace Photobooth.Services
         public FilterType SelectedFilter => _selectedFilter;
         #endregion
 
-        public PhotoboothSessionService()
+        public PhotoboothSessionService() : this(new DatabaseOperations())
         {
-            _databaseOperations = new DatabaseOperations();
+        }
+
+        public PhotoboothSessionService(DatabaseOperations databaseOperations)
+        {
+            _databaseOperations = databaseOperations ?? new DatabaseOperations();
             _photoCaptureService = new PhotoCaptureService(_databaseOperations);
             _sessionManager = new SessionManager();
             _filterService = new PhotoFilterServiceHybrid();
@@ -796,6 +800,10 @@ namespace Photobooth.Services
                 {
                     CompletedSession = completedSession
                 });
+
+                // End the database session to mark it as complete
+                _databaseOperations.EndSession();
+                Log.Debug("PhotoboothSessionService: Database session ended");
 
                 Log.Debug("PhotoboothSessionService: Session completed successfully");
                 

@@ -27,6 +27,7 @@ namespace Photobooth.Services
         private DateTime _lastRefresh;
         private readonly TimeSpan _cacheTimeout = TimeSpan.FromMinutes(5);
         private readonly Database.TemplateDatabase _database;
+        private int? _currentEventId;
         #endregion
 
         public GalleryBrowserService()
@@ -43,6 +44,18 @@ namespace Photobooth.Services
                     "Photobooth"
                 );
             }
+        }
+
+        /// <summary>
+        /// Set the current event ID for filtering sessions
+        /// </summary>
+        public void SetCurrentEventId(int? eventId)
+        {
+            System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Setting current event ID to {eventId}");
+            _currentEventId = eventId;
+            // Clear cache when event changes to force reload
+            _cachedSessions = null;
+            _lastRefresh = DateTime.MinValue;
         }
 
         /// <summary>
@@ -281,11 +294,19 @@ namespace Photobooth.Services
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Loading sessions from database (offset: {offset}, limit: {limit})");
+                System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Loading sessions from database for eventId={_currentEventId} (offset: {offset}, limit: {limit})");
+                
+                // Don't load any sessions if no event is selected
+                if (!_currentEventId.HasValue)
+                {
+                    System.Diagnostics.Debug.WriteLine("GalleryBrowserService: No event selected, returning empty list");
+                    return new List<GallerySessionInfo>();
+                }
+                
                 var sessions = new List<GallerySessionInfo>();
                 
-                // Get only recent photo sessions from database with limit for faster loading
-                var dbSessions = _database.GetPhotoSessions(limit: limit, offset: offset);
+                // Get only recent photo sessions from database filtered by event ID
+                var dbSessions = _database.GetPhotoSessions(eventId: _currentEventId.Value, limit: limit, offset: offset);
                 
                 // Process sessions quickly without loading all photo details
                 foreach (var dbSession in dbSessions)

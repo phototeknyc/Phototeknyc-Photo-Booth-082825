@@ -445,15 +445,6 @@
         <!-- Action Buttons Area (Row 2) -->
         <Grid Grid.Row="2" Margin="20,0,20,20">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <!-- Home Button -->
-                <Button x:Name="homeButton"
-                        Content="🏠 HOME"
-                        Style="{StaticResource HomeButtonStyle}"
-                        Width="180"
-                        Height="70"
-                        FontSize="20"
-                        Visibility="Collapsed"
-                        Click="HomeButton_Click"/>
                 
                 <!-- Unified Action Buttons Panel (works for both session completion and gallery) -->
                 <StackPanel x:Name="actionButtonsPanel" 
@@ -578,16 +569,6 @@
                         Visibility="Collapsed"
                         Click="SettingsButton_Click"/>
                 
-                <!-- Gallery Button -->
-                <Button x:Name="galleryButton"
-                        Content="📸 GALLERY"
-                        Style="{StaticResource TouchButtonStyle}"
-                        Background="#FF9800"
-                        Width="180"
-                        Height="70"
-                        FontSize="20"
-                        Visibility="Collapsed"
-                        Click="GalleryButton_Click"/>
                 
                 <!-- Removed duplicate gallery navigation panel - using unified actionButtonsPanel instead -->
             </StackPanel>

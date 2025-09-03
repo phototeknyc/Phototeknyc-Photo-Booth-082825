@@ -57,15 +57,28 @@ namespace Photobooth.Services
         /// <summary>
         /// Show the event gallery in the main view (not overlay)
         /// </summary>
-        public async Task ShowGalleryAsync()
+        public async Task ShowGalleryAsync(int? eventId = null)
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("EventGalleryService: Showing gallery in main view");
+                System.Diagnostics.Debug.WriteLine($"EventGalleryService: Showing gallery in main view for eventId: {eventId}");
+                
+                // Don't show gallery if no event is selected
+                if (!eventId.HasValue)
+                {
+                    System.Diagnostics.Debug.WriteLine("EventGalleryService: No event selected, not showing gallery");
+                    GalleryError?.Invoke(this, new GalleryErrorEventArgs 
+                    { 
+                        Error = new InvalidOperationException("No event selected"), 
+                        Operation = "ShowGallery" 
+                    });
+                    return;
+                }
+                
                 IsGalleryVisible = true;
                 
-                // Load gallery sessions
-                var sessions = await GetRecentSessionsAsync();
+                // Load gallery sessions for the specific event
+                var sessions = await GetRecentSessionsAsync(eventId);
                 
                 if (sessions != null && sessions.Any())
                 {
@@ -134,18 +147,26 @@ namespace Photobooth.Services
         /// <summary>
         /// Get recent sessions from the gallery
         /// </summary>
-        private async Task<List<SessionGalleryData>> GetRecentSessionsAsync()
+        private async Task<List<SessionGalleryData>> GetRecentSessionsAsync(int? eventId = null)
         {
             return await Task.Run(() =>
             {
                 var sessions = new List<SessionGalleryData>();
                 
+                // If no event is selected, return empty list
+                if (!eventId.HasValue)
+                {
+                    System.Diagnostics.Debug.WriteLine("EventGalleryService: No eventId provided, returning empty session list");
+                    return sessions;
+                }
+                
                 try
                 {
-                    System.Diagnostics.Debug.WriteLine("EventGalleryService: Loading sessions from database");
+                    System.Diagnostics.Debug.WriteLine($"★★★ EventGalleryService: Loading sessions from database for eventId: {eventId}");
                     
-                    // Get sessions from database
-                    var dbSessions = _database.GetPhotoSessions();
+                    // Get sessions from database, filtered by event (required)
+                    var dbSessions = _database.GetPhotoSessions(eventId.Value);
+                    System.Diagnostics.Debug.WriteLine($"★★★ EventGalleryService: Database returned {dbSessions.Count} sessions");
                     
                     // Sort by date and take recent ones
                     var recentSessions = dbSessions

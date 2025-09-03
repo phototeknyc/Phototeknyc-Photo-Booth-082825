@@ -39,12 +39,29 @@ namespace Photobooth.Controls
         #region Initialization
         private void InitializeServices()
         {
-            // Use the browser service for all data operations
-            _browserService = new GalleryBrowserService();
+            // Service will be injected via SetBrowserService method
+            // This ensures we use the same instance with the correct event ID
+        }
+        
+        /// <summary>
+        /// Set the browser service instance (dependency injection)
+        /// </summary>
+        public void SetBrowserService(GalleryBrowserService browserService)
+        {
+            // Unsubscribe from old service if exists
+            if (_browserService != null)
+            {
+                _browserService.GalleryBrowseLoaded -= OnGalleryBrowseLoaded;
+                _browserService.GalleryBrowseError -= OnGalleryBrowseError;
+            }
             
-            // Subscribe to service events
-            _browserService.GalleryBrowseLoaded += OnGalleryBrowseLoaded;
-            _browserService.GalleryBrowseError += OnGalleryBrowseError;
+            // Set new service and subscribe to events
+            _browserService = browserService;
+            if (_browserService != null)
+            {
+                _browserService.GalleryBrowseLoaded += OnGalleryBrowseLoaded;
+                _browserService.GalleryBrowseError += OnGalleryBrowseError;
+            }
         }
         #endregion
 
@@ -56,6 +73,14 @@ namespace Photobooth.Controls
         {
             try
             {
+                // Ensure browser service is set
+                if (_browserService == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("GalleryBrowserModal: ERROR - Browser service not set! Use SetBrowserService() first.");
+                    UpdateStatus("Gallery service not configured");
+                    return;
+                }
+                
                 IsOpen = true;
                 Visibility = Visibility.Visible;
                 
@@ -160,8 +185,25 @@ namespace Photobooth.Controls
 
         private async void RefreshGallery_Click(object sender, RoutedEventArgs e)
         {
-            UpdateStatus("Refreshing gallery...");
-            await LoadGalleryData();
+            try
+            {
+                // Ensure browser service is set
+                if (_browserService == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("GalleryBrowserModal: Cannot refresh - Browser service not set");
+                    UpdateStatus("Gallery service not configured");
+                    return;
+                }
+                
+                UpdateStatus("Refreshing gallery...");
+                // Force refresh to reload from database
+                await _browserService.LoadGallerySessionsAsync(forceRefresh: true);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"GalleryBrowserModal: Error refreshing gallery: {ex.Message}");
+                UpdateStatus("Failed to refresh gallery");
+            }
         }
         #endregion
 
@@ -170,6 +212,14 @@ namespace Photobooth.Controls
         {
             try
             {
+                // Ensure browser service is set
+                if (_browserService == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("GalleryBrowserModal: Cannot load gallery - Browser service not set");
+                    UpdateStatus("Gallery service not configured");
+                    return;
+                }
+                
                 UpdateStatus("Loading sessions...");
                 
                 // Let the service handle all the data loading

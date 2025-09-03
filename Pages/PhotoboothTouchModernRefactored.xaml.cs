@@ -175,8 +175,12 @@ namespace Photobooth.Pages
             // Core camera system
             _cameraManager = CameraSessionManager.Instance;
             
-            // Initialize CLEAN SERVICES that do all the work
-            _sessionService = new Services.PhotoboothSessionService();
+            // Use a single DatabaseOperations instance to avoid multiple database connections
+            _databaseOps = new DatabaseOperations();
+            _database = _databaseOps; // Use same instance
+            
+            // Initialize CLEAN SERVICES that do all the work, sharing the DatabaseOperations instance
+            _sessionService = new Services.PhotoboothSessionService(_databaseOps);
             _workflowService = new Services.PhotoboothWorkflowService(_cameraManager, _sessionService);
             _uiService = new Services.PhotoboothUIService();
             _compositionService = new Services.PhotoCompositionService();
@@ -231,9 +235,8 @@ namespace Photobooth.Pages
                 _shareService,
                 _sharingUIService
             );
-            // Use a single DatabaseOperations instance to avoid multiple database connections
-            _databaseOps = new DatabaseOperations();
-            _database = _databaseOps; // Use same instance
+            
+            // Initialize PhotoCaptureService with shared DatabaseOperations instance
             _photoCaptureService = new PhotoCaptureService(_databaseOps); // Share the instance
             // Share the PhotoCaptureService instance with SessionService to maintain retake state
             _sessionService.SetPhotoCaptureService(_photoCaptureService);
@@ -403,6 +406,8 @@ namespace Photobooth.Pages
             {
                 GalleryBrowserModal.SessionSelected += OnGallerySessionSelected;
                 GalleryBrowserModal.ModalClosed += OnGalleryModalClosed;
+                // Set the shared browser service instance so it uses the correct event filtering
+                GalleryBrowserModal.SetBrowserService(_galleryBrowserService);
             }
             
             // Subscribe to camera events like original PhotoboothTouchModern
@@ -738,6 +743,13 @@ namespace Photobooth.Pages
                 case "AddComposed":
                     Log.Debug($"  Adding composed thumbnail for: {action.FilePath}");
                     AddComposedThumbnail(action.FilePath);
+                    
+                    // Also display the composed image in live view like we do for regular sessions
+                    if (FileValidationService.Instance.ValidateFilePath(action.FilePath))
+                    {
+                        Log.Debug($"  Displaying composed image in live view: {action.FilePath}");
+                        _uiService.DisplayImage(action.FilePath);
+                    }
                     break;
                 case "AddPhoto":
                     Log.Debug($"  Adding original photo thumbnail for: {action.FilePath}");
@@ -1196,8 +1208,7 @@ namespace Photobooth.Pages
                         Log.Error("actionButtonsPanel is NULL - cannot show action buttons!");
                     }
                     
-                    // Show Gallery button to view saved sessions
-                    if (galleryButton != null) galleryButton.Visibility = Visibility.Visible;
+                    // Gallery button removed - sessions can be accessed through main gallery
                     
                     // Start auto-clear timer through service if enabled
                     if (Properties.Settings.Default.AutoClearSession)
@@ -2274,8 +2285,7 @@ namespace Photobooth.Pages
                     actionButtonsPanel.Visibility = Visibility.Collapsed;
                     Log.Debug("Action buttons panel hidden after session clear");
                 }
-                if (homeButton != null) homeButton.Visibility = Visibility.Collapsed;
-                if (galleryButton != null) galleryButton.Visibility = Visibility.Collapsed;
+                // Home and gallery buttons removed from sharing overlay
                 
                 // Reset gallery mode when session is cleared
                 _isInGalleryMode = false;
@@ -3582,7 +3592,15 @@ namespace Photobooth.Pages
         {
             try
             {
-                Log.Debug("Gallery button clicked - checking lock state");
+                Log.Debug("Gallery button clicked - checking event selection and lock state");
+                
+                // Check if an event is selected
+                if (_currentEvent == null)
+                {
+                    Log.Debug("No event selected - gallery cannot be shown");
+                    _uiService?.UpdateStatus("Please select an event first");
+                    return;
+                }
                 
                 // Check if interface is locked
                 var pinLockService = PinLockService.Instance;
@@ -3600,6 +3618,14 @@ namespace Photobooth.Pages
                                 UpdateLockButtonAppearance(false);
                                 UpdateSettingsAccessibility(true);
                                 
+                                // Check again if event is selected after PIN unlock
+                                if (_currentEvent == null)
+                                {
+                                    Log.Debug("No event selected after PIN unlock - gallery cannot be shown");
+                                    _uiService?.UpdateStatus("Please select an event first");
+                                    return;
+                                }
+                                
                                 // Hide session completion UI
                                 if (doneButton != null)
                                     doneButton.Visibility = Visibility.Collapsed;
@@ -3607,8 +3633,8 @@ namespace Photobooth.Pages
                                 // Stop live view for gallery mode
                                 _liveViewTimer?.Stop();
                                 
-                                // Show gallery using service
-                                await _galleryService?.ShowGalleryAsync();
+                                // Show gallery using service, filtered by current event
+                                await _galleryService?.ShowGalleryAsync(_currentEvent.Id);
                                 
                                 Log.Debug("Gallery unlocked and shown");
                             });
@@ -3624,8 +3650,8 @@ namespace Photobooth.Pages
                 // Stop live view for gallery mode
                 _liveViewTimer?.Stop();
                 
-                // Show gallery using service
-                await _galleryService?.ShowGalleryAsync();
+                // Show gallery using service, filtered by current event (we know it's not null from check above)
+                await _galleryService?.ShowGalleryAsync(_currentEvent.Id);
             }
             catch (Exception ex)
             {
@@ -4980,7 +5006,15 @@ namespace Photobooth.Pages
         {
             try
             {
-                Log.Debug("Gallery preview clicked - checking lock state");
+                Log.Debug("Gallery preview clicked - checking event selection and lock state");
+                
+                // Check if an event is selected
+                if (_currentEvent == null)
+                {
+                    Log.Debug("No event selected - gallery browser cannot be shown");
+                    _uiService?.UpdateStatus("Please select an event first");
+                    return;
+                }
                 
                 // Check if interface is locked
                 var pinLockService = PinLockService.Instance;
@@ -4998,6 +5032,9 @@ namespace Photobooth.Pages
                                 UpdateLockButtonAppearance(false);
                                 UpdateSettingsAccessibility(true);
                                 
+                                // Set the current event ID for filtering
+                                _galleryBrowserService?.SetCurrentEventId(_currentEvent?.Id);
+                                
                                 // Show the gallery browser modal
                                 if (GalleryBrowserModal != null)
                                 {
@@ -5010,6 +5047,9 @@ namespace Photobooth.Pages
                     });
                     return;
                 }
+                
+                // Set the current event ID for filtering
+                _galleryBrowserService?.SetCurrentEventId(_currentEvent?.Id);
                 
                 // Show the gallery browser modal (UI routing only!)
                 if (GalleryBrowserModal != null)

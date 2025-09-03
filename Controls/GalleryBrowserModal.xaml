@@ -14,7 +14,7 @@
         <!-- Session Card Style -->
         <Style x:Key="SessionCardStyle" TargetType="Border">
             <Setter Property="Width" Value="250"/>
-            <Setter Property="Height" Value="300"/>
+            <Setter Property="Height" Value="340"/>
             <Setter Property="Margin" Value="15"/>
             <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="Background" Value="#3E3E3E"/>
@@ -132,7 +132,7 @@
                                     
                                     <Grid>
                                         <!-- Single Thumbnail -->
-                                        <Border Margin="10,10,10,85" 
+                                        <Border Margin="10,10,10,90" 
                                                 CornerRadius="8" 
                                                 ClipToBounds="True">
                                             <Grid>
@@ -163,8 +163,8 @@
                                         <Border VerticalAlignment="Bottom"
                                                 Background="#CC000000"
                                                 CornerRadius="0,0,10,10"
-                                                Height="75">
-                                            <StackPanel Margin="15,10">
+                                                Height="85">
+                                            <StackPanel Margin="12,10">
                                                 <TextBlock Text="{Binding SessionName}" 
                                                            Foreground="White" 
                                                            FontSize="16"
@@ -174,7 +174,7 @@
                                                            Foreground="#CCCCCC" 
                                                            FontSize="14"
                                                            Margin="0,2,0,0"/>
-                                                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                                <StackPanel Orientation="Horizontal" Margin="0,6,0,2">
                                                     <TextBlock Text="📷 " 
                                                                Foreground="#4CAF50" 
                                                                FontSize="12"/>
@@ -223,7 +223,7 @@
                                     Click="RefreshGallery_Click"
                                     Background="#4CAF50"
                                     Foreground="White"
-                                    Padding="15,8"
+                                    Padding="20,10"
                                     Margin="0,0,10,0"
                                     FontSize="14"
                                     BorderThickness="0"
@@ -231,13 +231,14 @@
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border Background="{TemplateBinding Background}" 
-                                                CornerRadius="20">
+                                                CornerRadius="8">
                                             <ContentPresenter HorizontalAlignment="Center" 
-                                                              VerticalAlignment="Center"/>
+                                                              VerticalAlignment="Center"
+                                                              Margin="{TemplateBinding Padding}"/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#66BB6A"/>
+                                                <Setter Property="Background" Value="#5CBF60"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
