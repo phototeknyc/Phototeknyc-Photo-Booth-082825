@@ -2614,7 +2614,18 @@ namespace Photobooth.Pages
                     }
                     else
                     {
-                        DeviceManager.SelectedCameraDevice.StopLiveView();
+                        // Only try to stop live view if camera is connected
+                        if (DeviceManager.SelectedCameraDevice?.IsConnected == true)
+                        {
+                            try
+                            {
+                                DeviceManager.SelectedCameraDevice.StopLiveView();
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Debug($"Failed to stop live view after session clear: {ex.Message}");
+                            }
+                        }
                         _liveViewTimer?.Stop();
                         Log.Debug("Live view stopped after session clear (idle live view disabled)");
                     }

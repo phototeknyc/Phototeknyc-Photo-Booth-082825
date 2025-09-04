@@ -1414,5 +1414,17 @@ namespace Photobooth.Properties {
                 this["MaxCopiesInModal"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool VideoModeLiveViewEnabled {
+            get {
+                return ((bool)(this["VideoModeLiveViewEnabled"]));
+            }
+            set {
+                this["VideoModeLiveViewEnabled"] = value;
+            }
+        }
     }
 }

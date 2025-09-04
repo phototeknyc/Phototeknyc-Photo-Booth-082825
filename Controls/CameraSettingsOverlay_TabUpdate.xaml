@@ -1,0 +1,336 @@
+<!-- This is the tab structure update for CameraSettingsOverlay.xaml -->
+<!-- Replace from line 340 (after </TabControl.Resources>) to line 527 (</ScrollViewer>) -->
+
+                        </TabControl.Resources>
+                        
+                        <!-- Live View Settings Tab -->
+                        <TabItem x:Name="LiveViewTab">
+                            <TabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="👁️" FontSize="16" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Live View" FontSize="14" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </TabItem.Header>
+                            
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel Margin="0,10,20,0">
+                                    
+                                    <!-- Enhanced Live View Controls -->
+                                    <Border Background="#1A1A1A" BorderBrush="#2196F3" BorderThickness="1" 
+                                            CornerRadius="8" Padding="15" Margin="0,0,0,20">
+                                        <StackPanel>
+                                            <TextBlock Text="LIVE VIEW ENHANCEMENT" 
+                                                      FontSize="12" FontWeight="Bold" Foreground="#2196F3" 
+                                                      Margin="0,0,0,10"/>
+                                            
+                                            <!-- Video Mode Toggle -->
+                                            <Grid Margin="0,0,0,10">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="Video Mode Live View" FontSize="14" Foreground="#FFF"/>
+                                                    <TextBlock Text="Real-time camera control" 
+                                                              FontSize="11" Foreground="#888" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                                <CheckBox Grid.Column="1" x:Name="VideoModeLiveViewToggle" 
+                                                          IsChecked="False"
+                                                          Checked="VideoModeLiveViewToggle_Checked"
+                                                          Unchecked="VideoModeLiveViewToggle_Unchecked"
+                                                          Style="{StaticResource ModernToggleSwitch}"/>
+                                            </Grid>
+                                            
+                                            <!-- Visual Enhancement Toggle -->
+                                            <Grid Margin="0,0,0,10">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="Visual Enhancement" FontSize="14" Foreground="#FFF"/>
+                                                    <TextBlock Text="Brighten preview without changing capture" 
+                                                              FontSize="11" Foreground="#888" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                                <CheckBox Grid.Column="1" x:Name="LiveViewControlsToggle" 
+                                                          IsChecked="False"
+                                                          Checked="LiveViewControlsToggle_Checked"
+                                                          Unchecked="LiveViewControlsToggle_Unchecked"
+                                                          Style="{StaticResource ModernToggleSwitch}"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                    
+                                    <!-- Live View Exposure Settings -->
+                                    <TextBlock Text="LIVE VIEW EXPOSURE" FontSize="12" FontWeight="Bold" 
+                                              Foreground="#999" Margin="0,0,0,10"/>
+                                    
+                                    <!-- ISO Setting for Live View -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="ISO (Live View)" FontSize="14" Foreground="#999"/>
+                                            <TextBlock Grid.Column="1" x:Name="LiveViewISOValueText" Text="800" 
+                                                       FontSize="14" Foreground="#2196F3"/>
+                                        </Grid>
+                                        <ComboBox x:Name="LiveViewISOComboBox" FontSize="15" Height="42" Margin="0,8,0,0"
+                                                  Background="{StaticResource SurfacePanelBrush}" 
+                                                  Foreground="White" BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                                  SelectionChanged="LiveViewISOComboBox_SelectionChanged">
+                                            <ComboBoxItem Content="100"/>
+                                            <ComboBoxItem Content="200"/>
+                                            <ComboBoxItem Content="400"/>
+                                            <ComboBoxItem Content="800" IsSelected="True"/>
+                                            <ComboBoxItem Content="1600"/>
+                                            <ComboBoxItem Content="3200"/>
+                                            <ComboBoxItem Content="6400"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    
+                                    <!-- Aperture for Live View -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Aperture (Live View)" FontSize="14" Foreground="#999"/>
+                                            <TextBlock Grid.Column="1" x:Name="LiveViewApertureValueText" Text="f/2.8" 
+                                                       FontSize="14" Foreground="#2196F3"/>
+                                        </Grid>
+                                        <ComboBox x:Name="LiveViewApertureComboBox" FontSize="15" Height="42" Margin="0,8,0,0"
+                                                  Background="{StaticResource SurfacePanelBrush}" 
+                                                  Foreground="White" BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                                  SelectionChanged="LiveViewApertureComboBox_SelectionChanged">
+                                            <ComboBoxItem Content="f/1.4"/>
+                                            <ComboBoxItem Content="f/1.8"/>
+                                            <ComboBoxItem Content="f/2.0"/>
+                                            <ComboBoxItem Content="f/2.8" IsSelected="True"/>
+                                            <ComboBoxItem Content="f/4.0"/>
+                                            <ComboBoxItem Content="f/5.6"/>
+                                            <ComboBoxItem Content="f/8.0"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    
+                                    <!-- Shutter Speed for Live View -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Shutter Speed (Live View)" FontSize="14" Foreground="#999"/>
+                                            <TextBlock Grid.Column="1" x:Name="LiveViewShutterValueText" Text="1/60" 
+                                                       FontSize="14" Foreground="#2196F3"/>
+                                        </Grid>
+                                        <ComboBox x:Name="LiveViewShutterComboBox" FontSize="15" Height="42" Margin="0,8,0,0"
+                                                  Background="{StaticResource SurfacePanelBrush}" 
+                                                  Foreground="White" BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                                  SelectionChanged="LiveViewShutterComboBox_SelectionChanged">
+                                            <ComboBoxItem Content="1/15"/>
+                                            <ComboBoxItem Content="1/30"/>
+                                            <ComboBoxItem Content="1/60" IsSelected="True"/>
+                                            <ComboBoxItem Content="1/125"/>
+                                            <ComboBoxItem Content="1/250"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    
+                                    <!-- Brightness Enhancement Slider -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Brightness Boost" FontSize="14" Foreground="#999"/>
+                                            <TextBlock Grid.Column="1" x:Name="BrightnessValueText" Text="+0" 
+                                                       FontSize="14" Foreground="#2196F3"/>
+                                        </Grid>
+                                        <Slider x:Name="BrightnessSlider" Minimum="-100" Maximum="100" Value="0"
+                                                Style="{StaticResource ModernSlider}" Margin="0,8,0,0"
+                                                ValueChanged="BrightnessSlider_ValueChanged"/>
+                                    </StackPanel>
+                                    
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+                        
+                        <!-- Photo Capture Settings Tab -->
+                        <TabItem x:Name="PhotoCaptureTab" IsSelected="True">
+                            <TabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📸" FontSize="16" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Photo Capture" FontSize="14" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </TabItem.Header>
+                            
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel Margin="0,10,20,0">
+                                    
+                                    <!-- Camera Selection (Shared) -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <TextBlock Text="Camera" FontSize="14" Foreground="#999" Margin="0,0,0,8"/>
+                                        <ComboBox x:Name="CameraComboBox" FontSize="15" Height="42" 
+                                                  Background="{StaticResource SurfacePanelBrush}" 
+                                                  Foreground="White" BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                                  SelectionChanged="CameraComboBox_SelectionChanged"/>
+                                    </StackPanel>
+                                    
+                                    <!-- Image Quality -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <TextBlock Text="Image Quality" FontSize="14" Foreground="#999" Margin="0,0,0,8"/>
+                                        <ComboBox x:Name="ImageQualityComboBox" FontSize="15" Height="42"
+                                                  Background="{StaticResource SurfacePanelBrush}" 
+                                                  Foreground="White" BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                                  SelectionChanged="ImageQualityComboBox_SelectionChanged">
+                                            <ComboBoxItem Content="JPEG Fine" IsSelected="True"/>
+                                            <ComboBoxItem Content="JPEG Normal"/>
+                                            <ComboBoxItem Content="JPEG Basic"/>
+                                            <ComboBoxItem Content="RAW"/>
+                                            <ComboBoxItem Content="RAW + JPEG Fine"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    
+                                    <!-- ISO Setting -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="ISO" FontSize="14" Foreground="#999"/>
+                                            <TextBlock Grid.Column="1" x:Name="ISOValueText" Text="Auto" 
+                                                       FontSize="14" Foreground="#0078D4"/>
+                                        </Grid>
+                                        <ComboBox x:Name="ISOComboBox" FontSize="15" Height="42" Margin="0,8,0,0"
+                                                  Background="{StaticResource SurfacePanelBrush}" 
+                                                  Foreground="White" BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                                  SelectionChanged="ISOComboBox_SelectionChanged">
+                                            <ComboBoxItem Content="Auto" IsSelected="True"/>
+                                            <ComboBoxItem Content="100"/>
+                                            <ComboBoxItem Content="200"/>
+                                            <ComboBoxItem Content="400"/>
+                                            <ComboBoxItem Content="800"/>
+                                            <ComboBoxItem Content="1600"/>
+                                            <ComboBoxItem Content="3200"/>
+                                            <ComboBoxItem Content="6400"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    
+                                    <!-- Aperture (F-Stop) Setting -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Aperture (F-Stop)" FontSize="14" Foreground="#999"/>
+                                            <TextBlock Grid.Column="1" x:Name="ApertureValueText" Text="Auto" 
+                                                       FontSize="14" Foreground="#0078D4"/>
+                                        </Grid>
+                                        <ComboBox x:Name="ApertureComboBox" FontSize="15" Height="42" Margin="0,8,0,0"
+                                                  Background="{StaticResource SurfacePanelBrush}" 
+                                                  Foreground="White" BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                                  SelectionChanged="ApertureComboBox_SelectionChanged">
+                                            <ComboBoxItem Content="Auto" IsSelected="True"/>
+                                            <ComboBoxItem Content="f/1.4"/>
+                                            <ComboBoxItem Content="f/1.8"/>
+                                            <ComboBoxItem Content="f/2.0"/>
+                                            <ComboBoxItem Content="f/2.8"/>
+                                            <ComboBoxItem Content="f/4.0"/>
+                                            <ComboBoxItem Content="f/5.6"/>
+                                            <ComboBoxItem Content="f/8.0"/>
+                                            <ComboBoxItem Content="f/11"/>
+                                            <ComboBoxItem Content="f/16"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    
+                                    <!-- Shutter Speed Setting -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Shutter Speed" FontSize="14" Foreground="#999"/>
+                                            <TextBlock Grid.Column="1" x:Name="ShutterSpeedValueText" Text="Auto" 
+                                                       FontSize="14" Foreground="#0078D4"/>
+                                        </Grid>
+                                        <ComboBox x:Name="ShutterSpeedComboBox" FontSize="15" Height="42" Margin="0,8,0,0"
+                                                  Background="{StaticResource SurfacePanelBrush}" 
+                                                  Foreground="White" BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                                  SelectionChanged="ShutterSpeedComboBox_SelectionChanged">
+                                            <ComboBoxItem Content="Auto" IsSelected="True"/>
+                                            <ComboBoxItem Content="1/15"/>
+                                            <ComboBoxItem Content="1/30"/>
+                                            <ComboBoxItem Content="1/60"/>
+                                            <ComboBoxItem Content="1/125"/>
+                                            <ComboBoxItem Content="1/250"/>
+                                            <ComboBoxItem Content="1/500"/>
+                                            <ComboBoxItem Content="1/1000"/>
+                                            <ComboBoxItem Content="1/2000"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    
+                                    <!-- White Balance Setting -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="White Balance" FontSize="14" Foreground="#999"/>
+                                            <TextBlock Grid.Column="1" x:Name="WhiteBalanceValueText" Text="Auto" 
+                                                       FontSize="14" Foreground="#0078D4"/>
+                                        </Grid>
+                                        <ComboBox x:Name="WhiteBalanceComboBox" FontSize="15" Height="42" Margin="0,8,0,0"
+                                                  Background="{StaticResource SurfacePanelBrush}" 
+                                                  Foreground="White" BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                                  SelectionChanged="WhiteBalanceComboBox_SelectionChanged">
+                                            <ComboBoxItem Content="Auto" IsSelected="True"/>
+                                            <ComboBoxItem Content="Daylight"/>
+                                            <ComboBoxItem Content="Cloudy"/>
+                                            <ComboBoxItem Content="Shade"/>
+                                            <ComboBoxItem Content="Tungsten"/>
+                                            <ComboBoxItem Content="Fluorescent"/>
+                                            <ComboBoxItem Content="Flash"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    
+                                    <!-- Exposure Compensation -->
+                                    <StackPanel Margin="0,0,0,20">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Exposure Compensation" FontSize="14" Foreground="#999"/>
+                                            <TextBlock Grid.Column="1" x:Name="ExposureCompValueText" Text="0 EV" 
+                                                       FontSize="14" Foreground="#0078D4"/>
+                                        </Grid>
+                                        <Slider x:Name="ExposureCompSlider" Minimum="-3" Maximum="3" Value="0"
+                                                TickFrequency="0.33" IsSnapToTickEnabled="True"
+                                                Style="{StaticResource ModernSlider}" Margin="0,8,0,5"
+                                                ValueChanged="ExposureCompSlider_ValueChanged"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="-3 EV" FontSize="12" Foreground="#666" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="0" FontSize="12" Foreground="#666" HorizontalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="+3 EV" FontSize="12" Foreground="#666" HorizontalAlignment="Right"/>
+                                        </Grid>
+                                    </StackPanel>
+                                    
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+                        
+                    </TabControl>

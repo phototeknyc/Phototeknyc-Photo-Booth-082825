@@ -526,25 +526,39 @@ namespace CameraControl.Devices
             {
                 foreach (EosCamera eosCamera in GetEosCameras())
                 {
+                    // Check if this camera is already connected by port or device name
                     bool shouldbeadded =
-                        ConnectedDevices.OfType<CanonSDKBase>().All(camera => camera.PortName != eosCamera.PortName);
+                        ConnectedDevices.OfType<CanonSDKBase>().All(camera => camera.PortName != eosCamera.PortName) &&
+                        ConnectedDevices.All(camera => camera.DeviceName != eosCamera.DeviceDescription);
 
                     if (shouldbeadded)
                     {
-                        Log.Debug("New canon camera found !");
-                        CanonSDKBase camera = new CanonSDKBase();
-                        Log.Debug("Pas 1");
-                        DeviceDescriptor descriptor = new DeviceDescriptor {EosCamera = eosCamera};
-                        descriptor.CameraDevice = camera;
-                        Log.Debug("Pas 2");
-                        camera.Init(eosCamera);
-                        Log.Debug("Pas 3");
-                        ConnectedDevices.Add(camera);
-                        Log.Debug("Pas 4");
-                        _deviceEnumerator.Add(descriptor);
-                        Log.Debug("Pas 5");
-                        NewCameraConnected(camera);
-                        Log.Debug("New canon camera found done!");
+                        try
+                        {
+                            Log.Debug("New canon camera found !");
+                            CanonSDKBase camera = new CanonSDKBase();
+                            Log.Debug("Pas 1");
+                            DeviceDescriptor descriptor = new DeviceDescriptor {EosCamera = eosCamera};
+                            descriptor.CameraDevice = camera;
+                            Log.Debug("Pas 2");
+                            camera.Init(eosCamera);
+                            Log.Debug("Pas 3");
+                            ConnectedDevices.Add(camera);
+                            Log.Debug("Pas 4");
+                            _deviceEnumerator.Add(descriptor);
+                            Log.Debug("Pas 5");
+                            NewCameraConnected(camera);
+                            Log.Debug("New canon camera found done!");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error($"Failed to initialize Canon camera: {ex.Message}");
+                            // Continue with next camera
+                        }
+                    }
+                    else
+                    {
+                        Log.Debug($"Canon camera {eosCamera.DeviceDescription} already connected - skipping");
                     }
                 }
                 //Thread.Sleep(2500);
@@ -879,7 +893,41 @@ namespace CameraControl.Devices
             Log.Debug("Manufacturer :" + cameraDevice.Manufacturer);
             if (CameraConnected != null)
                 CameraConnected(cameraDevice);
-            SelectedCameraDevice = cameraDevice;
+            
+            // Only update SelectedCameraDevice if:
+            // 1. No camera is currently selected (or it's NotConnectedCameraDevice)
+            // 2. The currently selected camera is not connected
+            // 3. This is a Canon SDK camera (preferred over WIA)
+            bool shouldSelectCamera = false;
+            
+            if (SelectedCameraDevice == null || SelectedCameraDevice is NotConnectedCameraDevice)
+            {
+                shouldSelectCamera = true;
+                Log.Debug($"Selecting {cameraDevice.DeviceName} - no camera currently selected");
+            }
+            else if (!SelectedCameraDevice.IsConnected)
+            {
+                shouldSelectCamera = true;
+                Log.Debug($"Selecting {cameraDevice.DeviceName} - current camera not connected");
+            }
+            else if (cameraDevice is CanonSDKBase && !(SelectedCameraDevice is CanonSDKBase) && 
+                     cameraDevice.DeviceName == SelectedCameraDevice.DeviceName)
+            {
+                // Prefer Canon SDK over WIA for the same Canon camera
+                shouldSelectCamera = true;
+                Log.Debug($"Selecting {cameraDevice.DeviceName} (Canon SDK) over WIA driver");
+            }
+            
+            if (shouldSelectCamera)
+            {
+                SelectedCameraDevice = cameraDevice;
+                Log.Debug($"SelectedCameraDevice set to: {cameraDevice.DeviceName} ({cameraDevice.GetType().Name})");
+            }
+            else
+            {
+                Log.Debug($"Not selecting {cameraDevice.DeviceName} - keeping {SelectedCameraDevice.DeviceName}");
+            }
+            
             cameraDevice.PhotoCaptured += cameraDevice_PhotoCaptured;
             cameraDevice.CameraDisconnected += cameraDevice_CameraDisconnected;
         }
@@ -907,16 +955,53 @@ namespace CameraControl.Devices
         [HandleProcessCorruptedStateExceptions]
         public void DisconnectCamera(ICameraDevice cameraDevice)
         {
+            lock (_locker)
+            {
+                // Check if camera is already disconnected
+                if (!ConnectedDevices.Contains(cameraDevice))
+                {
+                    Log.Debug($"Camera {cameraDevice?.DeviceName} already disconnected - skipping");
+                    return;
+                }
+                
+                cameraDevice.PhotoCaptured -= cameraDevice_PhotoCaptured;
+                cameraDevice.CameraDisconnected -= cameraDevice_CameraDisconnected;
+                
+                // Mark as disconnected before removing
+                cameraDevice.IsConnected = false;
+                
+                ConnectedDevices.Remove(cameraDevice);
+                StaticHelper.Instance.SystemMessage = "Camera disconnected :" + cameraDevice.DeviceName;
+                Log.Debug("===========Camera disconnected==============");
+                Log.Debug("Name :" + cameraDevice.DeviceName);
 
-            cameraDevice.PhotoCaptured -= cameraDevice_PhotoCaptured;
-            cameraDevice.CameraDisconnected -= cameraDevice_CameraDisconnected;
-            ConnectedDevices.Remove(cameraDevice);
-            StaticHelper.Instance.SystemMessage = "Camera disconnected :" + cameraDevice.DeviceName;
-            Log.Debug("===========Camera disconnected==============");
-            Log.Debug("Name :" + cameraDevice.DeviceName);
+                // If this was the selected camera, reset to NotConnectedCameraDevice
+                if (SelectedCameraDevice == cameraDevice)
+                {
+                    Log.Debug($"Disconnected camera was SelectedCameraDevice - resetting to NotConnectedCameraDevice");
+                    SelectedCameraDevice = new NotConnectedCameraDevice();
+                    
+                    // Try to select another connected camera if available
+                    var nextCamera = ConnectedDevices.FirstOrDefault(c => c.IsConnected && c is CanonSDKBase) ??
+                                    ConnectedDevices.FirstOrDefault(c => c.IsConnected);
+                    if (nextCamera != null)
+                    {
+                        SelectedCameraDevice = nextCamera;
+                        Log.Debug($"Auto-selected next available camera: {nextCamera.DeviceName}");
+                    }
+                }
 
-            cameraDevice.Close();
-            OnCameraDisconnected(cameraDevice);
+                try
+                {
+                    cameraDevice.Close();
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"Error closing camera during disconnect: {ex.Message}");
+                }
+                
+                OnCameraDisconnected(cameraDevice);
+            }
         }
 
         private void DisconnectCamera(string wiaId)
@@ -965,20 +1050,39 @@ namespace CameraControl.Devices
 
         private void DisconnectCamera(EosCamera device)
         {
-            DeviceDescriptor descriptor = _deviceEnumerator.GetByEosCamera(device);
-            if (descriptor != null)
+            lock (_locker)
             {
-                descriptor.CameraDevice.PhotoCaptured -= cameraDevice_PhotoCaptured;
-                descriptor.CameraDevice.CameraDisconnected -= cameraDevice_CameraDisconnected;
-                StaticHelper.Instance.SystemMessage = "Camera disconnected :" + descriptor.CameraDevice.DeviceName;
-                Log.Debug("===========Camera disconnected==============");
-                Log.Debug("Name :" + descriptor.CameraDevice.DeviceName);
-                ConnectedDevices.Remove(descriptor.CameraDevice);
-                descriptor.CameraDevice.Close();
-                _deviceEnumerator.Remove(descriptor);
-                _deviceEnumerator.RemoveDisconnected();
+                DeviceDescriptor descriptor = _deviceEnumerator.GetByEosCamera(device);
+                if (descriptor != null)
+                {
+                    descriptor.CameraDevice.PhotoCaptured -= cameraDevice_PhotoCaptured;
+                    descriptor.CameraDevice.CameraDisconnected -= cameraDevice_CameraDisconnected;
+                    StaticHelper.Instance.SystemMessage = "Camera disconnected :" + descriptor.CameraDevice.DeviceName;
+                    Log.Debug("===========Camera disconnected==============");
+                    Log.Debug("Name :" + descriptor.CameraDevice.DeviceName);
+                    
+                    // Ensure the camera is marked as not connected before cleanup
+                    descriptor.CameraDevice.IsConnected = false;
+                    
+                    // Close the camera before removing from collections
+                    try
+                    {
+                        descriptor.CameraDevice.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"Error closing camera during disconnect: {ex.Message}");
+                    }
+                    
+                    ConnectedDevices.Remove(descriptor.CameraDevice);
+                    _deviceEnumerator.Remove(descriptor);
+                    _deviceEnumerator.RemoveDisconnected();
+                    
+                    // Clean up the EOS camera object
+                    descriptor.EosCamera = null;
+                }
+                RemoveDisconnected();
             }
-            RemoveDisconnected();
         }
 
         private void RemoveDisconnected()
@@ -1085,9 +1189,19 @@ namespace CameraControl.Devices
             {
                 // Look for CameraDeviceType devices
                 string model = devInfo.Properties["Name"].get_Value();
-                // skip canon cameras 
-                //if (!string.IsNullOrEmpty(model) && model.Contains("Canon"))
-                //    continue;
+                
+                // Skip Canon cameras if already connected via Canon SDK
+                if (!string.IsNullOrEmpty(model) && model.Contains("Canon"))
+                {
+                    bool canonAlreadyConnected = ConnectedDevices.Any(d => 
+                        d is CanonSDKBase && d.DeviceName == model);
+                    if (canonAlreadyConnected)
+                    {
+                        Log.Debug($"Skipping WIA connection for {model} - already connected via Canon SDK");
+                        continue;
+                    }
+                }
+                
                 if (getDeviceDescription(model) != null)
                     continue;
 

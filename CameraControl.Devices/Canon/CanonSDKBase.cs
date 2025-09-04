@@ -513,6 +513,7 @@ namespace CameraControl.Devices.Canon
         {
             try
             {
+                if (Camera == null) return;
                 Camera.SetProperty(Edsdk.PropID_FlashCompensation, val);
             }
             catch (Exception exception)
@@ -663,12 +664,14 @@ namespace CameraControl.Devices.Canon
 
         private void CompressionSetting_ValueChanged(object sender, string key, long val)
         {
+            if (Camera == null) return;
             Camera.ImageQuality = EosImageQuality.Create(val);
         }
 
 
         private void LiveViewImageZoomRatio_ValueChanged(object sender, string key, long val)
         {
+            if (Camera == null) return;
             Camera.SetProperty(Edsdk.PropID_Evf_Zoom, val);
             //Camera.LiveViewqueue.Enqueue(() => Camera.SetProperty(Edsdk.PropID_Evf_Zoom, val));
         }
@@ -677,6 +680,8 @@ namespace CameraControl.Devices.Canon
         private void Camera_PropertyChanged(object sender, EosPropertyEventArgs e)
         {
             if (IsBusy)
+                return;
+            if (Camera == null)
                 return;
             lock (Locker)
             {
@@ -818,15 +823,20 @@ namespace CameraControl.Devices.Canon
         public override void Close()
         {
             HaveLiveView = false;
-            Camera.Error -= _camera_Error;
-            Camera.Shutdown -= _camera_Shutdown;
-            Camera.LiveViewPaused -= Camera_LiveViewPaused;
-            Camera.LiveViewUpdate -= Camera_LiveViewUpdate;
-            Camera.PictureTaken -= Camera_PictureTaken;
-            Camera.PropertyChanged -= Camera_PropertyChanged;
-            // this block the application
-            //Camera.Dispose();
-            Camera = null;
+            
+            // Check if Camera is null before unsubscribing from events
+            if (Camera != null)
+            {
+                Camera.Error -= _camera_Error;
+                Camera.Shutdown -= _camera_Shutdown;
+                Camera.LiveViewPaused -= Camera_LiveViewPaused;
+                Camera.LiveViewUpdate -= Camera_LiveViewUpdate;
+                Camera.PictureTaken -= Camera_PictureTaken;
+                Camera.PropertyChanged -= Camera_PropertyChanged;
+                // this block the application
+                //Camera.Dispose();
+                Camera = null;
+            }
         }
 
 
@@ -908,6 +918,7 @@ namespace CameraControl.Devices.Canon
         {
             try
             {
+                if (Camera == null) return;
                 Camera.SetProperty(Edsdk.PropID_Tv, val);
             }
             catch (Exception exception)
@@ -929,6 +940,7 @@ namespace CameraControl.Devices.Canon
         {
             try
             {
+                if (Camera == null) return;
                 Camera.SetProperty(Edsdk.PropID_Av, val);
             }
             catch (Exception exception)
@@ -995,6 +1007,7 @@ namespace CameraControl.Devices.Canon
         {
             try
             {
+                if (Camera == null) return;
                 Camera.PauseLiveview();
                 Camera.SetProperty(Edsdk.PropID_ISOSpeed, val);
                 Camera.ResumeLiveview();
@@ -1080,6 +1093,7 @@ namespace CameraControl.Devices.Canon
         {
             try
             {
+                if (Camera == null) return;
                 Camera.SetProperty(Edsdk.PropID_AEModeSelect, val);
                 //Camera.SetProperty(Edsdk.PropID_AEMode, val);
                 //Thread.Sleep(200);
@@ -1147,6 +1161,7 @@ namespace CameraControl.Devices.Canon
         {
             try
             {
+                if (Camera == null) return;
                 Camera.SetProperty(Edsdk.PropID_WhiteBalance, val);
             }
             catch (Exception exception)
@@ -1203,6 +1218,7 @@ namespace CameraControl.Devices.Canon
         {
             try
             {
+                if (Camera == null) return;
                 Camera.SetProperty(Edsdk.PropID_AFMode, val);
             }
             catch (Exception exception)
@@ -1215,6 +1231,7 @@ namespace CameraControl.Devices.Canon
         {
             try
             {
+                if (Camera == null) return;
                 Camera.SetProperty(Edsdk.PropID_MeteringMode, val);
             }
             catch (Exception exception)
@@ -1227,6 +1244,7 @@ namespace CameraControl.Devices.Canon
         {
             try
             {
+                if (Camera == null) return;
                 Camera.SetProperty(Edsdk.PropID_ExposureCompensation, val);
             }
             catch (Exception exception)
@@ -1285,10 +1303,29 @@ namespace CameraControl.Devices.Canon
                 return 0;
             }
             
-            Camera.SendCommand(Edsdk.CameraCommand_DoEvfAf, 0);
-            //ErrorCodes.GetCanonException(Camera.SendCommand(Edsdk.CameraCommand_DoEvfAf, 0));
-            return Camera.SendCommand(Edsdk.CameraCommand_PressShutterButton,
-                (int) Edsdk.EdsShutterButton.CameraCommand_ShutterButton_OFF);
+            if (!IsConnected)
+            {
+                Log.Debug("Cannot reset shutter button - Camera is not connected");
+                return 0;
+            }
+            
+            try
+            {
+                Camera.SendCommand(Edsdk.CameraCommand_DoEvfAf, 0);
+                //ErrorCodes.GetCanonException(Camera.SendCommand(Edsdk.CameraCommand_DoEvfAf, 0));
+                return Camera.SendCommand(Edsdk.CameraCommand_PressShutterButton,
+                    (int) Edsdk.EdsShutterButton.CameraCommand_ShutterButton_OFF);
+            }
+            catch (EosException ex)
+            {
+                Log.Debug($"Canon ResetShutterButton: Failed to reset - {ex.Message}");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Canon ResetShutterButton: Unexpected error - {ex.Message}");
+                return 0;
+            }
         }
 
         public void PressButton()
@@ -1469,18 +1506,42 @@ namespace CameraControl.Devices.Canon
         {
             if (Camera == null)
                 return;
-            ResetShutterButton();
-            //if (Camera.IsInLiveViewMode)
-            Camera.StopLiveView();
+            
+            try
+            {
+                // Only try to reset shutter button if camera is connected
+                if (IsConnected)
+                {
+                    ResetShutterButton();
+                }
+                
+                //if (Camera.IsInLiveViewMode)
+                Camera.StopLiveView();
+            }
+            catch (EosException ex)
+            {
+                Log.Debug($"Canon StopLiveView: Failed to stop live view - {ex.Message}");
+                // Swallow the exception - camera might be disconnected
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Canon StopLiveView: Unexpected error - {ex.Message}");
+                // Swallow the exception
+            }
         }
 
         public override void AutoFocus()
         {
-            ResetShutterButton();
-            Camera.PauseLiveview();
+            if (Camera == null || !IsConnected)
+            {
+                Log.Debug("Canon AutoFocus: Camera not connected");
+                return;
+            }
             
             try
             {
+                ResetShutterButton();
+                Camera.PauseLiveview();
                 ErrorCodes.GetCanonException(Camera.SendCommand(Edsdk.CameraCommand_DoEvfAf, 1));
          //       ErrorCodes.GetCanonException(
          //Camera.SendCommand(Edsdk.CameraCommand_PressShutterButton,
@@ -1501,6 +1562,12 @@ namespace CameraControl.Devices.Canon
 
         public override int Focus(int step)
         {
+            if (Camera == null || !IsConnected)
+            {
+                Log.Debug("Canon Focus: Camera not connected");
+                return 0;
+            }
+            
             ResetShutterButton();
 
             int focus = 0;
@@ -1517,6 +1584,12 @@ namespace CameraControl.Devices.Canon
 
         public override void Focus(FocusDirection direction, FocusAmount amount)
         {
+            if (Camera == null || !IsConnected)
+            {
+                Log.Debug("Canon Focus: Camera not connected");
+                return;
+            }
+            
             ResetShutterButton();
             switch (direction)
             {

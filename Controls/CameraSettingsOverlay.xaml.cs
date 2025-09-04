@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -16,17 +17,28 @@ namespace Photobooth.Controls
     public partial class CameraSettingsOverlay : UserControl
     {
         private CameraSettingsService _cameraSettingsService;
+        private LiveViewEnhancementService _liveViewEnhancementService;
+        private VideoModeLiveViewService _videoModeLiveViewService;
+        private DualCameraSettingsService _dualSettingsService;
         private bool _isInitialized = false;
         private bool _autoSaveEnabled = true;
         private DispatcherTimer _liveViewTimer;
         private DispatcherTimer _autoRestartTimer;
         private bool _isLiveViewActive = false;
         private ICameraDevice _currentCamera;
+        private bool _liveViewControlsEnabled = false;
+        private bool _videoModeActive = false;
 
         public CameraSettingsOverlay()
         {
-            // Initialize the service BEFORE InitializeComponent to ensure it's available for any events
+            // Initialize the services BEFORE InitializeComponent to ensure they're available for any events
             _cameraSettingsService = CameraSettingsService.Instance;
+            _liveViewEnhancementService = new LiveViewEnhancementService();
+            _videoModeLiveViewService = VideoModeLiveViewService.Instance;
+            _dualSettingsService = DualCameraSettingsService.Instance;
+            
+            // Keep enhancement service disabled by default to avoid breaking existing live view
+            _liveViewEnhancementService.IsEnabled = false;
             
             InitializeComponent();
             
@@ -63,10 +75,73 @@ namespace Photobooth.Controls
                 // Start live view when control loads
                 var sessionManager = CameraSessionManager.Instance;
                 _currentCamera = sessionManager?.DeviceManager?.SelectedCameraDevice;
+                
                 if (_currentCamera != null)
                 {
                     StartLiveView();
+                    
+                    // Initialize video mode service with camera reference
+                    if (_videoModeLiveViewService != null)
+                    {
+                        _videoModeLiveViewService.UpdateCameraReference(_currentCamera);
+                        DebugService.LogDebug($"Video mode service initialized with camera: {_currentCamera.DeviceName}");
+                    }
+                    
+                    // Initialize dual settings service
+                    if (_dualSettingsService != null)
+                    {
+                        _dualSettingsService.UpdateCameraReference(_currentCamera);
+                        // Apply photo mode settings on startup (app should start in photo mode)
+                        _dualSettingsService.ApplyPhotoCaptureSettings();
+                        DebugService.LogDebug("Applied photo capture settings on startup");
+                    }
                 }
+                else
+                {
+                    DebugService.LogDebug("WARNING: No camera available for video mode initialization");
+                    // Disable video mode toggle if no camera
+                    if (VideoModeLiveViewToggle != null)
+                    {
+                        VideoModeLiveViewToggle.IsEnabled = false;
+                    }
+                }
+                
+                // Restore video mode toggle state from settings
+                RestoreVideoModeToggleState();
+            }
+        }
+        
+        private void RestoreVideoModeToggleState()
+        {
+            try
+            {
+                // Get saved state from settings
+                bool savedVideoModeState = Properties.Settings.Default.VideoModeLiveViewEnabled;
+                
+                DebugService.LogDebug($"Restoring video mode toggle state: {savedVideoModeState}");
+                
+                // Apply the saved state to the toggle UI only - don't actually start video mode yet
+                // The app should start in photo mode and only switch to video when needed
+                if (VideoModeLiveViewToggle != null)
+                {
+                    VideoModeLiveViewToggle.IsChecked = savedVideoModeState;
+                    
+                    // Mark the service as enabled but don't start video mode
+                    // Video mode will start when a session begins if this is true
+                    if (savedVideoModeState)
+                    {
+                        _videoModeLiveViewService.IsEnabled = true;
+                        DebugService.LogDebug("Video mode toggle restored (will activate on session start)");
+                    }
+                    else
+                    {
+                        _videoModeLiveViewService.IsEnabled = false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"Error restoring video mode toggle state: {ex.Message}");
             }
         }
 
@@ -117,13 +192,39 @@ namespace Photobooth.Controls
                 var liveViewData = _currentCamera.GetLiveViewImage();
                 if (liveViewData != null && liveViewData.ImageData != null)
                 {
-                    // Convert to BitmapImage
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.StreamSource = new MemoryStream(liveViewData.ImageData);
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.EndInit();
-                    bitmap.Freeze();
+                    byte[] processedImageData = liveViewData.ImageData;
+
+                    // Apply visual enhancements if live view controls are enabled
+                    if (_liveViewControlsEnabled && _liveViewEnhancementService != null && _liveViewEnhancementService.IsEnabled)
+                    {
+                        try
+                        {
+                            processedImageData = _liveViewEnhancementService.ProcessLiveViewImage(liveViewData.ImageData);
+                            DebugService.LogDebug("Live view: Enhancement processing completed successfully");
+                        }
+                        catch (Exception enhancementEx)
+                        {
+                            // If enhancement fails, use original image and log error
+                            processedImageData = liveViewData.ImageData;
+                            DebugService.LogError($"Live view enhancement failed: {enhancementEx.Message}");
+                        }
+                    }
+                    else
+                    {
+                        DebugService.LogDebug($"Live view: Using original image (enhancement enabled: {_liveViewControlsEnabled && _liveViewEnhancementService?.IsEnabled == true})");
+                    }
+
+                    // Convert processed image to BitmapImage with proper disposal
+                    BitmapImage bitmap;
+                    using (var ms = new MemoryStream(processedImageData))
+                    {
+                        bitmap = new BitmapImage();
+                        bitmap.BeginInit();
+                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                        bitmap.StreamSource = ms;
+                        bitmap.EndInit();
+                        bitmap.Freeze();
+                    }
 
                     // Update the live view image
                     LiveViewImage.Source = bitmap;
@@ -132,9 +233,14 @@ namespace Photobooth.Controls
                     LiveViewStatus.Visibility = Visibility.Visible;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Silently ignore live view errors to avoid spam
+                // Log live view errors for debugging
+                DebugService.LogError($"Live view error: {ex.Message}");
+                
+                // Show placeholder on error
+                LiveViewImage.Visibility = Visibility.Collapsed;
+                PreviewPlaceholder.Visibility = Visibility.Visible;
             }
         }
 
@@ -272,6 +378,30 @@ namespace Photobooth.Controls
                 {
                     ISOValueText.Text = content;
                     _cameraSettingsService.OnSettingChanged("ISO", content);
+                    
+                    // Apply to video mode if active
+                    if (_videoModeActive && _videoModeLiveViewService != null)
+                    {
+                        _videoModeLiveViewService.SetISO(content);
+                    }
+                    // Or apply visual simulation if enhancement is enabled
+                    else if (_liveViewControlsEnabled && _liveViewEnhancementService != null)
+                    {
+                        if (int.TryParse(content, out int isoValue))
+                        {
+                            _liveViewEnhancementService.SetSimulatedISO(isoValue);
+                        }
+                    }
+                    
+                    // Update dual settings based on current mode
+                    if (_dualSettingsService != null)
+                    {
+                        if (_dualSettingsService.CurrentMode == DualCameraSettingsService.SettingsMode.LiveView)
+                            _dualSettingsService.LiveViewSettings.ISO = content;
+                        else
+                            _dualSettingsService.PhotoCaptureSettings.ISO = content;
+                    }
+                    
                     AutoSaveIfEnabled();
                 }
             }
@@ -289,7 +419,57 @@ namespace Photobooth.Controls
                 if (!string.IsNullOrEmpty(content))
                 {
                     ApertureValueText.Text = content;
-                    _cameraSettingsService.OnSettingChanged("Aperture", content);
+                    
+                    // Handle based on current mode
+                    if (_videoModeActive && _videoModeLiveViewService != null)
+                    {
+                        // In video mode, apply directly to camera for real-time effect
+                        _videoModeLiveViewService.SetAperture(content);
+                        DebugService.LogDebug($"Video mode: Aperture set to {content} (real-time)");
+                    }
+                    
+                    // Update appropriate settings profile based on dual settings mode
+                    if (_dualSettingsService != null)
+                    {
+                        switch (_dualSettingsService.CurrentMode)
+                        {
+                            case DualCameraSettingsService.SettingsMode.LiveView:
+                                _dualSettingsService.SetLiveViewSetting("Aperture", content);
+                                // Also apply visual simulation
+                                if (_liveViewEnhancementService != null)
+                                {
+                                    var cleanValue = content.Replace("f/", "");
+                                    if (double.TryParse(cleanValue, out double apertureValue))
+                                    {
+                                        _liveViewEnhancementService.SetSimulatedAperture(apertureValue);
+                                    }
+                                }
+                                break;
+                            case DualCameraSettingsService.SettingsMode.PhotoCapture:
+                                _dualSettingsService.SetPhotoCaptureSetting("Aperture", content);
+                                _cameraSettingsService.OnSettingChanged("Aperture", content);
+                                break;
+                            case DualCameraSettingsService.SettingsMode.Synchronized:
+                                _dualSettingsService.SetLiveViewSetting("Aperture", content);
+                                _dualSettingsService.SetPhotoCaptureSetting("Aperture", content);
+                                _cameraSettingsService.OnSettingChanged("Aperture", content);
+                                if (_liveViewEnhancementService != null)
+                                {
+                                    var cleanValue = content.Replace("f/", "");
+                                    if (double.TryParse(cleanValue, out double apertureValue))
+                                    {
+                                        _liveViewEnhancementService.SetSimulatedAperture(apertureValue);
+                                    }
+                                }
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        // Fallback to original behavior
+                        _cameraSettingsService.OnSettingChanged("Aperture", content);
+                    }
+                    
                     AutoSaveIfEnabled();
                 }
             }
@@ -307,7 +487,49 @@ namespace Photobooth.Controls
                 if (!string.IsNullOrEmpty(content))
                 {
                     ShutterSpeedValueText.Text = content;
-                    _cameraSettingsService.OnSettingChanged("ShutterSpeed", content);
+                    
+                    // Handle based on current mode
+                    if (_videoModeActive && _videoModeLiveViewService != null)
+                    {
+                        // In video mode, apply directly to camera for real-time effect
+                        _videoModeLiveViewService.SetShutterSpeed(content);
+                        DebugService.LogDebug($"Video mode: Shutter speed set to {content} (real-time)");
+                    }
+                    
+                    // Update appropriate settings profile based on dual settings mode
+                    if (_dualSettingsService != null)
+                    {
+                        switch (_dualSettingsService.CurrentMode)
+                        {
+                            case DualCameraSettingsService.SettingsMode.LiveView:
+                                _dualSettingsService.SetLiveViewSetting("ShutterSpeed", content);
+                                // Also apply visual simulation
+                                if (_liveViewEnhancementService != null)
+                                {
+                                    _liveViewEnhancementService.SetSimulatedShutterSpeed(content);
+                                }
+                                break;
+                            case DualCameraSettingsService.SettingsMode.PhotoCapture:
+                                _dualSettingsService.SetPhotoCaptureSetting("ShutterSpeed", content);
+                                _cameraSettingsService.OnSettingChanged("ShutterSpeed", content);
+                                break;
+                            case DualCameraSettingsService.SettingsMode.Synchronized:
+                                _dualSettingsService.SetLiveViewSetting("ShutterSpeed", content);
+                                _dualSettingsService.SetPhotoCaptureSetting("ShutterSpeed", content);
+                                _cameraSettingsService.OnSettingChanged("ShutterSpeed", content);
+                                if (_liveViewEnhancementService != null)
+                                {
+                                    _liveViewEnhancementService.SetSimulatedShutterSpeed(content);
+                                }
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        // Fallback to original behavior
+                        _cameraSettingsService.OnSettingChanged("ShutterSpeed", content);
+                    }
+                    
                     AutoSaveIfEnabled();
                 }
             }
@@ -325,7 +547,42 @@ namespace Photobooth.Controls
                 if (!string.IsNullOrEmpty(content))
                 {
                     WhiteBalanceValueText.Text = content;
-                    _cameraSettingsService.OnSettingChanged("WhiteBalance", content);
+                    
+                    // Handle based on current mode
+                    if (_videoModeActive && _videoModeLiveViewService != null)
+                    {
+                        // In video mode, apply directly to camera for real-time effect
+                        _videoModeLiveViewService.SetWhiteBalance(content);
+                        DebugService.LogDebug($"Video mode: White balance set to {content} (real-time)");
+                    }
+                    
+                    // Update appropriate settings profile based on dual settings mode
+                    if (_dualSettingsService != null)
+                    {
+                        switch (_dualSettingsService.CurrentMode)
+                        {
+                            case DualCameraSettingsService.SettingsMode.LiveView:
+                                _dualSettingsService.SetLiveViewSetting("WhiteBalance", content);
+                                // White balance can be applied directly even in photo mode
+                                _cameraSettingsService.OnSettingChanged("WhiteBalance", content);
+                                break;
+                            case DualCameraSettingsService.SettingsMode.PhotoCapture:
+                                _dualSettingsService.SetPhotoCaptureSetting("WhiteBalance", content);
+                                _cameraSettingsService.OnSettingChanged("WhiteBalance", content);
+                                break;
+                            case DualCameraSettingsService.SettingsMode.Synchronized:
+                                _dualSettingsService.SetLiveViewSetting("WhiteBalance", content);
+                                _dualSettingsService.SetPhotoCaptureSetting("WhiteBalance", content);
+                                _cameraSettingsService.OnSettingChanged("WhiteBalance", content);
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        // Fallback to original behavior
+                        _cameraSettingsService.OnSettingChanged("WhiteBalance", content);
+                    }
+                    
                     AutoSaveIfEnabled();
                 }
             }
@@ -340,7 +597,49 @@ namespace Photobooth.Controls
             var value = Math.Round(ExposureCompSlider.Value, 1);
             var displayValue = value >= 0 ? $"+{value} EV" : $"{value} EV";
             ExposureCompValueText.Text = displayValue;
-            _cameraSettingsService.OnSettingChanged("ExposureCompensation", value.ToString());
+            
+            // Handle based on current mode
+            if (_videoModeActive && _videoModeLiveViewService != null)
+            {
+                // In video mode, apply directly to camera for real-time effect
+                _videoModeLiveViewService.SetExposureCompensation(value.ToString());
+                DebugService.LogDebug($"Video mode: Exposure compensation set to {value:+0.0;-0.0;0} EV (real-time)");
+            }
+            
+            // Update appropriate settings profile based on dual settings mode
+            if (_dualSettingsService != null)
+            {
+                switch (_dualSettingsService.CurrentMode)
+                {
+                    case DualCameraSettingsService.SettingsMode.LiveView:
+                        _dualSettingsService.SetLiveViewSetting("ExposureCompensation", value.ToString());
+                        // Also apply visual simulation
+                        if (_liveViewEnhancementService != null)
+                        {
+                            _liveViewEnhancementService.SetSimulatedExposureCompensation(value);
+                        }
+                        break;
+                    case DualCameraSettingsService.SettingsMode.PhotoCapture:
+                        _dualSettingsService.SetPhotoCaptureSetting("ExposureCompensation", value.ToString());
+                        _cameraSettingsService.OnSettingChanged("ExposureCompensation", value.ToString());
+                        break;
+                    case DualCameraSettingsService.SettingsMode.Synchronized:
+                        _dualSettingsService.SetLiveViewSetting("ExposureCompensation", value.ToString());
+                        _dualSettingsService.SetPhotoCaptureSetting("ExposureCompensation", value.ToString());
+                        _cameraSettingsService.OnSettingChanged("ExposureCompensation", value.ToString());
+                        if (_liveViewEnhancementService != null)
+                        {
+                            _liveViewEnhancementService.SetSimulatedExposureCompensation(value);
+                        }
+                        break;
+                }
+            }
+            else
+            {
+                // Fallback to original behavior
+                _cameraSettingsService.OnSettingChanged("ExposureCompensation", value.ToString());
+            }
+            
             AutoSaveIfEnabled();
         }
 
@@ -773,5 +1072,335 @@ namespace Photobooth.Controls
                 StartLiveView();
             }
         }
+        
+        #region Video Mode Live View Controls
+        
+        private async void VideoModeLiveViewToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Check if camera is available
+                if (_currentCamera == null)
+                {
+                    DebugService.LogError("Cannot enable video mode: No camera connected");
+                    VideoModeLiveViewToggle.IsChecked = false;
+                    
+                    // Show user feedback
+                    if (VideoModeLiveViewToggle != null)
+                    {
+                        VideoModeLiveViewToggle.ToolTip = "No camera connected";
+                    }
+                    return;
+                }
+                
+                // Update camera reference
+                _videoModeLiveViewService.UpdateCameraReference(_currentCamera);
+                _dualSettingsService.UpdateCameraReference(_currentCamera);
+                
+                DebugService.LogDebug($"Attempting to start video mode for camera: {_currentCamera.DeviceName}");
+                
+                // Start video mode live view
+                if (await _videoModeLiveViewService.StartVideoModeLiveView())
+                {
+                    _videoModeActive = true;
+                    _dualSettingsService.ApplyLiveViewSettings();
+                    UpdateControlStates(true);
+                    DebugService.LogDebug("Video mode live view enabled with real-time camera control");
+                    
+                    if (VideoModeLiveViewToggle != null)
+                    {
+                        VideoModeLiveViewToggle.ToolTip = "Video mode active - Real-time control enabled";
+                    }
+                    
+                    // Save the enabled state
+                    Properties.Settings.Default.VideoModeLiveViewEnabled = true;
+                    Properties.Settings.Default.Save();
+                    DebugService.LogDebug("Video mode toggle state saved: Enabled");
+                }
+                else
+                {
+                    // Failed to start, uncheck the toggle
+                    VideoModeLiveViewToggle.IsChecked = false;
+                    DebugService.LogError("Failed to enable video mode live view - camera may not support video mode");
+                    
+                    if (VideoModeLiveViewToggle != null)
+                    {
+                        VideoModeLiveViewToggle.ToolTip = "Camera does not support video mode";
+                    }
+                    
+                    // Save the disabled state
+                    Properties.Settings.Default.VideoModeLiveViewEnabled = false;
+                    Properties.Settings.Default.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                VideoModeLiveViewToggle.IsChecked = false;
+                DebugService.LogError($"Error enabling video mode: {ex.Message}");
+                
+                if (VideoModeLiveViewToggle != null)
+                {
+                    VideoModeLiveViewToggle.ToolTip = $"Error: {ex.Message}";
+                }
+            }
+        }
+
+        private async void VideoModeLiveViewToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Stop video mode and restore photo mode
+                if (await _videoModeLiveViewService.StopVideoModeLiveView())
+                {
+                    _videoModeActive = false;
+                    _dualSettingsService.ApplyPhotoCaptureSettings();
+                    UpdateControlStates(false);
+                    DebugService.LogDebug("Video mode live view disabled, photo mode restored");
+                    
+                    // Save the disabled state
+                    Properties.Settings.Default.VideoModeLiveViewEnabled = false;
+                    Properties.Settings.Default.Save();
+                    DebugService.LogDebug("Video mode toggle state saved: Disabled");
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"Error disabling video mode: {ex.Message}");
+            }
+        }
+
+        private void SettingsModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (SettingsModeCombo?.SelectedItem is ComboBoxItem item)
+            {
+                var mode = item.Tag?.ToString();
+                switch (mode)
+                {
+                    case "LiveView":
+                        _dualSettingsService.CurrentMode = DualCameraSettingsService.SettingsMode.LiveView;
+                        DebugService.LogDebug("Switched to Live View settings mode");
+                        break;
+                    case "PhotoCapture":
+                        _dualSettingsService.CurrentMode = DualCameraSettingsService.SettingsMode.PhotoCapture;
+                        DebugService.LogDebug("Switched to Photo Capture settings mode");
+                        break;
+                    case "Synchronized":
+                        _dualSettingsService.CurrentMode = DualCameraSettingsService.SettingsMode.Synchronized;
+                        DebugService.LogDebug("Switched to Synchronized settings mode");
+                        break;
+                }
+            }
+        }
+
+        private void ApplyToPhotoBtn_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Apply current video mode settings to photo capture settings
+                _videoModeLiveViewService.ApplyVideoSettingsToPhotoMode();
+                DebugService.LogDebug("Applied video mode settings to photo capture");
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"Error applying settings: {ex.Message}");
+            }
+        }
+
+        private void SyncSettingsBtn_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Synchronize settings between profiles
+                if (_dualSettingsService.CurrentMode == DualCameraSettingsService.SettingsMode.LiveView)
+                {
+                    _dualSettingsService.SynchronizeSettings(DualCameraSettingsService.SyncDirection.LiveViewToPhoto);
+                    DebugService.LogDebug("Synchronized live view settings to photo capture");
+                }
+                else
+                {
+                    _dualSettingsService.SynchronizeSettings(DualCameraSettingsService.SyncDirection.PhotoToLiveView);
+                    DebugService.LogDebug("Synchronized photo capture settings to live view");
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"Error synchronizing settings: {ex.Message}");
+            }
+        }
+
+        private void UpdateControlStates(bool videoModeActive)
+        {
+            // Update UI based on video mode state
+            ApplyToPhotoBtn.IsEnabled = videoModeActive;
+            SyncSettingsBtn.IsEnabled = true;
+            
+            // Update status text
+            if (videoModeActive)
+            {
+                // Could update a status label if you have one
+                DebugService.LogDebug("Controls updated for video mode");
+            }
+        }
+
+        #endregion
+
+        #region Live View Visual Enhancement Controls (Legacy)
+        private void LiveViewControlsToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            _liveViewControlsEnabled = true;
+            
+            // Enable visual enhancements for live view preview only
+            _liveViewEnhancementService.IsEnabled = true;
+            DebugService.LogDebug("Live view visual enhancement controls enabled - camera settings unchanged");
+        }
+
+        private void LiveViewControlsToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            _liveViewControlsEnabled = false;
+            _liveViewEnhancementService.IsEnabled = false;
+            DebugService.LogDebug("Live view visual enhancement controls disabled");
+        }
+
+        #endregion
+
+        #region Live View Tab Event Handlers
+        
+        private void LiveViewISOComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_isInitialized || LiveViewISOComboBox == null) return;
+            
+            if (LiveViewISOComboBox.SelectedItem != null)
+            {
+                var content = (LiveViewISOComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+                if (!string.IsNullOrEmpty(content))
+                {
+                    LiveViewISOValueText.Text = content;
+                    
+                    // Auto-enable enhancement when Live View settings are changed
+                    if (!_liveViewControlsEnabled)
+                    {
+                        _liveViewControlsEnabled = true;
+                        if (_liveViewEnhancementService != null)
+                        {
+                            _liveViewEnhancementService.IsEnabled = true;
+                        }
+                        if (LiveViewControlsToggle != null)
+                        {
+                            LiveViewControlsToggle.IsChecked = true;
+                        }
+                        DebugService.LogDebug("Auto-enabled Live View enhancement due to setting change");
+                    }
+                    
+                    // Update live view settings
+                    if (_dualSettingsService != null)
+                    {
+                        _dualSettingsService.SetLiveViewSetting("ISO", content);
+                    }
+                    
+                    // If video mode is active, apply in real-time
+                    if (_videoModeActive && _videoModeLiveViewService != null)
+                    {
+                        _videoModeLiveViewService.SetISO(content);
+                    }
+                    
+                    // Apply to visual enhancement
+                    if (_liveViewEnhancementService != null && int.TryParse(content, out int isoValue))
+                    {
+                        _liveViewEnhancementService.SetSimulatedISO(isoValue);
+                    }
+                    
+                    DebugService.LogDebug($"Live View ISO set to {content}");
+                }
+            }
+        }
+        
+        private void LiveViewApertureComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_isInitialized || LiveViewApertureComboBox == null) return;
+            
+            if (LiveViewApertureComboBox.SelectedItem != null)
+            {
+                var content = (LiveViewApertureComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+                if (!string.IsNullOrEmpty(content))
+                {
+                    LiveViewApertureValueText.Text = content;
+                    
+                    // Update live view settings
+                    if (_dualSettingsService != null)
+                    {
+                        _dualSettingsService.SetLiveViewSetting("Aperture", content);
+                    }
+                    
+                    // If video mode is active, apply in real-time
+                    if (_videoModeActive && _videoModeLiveViewService != null)
+                    {
+                        _videoModeLiveViewService.SetAperture(content);
+                    }
+                    
+                    // Apply to visual enhancement
+                    if (_liveViewEnhancementService != null)
+                    {
+                        var cleanValue = content.Replace("f/", "");
+                        if (double.TryParse(cleanValue, out double apertureValue))
+                        {
+                            _liveViewEnhancementService.SetSimulatedAperture(apertureValue);
+                        }
+                    }
+                    
+                    DebugService.LogDebug($"Live View Aperture set to {content}");
+                }
+            }
+        }
+        
+        private void LiveViewShutterComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_isInitialized || LiveViewShutterComboBox == null) return;
+            
+            if (LiveViewShutterComboBox.SelectedItem != null)
+            {
+                var content = (LiveViewShutterComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+                if (!string.IsNullOrEmpty(content))
+                {
+                    LiveViewShutterValueText.Text = content;
+                    
+                    // Update live view settings
+                    if (_dualSettingsService != null)
+                    {
+                        _dualSettingsService.SetLiveViewSetting("ShutterSpeed", content);
+                    }
+                    
+                    // If video mode is active, apply in real-time
+                    if (_videoModeActive && _videoModeLiveViewService != null)
+                    {
+                        _videoModeLiveViewService.SetShutterSpeed(content);
+                    }
+                    
+                    // Apply to visual enhancement
+                    if (_liveViewEnhancementService != null)
+                    {
+                        _liveViewEnhancementService.SetSimulatedShutterSpeed(content);
+                    }
+                    
+                    DebugService.LogDebug($"Live View Shutter Speed set to {content}");
+                }
+            }
+        }
+        
+        private void BrightnessSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (!_isInitialized || BrightnessSlider == null) return;
+            
+            var value = (int)Math.Round(BrightnessSlider.Value);
+            BrightnessValueText.Text = value >= 0 ? $"+{value}" : value.ToString();
+            
+            // Apply brightness boost to live view enhancement
+            if (_liveViewEnhancementService != null)
+            {
+                _liveViewEnhancementService.SetBrightness(value);
+                DebugService.LogDebug($"Live View Brightness Boost set to {value}");
+            }
+        }
+        
+        #endregion
     }
 }

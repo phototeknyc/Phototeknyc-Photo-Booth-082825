@@ -233,6 +233,10 @@
     <Compile Include="Services\ImageProcessingService.cs" />
     <Compile Include="Services\CameraSessionManager.cs" />
     <Compile Include="Services\CameraSettingsService.cs" />
+    <Compile Include="Services\LiveViewCameraControlService.cs" />
+    <Compile Include="Services\LiveViewEnhancementService.cs" />
+    <Compile Include="Services\VideoModeLiveViewService.cs" />
+    <Compile Include="Services\DualCameraSettingsService.cs" />
     <Compile Include="Services\SettingsManagementService.cs" />
     <Compile Include="Services\PhotoFilterService.cs" />
     <Compile Include="Services\PhotoFilterServiceMagick.cs" />

@@ -121,6 +121,13 @@ namespace Photobooth.Services
                 Log.Debug($"PhotoboothWorkflowService: Camera = {camera?.DeviceName}, Connected = {camera?.IsConnected}");
                 Log.Debug($"PhotoboothWorkflowService: Session Active = {_sessionService.IsSessionActive}");
                 
+                // Check if video mode should be started (first photo of session only)
+                // This happens when video mode was previously enabled but the service was restarted
+                var videoModeService = VideoModeLiveViewService.Instance;
+                
+                // Note: We don't auto-start video mode here anymore as it should be 
+                // explicitly enabled through settings or UI controls before starting a session
+                
                 // Ensure we're subscribed to camera events
                 Log.Debug("PhotoboothWorkflowService: Ensuring camera event subscription...");
                 EnsureCameraEventSubscription();
@@ -268,16 +275,43 @@ namespace Photobooth.Services
 
                 Log.Debug("PhotoboothWorkflowService: Executing photo capture");
                 
-                // Stop live view during capture
-                camera.StopLiveView();
+                // Check if we need to switch from video mode to photo mode
+                var videoModeService = VideoModeLiveViewService.Instance;
+                Log.Debug($"PhotoboothWorkflowService: Video mode check - IsVideoModeActive={videoModeService.IsVideoModeActive}, IsEnabled={videoModeService.IsEnabled}");
+                
+                if (videoModeService.IsVideoModeActive)
+                {
+                    Log.Debug("PhotoboothWorkflowService: Video mode is active, switching to photo mode for capture");
+                    
+                    // Fire events first (UI updates)
+                    CaptureStarted?.Invoke(this, new CaptureEventArgs 
+                    { 
+                        PhotoIndex = _sessionService.CurrentPhotoIndex + 1,
+                        TotalPhotos = _sessionService.TotalPhotosRequired
+                    });
 
-                CaptureStarted?.Invoke(this, new CaptureEventArgs 
-                { 
-                    PhotoIndex = _sessionService.CurrentPhotoIndex + 1,
-                    TotalPhotos = _sessionService.TotalPhotosRequired
-                });
+                    StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Capturing..." });
+                    
+                    // Now switch mode and WAIT for it to complete before capture
+                    bool switchResult = await videoModeService.SwitchToPhotoModeForCapture();
+                    Log.Debug($"PhotoboothWorkflowService: Switch to photo mode result: {switchResult}");
+                    
+                    // Small delay to ensure mode is fully settled
+                    await Task.Delay(20);
+                }
+                else
+                {
+                    // Stop live view during capture only if not in video mode
+                    camera.StopLiveView();
+                    
+                    CaptureStarted?.Invoke(this, new CaptureEventArgs 
+                    { 
+                        PhotoIndex = _sessionService.CurrentPhotoIndex + 1,
+                        TotalPhotos = _sessionService.TotalPhotosRequired
+                    });
 
-                StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Capturing..." });
+                    StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Capturing..." });
+                }
 
                 // Capture the photo - the camera's PhotoCaptured event will handle the result
                 // The event subscription is already ensured in StartPhotoCaptureWorkflowAsync
@@ -295,7 +329,7 @@ namespace Photobooth.Services
                 _isCapturing = false;
                 
                 // Restart live view on error
-                CurrentCamera?.StartLiveView();
+                _ = ResumeLiveViewAsync();
             }
         }
 
@@ -399,7 +433,7 @@ namespace Photobooth.Services
                 {
                     Log.Error($"PhotoboothWorkflowService: Cannot display photo - processed path is empty or file doesn't exist: {processedPhotoPath}");
                     // If we can't display the photo, we still need to resume live view
-                    CurrentCamera?.StartLiveView();
+                    await ResumeLiveViewAsync();
                 }
 
                 
@@ -427,7 +461,7 @@ namespace Photobooth.Services
                 {
                     Log.Debug("PhotoboothWorkflowService: Photo display duration is 0, skipping display");
                     // Still need to check for next photo
-                    CurrentCamera?.StartLiveView();
+                    await ResumeLiveViewAsync();
                     Log.Debug("Camera live view restarted (no photo display)");
                     await CheckAndContinueWorkflow();
                     return;
@@ -458,7 +492,7 @@ namespace Photobooth.Services
                 Log.Debug("PhotoDisplayCompleted event fired");
                 
                 // Resume live view
-                CurrentCamera?.StartLiveView();
+                await ResumeLiveViewAsync();
                 Log.Debug("Camera live view restarted");
                 
                 // Check if we need to continue with more photos
@@ -556,6 +590,44 @@ namespace Photobooth.Services
             catch (Exception ex)
             {
                 Log.Error($"PhotoboothWorkflowService: Error handling session completed: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Resume live view, using video mode if it was previously active
+        /// </summary>
+        private async Task ResumeLiveViewAsync()
+        {
+            try
+            {
+                var videoModeService = VideoModeLiveViewService.Instance;
+                
+                // Only resume video mode if it was previously active before capture
+                // Don't start it for the first time here - that should be done explicitly
+                if (videoModeService.IsEnabled && !videoModeService.IsVideoModeActive)
+                {
+                    // Video mode is enabled but not active (was switched to photo mode for capture)
+                    Log.Debug($"PhotoboothWorkflowService: Resuming video mode after capture (IsEnabled={videoModeService.IsEnabled})");
+                    _ = videoModeService.ResumeVideoModeAfterCapture();
+                }
+                else if (!videoModeService.IsEnabled)
+                {
+                    // Normal live view resume when video mode is not enabled
+                    Log.Debug("PhotoboothWorkflowService: Resuming normal live view (video mode not enabled)");
+                    CurrentCamera?.StartLiveView();
+                }
+                else
+                {
+                    // Video mode is both enabled and active - shouldn't happen but handle it
+                    Log.Debug($"PhotoboothWorkflowService: Video mode already active, starting live view");
+                    CurrentCamera?.StartLiveView();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PhotoboothWorkflowService: Error resuming live view: {ex.Message}");
+                // Fallback to normal live view on error
+                CurrentCamera?.StartLiveView();
             }
         }
         #endregion

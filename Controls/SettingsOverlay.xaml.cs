@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Documents;
 using Photobooth.Services;
 using CameraControl.Devices;
 
@@ -216,6 +217,25 @@ namespace Photobooth.Controls
                     SettingsCount = 2
                 });
                 
+                // Debug/Logging Settings
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "Debug",
+                    Icon = "🐛",
+                    Summary = $"Debug Logging: {(DebugService.Instance.IsDebugEnabled ? "Enabled" : "Disabled")}",
+                    SettingsCount = 3
+                });
+                
+                // Live View Camera Controls
+                var liveViewService = LiveViewCameraControlService.Instance;
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "Live View",
+                    Icon = "📹",
+                    Summary = $"Camera Controls: {(liveViewService.IsEnabled ? "Active" : "Inactive")}, ISO: {liveViewService.CurrentISO}",
+                    SettingsCount = 6
+                });
+                
                 CategoriesGrid.ItemsSource = categories;
             }
             catch (Exception ex)
@@ -277,6 +297,20 @@ namespace Photobooth.Controls
             if (categoryName == "Security")
             {
                 LoadSecuritySettings();
+                return;
+            }
+            
+            // Special handling for Debug category to add debug controls
+            if (categoryName == "Debug")
+            {
+                LoadDebugSettings();
+                return;
+            }
+            
+            // Special handling for Live View category to add camera controls
+            if (categoryName == "Live View")
+            {
+                LoadLiveViewCameraSettings();
                 return;
             }
             
@@ -806,6 +840,436 @@ namespace Photobooth.Controls
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 LoadCategorySettings("Security"); // Refresh the security settings
             }
+        }
+        
+        #endregion
+        
+        #region Debug Settings
+        
+        /// <summary>
+        /// Load debug/logging settings with toggle controls
+        /// </summary>
+        private void LoadDebugSettings()
+        {
+            try
+            {
+                // Debug Logging Enable toggle
+                var enableDebugSetting = new SettingItem
+                {
+                    Name = "EnableDebugLogging",
+                    DisplayName = "Enable Debug Logging",
+                    Type = SettingType.Toggle,
+                    Value = DebugService.Instance.IsDebugEnabled,
+                    Description = "Enable detailed debug logging output for troubleshooting"
+                };
+                var enableDebugControl = CreateDebugSettingControl(enableDebugSetting);
+                SettingsListPanel.Children.Add(enableDebugControl);
+                
+                // Debug Output Location info
+                var outputLocationInfo = CreateDebugInfoSection("Debug Output Location", 
+                    "Debug messages appear in:\n• Visual Studio Debug Output window\n• Debug console applications\n• Logging tools and frameworks");
+                SettingsListPanel.Children.Add(outputLocationInfo);
+                
+                // Debug Categories info
+                var categoriesInfo = CreateDebugInfoSection("Debug Categories", 
+                    "When enabled, debug logging includes:\n• UI Service operations\n• Camera operations\n• Queue service status\n• Gallery actions\n• Share operations\n• Session management");
+                SettingsListPanel.Children.Add(categoriesInfo);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Failed to load debug settings: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Create debug setting control with immediate feedback
+        /// </summary>
+        private UIElement CreateDebugSettingControl(SettingItem setting)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+            
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            
+            var stackPanel = new StackPanel { Margin = new Thickness(0, 0, 15, 0) };
+            
+            // Setting name
+            var nameText = new TextBlock
+            {
+                Text = setting.DisplayName,
+                FontSize = 16,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            stackPanel.Children.Add(nameText);
+            
+            // Description
+            var descText = new TextBlock
+            {
+                Text = setting.Description,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                TextWrapping = TextWrapping.Wrap
+            };
+            stackPanel.Children.Add(descText);
+            
+            Grid.SetColumn(stackPanel, 0);
+            grid.Children.Add(stackPanel);
+            
+            // Toggle switch
+            var toggle = new CheckBox
+            {
+                Style = (Style)FindResource("SettingToggleStyle"),
+                IsChecked = (bool)setting.Value,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            
+            // Immediate toggle handling for debug service
+            toggle.Checked += (s, e) =>
+            {
+                DebugService.Instance.IsDebugEnabled = true;
+                Log.Debug("Debug logging enabled via Settings Overlay");
+                // Update category summary
+                LoadCategories();
+            };
+            
+            toggle.Unchecked += (s, e) =>
+            {
+                Log.Debug("Debug logging disabled via Settings Overlay");
+                DebugService.Instance.IsDebugEnabled = false;
+                // Update category summary
+                LoadCategories();
+            };
+            
+            Grid.SetColumn(toggle, 1);
+            grid.Children.Add(toggle);
+            
+            container.Child = grid;
+            return container;
+        }
+        
+        /// <summary>
+        /// Create debug information section
+        /// </summary>
+        private UIElement CreateDebugInfoSection(string title, string content)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                BorderThickness = new Thickness(1)
+            };
+            
+            var stackPanel = new StackPanel();
+            
+            // Title
+            var titleText = new TextBlock
+            {
+                Text = title,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            stackPanel.Children.Add(titleText);
+            
+            // Content
+            var contentText = new TextBlock
+            {
+                Text = content,
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xB0, 0xB0, 0xB0)),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 16
+            };
+            stackPanel.Children.Add(contentText);
+            
+            container.Child = stackPanel;
+            return container;
+        }
+        
+        #endregion
+        
+        #region Live View Camera Settings
+        
+        /// <summary>
+        /// Load live view camera controls
+        /// </summary>
+        private void LoadLiveViewCameraSettings()
+        {
+            try
+            {
+                var liveViewService = LiveViewCameraControlService.Instance;
+                
+                // Enable/Disable Live View Controls toggle
+                var enableControlsSetting = new SettingItem
+                {
+                    Name = "EnableLiveViewControls",
+                    DisplayName = "Enable Live View Camera Controls",
+                    Type = SettingType.Toggle,
+                    Value = liveViewService.IsEnabled,
+                    Description = "Enable real-time camera adjustments that affect live view display"
+                };
+                var enableControlsControl = CreateLiveViewToggleControl(enableControlsSetting);
+                SettingsListPanel.Children.Add(enableControlsControl);
+                
+                // Camera Settings Section
+                if (liveViewService.IsEnabled)
+                {
+                    // ISO Control
+                    var isoControl = CreateLiveViewComboControl("ISO", "Current ISO Setting", 
+                        liveViewService.GetAvailableISOValues(), liveViewService.CurrentISO,
+                        (value) => liveViewService.SetISO(value));
+                    SettingsListPanel.Children.Add(isoControl);
+                    
+                    // Aperture Control
+                    var apertureControl = CreateLiveViewComboControl("Aperture", "Current Aperture Setting", 
+                        liveViewService.GetAvailableApertureValues(), liveViewService.CurrentAperture,
+                        (value) => liveViewService.SetAperture(value));
+                    SettingsListPanel.Children.Add(apertureControl);
+                    
+                    // Shutter Speed Control
+                    var shutterControl = CreateLiveViewComboControl("Shutter Speed", "Current Shutter Speed Setting", 
+                        liveViewService.GetAvailableShutterSpeedValues(), liveViewService.CurrentShutterSpeed,
+                        (value) => liveViewService.SetShutterSpeed(value));
+                    SettingsListPanel.Children.Add(shutterControl);
+                    
+                    // White Balance Control
+                    var wbControl = CreateLiveViewComboControl("White Balance", "Current White Balance Setting", 
+                        liveViewService.GetAvailableWhiteBalanceValues(), liveViewService.CurrentWhiteBalance,
+                        (value) => liveViewService.SetWhiteBalance(value));
+                    SettingsListPanel.Children.Add(wbControl);
+                    
+                    // Exposure Compensation Control
+                    var expControl = CreateLiveViewComboControl("Exposure Compensation", "Current Exposure Compensation Setting", 
+                        liveViewService.GetAvailableExposureCompensationValues(), liveViewService.CurrentExposureCompensation,
+                        (value) => liveViewService.SetExposureCompensation(value));
+                    SettingsListPanel.Children.Add(expControl);
+                }
+                
+                // Information Section
+                var infoSection = CreateLiveViewInfoSection();
+                SettingsListPanel.Children.Add(infoSection);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Failed to load live view camera settings: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Create live view toggle control with immediate feedback
+        /// </summary>
+        private UIElement CreateLiveViewToggleControl(SettingItem setting)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+            
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            
+            var stackPanel = new StackPanel { Margin = new Thickness(0, 0, 15, 0) };
+            
+            // Setting name
+            var nameText = new TextBlock
+            {
+                Text = setting.DisplayName,
+                FontSize = 16,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            stackPanel.Children.Add(nameText);
+            
+            // Description
+            var descText = new TextBlock
+            {
+                Text = setting.Description,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                TextWrapping = TextWrapping.Wrap
+            };
+            stackPanel.Children.Add(descText);
+            
+            Grid.SetColumn(stackPanel, 0);
+            grid.Children.Add(stackPanel);
+            
+            // Toggle switch
+            var toggle = new CheckBox
+            {
+                Style = (Style)FindResource("SettingToggleStyle"),
+                IsChecked = (bool)setting.Value,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            
+            // Immediate toggle handling
+            toggle.Checked += (s, e) =>
+            {
+                LiveViewCameraControlService.Instance.IsEnabled = true;
+                LoadCategories(); // Refresh category summary
+                LoadLiveViewCameraSettings(); // Refresh this panel
+            };
+            
+            toggle.Unchecked += (s, e) =>
+            {
+                LiveViewCameraControlService.Instance.IsEnabled = false;
+                LoadCategories(); // Refresh category summary  
+                LoadLiveViewCameraSettings(); // Refresh this panel
+            };
+            
+            Grid.SetColumn(toggle, 1);
+            grid.Children.Add(toggle);
+            
+            container.Child = grid;
+            return container;
+        }
+        
+        /// <summary>
+        /// Create live view combo box control for camera settings
+        /// </summary>
+        private UIElement CreateLiveViewComboControl(string displayName, string description, 
+            List<string> options, string currentValue, Action<string> onChange)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+            
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            
+            var stackPanel = new StackPanel { Margin = new Thickness(0, 0, 15, 0) };
+            
+            // Setting name
+            var nameText = new TextBlock
+            {
+                Text = displayName,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 3)
+            };
+            stackPanel.Children.Add(nameText);
+            
+            // Description
+            var descText = new TextBlock
+            {
+                Text = description,
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0))
+            };
+            stackPanel.Children.Add(descText);
+            
+            Grid.SetColumn(stackPanel, 0);
+            grid.Children.Add(stackPanel);
+            
+            // ComboBox
+            var comboBox = new ComboBox
+            {
+                Width = 120,
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
+                Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                BorderThickness = new Thickness(1)
+            };
+            
+            foreach (var option in options)
+            {
+                comboBox.Items.Add(option);
+            }
+            
+            // Set current selection
+            var currentIndex = options.IndexOf(currentValue);
+            if (currentIndex >= 0)
+                comboBox.SelectedIndex = currentIndex;
+            
+            // Handle selection changes
+            comboBox.SelectionChanged += (s, e) =>
+            {
+                if (comboBox.SelectedItem != null)
+                {
+                    onChange(comboBox.SelectedItem.ToString());
+                    LoadCategories(); // Refresh category summary
+                }
+            };
+            
+            Grid.SetColumn(comboBox, 1);
+            grid.Children.Add(comboBox);
+            
+            container.Child = grid;
+            return container;
+        }
+        
+        /// <summary>
+        /// Create live view information section
+        /// </summary>
+        private UIElement CreateLiveViewInfoSection()
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                BorderThickness = new Thickness(1)
+            };
+            
+            var stackPanel = new StackPanel();
+            
+            // Title
+            var titleText = new TextBlock
+            {
+                Text = "Live View Camera Controls",
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            stackPanel.Children.Add(titleText);
+            
+            // Content
+            var contentText = new TextBlock
+            {
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xB0, 0xB0, 0xB0)),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 16
+            };
+            contentText.Inlines.Add(new Run("Real-time camera adjustments that affect live view display:\n"));
+            contentText.Inlines.Add(new Run("• ISO: Controls sensor sensitivity and image brightness\n"));
+            contentText.Inlines.Add(new Run("• Aperture: Controls depth of field and exposure\n"));
+            contentText.Inlines.Add(new Run("• Shutter Speed: Controls motion blur and exposure\n"));
+            contentText.Inlines.Add(new Run("• White Balance: Controls color temperature\n"));
+            contentText.Inlines.Add(new Run("• Exposure Compensation: Fine-tune overall exposure\n\n"));
+            contentText.Inlines.Add(new Run("Note: These settings affect live view preview only. Original camera settings are restored when disabled."));
+            
+            stackPanel.Children.Add(contentText);
+            
+            container.Child = stackPanel;
+            return container;
         }
         
         #endregion

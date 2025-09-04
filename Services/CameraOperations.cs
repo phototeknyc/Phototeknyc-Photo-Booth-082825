@@ -195,7 +195,7 @@ namespace Photobooth.Services
         /// <summary>
         /// Capture a photo with the current camera
         /// </summary>
-        public void CapturePhoto()
+        public async void CapturePhoto()
         {
             try
             {
@@ -204,6 +204,16 @@ namespace Photobooth.Services
                 {
                     Log.Error("No camera device selected");
                     return;
+                }
+                
+                // Check if we need to switch from video mode to photo mode
+                var videoModeService = VideoModeLiveViewService.Instance;
+                if (videoModeService.IsVideoModeActive)
+                {
+                    Log.Debug("Switching from video mode to photo mode for capture");
+                    await videoModeService.SwitchToPhotoModeForCapture();
+                    // Brief delay to ensure mode switch is complete
+                    await Task.Delay(200);
                 }
                 
                 // Freeze the live view image briefly
@@ -221,6 +231,16 @@ namespace Photobooth.Services
                 device.CapturePhoto();
                 
                 Log.Debug("Photo capture initiated");
+                
+                // Schedule return to video mode immediately
+                if (videoModeService.IsEnabled)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(100); // Ultra-minimal wait just for capture command to register
+                        await videoModeService.ResumeVideoModeAfterCapture();
+                    });
+                }
             }
             catch (Exception ex)
             {

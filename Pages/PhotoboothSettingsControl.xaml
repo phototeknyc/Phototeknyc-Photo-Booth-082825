@@ -2690,6 +2690,99 @@
                 </StackPanel>
             </Expander>
             
+            <!-- Debug & Logging Settings -->
+            <Expander Header="Debug &amp; Logging" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🐛" FontSize="16" Margin="0,0,8,0"/>
+                            <TextBlock Text="{Binding}" FontSize="14" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="20,15,20,20">
+                    
+                    <!-- Debug Logging Toggle -->
+                    <Border Style="{StaticResource SettingBorderStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Enable Debug Logging" 
+                                       FontSize="16" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="White" 
+                                       Margin="0,0,0,8"/>
+                            
+                            <TextBlock Text="Enable detailed debug logging for troubleshooting. Debug messages appear in Visual Studio Debug Output window and logging tools."
+                                       FontSize="12"
+                                       Foreground="#B0B0B0"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,12"/>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding ElementName=DebugLoggingToggle, Path=IsChecked, Converter={StaticResource BoolToEnableText}}"
+                                           FontSize="14"
+                                           VerticalAlignment="Center"
+                                           Foreground="#4CAF50"/>
+                                
+                                <CheckBox x:Name="DebugLoggingToggle"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ModernToggleStyle}"
+                                          Checked="DebugLoggingToggle_Checked"
+                                          Unchecked="DebugLoggingToggle_Unchecked"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Debug Information -->
+                    <Border Style="{StaticResource InfoBorderStyle}" Margin="0,15,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Debug Output Locations" 
+                                       FontSize="14" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="#4CAF50" 
+                                       Margin="0,0,0,8"/>
+                            
+                            <TextBlock FontSize="12" 
+                                       Foreground="#B0B0B0" 
+                                       TextWrapping="Wrap">
+                                <Run Text="When debug logging is enabled, messages appear in:"/>
+                                <LineBreak/>
+                                <Run Text="• Visual Studio Debug Output window"/>
+                                <LineBreak/>
+                                <Run Text="• Debug console applications"/>
+                                <LineBreak/>
+                                <Run Text="• External logging tools and frameworks"/>
+                                <LineBreak/>
+                                <LineBreak/>
+                                <Run Text="Debug categories include: UI operations, camera operations, queue status, gallery actions, sharing operations, and session management."/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Debug Status -->
+                    <Border Style="{StaticResource InfoBorderStyle}" Margin="0,15,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Current Debug Status" 
+                                       FontSize="14" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="#4CAF50" 
+                                       Margin="0,0,0,8"/>
+                            
+                            <TextBlock x:Name="DebugStatusText"
+                                       FontSize="12" 
+                                       Foreground="#B0B0B0"
+                                       Text="Debug logging is currently disabled"/>
+                        </StackPanel>
+                    </Border>
+                    
+                </StackPanel>
+            </Expander>
+            
             <!-- Action Buttons -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,40,0,40">
                 <Button Content="Save Settings" 

@@ -206,7 +206,7 @@ namespace CameraControl.Devices.Classes
             Thread thread = new Thread(OnValueChangedThread);
             thread.Name = "SetProperty thread " + Name;
             thread.Start(new object[] { sender, key, val });
-            thread.Join(200);
+            thread.Join(10); // Reduced from 200ms to 10ms for faster property changes
         }
 
         public void OnValueChangedThread(object obj)
@@ -233,7 +233,7 @@ namespace CameraControl.Devices.Classes
                         {
                             retrynum--;
                             retry = true;
-                            Thread.Sleep(100);
+                            Thread.Sleep(10); // Reduced from 100ms to 10ms for faster retries
                         }
                     }
                 } while (retry);

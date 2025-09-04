@@ -207,6 +207,9 @@ namespace Photobooth.Pages
                 
                 // Load cloud settings
                 LoadCloudSettings();
+                
+                // Load debug logging settings
+                LoadDebugLoggingSettings();
             }
             catch (Exception)
             {
@@ -3581,6 +3584,91 @@ namespace Photobooth.Pages
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error syncing settings reset from service: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #region Debug Logging Settings
+        
+        /// <summary>
+        /// Load debug logging settings and initialize UI
+        /// </summary>
+        private void LoadDebugLoggingSettings()
+        {
+            try
+            {
+                // Set the toggle state based on current debug service state
+                if (DebugLoggingToggle != null)
+                {
+                    DebugLoggingToggle.IsChecked = DebugService.Instance.IsDebugEnabled;
+                }
+                
+                // Update the status display
+                UpdateDebugStatus();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading debug settings: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #region Debug Settings Event Handlers
+        
+        /// <summary>
+        /// Handle debug logging toggle checked event
+        /// </summary>
+        private void DebugLoggingToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                DebugService.Instance.IsDebugEnabled = true;
+                UpdateDebugStatus();
+                DebugService.LogDebug("Debug logging enabled via Settings Control");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error enabling debug logging: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Handle debug logging toggle unchecked event
+        /// </summary>
+        private void DebugLoggingToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                DebugService.LogDebug("Debug logging disabled via Settings Control");
+                DebugService.Instance.IsDebugEnabled = false;
+                UpdateDebugStatus();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error disabling debug logging: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Update debug status display
+        /// </summary>
+        private void UpdateDebugStatus()
+        {
+            try
+            {
+                bool isEnabled = DebugService.Instance.IsDebugEnabled;
+                DebugStatusText.Text = isEnabled 
+                    ? "Debug logging is currently enabled. Messages appear in Debug Output window."
+                    : "Debug logging is currently disabled.";
+                DebugStatusText.Foreground = new SolidColorBrush(isEnabled 
+                    ? Color.FromRgb(76, 175, 80)    // Green when enabled
+                    : Color.FromRgb(176, 176, 176)); // Gray when disabled
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating debug status: {ex.Message}");
             }
         }
         
