@@ -3669,6 +3669,15 @@ namespace Photobooth.Pages
             {
                 Log.Debug("=== STARTING PHOTO SESSION USING CLEAN SERVICES ===");
                 
+                // Check if capture modes are enabled
+                var captureModesService = CaptureModesService.Instance;
+                if (captureModesService.IsEnabled && captureModesService.HasMultipleModes)
+                {
+                    // Show capture modes overlay for user to select
+                    ShowCaptureModesOverlay();
+                    return;
+                }
+                
                 // Ensure template and event are loaded
                 if (!await EnsureTemplateAndEvent())
                     return;
@@ -6103,6 +6112,171 @@ namespace Photobooth.Pages
         }
         
         #endregion
+        
+        #endregion
+        
+        #region Capture Modes Integration
+        
+        private void ShowCaptureModesOverlay()
+        {
+            if (CaptureModesOverlay == null) return;
+            
+            // Subscribe to overlay events
+            CaptureModesOverlay.ModeSelected -= OnCaptureModeSelected;
+            CaptureModesOverlay.ModeSelected += OnCaptureModeSelected;
+            
+            // Show the overlay
+            CaptureModesOverlay.Show();
+        }
+        
+        private async void OnCaptureModeSelected(object sender, Photobooth.Services.CaptureMode mode)
+        {
+            Log.Debug($"Capture mode selected: {mode}");
+            
+            // Ensure template and event are loaded
+            if (!await EnsureTemplateAndEvent())
+                return;
+            
+            // Handle different capture modes
+            switch (mode)
+            {
+                case Photobooth.Services.CaptureMode.Photo:
+                    await StartStandardPhotoSession();
+                    break;
+                    
+                case Photobooth.Services.CaptureMode.Video:
+                    await StartVideoSession();
+                    break;
+                    
+                case Photobooth.Services.CaptureMode.Gif:
+                    await StartGifSession();
+                    break;
+                    
+                case Photobooth.Services.CaptureMode.Boomerang:
+                    await StartBoomerangSession();
+                    break;
+                    
+                case Photobooth.Services.CaptureMode.GreenScreen:
+                    await StartGreenScreenSession();
+                    break;
+                    
+                case Photobooth.Services.CaptureMode.AI:
+                    await StartAISession();
+                    break;
+                    
+                case Photobooth.Services.CaptureMode.Flipbook:
+                    await StartFlipbookSession();
+                    break;
+            }
+        }
+        
+        private async Task StartStandardPhotoSession()
+        {
+            // Standard photo capture - same as before
+            bool sessionStarted = await _sessionService.StartSessionAsync(
+                _currentEvent, 
+                _currentTemplate, 
+                GetTotalPhotosNeeded());
+            
+            if (sessionStarted)
+            {
+                await _workflowService.StartPhotoCaptureWorkflowAsync();
+            }
+        }
+        
+        private async Task StartVideoSession()
+        {
+            // Start video recording session
+            var videoService = Services.VideoRecordingService.Instance;
+            if (videoService != null)
+            {
+                bool sessionStarted = await _sessionService.StartSessionAsync(
+                    _currentEvent, 
+                    _currentTemplate, 
+                    0); // No photos for video
+                
+                if (sessionStarted)
+                {
+                    await videoService.StartRecording();
+                }
+            }
+        }
+        
+        private async Task StartGifSession()
+        {
+            // Start GIF capture session (typically 4 photos)
+            bool sessionStarted = await _sessionService.StartSessionAsync(
+                _currentEvent, 
+                _currentTemplate, 
+                4); // 4 photos for GIF
+            
+            if (sessionStarted)
+            {
+                // TODO: Track GIF session mode in PhotoboothSessionService
+                // _sessionService.IsGifSession = true;
+                await _workflowService.StartPhotoCaptureWorkflowAsync();
+            }
+        }
+        
+        private async Task StartBoomerangSession()
+        {
+            // Start Boomerang session (rapid burst)
+            bool sessionStarted = await _sessionService.StartSessionAsync(
+                _currentEvent, 
+                _currentTemplate, 
+                10); // 10 photos for boomerang
+            
+            if (sessionStarted)
+            {
+                // Set rapid capture mode
+                await _workflowService.StartPhotoCaptureWorkflowAsync();
+            }
+        }
+        
+        private async Task StartGreenScreenSession()
+        {
+            // Start green screen session
+            bool sessionStarted = await _sessionService.StartSessionAsync(
+                _currentEvent, 
+                _currentTemplate, 
+                1); // Single photo with green screen
+            
+            if (sessionStarted)
+            {
+                // Enable green screen processing
+                await _workflowService.StartPhotoCaptureWorkflowAsync();
+            }
+        }
+        
+        private async Task StartAISession()
+        {
+            // Start AI-enhanced photo session
+            bool sessionStarted = await _sessionService.StartSessionAsync(
+                _currentEvent, 
+                _currentTemplate, 
+                1); // Single photo with AI enhancement
+            
+            if (sessionStarted)
+            {
+                // Enable AI processing
+                await _workflowService.StartPhotoCaptureWorkflowAsync();
+            }
+        }
+        
+        private async Task StartFlipbookSession()
+        {
+            // Start flipbook session (many rapid photos)
+            bool sessionStarted = await _sessionService.StartSessionAsync(
+                _currentEvent, 
+                _currentTemplate, 
+                8); // 8 photos for flipbook
+            
+            if (sessionStarted)
+            {
+                // Set rapid capture for flipbook
+                await _workflowService.StartPhotoCaptureWorkflowAsync();
+            }
+        }
         
         #endregion
     }

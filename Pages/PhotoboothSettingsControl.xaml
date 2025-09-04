@@ -2797,6 +2797,127 @@
                         Click="OpenPhotobooth_Click"
                         Style="{StaticResource OpenButtonStyle}"/>
             </StackPanel>
+            
+            <!-- Capture Modes Section -->
+            <Border Style="{StaticResource GlassBorderStyle}" 
+                    Margin="0,30,0,30" Background="{StaticResource SurfaceBrush}">
+                <StackPanel Margin="30">
+                    <TextBlock Text="Capture Modes" 
+                               Style="{StaticResource SurfaceTextPrimaryStyle}"
+                               FontSize="22" FontWeight="Bold" Margin="0,0,0,20"/>
+                    
+                    <!-- Enable Capture Modes -->
+                    <CheckBox x:Name="EnableCaptureModesCheckBox"
+                              Style="{StaticResource ModernSwitchStyle}"
+                              IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModesEnabled}"
+                              Margin="0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Enable Multiple Capture Modes" 
+                                       Style="{StaticResource SurfaceTextPrimaryStyle}"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Text="(Allow users to select different capture types)" 
+                                       Style="{StaticResource SurfaceTextSecondaryStyle}"
+                                       VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        </StackPanel>
+                    </CheckBox>
+
+                    <!-- Individual Mode Settings -->
+                    <Grid Margin="30,20,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Photo Mode -->
+                        <CheckBox Grid.Row="0" Grid.Column="0"
+                                  Style="{StaticResource ModernSwitchStyle}"
+                                  IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModePhoto}"
+                                  IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
+                                  Margin="0,5">
+                            <TextBlock Text="Photo" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                        </CheckBox>
+
+                        <!-- Video Mode -->
+                        <CheckBox Grid.Row="0" Grid.Column="1"
+                                  Style="{StaticResource ModernSwitchStyle}"
+                                  IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeVideo}"
+                                  IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
+                                  Margin="0,5">
+                            <TextBlock Text="Video" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                        </CheckBox>
+
+                        <!-- Boomerang Mode -->
+                        <CheckBox Grid.Row="1" Grid.Column="0"
+                                  Style="{StaticResource ModernSwitchStyle}"
+                                  IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeBoomerang}"
+                                  IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
+                                  Margin="0,5">
+                            <TextBlock Text="Boomerang" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                        </CheckBox>
+
+                        <!-- GIF Mode -->
+                        <CheckBox Grid.Row="1" Grid.Column="1"
+                                  Style="{StaticResource ModernSwitchStyle}"
+                                  IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeGif}"
+                                  IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
+                                  Margin="0,5">
+                            <TextBlock Text="GIF" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                        </CheckBox>
+
+                        <!-- Green Screen Mode -->
+                        <CheckBox Grid.Row="2" Grid.Column="0"
+                                  Style="{StaticResource ModernSwitchStyle}"
+                                  IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeGreenScreen}"
+                                  IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
+                                  Margin="0,5">
+                            <TextBlock Text="Green Screen" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                        </CheckBox>
+
+                        <!-- AI Mode -->
+                        <CheckBox Grid.Row="2" Grid.Column="1"
+                                  Style="{StaticResource ModernSwitchStyle}"
+                                  IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeAI}"
+                                  IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
+                                  Margin="0,5">
+                            <TextBlock Text="AI Photo" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                        </CheckBox>
+
+                        <!-- Flipbook Mode -->
+                        <CheckBox Grid.Row="3" Grid.Column="0"
+                                  Style="{StaticResource ModernSwitchStyle}"
+                                  IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeFlipbook}"
+                                  IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
+                                  Margin="0,5">
+                            <TextBlock Text="Flipbook" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                        </CheckBox>
+                    </Grid>
+
+                    <!-- Default Mode Selection -->
+                    <StackPanel Margin="0,20,0,0">
+                        <TextBlock Text="Default Capture Mode:" 
+                                   Style="{StaticResource SurfaceTextPrimaryStyle}"
+                                   Margin="0,0,0,10"/>
+                        <ComboBox x:Name="DefaultCaptureModeCombo"
+                                  Width="200" HorizontalAlignment="Left"
+                                  IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
+                                  SelectionChanged="DefaultCaptureModeCombo_SelectionChanged">
+                            <ComboBoxItem Content="Photo"/>
+                            <ComboBoxItem Content="Video"/>
+                            <ComboBoxItem Content="Boomerang"/>
+                            <ComboBoxItem Content="Gif"/>
+                            <ComboBoxItem Content="GreenScreen"/>
+                            <ComboBoxItem Content="AI"/>
+                            <ComboBoxItem Content="Flipbook"/>
+                        </ComboBox>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

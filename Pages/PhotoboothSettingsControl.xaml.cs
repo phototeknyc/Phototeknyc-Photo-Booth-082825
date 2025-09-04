@@ -3671,6 +3671,24 @@ namespace Photobooth.Pages
                 System.Diagnostics.Debug.WriteLine($"Error updating debug status: {ex.Message}");
             }
         }
+
+        private void DefaultCaptureModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Save the selected default capture mode
+            if (DefaultCaptureModeCombo?.SelectedItem is ComboBoxItem selectedItem)
+            {
+                string modeName = selectedItem.Content.ToString();
+                Properties.Settings.Default.DefaultCaptureMode = modeName;
+                Properties.Settings.Default.Save();
+                
+                // Update the service
+                var service = Photobooth.Services.CaptureModesService.Instance;
+                if (Enum.TryParse<Photobooth.Services.CaptureMode>(modeName, out var mode))
+                {
+                    service.CurrentMode = mode;
+                }
+            }
+        }
         
         #endregion
     }

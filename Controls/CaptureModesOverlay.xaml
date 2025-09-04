@@ -1,0 +1,235 @@
+<UserControl x:Class="Photobooth.Controls.CaptureModesOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Photobooth.Controls"
+             mc:Ignorable="d" 
+             d:DesignHeight="1080" d:DesignWidth="1920">
+    
+    <UserControl.Resources>
+        <!-- Capture Mode Button Style -->
+        <Style x:Key="CaptureModeButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="200"/>
+            <Setter Property="Height" Value="250"/>
+            <Setter Property="Margin" Value="20"/>
+            <Setter Property="Background" Value="#FF2C2C2C"/>
+            <Setter Property="BorderBrush" Value="#FF4A4A4A"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" 
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="15">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="2*"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="20"/>
+                                </Grid.RowDefinitions>
+                                
+                                <!-- Icon -->
+                                <Viewbox Grid.Row="0" Margin="20,20,20,10">
+                                    <ContentPresenter x:Name="IconPresenter" 
+                                                      Content="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Tag}"/>
+                                </Viewbox>
+                                
+                                <!-- Mode Name -->
+                                <TextBlock Grid.Row="1" 
+                                           Text="{TemplateBinding Content}"
+                                           HorizontalAlignment="Center"
+                                           FontSize="20"
+                                           FontWeight="Bold"
+                                           Margin="5"/>
+                                
+                                <!-- Description -->
+                                <TextBlock Grid.Row="2" 
+                                           x:Name="DescriptionText"
+                                           Text=""
+                                           HorizontalAlignment="Center"
+                                           FontSize="12"
+                                           Opacity="0.7"
+                                           Margin="10,0,10,0"
+                                           TextWrapping="Wrap"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#FF3C3C3C"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#FF00BCD4"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="3"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#FF1C1C1C"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Close Button Style -->
+        <Style x:Key="CloseButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="50"/>
+            <Setter Property="Height" Value="50"/>
+            <Setter Property="Background" Value="#FF2C2C2C"/>
+            <Setter Property="BorderBrush" Value="#FF4A4A4A"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="24"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="25">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid x:Name="MainGrid" Visibility="Collapsed">
+        <!-- Semi-transparent background -->
+        <Rectangle Fill="Black" Opacity="0.8"/>
+        
+        <!-- Main Content -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="100"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="100"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Header -->
+            <Grid Grid.Row="0">
+                <TextBlock Text="Select Capture Mode" 
+                           HorizontalAlignment="Center" 
+                           VerticalAlignment="Center"
+                           FontSize="36" 
+                           FontWeight="Bold" 
+                           Foreground="White"/>
+                
+                <!-- Close Button -->
+                <Button x:Name="CloseButton" 
+                        Style="{StaticResource CloseButtonStyle}"
+                        Content="✕"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Margin="30"
+                        Click="CloseButton_Click"/>
+            </Grid>
+            
+            <!-- Capture Mode Buttons -->
+            <ScrollViewer Grid.Row="1" 
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled">
+                <WrapPanel x:Name="ModesPanel" 
+                           Orientation="Horizontal"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center">
+                    
+                    <!-- Photo Mode -->
+                    <Button x:Name="PhotoModeButton" 
+                            Style="{StaticResource CaptureModeButtonStyle}"
+                            Content="Photo"
+                            Click="ModeButton_Click">
+                        <Button.Tag>
+                            <Path Data="M12 15.2L8.4 11.6l1.4-1.4 2.2 2.2 4.6-4.6 1.4 1.4L12 15.2zM4 20q-.825 0-1.412-.587Q2 18.825 2 18V6q0-.825.588-1.412Q3.175 4 4 4h3.15L9 2h6l1.85 2H20q.825 0 1.413.588Q22 5.175 22 6v12q0 .825-.587 1.413Q20.825 20 20 20Zm16-2V6H4v12ZM4 18V6v12Z"
+                                  Fill="White" Stretch="Uniform" Width="60" Height="60"/>
+                        </Button.Tag>
+                    </Button>
+                    
+                    <!-- Video Mode -->
+                    <Button x:Name="VideoModeButton" 
+                            Style="{StaticResource CaptureModeButtonStyle}"
+                            Content="Video"
+                            Click="ModeButton_Click">
+                        <Button.Tag>
+                            <Path Data="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
+                                  Fill="White" Stretch="Uniform" Width="60" Height="60"/>
+                        </Button.Tag>
+                    </Button>
+                    
+                    <!-- Boomerang Mode -->
+                    <Button x:Name="BoomerangModeButton" 
+                            Style="{StaticResource CaptureModeButtonStyle}"
+                            Content="Boomerang"
+                            Click="ModeButton_Click">
+                        <Button.Tag>
+                            <Path Data="M7.47 21.5C4.2 19.93 1.86 16.76 1.5 13H0c.5 6.16 5.66 11 11.95 11 .23 0 .44 0 .66-.03L8.8 20.15 7.47 21.5zM12.05 0c-.23 0-.44 0-.66.04l3.81 3.81 1.33-1.35C19.8 4.07 22.14 7.24 22.5 11H24c-.5-6.16-5.66-11-11.95-11zM16.53 2.5l1.33 1.35L8.8 12.91l-1.33-1.35L16.53 2.5z"
+                                  Fill="White" Stretch="Uniform" Width="60" Height="60"/>
+                        </Button.Tag>
+                    </Button>
+                    
+                    <!-- GIF Mode -->
+                    <Button x:Name="GifModeButton" 
+                            Style="{StaticResource CaptureModeButtonStyle}"
+                            Content="GIF"
+                            Click="ModeButton_Click">
+                        <Button.Tag>
+                            <TextBlock Text="GIF" FontSize="40" FontWeight="Bold" Foreground="White"/>
+                        </Button.Tag>
+                    </Button>
+                    
+                    <!-- Green Screen Mode -->
+                    <Button x:Name="GreenScreenModeButton" 
+                            Style="{StaticResource CaptureModeButtonStyle}"
+                            Content="Green Screen"
+                            Click="ModeButton_Click">
+                        <Button.Tag>
+                            <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+                                  Fill="#00FF00" Stretch="Uniform" Width="60" Height="60"/>
+                        </Button.Tag>
+                    </Button>
+                    
+                    <!-- AI Mode -->
+                    <Button x:Name="AIModeButton" 
+                            Style="{StaticResource CaptureModeButtonStyle}"
+                            Content="AI Photo"
+                            Click="ModeButton_Click">
+                        <Button.Tag>
+                            <Path Data="M21.928 11.607c-.202-.488-.635-.605-.928-.633V8c0-1.103-.897-2-2-2h-6V4.61c.305-.274.5-.668.5-1.11 0-.828-.672-1.5-1.5-1.5s-1.5.672-1.5 1.5c0 .442.195.836.5 1.11V6H5c-1.103 0-2 .897-2 2v2.997l-.082.006c-.395.081-.768.285-.957.684-.104.218-.151.451-.151.707 0 .256.047.489.151.707.189.399.562.603.957.684l.082.006V16c0 1.103.897 2 2 2h14c1.103 0 2-.897 2-2v-2.974c.293-.028.726-.145.928-.633.181-.434.181-1.352 0-1.786zM12 2.5c.276 0 .5.224.5.5s-.224.5-.5.5-.5-.224-.5-.5.224-.5.5-.5zM5 8h14l.001 3H5V8zm0 8v-3h14v3H5z"
+                                  Fill="#FF6B6B" Stretch="Uniform" Width="60" Height="60"/>
+                        </Button.Tag>
+                    </Button>
+                    
+                    <!-- Flipbook Mode -->
+                    <Button x:Name="FlipbookModeButton" 
+                            Style="{StaticResource CaptureModeButtonStyle}"
+                            Content="Flipbook"
+                            Click="ModeButton_Click">
+                        <Button.Tag>
+                            <Path Data="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM5 19V5h14v14H5z M7 7h5v5H7z M14 7h3v3h-3z M14 12h3v3h-3z M7 14h5v3H7z"
+                                  Fill="White" Stretch="Uniform" Width="60" Height="60"/>
+                        </Button.Tag>
+                    </Button>
+                </WrapPanel>
+            </ScrollViewer>
+            
+            <!-- Footer Info -->
+            <TextBlock Grid.Row="2" 
+                       x:Name="InfoTextBlock"
+                       Text="Select a capture mode to begin"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="18"
+                       Foreground="White"
+                       Opacity="0.8"/>
+        </Grid>
+    </Grid>
+</UserControl>

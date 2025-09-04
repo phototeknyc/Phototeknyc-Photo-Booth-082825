@@ -375,6 +375,9 @@ namespace Photobooth.Services
         Photo,
         Video,
         Boomerang,
+        Gif,
+        GreenScreen,
+        AI,
         Flipbook
     }
 }

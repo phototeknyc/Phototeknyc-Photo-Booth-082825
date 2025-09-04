@@ -99,6 +99,12 @@
                                       Grid.RowSpan="3"
                                       Panel.ZIndex="999"/>
         
+        <!-- Capture Modes Overlay -->
+        <controls:CaptureModesOverlay x:Name="CaptureModesOverlay"
+                                      Grid.RowSpan="3"
+                                      Panel.ZIndex="998"
+                                      Visibility="Collapsed"/>
+        
         <!-- Main Live View Area -->
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
@@ -1740,5 +1746,8 @@
                                    Visibility="Collapsed"
                                    Grid.RowSpan="10"
                                    Panel.ZIndex="9999"/>
+        <!-- Capture Modes Overlay -->
+        <controls:CaptureModesOverlay x:Name="captureModesOverlay" 
+                                       Visibility="Collapsed"/>
     </Grid>
 </Page>
