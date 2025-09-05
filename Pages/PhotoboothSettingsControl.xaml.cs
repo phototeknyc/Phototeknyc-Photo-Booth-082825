@@ -3481,6 +3481,84 @@ namespace Photobooth.Pages
             }
         }
         
+        private void EnableVideoCompression_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (enableVideoCompressionCheckBox != null)
+                {
+                    bool isEnabled = enableVideoCompressionCheckBox.IsChecked == true;
+                    Properties.Settings.Default.EnableVideoCompression = isEnabled;
+                    Properties.Settings.Default.Save();
+                    
+                    System.Diagnostics.Debug.WriteLine($"[SETTINGS] Video compression enabled: {isEnabled}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"EnableVideoCompression_Changed error: {ex.Message}");
+            }
+        }
+        
+        private void VideoCompressionQuality_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                if (videoCompressionQualityComboBox?.SelectedItem != null && compressionEstimateText != null)
+                {
+                    var selectedItem = (ComboBoxItem)videoCompressionQualityComboBox.SelectedItem;
+                    string quality = selectedItem.Tag?.ToString() ?? "medium";
+                    
+                    Properties.Settings.Default.VideoCompressionQuality = quality;
+                    Properties.Settings.Default.Save();
+                    
+                    // Update estimate text based on quality
+                    switch (quality)
+                    {
+                        case "low":
+                            compressionEstimateText.Text = "Estimated size reduction: 80-90%";
+                            break;
+                        case "medium":
+                            compressionEstimateText.Text = "Estimated size reduction: 60-80%";
+                            break;
+                        case "high":
+                            compressionEstimateText.Text = "Estimated size reduction: 40-60%";
+                            break;
+                        case "veryhigh":
+                            compressionEstimateText.Text = "Estimated size reduction: 20-40%";
+                            break;
+                    }
+                    
+                    System.Diagnostics.Debug.WriteLine($"[SETTINGS] Video compression quality set to: {quality}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"VideoCompressionQuality_Changed error: {ex.Message}");
+            }
+        }
+        
+        private void VideoUploadResolution_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                if (videoUploadResolutionComboBox?.SelectedItem != null)
+                {
+                    var selectedItem = (ComboBoxItem)videoUploadResolutionComboBox.SelectedItem;
+                    string resolution = selectedItem.Tag?.ToString() ?? "1080p";
+                    
+                    Properties.Settings.Default.VideoUploadResolution = resolution;
+                    Properties.Settings.Default.Save();
+                    
+                    System.Diagnostics.Debug.WriteLine($"[SETTINGS] Video upload resolution set to: {resolution}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"VideoUploadResolution_Changed error: {ex.Message}");
+            }
+        }
+        
         private void EnableBoomerangModule_Changed(object sender, RoutedEventArgs e)
         {
             try

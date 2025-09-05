@@ -279,11 +279,67 @@ namespace Photobooth.Services
                         
                         if (isVideo)
                         {
-                            // Upload video file directly without resizing
-                            System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Uploading video file: {Path.GetFileName(photoPath)}");
+                            System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Processing video file: {Path.GetFileName(photoPath)}");
+                            
+                            string videoToUpload = photoPath;
+                            string compressedPath = null;
+                            
+                            // Check if compression is enabled
+                            bool compressionEnabled = Properties.Settings.Default.EnableVideoCompression;
+                            
+                            if (compressionEnabled)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Compressing video before upload...");
+                                
+                                // Compress the video
+                                var compressionService = VideoCompressionService.Instance;
+                                if (compressionService.IsFFmpegAvailable())
+                                {
+                                    try
+                                    {
+                                        // Generate compressed file path
+                                        string tempDir = Path.GetTempPath();
+                                        string compressedFileName = $"compressed_{Guid.NewGuid():N}.mp4";
+                                        compressedPath = Path.Combine(tempDir, compressedFileName);
+                                        
+                                        // Compress the video
+                                        string resultPath = await compressionService.CompressVideoAsync(photoPath, compressedPath);
+                                        
+                                        if (!string.IsNullOrEmpty(resultPath) && File.Exists(resultPath))
+                                        {
+                                            videoToUpload = resultPath;
+                                            
+                                            // Log compression results
+                                            long originalSize = new FileInfo(photoPath).Length;
+                                            long compressedSize = new FileInfo(resultPath).Length;
+                                            double reductionPercent = (1 - (double)compressedSize / originalSize) * 100;
+                                            
+                                            System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Video compressed successfully");
+                                            System.Diagnostics.Debug.WriteLine($"  Original: {originalSize / 1024.0 / 1024.0:F2} MB");
+                                            System.Diagnostics.Debug.WriteLine($"  Compressed: {compressedSize / 1024.0 / 1024.0:F2} MB");
+                                            System.Diagnostics.Debug.WriteLine($"  Reduction: {reductionPercent:F1}%");
+                                        }
+                                        else
+                                        {
+                                            System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Compression failed, uploading original");
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Error compressing video: {ex.Message}");
+                                        System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Uploading original video");
+                                    }
+                                }
+                                else
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: FFmpeg not available, uploading original");
+                                }
+                            }
+                            
+                            System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Uploading video: {Path.GetFileName(videoToUpload)}");
                             
                             // Open with shared read access to prevent conflicts with video player
-                            using (var videoStream = new FileStream(photoPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                            using (var videoStream = new FileStream(videoToUpload, FileMode.Open, FileAccess.Read, FileShare.Read))
                             {
                                 var putRequest = Activator.CreateInstance(_putObjectRequestType);
                                 var putRequestType = putRequest.GetType();
@@ -295,7 +351,21 @@ namespace Photobooth.Services
                                 
                                 // Upload the video
                                 await UploadToS3Async(putRequest);
-                                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Successfully uploaded video {Path.GetFileName(photoPath)} to S3");
+                                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Successfully uploaded video {Path.GetFileName(videoToUpload)} to S3");
+                            }
+                            
+                            // Clean up compressed file if it was created
+                            if (!string.IsNullOrEmpty(compressedPath) && File.Exists(compressedPath))
+                            {
+                                try
+                                {
+                                    File.Delete(compressedPath);
+                                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Cleaned up compressed video file");
+                                }
+                                catch
+                                {
+                                    // Ignore cleanup errors
+                                }
                             }
                             
                             // Generate pre-signed URL for video

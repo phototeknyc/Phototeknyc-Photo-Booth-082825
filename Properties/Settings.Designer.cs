@@ -1534,5 +1534,41 @@ namespace Photobooth.Properties {
                 this["DefaultCaptureMode"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnableVideoCompression {
+            get {
+                return ((bool)(this["EnableVideoCompression"]));
+            }
+            set {
+                this["EnableVideoCompression"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("medium")]
+        public string VideoCompressionQuality {
+            get {
+                return ((string)(this["VideoCompressionQuality"]));
+            }
+            set {
+                this["VideoCompressionQuality"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1080p")]
+        public string VideoUploadResolution {
+            get {
+                return ((string)(this["VideoUploadResolution"]));
+            }
+            set {
+                this["VideoUploadResolution"] = value;
+            }
+        }
     }
 }

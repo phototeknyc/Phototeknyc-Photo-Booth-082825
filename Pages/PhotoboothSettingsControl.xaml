@@ -1166,6 +1166,61 @@
                                            FontWeight="Bold"
                                            FontSize="18"/>
                             </StackPanel>
+                            
+                            <!-- Video Compression Settings -->
+                            <Separator Background="#44FFFFFF" Height="1" Margin="0,15,0,15"/>
+                            
+                            <CheckBox x:Name="enableVideoCompressionCheckBox" 
+                                      Content="Enable Video Compression (for cloud upload)" 
+                                      IsChecked="True"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"
+                                      IsEnabled="{Binding IsChecked, ElementName=enableVideoModuleCheckBox}"
+                                      ToolTip="Compress videos before uploading to reduce file size and upload time"
+                                      Checked="EnableVideoCompression_Changed"
+                                      Unchecked="EnableVideoCompression_Changed"/>
+                            
+                            <TextBlock Text="Video compression quality" 
+                                       Style="{StaticResource SettingsTextStyle}"
+                                       IsEnabled="{Binding IsChecked, ElementName=enableVideoCompressionCheckBox}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                                <ComboBox x:Name="videoCompressionQualityComboBox" 
+                                          Width="200"
+                                          Style="{StaticResource SettingsComboBoxStyle}"
+                                          IsEnabled="{Binding IsChecked, ElementName=enableVideoCompressionCheckBox}"
+                                          SelectionChanged="VideoCompressionQuality_Changed">
+                                    <ComboBoxItem Content="Low (smallest file)" Tag="low"/>
+                                    <ComboBoxItem Content="Medium (balanced)" Tag="medium" IsSelected="True"/>
+                                    <ComboBoxItem Content="High (better quality)" Tag="high"/>
+                                    <ComboBoxItem Content="Very High (best quality)" Tag="veryhigh"/>
+                                </ComboBox>
+                                <TextBlock Text="Estimated size reduction: 60-80%" 
+                                           x:Name="compressionEstimateText"
+                                           VerticalAlignment="Center" 
+                                           Margin="20,0,0,0" 
+                                           Foreground="#AAD4E7" 
+                                           FontStyle="Italic"/>
+                            </StackPanel>
+                            
+                            <TextBlock Text="Video resolution (for upload)" 
+                                       Style="{StaticResource SettingsTextStyle}"
+                                       IsEnabled="{Binding IsChecked, ElementName=enableVideoCompressionCheckBox}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                                <ComboBox x:Name="videoUploadResolutionComboBox" 
+                                          Width="200"
+                                          Style="{StaticResource SettingsComboBoxStyle}"
+                                          IsEnabled="{Binding IsChecked, ElementName=enableVideoCompressionCheckBox}"
+                                          SelectionChanged="VideoUploadResolution_Changed">
+                                    <ComboBoxItem Content="Original" Tag="original"/>
+                                    <ComboBoxItem Content="1080p (1920x1080)" Tag="1080p" IsSelected="True"/>
+                                    <ComboBoxItem Content="720p (1280x720)" Tag="720p"/>
+                                    <ComboBoxItem Content="480p (854x480)" Tag="480p"/>
+                                </ComboBox>
+                                <TextBlock Text="Lower resolution = faster upload" 
+                                           VerticalAlignment="Center" 
+                                           Margin="20,0,0,0" 
+                                           Foreground="#AAD4E7" 
+                                           FontStyle="Italic"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                     
