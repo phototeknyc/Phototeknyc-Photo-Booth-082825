@@ -188,6 +188,30 @@ namespace Photobooth.Services
         }
         
         /// <summary>
+        /// Save video session data to the database
+        /// </summary>
+        public void SaveVideoSessionData(string videoPath, string thumbnailPath, long fileSize, int durationSeconds)
+        {
+            try
+            {
+                if (currentDatabaseSessionId.HasValue)
+                {
+                    // Update the session with video information
+                    database.UpdateSessionWithVideoData(currentDatabaseSessionId.Value, videoPath, thumbnailPath, fileSize, durationSeconds);
+                    Log.Debug($"DatabaseOperations: Updated session {currentDatabaseSessionId} with video data");
+                }
+                else
+                {
+                    Log.Error("DatabaseOperations: No active session to save video data");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"DatabaseOperations: Error saving video session data: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
         /// End the current database session
         /// </summary>
         public void EndSession()

@@ -62,6 +62,57 @@ namespace Photobooth.Services
         #region Public Methods
         
         /// <summary>
+        /// Generate a thumbnail from a video file
+        /// </summary>
+        public async Task<string> GenerateThumbnailAsync(string videoPath, string thumbnailPath = null, int secondsOffset = 2)
+        {
+            if (!File.Exists(videoPath))
+            {
+                Debug.WriteLine($"VideoCompressionService: Video file not found for thumbnail: {videoPath}");
+                return null;
+            }
+            
+            try
+            {
+                // Generate thumbnail path if not provided
+                if (string.IsNullOrEmpty(thumbnailPath))
+                {
+                    string dir = Path.GetDirectoryName(videoPath);
+                    string filename = Path.GetFileNameWithoutExtension(videoPath);
+                    thumbnailPath = Path.Combine(dir, $"{filename}_thumb.jpg");
+                }
+                
+                Debug.WriteLine($"VideoCompressionService: Generating thumbnail at {secondsOffset}s from {videoPath}");
+                
+                // Build FFmpeg arguments for thumbnail generation
+                // -ss: seek to position (before -i for fast seek)
+                // -i: input file
+                // -vframes 1: extract one frame
+                // -q:v 2: quality (2 is high quality)
+                string ffmpegArgs = $"-ss {secondsOffset} -i \"{videoPath}\" -vframes 1 -q:v 2 -y \"{thumbnailPath}\"";
+                
+                // Execute FFmpeg
+                bool success = await ExecuteFFmpegAsync(ffmpegArgs, videoPath);
+                
+                if (success && File.Exists(thumbnailPath))
+                {
+                    Debug.WriteLine($"VideoCompressionService: Thumbnail generated successfully: {thumbnailPath}");
+                    return thumbnailPath;
+                }
+                else
+                {
+                    Debug.WriteLine("VideoCompressionService: Failed to generate thumbnail");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"VideoCompressionService: Error generating thumbnail - {ex.Message}");
+                return null;
+            }
+        }
+        
+        /// <summary>
         /// Compress a video file based on configured settings
         /// </summary>
         public async Task<string> CompressVideoAsync(string inputPath, string outputPath = null)

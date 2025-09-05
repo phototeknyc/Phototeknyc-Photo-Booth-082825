@@ -6684,6 +6684,40 @@ namespace Photobooth.Pages
                         Log.Debug("Stopped live view timer to show video playback");
                     }
                     
+                    // Generate video thumbnail and save to database
+                    if (!string.IsNullOrEmpty(videoPath))
+                    {
+                        // Generate thumbnail using FFmpeg
+                        try
+                        {
+                            var compressionService = Services.VideoCompressionService.Instance;
+                            if (compressionService.IsFFmpegAvailable())
+                            {
+                                string thumbnailPath = await compressionService.GenerateThumbnailAsync(videoPath);
+                                if (!string.IsNullOrEmpty(thumbnailPath))
+                                {
+                                    Log.Debug($"Generated video thumbnail: {thumbnailPath}");
+                                }
+                                
+                                // Get video file info
+                                if (File.Exists(videoPath))
+                                {
+                                    var fileInfo = new FileInfo(videoPath);
+                                    long fileSize = fileInfo.Length;
+                                    int durationSeconds = (int)e.Duration.TotalSeconds;
+                                    
+                                    // Save video session data to database
+                                    _databaseOperations.SaveVideoSessionData(videoPath, thumbnailPath, fileSize, durationSeconds);
+                                    Log.Debug($"Saved video session data to database - Size: {fileSize}, Duration: {durationSeconds}s");
+                                }
+                            }
+                        }
+                        catch (Exception thumbEx)
+                        {
+                            Log.Error($"Error generating thumbnail or saving video data: {thumbEx.Message}");
+                        }
+                    }
+                    
                     // Wait for video file to be fully downloaded
                     if (!string.IsNullOrEmpty(videoPath))
                     {

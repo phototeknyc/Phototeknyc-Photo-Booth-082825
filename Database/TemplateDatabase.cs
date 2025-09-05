@@ -351,6 +351,36 @@ namespace Photobooth.Database
                     command.ExecuteNonQuery();
                 }
                 
+                // Add video columns to PhotoSessions table if they don't exist
+                string[] videoColumns = new string[]
+                {
+                    "ALTER TABLE PhotoSessions ADD COLUMN IsVideoSession BOOLEAN DEFAULT 0",
+                    "ALTER TABLE PhotoSessions ADD COLUMN VideoPath TEXT",
+                    "ALTER TABLE PhotoSessions ADD COLUMN VideoThumbnailPath TEXT",
+                    "ALTER TABLE PhotoSessions ADD COLUMN VideoFileSize INTEGER DEFAULT 0",
+                    "ALTER TABLE PhotoSessions ADD COLUMN VideoDurationSeconds INTEGER DEFAULT 0",
+                    "ALTER TABLE PhotoSessions ADD COLUMN VideoCloudUrl TEXT"
+                };
+                
+                foreach (string alterCmd in videoColumns)
+                {
+                    try
+                    {
+                        using (var command = new SQLiteCommand(alterCmd, connection))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                    }
+                    catch (SQLiteException ex)
+                    {
+                        // Column might already exist, continue
+                        if (!ex.Message.Contains("duplicate column"))
+                        {
+                            throw;
+                        }
+                    }
+                }
+                
                 // Insert default categories
                 InsertDefaultCategories(connection);
             }
@@ -1811,6 +1841,35 @@ namespace Photobooth.Database
             }
         }
         
+        public void UpdateSessionWithVideoData(int sessionId, string videoPath, string thumbnailPath, long fileSize, int durationSeconds)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string updateSession = @"
+                    UPDATE PhotoSessions 
+                    SET IsVideoSession = 1,
+                        VideoPath = @videoPath,
+                        VideoThumbnailPath = @thumbnailPath,
+                        VideoFileSize = @fileSize,
+                        VideoDurationSeconds = @duration
+                    WHERE Id = @sessionId";
+                
+                using (var command = new SQLiteCommand(updateSession, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionId", sessionId);
+                    command.Parameters.AddWithValue("@videoPath", videoPath ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@thumbnailPath", thumbnailPath ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@fileSize", fileSize);
+                    command.Parameters.AddWithValue("@duration", durationSeconds);
+                    command.ExecuteNonQuery();
+                    
+                    System.Diagnostics.Debug.WriteLine($"TemplateDatabase: Updated session {sessionId} with video data");
+                }
+            }
+        }
+        
         public void EndPhotoSession(int sessionId)
         {
             using (var connection = new SQLiteConnection(connectionString))
@@ -2536,6 +2595,14 @@ namespace Photobooth.Database
         public string EventName { get; set; }
         public string TemplateName { get; set; }
         public bool IsActive { get; set; }
+        
+        // Video session fields
+        public bool IsVideoSession { get; set; }
+        public string VideoPath { get; set; }
+        public string VideoThumbnailPath { get; set; }
+        public long VideoFileSize { get; set; }
+        public int VideoDurationSeconds { get; set; }
+        public string VideoCloudUrl { get; set; }
     }
     
     public class PhotoData
