@@ -21,6 +21,7 @@ namespace Photobooth.Services
         private string _currentVideoPath;
         private readonly PhotoboothModulesConfig _config;
         private string _originalCameraMode; // Store original mode to restore it
+        private Database.EventData _currentEvent; // Store current event for folder structure
         
         // Store photo settings to restore after video
         private class PhotoSettings
@@ -145,6 +146,9 @@ namespace Photobooth.Services
         public async Task<bool> StartRecordingAsync(string outputPath = null, Database.EventData currentEvent = null)
         {
             System.Diagnostics.Debug.WriteLine($"[VIDEO] StartRecordingAsync called. Camera: {_camera?.DeviceName ?? "NULL"}, Already recording: {_isRecording}");
+            
+            // Store current event for use in other methods
+            _currentEvent = currentEvent;
             
             // Reset stop flag for new recording
             _isStopping = false;
@@ -1217,9 +1221,9 @@ namespace Photobooth.Services
                     
                     // Use the same event logic as above
                     string eventName;
-                    if (currentEvent != null && !string.IsNullOrEmpty(currentEvent.Name))
+                    if (_currentEvent != null && !string.IsNullOrEmpty(_currentEvent.Name))
                     {
-                        eventName = GetSafeEventName(currentEvent.Name);
+                        eventName = GetSafeEventName(_currentEvent.Name);
                     }
                     else
                     {

@@ -6707,7 +6707,7 @@ namespace Photobooth.Pages
                                     int durationSeconds = (int)e.Duration.TotalSeconds;
                                     
                                     // Save video session data to database
-                                    _databaseOperations.SaveVideoSessionData(videoPath, thumbnailPath, fileSize, durationSeconds);
+                                    _database.SaveVideoSessionData(videoPath, thumbnailPath, fileSize, durationSeconds);
                                     Log.Debug($"Saved video session data to database - Size: {fileSize}, Duration: {durationSeconds}s");
                                 }
                             }
