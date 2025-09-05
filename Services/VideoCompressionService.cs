@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
-using CameraControl.Devices.Classes;
 
 namespace Photobooth.Services
 {
@@ -56,7 +55,7 @@ namespace Photobooth.Services
                 }
             }
             
-            Log.Debug($"VideoCompressionService: FFmpeg path set to {_ffmpegPath}");
+            Debug.WriteLine($"VideoCompressionService: FFmpeg path set to {_ffmpegPath}");
         }
         #endregion
 
@@ -69,13 +68,13 @@ namespace Photobooth.Services
         {
             if (_isCompressing)
             {
-                Log.Warning("VideoCompressionService: Already compressing a video");
+                Debug.WriteLine("VideoCompressionService: WARNING - Already compressing a video");
                 return null;
             }
             
             if (!File.Exists(inputPath))
             {
-                Log.Error($"VideoCompressionService: Input file not found: {inputPath}");
+                Debug.WriteLine($"VideoCompressionService: ERROR - Input file not found: {inputPath}");
                 CompressionError?.Invoke(this, "Input video file not found");
                 return null;
             }
@@ -88,7 +87,7 @@ namespace Photobooth.Services
                 bool compressionEnabled = Properties.Settings.Default.EnableVideoCompression;
                 if (!compressionEnabled)
                 {
-                    Log.Debug("VideoCompressionService: Compression disabled, returning original file");
+                    Debug.WriteLine("VideoCompressionService: Compression disabled, returning original file");
                     return inputPath;
                 }
                 
@@ -103,9 +102,9 @@ namespace Photobooth.Services
                     outputPath = Path.Combine(dir, $"{filename}_compressed.mp4");
                 }
                 
-                Log.Debug($"VideoCompressionService: Starting compression - Quality: {quality}, Resolution: {resolution}");
-                Log.Debug($"VideoCompressionService: Input: {inputPath}");
-                Log.Debug($"VideoCompressionService: Output: {outputPath}");
+                Debug.WriteLine($"VideoCompressionService: Starting compression - Quality: {quality}, Resolution: {resolution}");
+                Debug.WriteLine($"VideoCompressionService: Input: {inputPath}");
+                Debug.WriteLine($"VideoCompressionService: Output: {outputPath}");
                 
                 // Fire started event
                 CompressionStarted?.Invoke(this, new VideoCompressionEventArgs 
@@ -127,10 +126,10 @@ namespace Photobooth.Services
                     long compressedSize = new FileInfo(outputPath).Length;
                     double reductionPercent = (1 - (double)compressedSize / originalSize) * 100;
                     
-                    Log.Debug($"VideoCompressionService: Compression completed successfully");
-                    Log.Debug($"VideoCompressionService: Original size: {originalSize / 1024.0 / 1024.0:F2} MB");
-                    Log.Debug($"VideoCompressionService: Compressed size: {compressedSize / 1024.0 / 1024.0:F2} MB");
-                    Log.Debug($"VideoCompressionService: Size reduction: {reductionPercent:F1}%");
+                    Debug.WriteLine("VideoCompressionService: Compression completed successfully");
+                    Debug.WriteLine($"VideoCompressionService: Original size: {originalSize / 1024.0 / 1024.0:F2} MB");
+                    Debug.WriteLine($"VideoCompressionService: Compressed size: {compressedSize / 1024.0 / 1024.0:F2} MB");
+                    Debug.WriteLine($"VideoCompressionService: Size reduction: {reductionPercent:F1}%");
                     
                     // Fire completed event
                     CompressionCompleted?.Invoke(this, new VideoCompressionEventArgs 
@@ -145,14 +144,14 @@ namespace Photobooth.Services
                 }
                 else
                 {
-                    Log.Error("VideoCompressionService: Compression failed or output file not created");
+                    Debug.WriteLine("VideoCompressionService: ERROR - Compression failed or output file not created");
                     CompressionError?.Invoke(this, "Video compression failed");
                     return null;
                 }
             }
             catch (Exception ex)
             {
-                Log.Error($"VideoCompressionService: Error during compression - {ex.Message}");
+                Debug.WriteLine($"VideoCompressionService: ERROR during compression - {ex.Message}");
                 CompressionError?.Invoke(this, ex.Message);
                 return null;
             }
@@ -186,13 +185,13 @@ namespace Photobooth.Services
                 process.WaitForExit(5000);
                 
                 bool available = process.ExitCode == 0;
-                Log.Debug($"VideoCompressionService: FFmpeg available: {available}");
+                Debug.WriteLine($"VideoCompressionService: FFmpeg available: {available}");
                 
                 return available;
             }
             catch (Exception ex)
             {
-                Log.Error($"VideoCompressionService: Error checking FFmpeg availability - {ex.Message}");
+                Debug.WriteLine($"VideoCompressionService: ERROR checking FFmpeg availability - {ex.Message}");
                 return false;
             }
         }
@@ -329,21 +328,21 @@ namespace Photobooth.Services
                     if (!completed)
                     {
                         process.Kill();
-                        Log.Error("VideoCompressionService: FFmpeg process timed out");
+                        Debug.WriteLine("VideoCompressionService: ERROR - FFmpeg process timed out");
                         return false;
                     }
                     
                     bool success = process.ExitCode == 0;
                     if (!success)
                     {
-                        Log.Error($"VideoCompressionService: FFmpeg exited with code {process.ExitCode}");
+                        Debug.WriteLine($"VideoCompressionService: ERROR - FFmpeg exited with code {process.ExitCode}");
                     }
                     
                     return success;
                 }
                 catch (Exception ex)
                 {
-                    Log.Error($"VideoCompressionService: Error executing FFmpeg - {ex.Message}");
+                    Debug.WriteLine($"VideoCompressionService: ERROR executing FFmpeg - {ex.Message}");
                     return false;
                 }
             });
