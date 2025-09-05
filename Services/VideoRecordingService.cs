@@ -202,23 +202,27 @@ namespace Photobooth.Services
                         photoboothDir = Path.Combine(picturesPath, "PhotoBooth");
                     }
                     
-                    // Use event-based folder structure if event is provided
+                    // Always use event-based folder structure
                     string videoDir;
+                    string eventName;
+                    
                     if (currentEvent != null && !string.IsNullOrEmpty(currentEvent.Name))
                     {
-                        // Sanitize event name for folder
-                        string eventName = GetSafeEventName(currentEvent.Name);
-                        string eventFolder = Path.Combine(photoboothDir, eventName);
-                        videoDir = Path.Combine(eventFolder, "videos");
-                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Using event folder structure: {videoDir}");
+                        // Use provided event
+                        eventName = GetSafeEventName(currentEvent.Name);
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Using provided event: {eventName}");
                     }
                     else
                     {
-                        // Fallback to generic Videos folder
-                        string videosDir = Path.Combine(photoboothDir, "Videos");
-                        videoDir = Path.Combine(videosDir, DateTime.Now.ToString("yyyy-MM-dd"));
-                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Using generic folder structure: {videoDir}");
+                        // Fallback to default event based on date - everything must be in an event
+                        eventName = $"Event_{DateTime.Now:yyyy-MM-dd}";
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] No event provided, using default event: {eventName}");
                     }
+                    
+                    // Create event folder structure - all videos must be in event folders
+                    string eventFolder = Path.Combine(photoboothDir, eventName);
+                    videoDir = Path.Combine(eventFolder, "videos");
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Using event folder structure: {videoDir}");
                     
                     System.Diagnostics.Debug.WriteLine($"[VIDEO] Creating directory: {videoDir}");
                     
@@ -1205,12 +1209,25 @@ namespace Photobooth.Services
                 var savePicturesToHostMethod = cameraType.GetMethod("SavePicturesToHost");
                 if (savePicturesToHostMethod != null)
                 {
-                    // Get the user's Videos folder
-                    string videoDir = Path.Combine(
+                    // Get the event-based video folder (same structure as above)
+                    string photoboothDir = Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                        "PhotoBooth",
-                        "Videos"
+                        "PhotoBooth"
                     );
+                    
+                    // Use the same event logic as above
+                    string eventName;
+                    if (currentEvent != null && !string.IsNullOrEmpty(currentEvent.Name))
+                    {
+                        eventName = GetSafeEventName(currentEvent.Name);
+                    }
+                    else
+                    {
+                        eventName = $"Event_{DateTime.Now:yyyy-MM-dd}";
+                    }
+                    
+                    string eventFolder = Path.Combine(photoboothDir, eventName);
+                    string videoDir = Path.Combine(eventFolder, "videos");
                     
                     if (!Directory.Exists(videoDir))
                     {
