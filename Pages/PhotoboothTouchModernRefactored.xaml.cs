@@ -120,6 +120,9 @@ namespace Photobooth.Pages
         private bool _isRetaking = false; // Flag to track if we're doing a retake
         private int _currentRetakeIndex = -1; // Index of photo being retaken
         private int _recordingFrameCounter = 0; // Counter for debug logging during recording
+        private DateTime _lastFpsUpdate = DateTime.Now;
+        private int _fpsFrameCount = 0;
+        private double _currentFps = 0;
         
         private void SetDisplayingSessionResult(bool value)
         {
@@ -278,11 +281,22 @@ namespace Photobooth.Pages
 
         private void InitializeTimers()
         {
+            // Configure live view FPS from settings (default: 30 FPS for smooth live view)
+            // Common options: 60 FPS = 16ms, 30 FPS = 33ms, 20 FPS = 50ms, 15 FPS = 66ms, 10 FPS = 100ms
+            int liveViewFps = Properties.Settings.Default.LiveViewFrameRate;
+            
+            // Clamp FPS to reasonable range (5-60 FPS)
+            liveViewFps = Math.Max(5, Math.Min(60, liveViewFps));
+            
+            int intervalMs = 1000 / liveViewFps;
+            
             _liveViewTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromMilliseconds(100)
+                Interval = TimeSpan.FromMilliseconds(intervalMs)
             };
             _liveViewTimer.Tick += LiveViewTimer_Tick;
+            
+            Log.Debug($"Live view timer configured for {liveViewFps} FPS ({intervalMs}ms interval) from settings");
             
             _countdownTimer = new DispatcherTimer
             {
@@ -3280,6 +3294,23 @@ namespace Photobooth.Pages
         {
             try
             {
+                // Update FPS counter
+                _fpsFrameCount++;
+                var now = DateTime.Now;
+                var elapsed = (now - _lastFpsUpdate).TotalSeconds;
+                if (elapsed >= 1.0) // Update FPS every second
+                {
+                    _currentFps = _fpsFrameCount / elapsed;
+                    _fpsFrameCount = 0;
+                    _lastFpsUpdate = now;
+                    
+                    // Log actual FPS periodically
+                    if (_recordingFrameCounter % 300 == 0) // Every 10 seconds at 30fps
+                    {
+                        Log.Debug($"Live view actual FPS: {_currentFps:F1}");
+                    }
+                }
+                
                 // Check if video recording is active FIRST - always allow live view during recording
                 var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
                 bool isVideoRecording = videoCoordinator.IsRecording;
@@ -3299,9 +3330,9 @@ namespace Photobooth.Pages
                     {
                         _recordingFrameCounter++;
                         
-                        if (_recordingFrameCounter % 60 == 0) // Log every ~6 seconds at 10fps
+                        if (_recordingFrameCounter % 180 == 0) // Log every ~6 seconds at 30fps
                         {
-                            Log.Debug("[RECORDING] LiveViewTimer_Tick: Processing live view frame during recording");
+                            Log.Debug($"[RECORDING] LiveViewTimer_Tick: Processing live view frame during recording (FPS: {_currentFps:F1})");
                         }
                     }
                     else
