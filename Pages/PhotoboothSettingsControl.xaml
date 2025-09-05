@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:Photobooth.Pages"
+             xmlns:properties="clr-namespace:Photobooth.Properties"
              mc:Ignorable="d" 
              d:DesignHeight="600" d:DesignWidth="800"
              Background="{StaticResource SurfaceBackgroundBrush}">
@@ -1148,10 +1149,10 @@
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
                                 <Slider x:Name="videoDurationSlider" 
                                         Minimum="5" 
-                                        Maximum="60" 
+                                        Maximum="300" 
                                         Value="30" 
                                         TickPlacement="BottomRight" 
-                                        TickFrequency="5" 
+                                        TickFrequency="10" 
                                         IsSnapToTickEnabled="True"
                                         Width="300"
                                         ValueChanged="VideoDurationSlider_ValueChanged"
@@ -2703,7 +2704,10 @@
                 <StackPanel Margin="20,15,20,20">
                     
                     <!-- Debug Logging Toggle -->
-                    <Border Style="{StaticResource SettingBorderStyle}">
+                    <Border Background="#2A2A2A" 
+                            CornerRadius="8" 
+                            Padding="15" 
+                            Margin="0,0,0,15">
                         <StackPanel>
                             <TextBlock Text="Enable Debug Logging" 
                                        FontSize="16" 
@@ -2724,14 +2728,14 @@
                                 </Grid.ColumnDefinitions>
                                 
                                 <TextBlock Grid.Column="0"
-                                           Text="{Binding ElementName=DebugLoggingToggle, Path=IsChecked, Converter={StaticResource BoolToEnableText}}"
+                                           Text="Disabled"
                                            FontSize="14"
                                            VerticalAlignment="Center"
                                            Foreground="#4CAF50"/>
                                 
                                 <CheckBox x:Name="DebugLoggingToggle"
                                           Grid.Column="1"
-                                          Style="{StaticResource ModernToggleStyle}"
+                                          Style="{StaticResource SettingsCheckBoxStyle}"
                                           Checked="DebugLoggingToggle_Checked"
                                           Unchecked="DebugLoggingToggle_Unchecked"/>
                             </Grid>
@@ -2739,7 +2743,10 @@
                     </Border>
                     
                     <!-- Debug Information -->
-                    <Border Style="{StaticResource InfoBorderStyle}" Margin="0,15,0,0">
+                    <Border Background="#1F4E79" 
+                            CornerRadius="8" 
+                            Padding="15" 
+                            Margin="0,15,0,0">
                         <StackPanel>
                             <TextBlock Text="Debug Output Locations" 
                                        FontSize="14" 
@@ -2765,7 +2772,10 @@
                     </Border>
                     
                     <!-- Debug Status -->
-                    <Border Style="{StaticResource InfoBorderStyle}" Margin="0,15,0,0">
+                    <Border Background="#1F4E79" 
+                            CornerRadius="8" 
+                            Padding="15" 
+                            Margin="0,15,0,0">
                         <StackPanel>
                             <TextBlock Text="Current Debug Status" 
                                        FontSize="14" 
@@ -2799,24 +2809,24 @@
             </StackPanel>
             
             <!-- Capture Modes Section -->
-            <Border Style="{StaticResource GlassBorderStyle}" 
-                    Margin="0,30,0,30" Background="{StaticResource SurfaceBrush}">
+            <Border Style="{StaticResource GlassSectionStyle}" 
+                    Margin="0,30,0,30" Background="#FF2E2E2E">
                 <StackPanel Margin="30">
                     <TextBlock Text="Capture Modes" 
-                               Style="{StaticResource SurfaceTextPrimaryStyle}"
+                               Foreground="White"
                                FontSize="22" FontWeight="Bold" Margin="0,0,0,20"/>
                     
                     <!-- Enable Capture Modes -->
                     <CheckBox x:Name="EnableCaptureModesCheckBox"
-                              Style="{StaticResource ModernSwitchStyle}"
+                              Style="{StaticResource SettingsCheckBoxStyle}"
                               IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModesEnabled}"
                               Margin="0,10">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Enable Multiple Capture Modes" 
-                                       Style="{StaticResource SurfaceTextPrimaryStyle}"
+                                       Foreground="White" FontWeight="SemiBold"
                                        VerticalAlignment="Center"/>
                             <TextBlock Text="(Allow users to select different capture types)" 
-                                       Style="{StaticResource SurfaceTextSecondaryStyle}"
+                                       Foreground="#B0B0B0" FontSize="12"
                                        VerticalAlignment="Center" Margin="10,0,0,0"/>
                         </StackPanel>
                     </CheckBox>
@@ -2836,72 +2846,72 @@
 
                         <!-- Photo Mode -->
                         <CheckBox Grid.Row="0" Grid.Column="0"
-                                  Style="{StaticResource ModernSwitchStyle}"
+                                  Style="{StaticResource SettingsCheckBoxStyle}"
                                   IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModePhoto}"
                                   IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
                                   Margin="0,5">
-                            <TextBlock Text="Photo" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                            <TextBlock Text="Photo" Foreground="White" FontWeight="SemiBold"/>
                         </CheckBox>
 
                         <!-- Video Mode -->
                         <CheckBox Grid.Row="0" Grid.Column="1"
-                                  Style="{StaticResource ModernSwitchStyle}"
+                                  Style="{StaticResource SettingsCheckBoxStyle}"
                                   IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeVideo}"
                                   IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
                                   Margin="0,5">
-                            <TextBlock Text="Video" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                            <TextBlock Text="Video" Foreground="White" FontWeight="SemiBold"/>
                         </CheckBox>
 
                         <!-- Boomerang Mode -->
                         <CheckBox Grid.Row="1" Grid.Column="0"
-                                  Style="{StaticResource ModernSwitchStyle}"
+                                  Style="{StaticResource SettingsCheckBoxStyle}"
                                   IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeBoomerang}"
                                   IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
                                   Margin="0,5">
-                            <TextBlock Text="Boomerang" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                            <TextBlock Text="Boomerang" Foreground="White" FontWeight="SemiBold"/>
                         </CheckBox>
 
                         <!-- GIF Mode -->
                         <CheckBox Grid.Row="1" Grid.Column="1"
-                                  Style="{StaticResource ModernSwitchStyle}"
+                                  Style="{StaticResource SettingsCheckBoxStyle}"
                                   IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeGif}"
                                   IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
                                   Margin="0,5">
-                            <TextBlock Text="GIF" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                            <TextBlock Text="GIF" Foreground="White" FontWeight="SemiBold"/>
                         </CheckBox>
 
                         <!-- Green Screen Mode -->
                         <CheckBox Grid.Row="2" Grid.Column="0"
-                                  Style="{StaticResource ModernSwitchStyle}"
+                                  Style="{StaticResource SettingsCheckBoxStyle}"
                                   IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeGreenScreen}"
                                   IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
                                   Margin="0,5">
-                            <TextBlock Text="Green Screen" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                            <TextBlock Text="Green Screen" Foreground="White" FontWeight="SemiBold"/>
                         </CheckBox>
 
                         <!-- AI Mode -->
                         <CheckBox Grid.Row="2" Grid.Column="1"
-                                  Style="{StaticResource ModernSwitchStyle}"
+                                  Style="{StaticResource SettingsCheckBoxStyle}"
                                   IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeAI}"
                                   IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
                                   Margin="0,5">
-                            <TextBlock Text="AI Photo" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                            <TextBlock Text="AI Photo" Foreground="White" FontWeight="SemiBold"/>
                         </CheckBox>
 
                         <!-- Flipbook Mode -->
                         <CheckBox Grid.Row="3" Grid.Column="0"
-                                  Style="{StaticResource ModernSwitchStyle}"
+                                  Style="{StaticResource SettingsCheckBoxStyle}"
                                   IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeFlipbook}"
                                   IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
                                   Margin="0,5">
-                            <TextBlock Text="Flipbook" Style="{StaticResource SurfaceTextPrimaryStyle}"/>
+                            <TextBlock Text="Flipbook" Foreground="White" FontWeight="SemiBold"/>
                         </CheckBox>
                     </Grid>
 
                     <!-- Default Mode Selection -->
                     <StackPanel Margin="0,20,0,0">
                         <TextBlock Text="Default Capture Mode:" 
-                                   Style="{StaticResource SurfaceTextPrimaryStyle}"
+                                   Foreground="White" FontWeight="SemiBold"
                                    Margin="0,0,0,10"/>
                         <ComboBox x:Name="DefaultCaptureModeCombo"
                                   Width="200" HorizontalAlignment="Left"

@@ -261,6 +261,7 @@
     <Compile Include="Services\DatabaseOperations.cs" />
     <Compile Include="Services\HostGalleryService.cs" />
     <Compile Include="Services\VideoRecordingService.cs" />
+    <Compile Include="Services\VideoRecordingCoordinatorService.cs" />
     <Compile Include="Services\BoomerangService.cs" />
     <Compile Include="Services\PhotoboothModulesConfig.cs" />
     <Compile Include="Services\FlipbookService.cs" />

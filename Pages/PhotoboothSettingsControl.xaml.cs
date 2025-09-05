@@ -141,6 +141,26 @@ namespace Photobooth.Pages
                 showVideoButtonCheckBox.IsChecked = modulesConfig.ShowVideoButton;
                 videoDurationSlider.Value = modulesConfig.VideoDuration;
                 
+                // Update the duration text display
+                int videoDuration = modulesConfig.VideoDuration;
+                if (videoDuration >= 60)
+                {
+                    int minutes = videoDuration / 60;
+                    int remainingSeconds = videoDuration % 60;
+                    if (remainingSeconds > 0)
+                    {
+                        videoDurationValueText.Text = $"{minutes}m {remainingSeconds}s";
+                    }
+                    else
+                    {
+                        videoDurationValueText.Text = $"{minutes} minute{(minutes > 1 ? "s" : "")}";
+                    }
+                }
+                else
+                {
+                    videoDurationValueText.Text = $"{videoDuration} seconds";
+                }
+                
                 enableBoomerangModuleCheckBox.IsChecked = modulesConfig.BoomerangEnabled;
                 showBoomerangButtonCheckBox.IsChecked = modulesConfig.ShowBoomerangButton;
                 boomerangFramesSlider.Value = modulesConfig.BoomerangFrames;
@@ -3421,13 +3441,38 @@ namespace Photobooth.Pages
         {
             try
             {
-                if (videoDurationValueText != null)
+                if (videoDurationValueText != null && videoDurationSlider != null)
                 {
                     int seconds = (int)videoDurationSlider.Value;
-                    videoDurationValueText.Text = $"{seconds} seconds";
                     
+                    // Update display text
+                    if (seconds >= 60)
+                    {
+                        int minutes = seconds / 60;
+                        int remainingSeconds = seconds % 60;
+                        if (remainingSeconds > 0)
+                        {
+                            videoDurationValueText.Text = $"{minutes}m {remainingSeconds}s";
+                        }
+                        else
+                        {
+                            videoDurationValueText.Text = $"{minutes} minute{(minutes > 1 ? "s" : "")}";
+                        }
+                    }
+                    else
+                    {
+                        videoDurationValueText.Text = $"{seconds} seconds";
+                    }
+                    
+                    // Save to config
                     var modulesConfig = PhotoboothModulesConfig.Instance;
                     modulesConfig.VideoDuration = seconds;
+                    
+                    // Force save to settings
+                    Properties.Settings.Default.VideoDuration = seconds;
+                    Properties.Settings.Default.Save();
+                    
+                    System.Diagnostics.Debug.WriteLine($"[SETTINGS] Video duration updated to {seconds} seconds");
                 }
             }
             catch (Exception ex)

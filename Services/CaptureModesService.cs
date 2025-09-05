@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using CameraControl.Devices;
 using CameraControl.Devices.Classes;
 
 namespace Photobooth.Services
@@ -54,7 +55,7 @@ namespace Photobooth.Services
                     OnPropertyChanged();
                     OnPropertyChanged(nameof(CurrentModeInfo));
                     CaptureModeChanged?.Invoke(this, value);
-                    Log.Debug($"CaptureModesService: Mode changed from {oldMode} to {value}");
+                    CameraControl.Devices.Log.Debug($"CaptureModesService: Mode changed from {oldMode} to {value}");
                 }
             }
         }
@@ -205,7 +206,7 @@ namespace Photobooth.Services
                 _currentMode = defaultMode;
             }
             
-            Log.Debug($"CaptureModesService: Loaded settings - Enabled: {_isEnabled}, Default Mode: {_currentMode}");
+            CameraControl.Devices.Log.Debug($"CaptureModesService: Loaded settings - Enabled: {_isEnabled}, Default Mode: {_currentMode}");
         }
 
         public void SaveSettings()
@@ -227,7 +228,7 @@ namespace Photobooth.Services
             
             settings.Save();
             
-            Log.Debug("CaptureModesService: Settings saved");
+            CameraControl.Devices.Log.Debug("CaptureModesService: Settings saved");
         }
 
         #endregion
@@ -264,14 +265,14 @@ namespace Photobooth.Services
         {
             if (!IsModeEnabled(mode))
             {
-                Log.Warning($"CaptureModesService: Attempted to start disabled mode {mode}");
+                CameraControl.Devices.Log.Error($"CaptureModesService: Attempted to start disabled mode {mode}");
                 return false;
             }
 
             CurrentMode = mode;
             var modeInfo = _modeConfigurations[mode];
             
-            Log.Debug($"CaptureModesService: Starting {mode} session - Photos: {modeInfo.PhotoCount}, Video: {modeInfo.RequiresVideo}");
+            CameraControl.Devices.Log.Debug($"CaptureModesService: Starting {mode} session - Photos: {modeInfo.PhotoCount}, Video: {modeInfo.RequiresVideo}");
             
             // Mode-specific initialization
             switch (mode)
@@ -312,14 +313,31 @@ namespace Photobooth.Services
 
         private async Task<bool> StartVideoCapture()
         {
-            // Video recording - integrate with VideoRecordingService
-            var videoService = VideoRecordingService.Instance;
-            if (videoService != null)
+            // Video recording - use the coordinator service for proper integration
+            try
             {
-                await videoService.StartRecording();
-                return true;
+                var videoCoordinator = VideoRecordingCoordinatorService.Instance;
+                
+                // Start video session with live view
+                CameraControl.Devices.Log.Debug("CaptureModesService: Starting video recording session");
+                bool success = await videoCoordinator.StartVideoSessionAsync();
+                
+                if (success)
+                {
+                    CameraControl.Devices.Log.Debug("CaptureModesService: Video recording started successfully");
+                }
+                else
+                {
+                    CameraControl.Devices.Log.Error("CaptureModesService: Failed to start video recording");
+                }
+                
+                return success;
             }
-            return false;
+            catch (Exception ex)
+            {
+                CameraControl.Devices.Log.Error($"CaptureModesService: Video capture error - {ex.Message}");
+                return false;
+            }
         }
 
         private async Task<bool> StartBoomerangCapture()

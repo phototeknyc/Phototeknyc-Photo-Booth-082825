@@ -198,6 +198,35 @@ namespace Photobooth.Services
         }
 
         /// <summary>
+        /// Show video recording controls
+        /// </summary>
+        public void ShowVideoRecordingControls()
+        {
+            try
+            {
+                Log.Debug("PhotoboothUIService: Showing video recording controls");
+                
+                // Show recording indicator
+                UIUpdateRequested?.Invoke(this, new UIUpdateEventArgs
+                {
+                    ElementName = "recordingIndicator",
+                    Property = "Visibility",
+                    Value = Visibility.Visible
+                });
+                
+                // Update status for video mode
+                UpdateStatus("Recording video...");
+                
+                // Hide photo-specific controls
+                HideCountdown();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PhotoboothUIService: Failed to show video recording controls: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
         /// Show completion controls (share, print, home)
         /// </summary>
         public void ShowCompletionControls()

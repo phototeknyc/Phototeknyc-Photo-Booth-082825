@@ -1893,7 +1893,7 @@ namespace Photobooth.Database
         
         public string GetPhotoSessionGalleryUrl(string sessionGuid)
         {
-            System.Diagnostics.Debug.WriteLine($"TemplateDatabase.GetPhotoSessionGalleryUrl: Looking up gallery URL for sessionGuid: {sessionGuid}");
+            // System.Diagnostics.Debug.WriteLine($"TemplateDatabase.GetPhotoSessionGalleryUrl: Looking up gallery URL for sessionGuid: {sessionGuid}");
             
             using (var connection = new SQLiteConnection(connectionString))
             {
@@ -1911,7 +1911,7 @@ namespace Photobooth.Database
                     var result = command.ExecuteScalar();
                     string galleryUrl = result?.ToString();
                     
-                    System.Diagnostics.Debug.WriteLine($"TemplateDatabase.GetPhotoSessionGalleryUrl: Result for {sessionGuid}: {galleryUrl ?? "NULL"}");
+                    // System.Diagnostics.Debug.WriteLine($"TemplateDatabase.GetPhotoSessionGalleryUrl: Result for {sessionGuid}: {galleryUrl ?? "NULL"}");
                     
                     // Also check if the session exists at all
                     if (string.IsNullOrEmpty(galleryUrl))
@@ -1921,7 +1921,7 @@ namespace Photobooth.Database
                         {
                             checkCmd.Parameters.AddWithValue("@sessionGuid", sessionGuid);
                             int count = Convert.ToInt32(checkCmd.ExecuteScalar());
-                            System.Diagnostics.Debug.WriteLine($"TemplateDatabase.GetPhotoSessionGalleryUrl: Session exists in DB: {count > 0} (count: {count})");
+                            // System.Diagnostics.Debug.WriteLine($"TemplateDatabase.GetPhotoSessionGalleryUrl: Session exists in DB: {count > 0} (count: {count})");
                         }
                     }
                     

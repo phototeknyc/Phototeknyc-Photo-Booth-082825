@@ -210,6 +210,7 @@ namespace CameraControl.Devices.Canon
                                                                         {14, "Close-Up"},
                                                                         {15, "Flash Off"},
                                                                         {19, "Creative Auto"},
+                                                                        {20, "Movie"},
                                                                         {21, "Photo in Movie"},
                                                                     };
 
@@ -1403,8 +1404,60 @@ namespace CameraControl.Devices.Canon
             lock (Locker)
             {
                 _recording = true;
-                ResetShutterButton();
-                Camera.StartRecord();
+                
+                try
+                {
+                    // Ensure shutter button is in released state first
+                    ResetShutterButton();
+                    
+                    // Check if live view is active (required for video recording)
+                    if (!HaveLiveView)
+                    {
+                        Log.Debug("Starting live view for video recording");
+                        StartLiveView();
+                        System.Threading.Thread.Sleep(500);
+                    }
+                    
+                    Log.Debug($"Current camera mode: {Mode?.Value}");
+                    
+                    // IMPORTANT: Don't use Camera.StartRecord() as it stops/restarts live view
+                    // and queues commands. Instead, execute commands directly to keep live view running
+                    Log.Debug("Starting video recording while keeping live view active");
+                    
+                    // Save pictures to camera (not PC) for video recording
+                    Camera.SavePicturesToCamera();
+                    
+                    // Enable movie recording mode
+                    Camera.SendCommand(Edsdk.CameraCommand_MovieSelectSwON);
+                    
+                    // Trigger autofocus for video
+                    Camera.SendCommand(Edsdk.CameraCommand_DoEvfAf, 0);
+                    
+                    // Set recording flag - this starts the actual recording
+                    Camera.SetProperty(Edsdk.PropID_Record, 4);
+                    
+                    // Process any pending commands in the LiveViewqueue
+                    while (Camera.LiveViewqueue.Count > 0)
+                    {
+                        try
+                        {
+                            var action = Camera.LiveViewqueue.Dequeue();
+                            action.Invoke();
+                        }
+                        catch (Exception queueEx)
+                        {
+                            Log.Debug($"Queue processing error: {queueEx.Message}");
+                        }
+                    }
+                    
+                    Log.Debug("StartRecordMovie completed - recording started with live view active");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"Error starting video recording: {ex.Message}");
+                    _recording = false;
+                    throw;
+                }
             }
         }
 
@@ -1412,8 +1465,32 @@ namespace CameraControl.Devices.Canon
         {
             lock (Locker)
             {
-                Camera.StopRecord();
-                _recording = false;
+                try
+                {
+                    Log.Debug("Stopping video recording while keeping live view active");
+                    
+                    // Trigger autofocus
+                    Camera.SendCommand(Edsdk.CameraCommand_DoEvfAf, 0);
+                    
+                    // Stop recording
+                    Camera.SetProperty(Edsdk.PropID_Record, 0);
+                    
+                    // Disable movie recording mode
+                    Camera.SendCommand(Edsdk.CameraCommand_MovieSelectSwOFF);
+                    
+                    // Switch back to saving to host PC
+                    Camera.SavePicturesToHost(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures));
+                    
+                    Log.Debug("StopRecord completed - video recording stopped with live view active");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"Error stopping video recording: {ex.Message}");
+                }
+                finally
+                {
+                    _recording = false;
+                }
             }
         }
 
@@ -1662,15 +1739,36 @@ namespace CameraControl.Devices.Canon
                     try
                     {
                         IsBusy = true;
-                        Camera.PauseLiveview();
-                        Log.Debug("Camera.PauseLiveview();");
+                        
+                        // Check if this is a video file transfer - if so, don't pause live view
+                        bool isVideoFile = filename?.ToLower().EndsWith(".mov") == true || 
+                                         filename?.ToLower().EndsWith(".mp4") == true;
+                        
+                        if (!isVideoFile)
+                        {
+                            Camera.PauseLiveview();
+                            Log.Debug("Camera.PauseLiveview(); (photo transfer)");
+                        }
+                        else
+                        {
+                            Log.Debug("Video file transfer - keeping live view active");
+                        }
+                        
                         var transporter = new EosImageTransporter();
                         transporter.ProgressEvent += (i) => TransferProgress = (uint) i;
                         Log.Debug("TransportAsFileName");
                         transporter.TransportAsFileName((IntPtr) o, filename, Camera.Handle);
                         Log.Debug("TransportAsFileName DONE");
-                        Camera.ResumeLiveview();
-                        Log.Debug("Camera.ResumeLiveview(); DONE");
+                        
+                        if (!isVideoFile)
+                        {
+                            Camera.ResumeLiveview();
+                            Log.Debug("Camera.ResumeLiveview(); DONE (photo transfer)");
+                        }
+                        else
+                        {
+                            Log.Debug("Video file transfer complete - live view remained active");
+                        }
                     }
                     catch (Exception exception)
                     {

@@ -112,11 +112,14 @@ namespace Photobooth.Pages
         #region Minimal State Management (Keep UI-only state here)
         private DispatcherTimer _liveViewTimer;
         private DispatcherTimer _countdownTimer;
+        private DispatcherTimer _recordingDurationTimer;
+        private DateTime _recordingStartTime;
         private bool _isDisplayingCapturedPhoto = false; // Flag to prevent live view from overwriting captured photo
         private bool _isCapturing = false; // Flag to track if we're actively capturing a photo
         private bool _isDisplayingSessionResult = false; // Flag to prevent live view from overwriting session result
         private bool _isRetaking = false; // Flag to track if we're doing a retake
         private int _currentRetakeIndex = -1; // Index of photo being retaken
+        private int _recordingFrameCounter = 0; // Counter for debug logging during recording
         
         private void SetDisplayingSessionResult(bool value)
         {
@@ -1524,7 +1527,9 @@ namespace Photobooth.Pages
                     // Handle auto-upload - always enabled
                     _ = Task.Run(async () =>
                     {
-                        await Task.Delay(1000); // Brief delay before upload
+                        // Longer delay for video sessions to ensure file is fully downloaded and released
+                        int delay = !string.IsNullOrEmpty(e.CompletedSession.VideoPath) ? 5000 : 1000;
+                        await Task.Delay(delay); // Wait for video to be fully available
                         await AutoUploadSessionPhotos(e.CompletedSession);
                     });
                 }
@@ -2546,6 +2551,18 @@ namespace Photobooth.Pages
                 _isDisplayingCapturedPhoto = false;
                 Log.Debug("Display flags cleared - live view can resume");
                 
+                // Check if we need to resume video mode after session
+                var videoModeService = Services.VideoModeLiveViewService.Instance;
+                if (videoModeService.IsEnabled && !videoModeService.IsVideoModeActive)
+                {
+                    Log.Debug("Session cleared - resuming video mode that was active before photo session");
+                    _ = Task.Run(async () => 
+                    {
+                        await Task.Delay(500); // Brief delay to let UI settle
+                        await videoModeService.ResumeVideoModeAfterCapture();
+                    });
+                }
+                
                 // Stop timers
                 _countdownTimer?.Stop();
                 
@@ -3209,16 +3226,19 @@ namespace Photobooth.Pages
                     {
                         UpdateCameraStatus($"Connected: {device.DeviceName}");
                         
-                        // Only start live view if idle live view is enabled
-                        if (Properties.Settings.Default.EnableIdleLiveView)
+                        // Start live view if idle live view is enabled OR if video recording is supported
+                        bool shouldStartLiveView = Properties.Settings.Default.EnableIdleLiveView || 
+                                                 Properties.Settings.Default.CaptureModeVideo;
+                        
+                        if (shouldStartLiveView)
                         {
                             device.StartLiveView();
                             _liveViewTimer.Start();
-                            Log.Debug("InitializeCamera: Started idle live view");
+                            Log.Debug($"InitializeCamera: Started live view (IdleLiveView: {Properties.Settings.Default.EnableIdleLiveView}, VideoModule: {Properties.Settings.Default.CaptureModeVideo})");
                         }
                         else
                         {
-                            Log.Debug("InitializeCamera: Idle live view disabled, not starting");
+                            Log.Debug("InitializeCamera: Live view disabled - both idle and video disabled");
                         }
                     }
                 }
@@ -3232,16 +3252,19 @@ namespace Photobooth.Pages
                     {
                         UpdateCameraStatus($"Connected: {device.DeviceName}");
                         
-                        // Only start live view if idle live view is enabled
-                        if (Properties.Settings.Default.EnableIdleLiveView)
+                        // Start live view if idle live view is enabled OR if video recording is supported
+                        bool shouldStartLiveView = Properties.Settings.Default.EnableIdleLiveView || 
+                                                 Properties.Settings.Default.CaptureModeVideo;
+                        
+                        if (shouldStartLiveView)
                         {
                             device.StartLiveView();
                             _liveViewTimer.Start();
-                            Log.Debug("InitializeCamera: Started idle live view after auto-connect");
+                            Log.Debug($"InitializeCamera: Started live view after auto-connect (IdleLiveView: {Properties.Settings.Default.EnableIdleLiveView}, VideoModule: {Properties.Settings.Default.CaptureModeVideo})");
                         }
                         else
                         {
-                            Log.Debug("InitializeCamera: Idle live view disabled after auto-connect");
+                            Log.Debug("InitializeCamera: Live view disabled after auto-connect - both idle and video disabled");
                         }
                     }
                 }
@@ -3257,8 +3280,13 @@ namespace Photobooth.Pages
         {
             try
             {
+                // Check if video recording is active FIRST - always allow live view during recording
+                var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
+                bool isVideoRecording = videoCoordinator.IsRecording;
+                
                 // Don't update live view if we're displaying a captured photo or session is complete
-                if (_isDisplayingCapturedPhoto || _isDisplayingSessionResult)
+                // BUT always allow live view during video recording
+                if (!isVideoRecording && (_isDisplayingCapturedPhoto || _isDisplayingSessionResult))
                 {
                     return;
                 }
@@ -3266,10 +3294,70 @@ namespace Photobooth.Pages
                 var device = DeviceManager?.SelectedCameraDevice;
                 if (device?.IsConnected == true)
                 {
-                    var liveViewData = device.GetLiveViewImage();
-                    if (liveViewData?.ImageData != null)
+                    // IMPORTANT: Continue live view updates during video recording
+                    // This ensures the UI shows the live camera feed while recording
+                    if (isVideoRecording)
                     {
+                        _recordingFrameCounter++;
+                        if (_recordingFrameCounter % 60 == 0) // Log every ~2 seconds at 30fps
+                        {
+                            Log.Debug("[RECORDING] LiveViewTimer_Tick: Attempting to get live view during recording");
+                        }
+                    }
+                    else
+                    {
+                        _recordingFrameCounter = 0;
+                    }
+                    
+                    LiveViewData liveViewData = null;
+                    try
+                    {
+                        liveViewData = device.GetLiveViewImage();
+                    }
+                    catch (Exception ex)
+                    {
+                        if (isVideoRecording && _recordingFrameCounter % 60 == 0)
+                        {
+                            Log.Debug($"[RECORDING] GetLiveViewImage exception: {ex.Message}");
+                        }
+                    }
+                    
+                    // Add detailed logging during recording
+                    if (isVideoRecording && _recordingFrameCounter % 60 == 0)
+                    {
+                        if (liveViewData == null)
+                        {
+                            Log.Debug("[RECORDING] GetLiveViewImage returned null - no frame available");
+                        }
+                        else if (liveViewData.ImageData == null)
+                        {
+                            Log.Debug("[RECORDING] GetLiveViewImage returned LiveViewData but ImageData is null");
+                        }
+                        else if (liveViewData.ImageData.Length == 0)
+                        {
+                            Log.Debug("[RECORDING] GetLiveViewImage returned LiveViewData but ImageData is empty (0 bytes)");
+                        }
+                        else
+                        {
+                            Log.Debug($"[RECORDING] GetLiveViewImage SUCCESS: Got {liveViewData.ImageData.Length} bytes");
+                        }
+                    }
+                    
+                    if (liveViewData?.ImageData != null && liveViewData.ImageData.Length > 0)
+                    {
+                        if (isVideoRecording && _recordingFrameCounter % 60 == 0)
+                        {
+                            Log.Debug($"[RECORDING] About to display live view with {liveViewData.ImageData.Length} bytes");
+                        }
                         DisplayLiveView(liveViewData.ImageData);
+                        if (isVideoRecording && _recordingFrameCounter % 60 == 0)
+                        {
+                            Log.Debug("[RECORDING] DisplayLiveView called successfully");
+                        }
+                    }
+                    else if (isVideoRecording && _recordingFrameCounter % 60 == 0)
+                    {
+                        Log.Debug("[RECORDING] No live view data to display during video recording");
                     }
                 }
             }
@@ -3281,16 +3369,65 @@ namespace Photobooth.Pages
 
         private void DisplayLiveView(byte[] imageData)
         {
-            using (var ms = new MemoryStream(imageData))
+            try
             {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.StreamSource = ms;
-                bitmap.EndInit();
-                bitmap.Freeze();
+                // Check if we're recording for debug purposes
+                var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
+                bool isVideoRecording = videoCoordinator.IsRecording;
                 
-                liveViewImage.Source = bitmap;
+                using (var ms = new MemoryStream(imageData))
+                {
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.StreamSource = ms;
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+                    
+                    if (isVideoRecording)
+                    {
+                        // Log every 2 seconds for detailed info
+                        if (_recordingFrameCounter % 60 == 0)
+                        {
+                            Log.Debug($"[RECORDING] DisplayLiveView: Created bitmap Width={bitmap.PixelWidth}, Height={bitmap.PixelHeight}");
+                            Log.Debug($"[RECORDING] DisplayLiveView: liveViewImage element is {(liveViewImage != null ? "NOT NULL" : "NULL")}");
+                            if (liveViewImage != null)
+                            {
+                                Log.Debug($"[RECORDING] DisplayLiveView: liveViewImage.Visibility = {liveViewImage.Visibility}");
+                                Log.Debug($"[RECORDING] DisplayLiveView: liveViewImage.IsVisible = {liveViewImage.IsVisible}");
+                                Log.Debug($"[RECORDING] DisplayLiveView: liveViewImage.Opacity = {liveViewImage.Opacity}");
+                            }
+                        }
+                        
+                        // Log every 10 frames (3 times per second) to confirm continuous updates
+                        if (_recordingFrameCounter % 10 == 0)
+                        {
+                            Log.Debug($"[RECORDING] Live view frame {_recordingFrameCounter}: Updating display (720x480)");
+                        }
+                    }
+                    
+                    if (liveViewImage != null)
+                    {
+                        liveViewImage.Source = bitmap;
+                        
+                        if (isVideoRecording && _recordingFrameCounter % 60 == 0)
+                        {
+                            Log.Debug($"[RECORDING] DisplayLiveView: Set liveViewImage.Source to new bitmap - UI should be showing live camera feed");
+                            
+                            // Force UI update
+                            liveViewImage.InvalidateVisual();
+                            Log.Debug($"[RECORDING] DisplayLiveView: Called InvalidateVisual() to force UI update");
+                        }
+                    }
+                    else if (isVideoRecording)
+                    {
+                        Log.Debug($"[RECORDING] ERROR: liveViewImage is NULL - cannot display!");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"DisplayLiveView error: {ex.Message}");
             }
         }
 
@@ -3660,6 +3797,7 @@ namespace Photobooth.Pages
         #region Photo Session Management - Clean Architecture
         private void StartButton_Click(object sender, RoutedEventArgs e)
         {
+            Log.Debug("StartButton_Click: Button clicked");
             StartPhotoSession();
         }
 
@@ -3671,6 +3809,8 @@ namespace Photobooth.Pages
                 
                 // Check if capture modes are enabled
                 var captureModesService = CaptureModesService.Instance;
+                Log.Debug($"CaptureModesService - Enabled: {captureModesService.IsEnabled}, HasMultipleModes: {captureModesService.HasMultipleModes}, EnabledModes Count: {captureModesService.EnabledModes.Count}");
+                
                 if (captureModesService.IsEnabled && captureModesService.HasMultipleModes)
                 {
                     // Show capture modes overlay for user to select
@@ -3805,11 +3945,11 @@ namespace Photobooth.Pages
                 System.Diagnostics.Debug.WriteLine($"AutoUploadSessionPhotos: Session GUID = {completedSession.SessionId}");
                 _uiService.UpdateStatus("Uploading...");
                 
-                // Build list of ALL files to upload (including composed and MP4/GIF)
+                // Build list of ALL files to upload (including composed, MP4/GIF, and video)
                 var allFiles = new List<string>();
                 
                 // Add original photos
-                if (completedSession.PhotoPaths != null)
+                if (completedSession.PhotoPaths != null && completedSession.PhotoPaths.Count > 0)
                 {
                     allFiles.AddRange(completedSession.PhotoPaths);
                     Log.Debug($"AutoUploadSessionPhotos: Added {completedSession.PhotoPaths.Count} original photos");
@@ -3829,8 +3969,23 @@ namespace Photobooth.Pages
                     Log.Debug($"AutoUploadSessionPhotos: Added animation: {Path.GetFileName(completedSession.GifPath)}");
                 }
                 
+                // Add video recording if it exists (for video sessions)
+                if (FileValidationService.Instance.ValidateFilePath(completedSession.VideoPath))
+                {
+                    allFiles.Add(completedSession.VideoPath);
+                    Log.Debug($"AutoUploadSessionPhotos: Added video recording: {Path.GetFileName(completedSession.VideoPath)}");
+                }
+                
                 Log.Debug($"AutoUploadSessionPhotos: Uploading {allFiles.Count} total files");
                 System.Diagnostics.Debug.WriteLine($"AutoUploadSessionPhotos: Uploading {allFiles.Count} files for session {completedSession.SessionId}");
+                
+                // Only proceed if we have files to upload
+                if (allFiles.Count == 0)
+                {
+                    Log.Debug("AutoUploadSessionPhotos: No files to upload, skipping cloud upload");
+                    _uiService.UpdateStatus("Session complete");
+                    return;
+                }
                 
                 // Use existing share service for upload with ALL files
                 var uploadResult = await _shareService.CreateShareableGalleryAsync(
@@ -4488,9 +4643,18 @@ namespace Photobooth.Pages
         #endregion
 
         #region Button Handlers
-        private void StopButton_Click(object sender, RoutedEventArgs e)
+        private async void StopButton_Click(object sender, RoutedEventArgs e)
         {
-            CancelCurrentPhoto();
+            // Check if we're recording video
+            var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
+            if (videoCoordinator.IsRecording)
+            {
+                await StopVideoRecording();
+            }
+            else
+            {
+                CancelCurrentPhoto();
+            }
         }
         
         private void CancelSessionButton_Click(object sender, RoutedEventArgs e)
@@ -6119,14 +6283,22 @@ namespace Photobooth.Pages
         
         private void ShowCaptureModesOverlay()
         {
-            if (CaptureModesOverlay == null) return;
+            Log.Debug($"ShowCaptureModesOverlay: CaptureModesOverlay is {(CaptureModesOverlay != null ? "not null" : "null")}");
+            
+            if (CaptureModesOverlay == null)
+            {
+                Log.Error("ShowCaptureModesOverlay: CaptureModesOverlay is null!");
+                return;
+            }
             
             // Subscribe to overlay events
             CaptureModesOverlay.ModeSelected -= OnCaptureModeSelected;
             CaptureModesOverlay.ModeSelected += OnCaptureModeSelected;
             
             // Show the overlay
+            Log.Debug("ShowCaptureModesOverlay: Calling Show() method");
             CaptureModesOverlay.Show();
+            Log.Debug("ShowCaptureModesOverlay: Show() method called");
         }
         
         private async void OnCaptureModeSelected(object sender, Photobooth.Services.CaptureMode mode)
@@ -6186,21 +6358,520 @@ namespace Photobooth.Pages
         
         private async Task StartVideoSession()
         {
-            // Start video recording session
-            var videoService = Services.VideoRecordingService.Instance;
-            if (videoService != null)
+            var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
+            
+            try
             {
+                Log.Debug("Starting video recording session");
+                
+                // Subscribe to video recording completion event
+                videoCoordinator.RecordingStopped += OnVideoRecordingStopped;
+                
+                // Start a session for tracking
                 bool sessionStarted = await _sessionService.StartSessionAsync(
                     _currentEvent, 
                     _currentTemplate, 
                     0); // No photos for video
                 
-                if (sessionStarted)
+                if (!sessionStarted)
                 {
-                    await videoService.StartRecording();
+                    Log.Error("Failed to start video session");
+                    _uiService.UpdateStatus("Failed to start video session");
+                    return;
+                }
+                
+                // Hide the capture overlay
+                if (CaptureModesOverlay != null && CaptureModesOverlay.Visibility == Visibility.Visible)
+                {
+                    CaptureModesOverlay.Hide();
+                }
+                
+                // Clear display flags to ensure live view can be shown during recording
+                _isDisplayingCapturedPhoto = false;
+                SetDisplayingSessionResult(false);
+                Log.Debug("Cleared display flags for video recording - live view will be shown");
+                
+                // Ensure live view timer is running BEFORE starting video recording
+                Log.Debug($"Live view timer status before video: IsEnabled={_liveViewTimer?.IsEnabled}");
+                if (_liveViewTimer != null && !_liveViewTimer.IsEnabled)
+                {
+                    _liveViewTimer.Start();
+                    Log.Debug("Started live view timer BEFORE video recording");
+                }
+                
+                // Ensure camera live view is active
+                if (DeviceManager?.SelectedCameraDevice != null)
+                {
+                    var device = DeviceManager.SelectedCameraDevice;
+                    // Just start live view - it's safe to call even if already running
+                    device.StartLiveView();
+                    Log.Debug("Ensured camera live view is active for video recording");
+                }
+                
+                // Update UI to show video recording state
+                _uiService.ShowVideoRecordingControls();
+                _uiService.UpdateStatus("Starting video recording...");
+                
+                // Start video recording with live view
+                bool recordingStarted = false;
+                string videoStartError = null;
+                
+                try
+                {
+                    recordingStarted = await videoCoordinator.StartVideoSessionAsync(null, _currentEvent);
+                }
+                catch (Exception videoEx)
+                {
+                    Log.Debug($"StartVideoSessionAsync threw exception: {videoEx.Message}");
+                    // Check if this is a non-critical Canon property exception
+                    if (videoEx.Message.Contains("Device Busy") && videoEx.Message.Contains("property"))
+                    {
+                        Log.Debug("Non-critical Canon property exception - checking if recording actually started");
+                        // Give it a moment and check if recording is actually working
+                        await Task.Delay(1000);
+                        recordingStarted = videoCoordinator.IsRecording;
+                        Log.Debug($"After property exception, IsRecording = {recordingStarted}");
+                    }
+                    else
+                    {
+                        videoStartError = videoEx.Message;
+                    }
+                }
+                
+                if (recordingStarted)
+                {
+                    Log.Debug("Video recording started successfully - live view should be visible");
+                    _uiService.UpdateStatus("Recording video...");
+                    
+                    // Show stop button for video recording
+                    if (stopSessionButton != null)
+                    {
+                        stopSessionButton.Visibility = Visibility.Visible;
+                    }
+                    
+                    // Show recording indicator
+                    if (VideoRecordingGrid != null)
+                    {
+                        VideoRecordingGrid.Visibility = Visibility.Visible;
+                    }
+                    
+                    // Start recording duration timer
+                    StartRecordingDurationTimer();
+                    
+                    // Log live view timer status during recording
+                    Log.Debug($"Live view timer status during recording: IsEnabled={_liveViewTimer?.IsEnabled}");
+                }
+                else
+                {
+                    var errorToShow = videoStartError ?? "Failed to start video recording";
+                    Log.Error($"Failed to start video recording: {errorToShow}");
+                    
+                    // Check if it's a Canon T6 mode dial issue
+                    var errorMessage = "Failed to start video recording";
+                    if (DeviceManager?.SelectedCameraDevice?.DeviceName?.Contains("T6") == true ||
+                        DeviceManager?.SelectedCameraDevice?.DeviceName?.Contains("1300D") == true)
+                    {
+                        errorMessage = "Please set camera dial to MOVIE mode (video icon)";
+                        
+                        // Show a message box for Canon T6 users
+                        await Dispatcher.InvokeAsync(() =>
+                        {
+                            System.Windows.MessageBox.Show(
+                                "Canon T6 Video Recording:\n\n" +
+                                "Please set your camera's mode dial to MOVIE MODE (video camera icon).\n\n" +
+                                "The Canon T6 requires the physical dial to be in Movie mode for video recording.\n\n" +
+                                "After changing the dial, try recording again.",
+                                "Camera Setup Required",
+                                System.Windows.MessageBoxButton.OK,
+                                System.Windows.MessageBoxImage.Information);
+                        });
+                    }
+                    
+                    _uiService.UpdateStatus(errorMessage);
+                    
+                    // End the session since recording failed
+                    await _sessionService.CompleteSessionAsync();
                 }
             }
+            catch (Exception ex)
+            {
+                Log.Error($"StartVideoSession error: {ex.Message}");
+                
+                // Check if this is a Canon property exception that might not be critical
+                if (ex.Message.Contains("Device Busy") && ex.Message.Contains("property"))
+                {
+                    Log.Debug("Canon property exception in outer catch - checking if recording actually started");
+                    // Give it a moment and check if recording is working despite the exception
+                    await Task.Delay(1000);
+                    if (videoCoordinator.IsRecording)
+                    {
+                        Log.Debug("Recording is actually working despite property exception");
+                        _uiService.UpdateStatus("Recording video...");
+                        return; // Don't show error, recording is working
+                    }
+                }
+                
+                _uiService.UpdateStatus("Video recording error");
+            }
         }
+        
+        private void PlayVideoInLiveView(string videoPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(videoPath) || !System.IO.File.Exists(videoPath))
+                {
+                    Log.Error($"Cannot play video - file not found: {videoPath}");
+                    return;
+                }
+                
+                // Create a MediaElement to play the video
+                var mediaElement = new MediaElement
+                {
+                    Source = new Uri(videoPath, UriKind.Absolute),
+                    LoadedBehavior = MediaState.Manual,
+                    UnloadedBehavior = MediaState.Close, // Close instead of Stop to release file
+                    Stretch = Stretch.Uniform,
+                    Volume = 0.5, // Set default volume
+                    // Use lower buffering to reduce file lock time
+                    ScrubbingEnabled = false
+                };
+                
+                // Handle when video finishes
+                mediaElement.MediaEnded += (s, args) =>
+                {
+                    Log.Debug("Video playback ended - looping");
+                    mediaElement.Position = TimeSpan.Zero;
+                    mediaElement.Play();
+                };
+                
+                // Handle media opened to start playback
+                mediaElement.MediaOpened += (s, args) =>
+                {
+                    Log.Debug($"Video loaded: Duration = {mediaElement.NaturalDuration}");
+                    mediaElement.Play();
+                };
+                
+                // Handle media failed
+                mediaElement.MediaFailed += (s, args) =>
+                {
+                    Log.Error($"Failed to play video: {args.ErrorException?.Message}");
+                };
+                
+                // Replace the live view image with the media element
+                if (liveViewImage != null)
+                {
+                    // Get the parent container
+                    var parent = liveViewImage.Parent as Panel;
+                    if (parent != null)
+                    {
+                        // Store the current image visibility
+                        liveViewImage.Visibility = Visibility.Collapsed;
+                        
+                        // Add the media element at the same position
+                        parent.Children.Add(mediaElement);
+                        
+                        // Store reference for cleanup
+                        _currentVideoPlayer = mediaElement;
+                        
+                        Log.Debug($"Video player added to UI for: {videoPath}");
+                        
+                        // Show video controls
+                        if (VideoPlaybackControls != null)
+                        {
+                            VideoPlaybackControls.Visibility = Visibility.Visible;
+                            UpdatePlayPauseButton(true); // Video is playing
+                        }
+                        
+                        // Start playback
+                        mediaElement.Play();
+                        _isVideoPlaying = true;
+                    }
+                    else
+                    {
+                        Log.Error("Could not find parent panel for live view image");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PlayVideoInLiveView error: {ex.Message}");
+            }
+        }
+        
+        private MediaElement _currentVideoPlayer = null;
+        private bool _isVideoPlaying = true; // Track play/pause state
+        
+        private void StopVideoPlayback()
+        {
+            try
+            {
+                if (_currentVideoPlayer != null)
+                {
+                    _currentVideoPlayer.Stop();
+                    _currentVideoPlayer.Close();
+                    
+                    // Remove from UI
+                    var parent = _currentVideoPlayer.Parent as Panel;
+                    if (parent != null)
+                    {
+                        parent.Children.Remove(_currentVideoPlayer);
+                    }
+                    
+                    _currentVideoPlayer = null;
+                    
+                    // Restore live view image visibility
+                    if (liveViewImage != null)
+                    {
+                        liveViewImage.Visibility = Visibility.Visible;
+                    }
+                    
+                    // Hide video controls
+                    if (VideoPlaybackControls != null)
+                    {
+                        VideoPlaybackControls.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    _isVideoPlaying = false;
+                    Log.Debug("Video playback stopped and player removed");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"StopVideoPlayback error: {ex.Message}");
+            }
+        }
+        
+        private async void OnVideoRecordingStopped(object sender, VideoRecordingEventArgs e)
+        {
+            try
+            {
+                Log.Debug($"OnVideoRecordingStopped: Video recording completed - Duration: {e.Duration}");
+                
+                // Get the video path
+                var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
+                string videoPath = videoCoordinator.CurrentVideoPath;
+                
+                if (string.IsNullOrEmpty(videoPath) && !string.IsNullOrEmpty(e.FilePath))
+                {
+                    videoPath = e.FilePath;
+                }
+                
+                Log.Debug($"OnVideoRecordingStopped: Video file path: {videoPath}");
+                
+                // Update UI on main thread
+                await Dispatcher.InvokeAsync(async () =>
+                {
+                    _uiService.UpdateStatus("Video recording completed");
+                    
+                    // Hide stop button
+                    if (stopSessionButton != null)
+                    {
+                        stopSessionButton.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    // Hide recording indicator
+                    if (VideoRecordingGrid != null)
+                    {
+                        VideoRecordingGrid.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    // Stop the recording duration timer
+                    StopRecordingDurationTimer();
+                    
+                    // Stop live view timer since we'll show video
+                    if (_liveViewTimer != null && _liveViewTimer.IsEnabled)
+                    {
+                        _liveViewTimer.Stop();
+                        Log.Debug("Stopped live view timer to show video playback");
+                    }
+                    
+                    // Wait for video file to be fully downloaded
+                    if (!string.IsNullOrEmpty(videoPath))
+                    {
+                        // Wait for file to be fully downloaded (not just exist)
+                        bool fileReady = false;
+                        await Task.Run(async () =>
+                        {
+                            int attempts = 0;
+                            long lastSize = 0;
+                            int stableCount = 0;
+                            
+                            while (attempts < 60) // Wait up to 60 seconds
+                            {
+                                if (System.IO.File.Exists(videoPath))
+                                {
+                                    try
+                                    {
+                                        var fileInfo = new System.IO.FileInfo(videoPath);
+                                        long currentSize = fileInfo.Length;
+                                        
+                                        // Check if file size is stable (not growing)
+                                        if (currentSize > 0 && currentSize == lastSize)
+                                        {
+                                            stableCount++;
+                                            if (stableCount >= 3) // File size stable for 3 seconds
+                                            {
+                                                Log.Debug($"Video file fully downloaded: {videoPath} (Size: {currentSize / 1024.0 / 1024.0:F2} MB)");
+                                                fileReady = true;
+                                                break;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            stableCount = 0;
+                                            Log.Debug($"Video download in progress: {currentSize / 1024.0 / 1024.0:F2} MB");
+                                        }
+                                        
+                                        lastSize = currentSize;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Log.Debug($"Error checking file size: {ex.Message}");
+                                    }
+                                }
+                                else
+                                {
+                                    Log.Debug($"Waiting for video file to be created: {videoPath}");
+                                }
+                                
+                                await Task.Delay(1000);
+                                attempts++;
+                            }
+                            
+                            if (attempts >= 60)
+                            {
+                                Log.Error($"Timeout waiting for video download to complete: {videoPath}");
+                            }
+                        });
+                        
+                        if (fileReady && System.IO.File.Exists(videoPath))
+                        {
+                            Log.Debug($"Playing video in live view area: {videoPath}");
+                            PlayVideoInLiveView(videoPath);
+                        }
+                        else
+                        {
+                            Log.Error($"Video file not ready or not found: {videoPath}");
+                        }
+                    }
+                    
+                    // Unsubscribe from event to prevent memory leaks
+                    videoCoordinator.RecordingStopped -= OnVideoRecordingStopped;
+                    
+                    // Complete the session with video path
+                    Log.Debug("OnVideoRecordingStopped: Completing video session");
+                    await _sessionService.CompleteSessionAsync(videoPath);
+                    
+                    // Show completion options
+                    _uiService.ShowCompletionControls();
+                    _uiService.UpdateStatus("Session completed - Video ready");
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"OnVideoRecordingStopped error: {ex.Message}");
+            }
+        }
+        
+        #region Video Playback Control Handlers
+        
+        private void PlayPauseButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_currentVideoPlayer != null)
+                {
+                    if (_isVideoPlaying)
+                    {
+                        _currentVideoPlayer.Pause();
+                        _isVideoPlaying = false;
+                        UpdatePlayPauseButton(false);
+                        Log.Debug("Video paused");
+                    }
+                    else
+                    {
+                        _currentVideoPlayer.Play();
+                        _isVideoPlaying = true;
+                        UpdatePlayPauseButton(true);
+                        Log.Debug("Video resumed");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PlayPauseButton_Click error: {ex.Message}");
+            }
+        }
+        
+        private void VideoStopButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                StopVideoPlayback();
+                
+                // Optionally restart live view
+                if (_liveViewTimer != null && !_liveViewTimer.IsEnabled)
+                {
+                    _liveViewTimer.Start();
+                    Log.Debug("Restarted live view after stopping video");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"VideoStopButton_Click error: {ex.Message}");
+            }
+        }
+        
+        private void VideoReplayButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_currentVideoPlayer != null)
+                {
+                    _currentVideoPlayer.Position = TimeSpan.Zero;
+                    _currentVideoPlayer.Play();
+                    _isVideoPlaying = true;
+                    UpdatePlayPauseButton(true);
+                    Log.Debug("Video restarted from beginning");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"VideoReplayButton_Click error: {ex.Message}");
+            }
+        }
+        
+        private void UpdatePlayPauseButton(bool isPlaying)
+        {
+            try
+            {
+                // Find the TextBlock inside the PlayPauseButton template
+                if (PlayPauseButton != null)
+                {
+                    var template = PlayPauseButton.Template;
+                    if (template != null)
+                    {
+                        var border = PlayPauseButton.Template.FindName("PlayPauseBorder", PlayPauseButton) as Border;
+                        if (border != null)
+                        {
+                            var textBlock = border.Child as TextBlock;
+                            if (textBlock != null)
+                            {
+                                textBlock.Text = isPlaying ? "⏸" : "▶";
+                                PlayPauseButton.ToolTip = isPlaying ? "Pause" : "Play";
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"UpdatePlayPauseButton error: {ex.Message}");
+            }
+        }
+        
+        #endregion
         
         private async Task StartGifSession()
         {
@@ -6231,6 +6902,125 @@ namespace Photobooth.Pages
                 // Set rapid capture mode
                 await _workflowService.StartPhotoCaptureWorkflowAsync();
             }
+        }
+        
+        private async Task StopVideoRecording()
+        {
+            try
+            {
+                Log.Debug("Stopping video recording");
+                
+                var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
+                
+                // Get the current video path from the coordinator's recording service
+                string videoPath = videoCoordinator.CurrentVideoPath;
+                Log.Debug($"Current video path before stopping: {videoPath ?? "null"}");
+                
+                // Stop the video session
+                bool stopped = await videoCoordinator.StopVideoSessionAsync();
+                
+                if (stopped)
+                {
+                    Log.Debug("Video recording stopped successfully");
+                    _uiService.UpdateStatus("Video recording completed");
+                    
+                    // Hide stop button
+                    if (stopSessionButton != null)
+                    {
+                        stopSessionButton.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    // Hide recording indicator
+                    if (VideoRecordingGrid != null)
+                    {
+                        VideoRecordingGrid.Visibility = Visibility.Collapsed;
+                    }
+                    
+                    // Stop recording duration timer
+                    StopRecordingDurationTimer();
+                    
+                    // Display the video in the live view window
+                    if (!string.IsNullOrEmpty(videoPath) && System.IO.File.Exists(videoPath))
+                    {
+                        Log.Debug($"Displaying recorded video: {videoPath}");
+                        DisplayVideoInLiveView(videoPath);
+                    }
+                    else
+                    {
+                        Log.Error($"Video file not found after recording: {videoPath}");
+                    }
+                    
+                    // End the session
+                    await _sessionService.CompleteSessionAsync();
+                    
+                    // Show completion options
+                    _uiService.ShowCompletionControls();
+                }
+                else
+                {
+                    Log.Error("Failed to stop video recording properly");
+                    _uiService.UpdateStatus("Error stopping video");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"StopVideoRecording error: {ex.Message}");
+                _uiService.UpdateStatus("Error stopping video");
+            }
+        }
+        
+        private void StartRecordingDurationTimer()
+        {
+            _recordingStartTime = DateTime.Now;
+            
+            if (_recordingDurationTimer == null)
+            {
+                _recordingDurationTimer = new DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(1)
+                };
+                _recordingDurationTimer.Tick += RecordingDurationTimer_Tick;
+            }
+            
+            _recordingDurationTimer.Start();
+            Log.Debug("Recording duration timer started");
+        }
+        
+        private void StopRecordingDurationTimer()
+        {
+            _recordingDurationTimer?.Stop();
+            
+            if (RecordingDurationText != null)
+            {
+                RecordingDurationText.Text = "00:00";
+            }
+            
+            Log.Debug("Recording duration timer stopped");
+        }
+        
+        private async void RecordingDurationTimer_Tick(object sender, EventArgs e)
+        {
+            var duration = DateTime.Now - _recordingStartTime;
+            
+            if (RecordingDurationText != null)
+            {
+                RecordingDurationText.Text = $"{duration:mm\\:ss}";
+            }
+            
+            // Check if recording coordinator is still recording to sync UI
+            var coordinator = Services.VideoRecordingCoordinatorService.Instance;
+            if (!coordinator.IsRecording)
+            {
+                Log.Debug("UI timer detected recording stopped - stopping UI timer");
+                StopRecordingDurationTimer();
+                // The video recording should have already stopped, just update UI
+                await StopVideoRecording();
+            }
+        }
+        
+        private async void StopVideoButton_Click(object sender, RoutedEventArgs e)
+        {
+            await StopVideoRecording();
         }
         
         private async Task StartGreenScreenSession()

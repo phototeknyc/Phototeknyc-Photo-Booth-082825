@@ -119,12 +119,13 @@ namespace Photobooth.Pages
         // Refactored services
         
         // Video and Boomerang modules
-        private VideoRecordingService videoService;
+        private VideoRecordingCoordinatorService videoService;
         private BoomerangService boomerangService;
         private PhotoboothModulesConfig modulesConfig;
         private bool isRecording = false;
         private bool isCapturingBoomerang = false;
         public bool IsRecording => isRecording;
+        private int _recordingFrameCounter = 0; // Counter for debug logging during recording
         public bool IsCapturingBoomerang => isCapturingBoomerang;
         private SharingOperations sharingOperations;
         private CameraOperations cameraOperations;
@@ -166,7 +167,7 @@ namespace Photobooth.Pages
             
             // Initialize video and boomerang modules
             modulesConfig = PhotoboothModulesConfig.Instance;
-            videoService = new VideoRecordingService();
+            videoService = VideoRecordingCoordinatorService.Instance;
             boomerangService = new BoomerangService();
             
             // Printer monitoring now handled by PrintingService
@@ -357,7 +358,7 @@ namespace Photobooth.Pages
             // Initialize video and boomerang services with camera
             if (DeviceManager.SelectedCameraDevice != null)
             {
-                videoService.Initialize(DeviceManager.SelectedCameraDevice);
+                // VideoRecordingCoordinatorService doesn't need explicit initialization
             }
             
             // Update button visibility based on settings
@@ -1538,6 +1539,9 @@ namespace Photobooth.Pages
                     return;
                 }
                 
+                // During video recording, continue trying to get live view
+                // Canon cameras can still provide live view frames during recording
+                
                 if (!device.GetCapability(CapabilityEnum.LiveView))
                 {
                     Log.Debug($"LiveViewTimer_Tick: Camera {device.DeviceName} doesn't support live view");
@@ -1549,34 +1553,92 @@ namespace Photobooth.Pages
                 try
                 {
                     liveViewData = device.GetLiveViewImage();
-                    if (liveViewData == null)
+                    
+                    // Add detailed logging during recording - use a simple frame counter for reliable logging
+                    if (isRecording)
                     {
-                        Log.Debug($"LiveViewTimer: GetLiveViewImage returned null");
+                        _recordingFrameCounter++;
+                        if (_recordingFrameCounter % 60 == 0) // Log every ~2 seconds at 30fps
+                        {
+                            if (liveViewData == null)
+                            {
+                                Log.Debug($"[RECORDING] GetLiveViewImage returned null - no frame available");
+                            }
+                            else if (liveViewData.ImageData == null)
+                            {
+                                Log.Debug($"[RECORDING] GetLiveViewImage returned LiveViewData but ImageData is null");
+                            }
+                            else if (liveViewData.ImageData.Length == 0)
+                            {
+                                Log.Debug($"[RECORDING] GetLiveViewImage returned LiveViewData but ImageData is empty (0 bytes)");
+                            }
+                            else
+                            {
+                                Log.Debug($"[RECORDING] GetLiveViewImage SUCCESS: Got {liveViewData.ImageData.Length} bytes");
+                            }
+                        }
                     }
-                    else if (liveViewData.ImageData == null)
+                    else
                     {
-                        Log.Debug($"LiveViewTimer: GetLiveViewImage returned data but ImageData is null");
+                        _recordingFrameCounter = 0; // Reset counter when not recording
                     }
-                    else if (liveViewData.ImageData.Length == 0)
+                    
+                    if (!isRecording) // Only log these during normal operation
                     {
-                        Log.Debug($"LiveViewTimer: GetLiveViewImage returned data but ImageData is empty");
+                        if (liveViewData == null)
+                        {
+                            Log.Debug($"LiveViewTimer: GetLiveViewImage returned null");
+                        }
+                        else if (liveViewData.ImageData == null)
+                        {
+                            Log.Debug($"LiveViewTimer: GetLiveViewImage returned data but ImageData is null");
+                        }
+                        else if (liveViewData.ImageData.Length == 0)
+                        {
+                            Log.Debug($"LiveViewTimer: GetLiveViewImage returned data but ImageData is empty");
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log.Debug($"Error getting live view image: {ex.Message}");
+                    // During recording, errors are expected as camera might not provide live view
+                    if (isRecording)
+                    {
+                        // Only log once every 30 frames (about once per second) to avoid spam
+                        if (DateTime.Now.Second % 30 == 0)
+                        {
+                            Log.Debug($"Live view unavailable during recording (expected): {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        Log.Debug($"Error getting live view image: {ex.Message}");
+                    }
                     return;
                 }
 
                 if (liveViewData != null && liveViewData.ImageData != null && liveViewData.ImageData.Length > 0)
                 {
-                    Log.Debug($"LiveViewTimer: Got live view data with {liveViewData.ImageData.Length} bytes, ImageDataPosition={liveViewData.ImageDataPosition}");
+                    if (!isRecording) // Only log during normal operation
+                    {
+                        Log.Debug($"LiveViewTimer: Got live view data with {liveViewData.ImageData.Length} bytes, ImageDataPosition={liveViewData.ImageDataPosition}");
+                    }
+                    else if (_recordingFrameCounter % 60 == 0) // Log every 2 seconds during recording
+                    {
+                        Log.Debug($"[RECORDING] LiveView frame received: {liveViewData.ImageData.Length} bytes, ImageDataPosition={liveViewData.ImageDataPosition}, processing for display");
+                    }
                     try
                     {
                         // For Sony cameras, the JPEG data starts at ImageDataPosition
                         // For other cameras, ImageDataPosition is typically 0
                         int startPos = liveViewData.ImageDataPosition;
                         int dataLength = liveViewData.ImageData.Length - startPos;
+                        
+                        // Add debug for recording
+                        if (isRecording && _recordingFrameCounter % 60 == 0)
+                        {
+                            Log.Debug($"[RECORDING] Processing frame: startPos={startPos}, dataLength={dataLength}");
+                        }
                         
                         if (dataLength <= 0)
                         {
@@ -1585,11 +1647,30 @@ namespace Photobooth.Pages
                             dataLength = liveViewData.ImageData.Length;
                         }
                         
-                        Log.Debug($"LiveViewTimer: Creating bitmap from {dataLength} bytes starting at position {startPos}");
+                        if (!isRecording) // Only log during normal operation
+                        {
+                            Log.Debug($"LiveViewTimer: Creating bitmap from {dataLength} bytes starting at position {startPos}");
+                        }
+                        
                         using (var memoryStream = new MemoryStream(liveViewData.ImageData, startPos, dataLength))
                         {
                             var bitmap = CreateBitmapFromStream(memoryStream);
-                            Log.Debug($"LiveViewTimer: Bitmap created successfully: {bitmap != null}, Width={bitmap?.PixelWidth}, Height={bitmap?.PixelHeight}");
+                            
+                            if (!isRecording && bitmap != null) // Only log success during normal operation
+                            {
+                                Log.Debug($"LiveViewTimer: Bitmap created successfully: Width={bitmap.PixelWidth}, Height={bitmap.PixelHeight}");
+                            }
+                            else if (isRecording && _recordingFrameCounter % 60 == 0)
+                            {
+                                if (bitmap != null)
+                                {
+                                    Log.Debug($"[RECORDING] Bitmap created: Width={bitmap.PixelWidth}, Height={bitmap.PixelHeight}");
+                                }
+                                else
+                                {
+                                    Log.Debug($"[RECORDING] Failed to create bitmap from stream");
+                                }
+                            }
                             
                             // Update UI on main thread
                             Dispatcher.BeginInvoke(new Action(() =>
@@ -1597,11 +1678,16 @@ namespace Photobooth.Pages
                                 if (liveViewImage != null)
                                 {
                                     liveViewImage.Source = bitmap;
-                                    Log.Debug($"LiveViewTimer: Updated liveViewImage.Source");
+                                    
+                                    if (isRecording && _recordingFrameCounter % 60 == 0)
+                                    {
+                                        // Log every 2 seconds during recording to confirm updates
+                                        Log.Debug($"[RECORDING] UI Updated: liveViewImage.Source set to bitmap (Width={bitmap?.PixelWidth}, Height={bitmap?.PixelHeight})");
+                                    }
                                 }
-                                else
+                                else if (isRecording)
                                 {
-                                    Log.Debug($"LiveViewTimer: liveViewImage is null - cannot display!");
+                                    Log.Debug($"[RECORDING] liveViewImage is null - cannot display! UI element missing.");
                                 }
                             }));
                         }
@@ -8254,26 +8340,33 @@ namespace Photobooth.Pages
                     // The Canon camera will handle live view internally
                     Log.Debug($"[VIDEO UI] Live view timer status: {liveViewTimer?.IsEnabled ?? false}");
                     
+                    // CRITICAL FIX: Subscribe to recording events BEFORE starting recording to avoid race conditions
+                    Log.Debug("[VIDEO UI] Subscribing to recording events before starting...");
+                    videoService.RecordingProgress += OnVideoRecordingProgress;
+                    videoService.RecordingStopped += OnVideoRecordingStopped;
+                    
                     string videoPath = Path.Combine(FolderForPhotos, $"VID_{DateTime.Now:yyyyMMdd_HHmmss}.mp4");
                     Log.Debug($"[VIDEO UI] Calling StartRecordingAsync with path: {videoPath}");
                     
-                    bool started = await videoService.StartRecordingAsync(videoPath);
+                    bool started = await videoService.StartVideoSessionAsync(videoPath);
                     
                     if (started)
                     {
                         isRecording = true;
                         UpdateStatusText($"Recording... (max {modulesConfig.VideoDuration}s)");
-                        Log.Debug($"[VIDEO UI] Recording started successfully");
-                        
-                        // Subscribe to recording events
-                        videoService.RecordingProgress += OnVideoRecordingProgress;
-                        videoService.RecordingStopped += OnVideoRecordingStopped;
+                        Log.Debug($"[VIDEO UI] Recording started successfully, UI state updated");
                         
                         // Update UI binding for button state
                         OnPropertyChanged(nameof(IsRecording));
+                        Log.Debug($"[VIDEO UI] OnPropertyChanged(IsRecording) called - button should now show STOP");
                     }
                     else
                     {
+                        // CRITICAL FIX: Unsubscribe events if recording failed to start
+                        Log.Debug("[VIDEO UI] Recording failed to start, cleaning up event subscriptions");
+                        videoService.RecordingProgress -= OnVideoRecordingProgress;
+                        videoService.RecordingStopped -= OnVideoRecordingStopped;
+                        
                         UpdateStatusText("Failed to start recording");
                         Log.Error("[VIDEO UI] Failed to start video recording");
                     }
@@ -8284,12 +8377,13 @@ namespace Photobooth.Pages
                     UpdateStatusText("Stopping video...");
                     Log.Debug($"[VIDEO UI] Stopping recording...");
                     
-                    string videoPath = await videoService.StopRecordingAsync();
-                    Log.Debug($"[VIDEO UI] StopRecordingAsync returned: {videoPath ?? "NULL"}");
+                    bool stopped = await videoService.StopVideoSessionAsync();
+                    string videoPath = videoService.CurrentVideoPath;
+                    Log.Debug($"[VIDEO UI] StopVideoSessionAsync returned: {stopped}, VideoPath: {videoPath ?? "NULL"}");
                     
-                    if (!string.IsNullOrEmpty(videoPath))
+                    if (stopped && !string.IsNullOrEmpty(videoPath))
                     {
-                        isRecording = false;
+                        // Note: isRecording state is managed by OnVideoRecordingStopped event handler
                         UpdateStatusText("Video saved!");
                         
                         Log.Debug($"[VIDEO UI] Processing completed video: {videoPath}");
@@ -8305,9 +8399,6 @@ namespace Photobooth.Pages
                         capturedPhotoPaths.Add(videoPath);
                         Log.Debug($"[VIDEO UI] Added video to captured files list: {capturedPhotoPaths.Count} total files");
                         
-                        // Update UI binding
-                        OnPropertyChanged(nameof(IsRecording));
-                        
                         // Display the video in the live view screen
                         Log.Debug($"[VIDEO UI] About to call DisplayVideoInLiveView with: {videoPath}");
                         DisplayVideoInLiveView(videoPath);
@@ -8319,7 +8410,21 @@ namespace Photobooth.Pages
                     }
                     else
                     {
-                        Log.Debug("[VIDEO UI] VideoPath is null or empty, not displaying video");
+                        // CRITICAL FIX: Ensure UI state is updated even if event handler doesn't fire
+                        Log.Debug("[VIDEO UI] Video recording failed, ensuring UI state is reset");
+                        if (isRecording)
+                        {
+                            Log.Debug("[VIDEO UI] Manually resetting UI state due to recording failure");
+                            isRecording = false;
+                            OnPropertyChanged(nameof(IsRecording));
+                            
+                            // Clean up event subscriptions
+                            videoService.RecordingProgress -= OnVideoRecordingProgress;
+                            videoService.RecordingStopped -= OnVideoRecordingStopped;
+                        }
+                        
+                        UpdateStatusText("Video recording failed");
+                        Log.Error("[VIDEO UI] Video recording failed or no video path returned");
                     }
                 }
             }
@@ -8327,7 +8432,25 @@ namespace Photobooth.Pages
             {
                 Log.Error($"VideoRecordButton_Click: Error: {ex.Message}");
                 UpdateStatusText("Video recording error");
-                isRecording = false;
+                
+                // CRITICAL FIX: Ensure UI state is reset even on exception
+                if (isRecording)
+                {
+                    Log.Debug("[VIDEO UI] Exception occurred, manually resetting UI state");
+                    isRecording = false;
+                    OnPropertyChanged(nameof(IsRecording));
+                    
+                    // Clean up event subscriptions
+                    try
+                    {
+                        videoService.RecordingProgress -= OnVideoRecordingProgress;
+                        videoService.RecordingStopped -= OnVideoRecordingStopped;
+                    }
+                    catch (Exception unsub)
+                    {
+                        Log.Error($"[VIDEO UI] Error unsubscribing from events: {unsub.Message}");
+                    }
+                }
                 
                 // Ensure camera state is cleared even on error
                 if (DeviceManager.SelectedCameraDevice != null)
@@ -8335,34 +8458,67 @@ namespace Photobooth.Pages
                     DeviceManager.SelectedCameraDevice.IsBusy = false;
                     Log.Debug("[VIDEO UI] Cleared camera IsBusy flag after video recording error");
                 }
-                
-                OnPropertyChanged(nameof(IsRecording));
             }
         }
         
-        private void OnVideoRecordingProgress(object sender, TimeSpan elapsed)
+        private void OnVideoRecordingProgress(object sender, VideoRecordingEventArgs e)
         {
-            Dispatcher.BeginInvoke(new Action(() =>
+            try
             {
-                int remaining = modulesConfig.VideoDuration - (int)elapsed.TotalSeconds;
-                if (remaining >= 0)
+                // CRITICAL FIX: Use Dispatcher.Invoke instead of BeginInvoke to catch exceptions
+                Dispatcher.Invoke(new Action(() =>
                 {
-                    UpdateStatusText($"Recording... {remaining}s remaining");
-                }
-            }));
+                    int remaining = modulesConfig.VideoDuration - (int)e.Duration.TotalSeconds;
+                    if (remaining >= 0)
+                    {
+                        UpdateStatusText($"Recording... {remaining}s remaining");
+                        Log.Debug($"[VIDEO UI] Progress update: {remaining}s remaining (Duration: {e.Duration.TotalSeconds:F1}s)");
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[VIDEO UI] Error in OnVideoRecordingProgress: {ex.Message}");
+            }
         }
         
         private void OnVideoRecordingStopped(object sender, VideoRecordingEventArgs e)
         {
-            Dispatcher.BeginInvoke(new Action(() =>
+            try
             {
-                isRecording = false;
-                OnPropertyChanged(nameof(IsRecording));
+                Log.Debug($"[VIDEO UI] OnVideoRecordingStopped event received - Duration: {e.Duration.TotalSeconds:F1}s");
                 
-                // Unsubscribe from events
-                videoService.RecordingProgress -= OnVideoRecordingProgress;
-                videoService.RecordingStopped -= OnVideoRecordingStopped;
-            }));
+                // CRITICAL FIX: Use Dispatcher.Invoke instead of BeginInvoke to catch exceptions
+                Dispatcher.Invoke(new Action(() =>
+                {
+                    Log.Debug($"[VIDEO UI] Setting isRecording = false and updating UI binding");
+                    isRecording = false;
+                    OnPropertyChanged(nameof(IsRecording));
+                    Log.Debug($"[VIDEO UI] OnPropertyChanged(IsRecording) called - button should now show Record");
+                    
+                    // Unsubscribe from events
+                    videoService.RecordingProgress -= OnVideoRecordingProgress;
+                    videoService.RecordingStopped -= OnVideoRecordingStopped;
+                    Log.Debug($"[VIDEO UI] Event subscriptions cleaned up");
+                }));
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[VIDEO UI] Error in OnVideoRecordingStopped: {ex.Message}");
+                // Ensure UI state is corrected even if there's an exception
+                try
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        isRecording = false;
+                        OnPropertyChanged(nameof(IsRecording));
+                    });
+                }
+                catch (Exception dispatcherEx)
+                {
+                    Log.Error($"[VIDEO UI] Failed to update UI state after exception: {dispatcherEx.Message}");
+                }
+            }
         }
         
         private void ShowVideoPreview(string videoPath)

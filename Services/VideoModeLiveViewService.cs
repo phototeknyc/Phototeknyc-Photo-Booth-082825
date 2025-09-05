@@ -86,37 +86,69 @@ namespace Photobooth.Services
         {
             try
             {
+                // Try to initialize camera if not already done
                 if (_currentCamera == null)
                 {
-                    DebugService.LogError("VideoModeLiveView: No camera available");
+                    InitializeCamera();
+                }
+                
+                if (_currentCamera == null)
+                {
+                    DebugService.LogError("VideoModeLiveView: No camera available after initialization attempt");
                     return false;
                 }
 
                 // Save current photo settings
                 SaveCurrentPhotoSettings();
 
-                // Switch to video mode
-                if (await SwitchToVideoMode())
+                DebugService.LogDebug($"VideoModeLiveView: Current camera: {_currentCamera.DeviceName}, Mode: {_currentCamera.Mode?.Value}");
+                
+                // Save the original camera mode before any potential changes
+                if (_currentCamera.Mode != null)
                 {
-                    _isVideoModeActive = true;
-                    _isLiveViewRunning = true;
-                    IsEnabled = true; // Important: Mark service as enabled
-                    
-                    // Start live view if not already running
-                    if (_currentCamera.GetCapability(CapabilityEnum.LiveView))
-                    {
-                        _currentCamera.StartLiveView();
-                    }
-                    
-                    // Log available properties in video mode
-                    LogAvailableProperties();
-                    
-                    DebugService.LogDebug("VideoModeLiveView: Started successfully in video mode");
-                    OnModeChanged(true);
-                    return true;
+                    OriginalCameraMode = _currentCamera.Mode.Value;
+                    DebugService.LogDebug($"VideoModeLiveView: Saved original camera mode: {OriginalCameraMode}");
                 }
                 
-                return false;
+                // DON'T switch to movie mode - Canon T6 doesn't need it
+                // Just ensure live view is running for video recording
+                _isVideoModeActive = true;
+                _isLiveViewRunning = true;
+                IsEnabled = true; // Important: Mark service as enabled
+                
+                // Ensure live view is running if not already running
+                // Don't start live view if it's already running from the UI timer
+                if (_currentCamera.GetCapability(CapabilityEnum.LiveView))
+                {
+                    try
+                    {
+                        // Only start live view if it's not already active
+                        // This prevents conflicts with the UI live view timer
+                        var liveViewData = _currentCamera.GetLiveViewImage();
+                        bool isLiveViewRunning = liveViewData?.IsLiveViewRunning == true;
+                        
+                        if (!isLiveViewRunning)
+                        {
+                            _currentCamera.StartLiveView();
+                            DebugService.LogDebug("VideoModeLiveView: Live view started for video recording");
+                        }
+                        else
+                        {
+                            DebugService.LogDebug("VideoModeLiveView: Live view already running - using existing stream");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugService.LogDebug($"VideoModeLiveView: Live view may already be running: {ex.Message}");
+                    }
+                }
+                
+                // Log available properties
+                LogAvailableProperties();
+                
+                DebugService.LogDebug("VideoModeLiveView: Ready for video recording (no mode switch needed)");
+                OnModeChanged(true);
+                return true;
             }
             catch (Exception ex)
             {
@@ -135,11 +167,13 @@ namespace Photobooth.Services
                 if (!_isVideoModeActive)
                     return true;
 
-                // Stop live view
+                // Don't stop live view - let the UI timer continue to manage it
+                // The UI live view timer should continue running after video recording
                 if (_currentCamera != null && _isLiveViewRunning)
                 {
-                    _currentCamera.StopLiveView();
-                    _isLiveViewRunning = false;
+                    DebugService.LogDebug("VideoModeLiveView: Keeping live view active for UI timer");
+                    _isLiveViewRunning = false; // Mark service as not managing live view
+                    // Note: Don't call _currentCamera.StopLiveView() to keep UI live view working
                 }
 
                 // Restore photo mode
@@ -540,13 +574,15 @@ namespace Photobooth.Services
                 DebugService.LogDebug($"VideoModeLiveView: Current mode: {OriginalCameraMode}");
                 
                 // Find video mode value (varies by camera model)
+                // IMPORTANT: "Photo in Movie" (mode 21) is NOT video mode - it's for taking photos during video
+                // We need pure Movie mode (mode 20 for Canon)
                 var videoModeValue = _currentCamera.Mode.Values?.FirstOrDefault(v => 
                     v.Equals("Movie", StringComparison.OrdinalIgnoreCase) ||
                     v.Equals("Video", StringComparison.OrdinalIgnoreCase) ||
-                    v == "20" || // Canon SDK value for movie mode
+                    v == "20" || // Canon SDK numeric value for movie mode
                     v == "movie" || // lowercase variant
-                    v.Contains("Movie") || // Any case variant containing Movie
-                    (v.ToLower().Contains("movie") && !v.ToLower().Contains("photo")));
+                    // Only match "Movie" if it doesn't contain "Photo"
+                    (v.ToLower() == "movie")); // Exact match only
 
                 if (!string.IsNullOrEmpty(videoModeValue))
                 {
@@ -571,7 +607,23 @@ namespace Photobooth.Services
                 }
                 else
                 {
-                    DebugService.LogError("VideoModeLiveView: Video mode not found in camera modes");
+                    // No pure movie mode found - camera might need manual mode dial adjustment
+                    DebugService.LogDebug("VideoModeLiveView: No pure video/movie mode found in SDK modes");
+                    DebugService.LogDebug("VideoModeLiveView: Camera may require manual mode dial adjustment to MOVIE mode");
+                    
+                    // Check if camera is Canon T6/1300D which requires manual mode switching
+                    if (_currentCamera.DeviceName?.Contains("T6") == true || 
+                        _currentCamera.DeviceName?.Contains("1300D") == true ||
+                        _currentCamera.DeviceName?.Contains("Rebel") == true)
+                    {
+                        DebugService.LogDebug("VideoModeLiveView: Canon T6/Rebel detected - requires physical mode dial set to MOVIE");
+                        DebugService.LogDebug("VideoModeLiveView: Proceeding anyway - assuming camera is manually set to movie mode");
+                        
+                        // For Canon T6, we proceed even without mode switch as it needs manual adjustment
+                        // The camera should be physically set to movie mode
+                        return true;
+                    }
+                    
                     if (_currentCamera.Mode.Values != null)
                     {
                         DebugService.LogError($"VideoModeLiveView: Available modes: {string.Join(", ", _currentCamera.Mode.Values)}");
@@ -605,8 +657,9 @@ namespace Photobooth.Services
                 
                 if (string.IsNullOrEmpty(OriginalCameraMode))
                 {
-                    DebugService.LogError("VideoModeLiveView: Original camera mode not saved, cannot restore");
-                    return false;
+                    // If original mode wasn't saved, assume camera is already in correct mode
+                    DebugService.LogDebug("VideoModeLiveView: Original camera mode not saved, assuming camera is already in correct mode");
+                    return true;
                 }
 
                 DebugService.LogDebug($"VideoModeLiveView: Setting camera mode back to '{OriginalCameraMode}'");

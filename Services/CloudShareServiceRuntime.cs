@@ -282,7 +282,8 @@ namespace Photobooth.Services
                             // Upload video file directly without resizing
                             System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Uploading video file: {Path.GetFileName(photoPath)}");
                             
-                            using (var videoStream = File.OpenRead(photoPath))
+                            // Open with shared read access to prevent conflicts with video player
+                            using (var videoStream = new FileStream(photoPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                             {
                                 var putRequest = Activator.CreateInstance(_putObjectRequestType);
                                 var putRequestType = putRequest.GetType();

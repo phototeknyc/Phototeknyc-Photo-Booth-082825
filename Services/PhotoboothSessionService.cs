@@ -762,7 +762,7 @@ namespace Photobooth.Services
         /// <summary>
         /// Complete the current session
         /// </summary>
-        public async Task<bool> CompleteSessionAsync()
+        public async Task<bool> CompleteSessionAsync(string videoPath = null)
         {
             try
             {
@@ -784,6 +784,7 @@ namespace Photobooth.Services
                     PhotoPaths = new List<string>(_capturedPhotoPaths),
                     ComposedImagePath = _composedImagePath,
                     GifPath = _gifPath,
+                    VideoPath = videoPath,  // Include video path if provided
                     CompletedAt = DateTime.Now
                 };
 
@@ -983,6 +984,7 @@ namespace Photobooth.Services
         public List<string> PhotoPaths { get; set; }
         public string ComposedImagePath { get; set; }
         public string GifPath { get; set; }
+        public string VideoPath { get; set; }  // Added for video sessions
         public DateTime CompletedAt { get; set; }
     }
     #endregion

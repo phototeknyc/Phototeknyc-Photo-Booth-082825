@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
+using CameraControl.Devices;
 using CameraControl.Devices.Classes;
 using Photobooth.Services;
 
@@ -123,14 +124,39 @@ namespace Photobooth.Controls
 
         public void Show()
         {
+            if (MainGrid == null)
+            {
+                CameraControl.Devices.Log.Error("CaptureModesOverlay.Show: MainGrid is null!");
+                return;
+            }
+            
+            CameraControl.Devices.Log.Debug($"CaptureModesOverlay.Show: MainGrid current visibility = {MainGrid.Visibility}");
+            
             UpdateButtonVisibility();
+            
+            CameraControl.Devices.Log.Debug($"CaptureModesOverlay.Show: Setting MainGrid visibility to Visible");
             MainGrid.Visibility = Visibility.Visible;
+            
+            // Set initial opacity for animation
+            MainGrid.Opacity = 0;
+            CameraControl.Devices.Log.Debug($"CaptureModesOverlay.Show: MainGrid opacity set to 0");
             
             // Fade in animation
             var fadeIn = new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(300)));
-            MainGrid.BeginAnimation(OpacityProperty, fadeIn);
+            MainGrid.BeginAnimation(Grid.OpacityProperty, fadeIn);
+            CameraControl.Devices.Log.Debug($"CaptureModesOverlay.Show: Animation started");
             
-            CameraControl.Devices.Classes.Log.Debug("CaptureModesOverlay: Shown");
+            var enabledCount = _captureModesService.EnabledModes.Count;
+            CameraControl.Devices.Log.Debug($"CaptureModesOverlay: Shown with {enabledCount} enabled modes");
+            
+            // Log each enabled mode
+            foreach (var mode in _captureModesService.EnabledModes)
+            {
+                CameraControl.Devices.Log.Debug($"  - {mode.Mode}: Enabled");
+            }
+            
+            // Force UI refresh
+            MainGrid.UpdateLayout();
         }
 
         public void Hide()
@@ -142,9 +168,9 @@ namespace Photobooth.Controls
                 MainGrid.Visibility = Visibility.Collapsed;
                 OverlayClosed?.Invoke(this, EventArgs.Empty);
             };
-            MainGrid.BeginAnimation(OpacityProperty, fadeOut);
+            MainGrid.BeginAnimation(Grid.OpacityProperty, fadeOut);
             
-            CameraControl.Devices.Classes.Log.Debug("CaptureModesOverlay: Hidden");
+            CameraControl.Devices.Log.Debug("CaptureModesOverlay: Hidden");
         }
 
         #endregion
@@ -153,7 +179,7 @@ namespace Photobooth.Controls
 
         private async void OnModeSelected(Photobooth.Services.CaptureMode mode)
         {
-            CameraControl.Devices.Classes.Log.Debug($"CaptureModesOverlay: Mode selected - {mode}");
+            CameraControl.Devices.Log.Debug($"CaptureModesOverlay: Mode selected - {mode}");
             
             // Let service handle the business logic
             var success = await _captureModesService.StartCaptureSession(mode);

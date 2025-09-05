@@ -46,7 +46,7 @@ namespace Photobooth.Services
         public VideoRecordingService()
         {
             _config = PhotoboothModulesConfig.Instance;
-            _recordingTimer = new System.Timers.Timer(100); // Update every 100ms
+            _recordingTimer = new System.Timers.Timer(100); // Update every 100ms - balanced between responsiveness and performance
             _recordingTimer.Elapsed += OnRecordingTimerElapsed;
         }
 
@@ -142,9 +142,12 @@ namespace Photobooth.Services
             }
         }
 
-        public async Task<bool> StartRecordingAsync(string outputPath = null)
+        public async Task<bool> StartRecordingAsync(string outputPath = null, Database.EventData currentEvent = null)
         {
             System.Diagnostics.Debug.WriteLine($"[VIDEO] StartRecordingAsync called. Camera: {_camera?.DeviceName ?? "NULL"}, Already recording: {_isRecording}");
+            
+            // Reset stop flag for new recording
+            _isStopping = false;
             
             if (_isRecording || _camera == null)
             {
@@ -188,13 +191,34 @@ namespace Photobooth.Services
                 // Generate output path if not provided
                 if (string.IsNullOrEmpty(outputPath))
                 {
-                    // Videos are saved in: C:\Users\[username]\Pictures\PhotoBooth\Videos\[date]\
-                    string videoDir = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                        "PhotoBooth",
-                        "Videos",
-                        DateTime.Now.ToString("yyyy-MM-dd")
-                    );
+                    // Videos are saved in event-based folder structure
+                    string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                    string photoboothDir = Path.Combine(documentsPath, "PhotoBooth");
+                    
+                    // If PhotoBooth directory doesn't exist in Documents, try Pictures
+                    if (!Directory.Exists(photoboothDir))
+                    {
+                        string picturesPath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+                        photoboothDir = Path.Combine(picturesPath, "PhotoBooth");
+                    }
+                    
+                    // Use event-based folder structure if event is provided
+                    string videoDir;
+                    if (currentEvent != null && !string.IsNullOrEmpty(currentEvent.Name))
+                    {
+                        // Sanitize event name for folder
+                        string eventName = GetSafeEventName(currentEvent.Name);
+                        string eventFolder = Path.Combine(photoboothDir, eventName);
+                        videoDir = Path.Combine(eventFolder, "videos");
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Using event folder structure: {videoDir}");
+                    }
+                    else
+                    {
+                        // Fallback to generic Videos folder
+                        string videosDir = Path.Combine(photoboothDir, "Videos");
+                        videoDir = Path.Combine(videosDir, DateTime.Now.ToString("yyyy-MM-dd"));
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Using generic folder structure: {videoDir}");
+                    }
                     
                     System.Diagnostics.Debug.WriteLine($"[VIDEO] Creating directory: {videoDir}");
                     
@@ -214,17 +238,10 @@ namespace Photobooth.Services
                 
                 System.Diagnostics.Debug.WriteLine($"[VIDEO] Calling camera.StartRecordMovie()...");
                 
-                // For Canon cameras, ensure movie mode and add delay
-                if (_camera.GetType().Name.Contains("Canon"))
-                {
-                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Canon camera detected, ensuring movie mode...");
-                    
-                    // Try to ensure the camera is in movie mode
-                    await EnsureCanonMovieMode();
-                    
-                    // Give the camera time to switch modes
-                    await Task.Delay(1000);
-                }
+                // NOTE: VideoRecordingCoordinatorService handles mode switching via VideoModeLiveViewService
+                // We should NOT attempt mode switching here as it's already been done
+                // The camera should already be in video mode by the time we get here
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera should already be in video mode via VideoModeLiveViewService");
                 
                 // Start recording on camera
                 bool recordingStarted = false;
@@ -271,19 +288,13 @@ namespace Photobooth.Services
                 // Wait a bit to ensure recording actually started
                 await Task.Delay(500);
                 
-                // For Canon cameras, verify recording actually started
+                // Skip the immediate recording check for Canon cameras
+                // The Canon T6 might report not recording even when it is
+                // We'll rely on the file being created when we stop recording
                 if (_camera.GetType().Name.Contains("Canon"))
                 {
-                    bool isActuallyRecording = await CheckCanonRecordingStatus();
-                    if (!isActuallyRecording)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[VIDEO] ERROR: Canon camera is not recording despite StartRecord call");
-                        System.Diagnostics.Debug.WriteLine($"[VIDEO] IMPORTANT: Please manually set your camera to MOVIE MODE using the mode dial");
-                        System.Diagnostics.Debug.WriteLine($"[VIDEO] The mode dial should be set to the movie camera icon");
-                        RecordingError?.Invoke(this, "Camera is not recording. Please set the camera mode dial to MOVIE MODE (video camera icon) and try again.");
-                        _isRecording = false;
-                        return false;
-                    }
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Canon camera - skipping immediate recording status check");
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Will verify recording when stopped by checking for video file");
                 }
                 
                 if (!recordingStarted)
@@ -306,17 +317,8 @@ namespace Photobooth.Services
                     StartTime = _recordingStartTime
                 });
                 
-                // Auto-stop if max duration is set
-                if (MaxDuration > TimeSpan.Zero)
-                {
-                    Task.Delay(MaxDuration).ContinueWith(t =>
-                    {
-                        if (_isRecording)
-                        {
-                            _ = StopRecordingAsync();
-                        }
-                    });
-                }
+                // Auto-stop timer is handled in OnRecordingTimerElapsed - no need for separate Task.Delay
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera status monitoring active - checking every 50ms");
                 
                 return true;
             }
@@ -327,9 +329,18 @@ namespace Photobooth.Services
             }
         }
 
+        private bool _isStopping = false; // Prevent multiple concurrent stops
+        
         public async Task<string> StopRecordingAsync()
         {
-            System.Diagnostics.Debug.WriteLine($"[VIDEO] StopRecordingAsync called. Recording: {_isRecording}, Camera: {_camera?.DeviceName ?? "NULL"}");
+            System.Diagnostics.Debug.WriteLine($"[VIDEO] StopRecordingAsync called. Recording: {_isRecording}, Stopping: {_isStopping}, Camera: {_camera?.DeviceName ?? "NULL"}");
+            
+            // CRITICAL: Prevent multiple concurrent stop operations
+            if (_isStopping)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Already stopping recording, ignoring duplicate call");
+                return _currentVideoPath;
+            }
             
             if (!_isRecording || _camera == null)
             {
@@ -337,9 +348,10 @@ namespace Photobooth.Services
                 return null;
             }
 
+            _isStopping = true; // Set flag to prevent concurrent stops
+            
             try
             {
-                _recordingTimer.Stop();
                 var recordingDuration = DateTime.Now - _recordingStartTime;
                 System.Diagnostics.Debug.WriteLine($"[VIDEO] Stopping recording after {recordingDuration.TotalSeconds:F1} seconds");
                 System.Diagnostics.Debug.WriteLine($"[VIDEO] Expected file location: {_currentVideoPath}");
@@ -366,8 +378,24 @@ namespace Photobooth.Services
                     }
                 });
                 
+                // Stop timer and update state IMMEDIATELY after camera stops
+                if (_recordingTimer.Enabled)
+                {
+                    _recordingTimer.Stop();
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] Recording timer stopped - camera recording stopped");
+                }
                 _isRecording = false;
                 var duration = DateTime.Now - _recordingStartTime;
+                
+                // Fire the stopped event immediately so UI updates right away
+                RecordingStopped?.Invoke(this, new VideoRecordingEventArgs
+                {
+                    FilePath = _currentVideoPath,
+                    StartTime = _recordingStartTime,
+                    Duration = duration
+                });
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera recording stopped, UI notified. Duration: {duration.TotalSeconds:F1} seconds");
                 
                 System.Diagnostics.Debug.WriteLine($"[VIDEO] Recording stopped. Duration: {duration.TotalSeconds:F1} seconds");
                 System.Diagnostics.Debug.WriteLine($"[VIDEO] Waiting for file to be written...");
@@ -417,13 +445,6 @@ namespace Photobooth.Services
                 // Restore photo settings after video recording
                 RestorePhotoSettings();
                 
-                RecordingStopped?.Invoke(this, new VideoRecordingEventArgs
-                {
-                    FilePath = _currentVideoPath,
-                    StartTime = _recordingStartTime,
-                    Duration = duration
-                });
-                
                 System.Diagnostics.Debug.WriteLine($"[VIDEO] StopRecordingAsync completed. Returning path: {_currentVideoPath}");
                 return _currentVideoPath;
             }
@@ -435,6 +456,11 @@ namespace Photobooth.Services
                 // Still return the path as the video file may have been created
                 return _currentVideoPath;
             }
+            finally
+            {
+                _isStopping = false; // Reset flag to allow future stop operations
+                _isRecording = false; // Ensure recording state is false
+            }
         }
 
 
@@ -444,100 +470,28 @@ namespace Photobooth.Services
             {
                 System.Diagnostics.Debug.WriteLine($"[VIDEO] Checking camera mode. Camera type: {_camera.GetType().Name}");
                 
-                // Check if it's a Canon camera
+                // NOTE: Mode switching is handled by VideoModeLiveViewService in VideoRecordingCoordinatorService
+                // We should NOT attempt any mode switching here as it will conflict with the proper mode switching
+                // The camera should already be in video mode when we get here
+                
+                // Check if it's a Canon camera for save location configuration only
                 if (_camera.GetType().Name.Contains("Canon"))
                 {
                     // IMPORTANT: For Canon cameras, we need to configure save location to PC
                     // before starting video recording to ensure videos are saved to computer
                     ConfigureCanonSaveToPC();
                     
-                    // Try to get the current mode
+                    // Log the current mode for debugging only - don't try to change it
                     var modeProperty = _camera.Mode;
                     if (modeProperty != null)
                     {
-                        // Check if we're already in movie mode
                         string currentMode = modeProperty.Value;
-                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Current camera mode: {currentMode}");
-                        
-                        // IMPORTANT: Check if we're in the wrong mode
-                        // "Photo in Movie" is for taking photos, not recording video!
-                        if (currentMode != null && currentMode.ToLower().Contains("photo") && currentMode.ToLower().Contains("movie"))
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[VIDEO] WARNING: Camera is in 'Photo in Movie' mode - this is for taking photos, not recording!");
-                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Need to switch to actual movie recording mode");
-                        }
-                        
-                        // Check if we need to switch modes
-                        // We need movie mode, but NOT "Photo in Movie"
-                        bool needsModeSwitch = currentMode != null && (
-                            currentMode.ToLower().Contains("photo") || // Any photo mode including "Photo in Movie"
-                            (!currentMode.ToLower().Contains("movie") && 
-                             !currentMode.ToLower().Contains("tv") &&
-                             !currentMode.ToLower().Contains("av") &&
-                             !currentMode.ToLower().Contains("manual")));
-                        
-                        if (needsModeSwitch)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera not in video-capable mode, attempting to switch...");
-                            
-                            // Don't switch to "Photo in Movie" - that's for taking photos in movie mode
-                            // We need to list all available modes to find the right one
-                            try
-                            {
-                                if (modeProperty.Values != null)
-                                {
-                                    var modeList = new List<string>();
-                                    foreach (var val in modeProperty.Values)
-                                        modeList.Add(val);
-                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Available modes: {string.Join(", ", modeList)}");
-                                }
-                                
-                                // Look for actual movie/video mode - NOT "Photo in Movie"
-                                // Try different patterns to find the right mode
-                                var movieModeValue = modeProperty.Values?.FirstOrDefault(v => 
-                                    v.Equals("Movie", StringComparison.OrdinalIgnoreCase) ||
-                                    v.Equals("Video", StringComparison.OrdinalIgnoreCase) ||
-                                    v == "20" || // Canon SDK value for movie mode
-                                    (v.ToLower().Contains("movie") && !v.ToLower().Contains("photo")));
-                                
-                                if (movieModeValue != null)
-                                {
-                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Found movie mode: {movieModeValue}");
-                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Setting mode to: {movieModeValue}");
-                                    modeProperty.SetValue(movieModeValue);
-                                    
-                                    // Give the camera time to switch modes
-                                    await Task.Delay(1000);
-                                    
-                                    System.Diagnostics.Debug.WriteLine("[VIDEO] Switched to movie mode successfully");
-                                }
-                                else
-                                {
-                                    System.Diagnostics.Debug.WriteLine("[VIDEO] WARNING: No pure movie mode found in available modes");
-                                    System.Diagnostics.Debug.WriteLine("[VIDEO] The camera may need to be manually set to movie mode using the mode dial");
-                                    System.Diagnostics.Debug.WriteLine("[VIDEO] Continuing anyway - camera might be in manual movie mode already");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[VIDEO] Failed to switch to movie mode: {ex.Message}");
-                                // Continue anyway - user may have manually set the camera to movie mode
-                            }
-                        }
-                        else
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[VIDEO] Camera already in video-capable mode: {currentMode}");
-                            System.Diagnostics.Debug.WriteLine($"[VIDEO] No mode switch needed - can record video in this mode");
-                        }
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Mode property is null");
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Current camera mode (should be video mode): {currentMode}");
                     }
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Not a Canon camera, skipping mode switch");
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Not a Canon camera");
                 }
             }
             catch (Exception ex)
@@ -1361,6 +1315,10 @@ namespace Photobooth.Services
             {
                 System.Diagnostics.Debug.WriteLine("[VIDEO] Attempting to download latest video from Canon camera...");
                 
+                // Wait for camera to update its file list after recording
+                await Task.Delay(2000);
+                System.Diagnostics.Debug.WriteLine("[VIDEO] Refreshing camera file list...");
+                
                 // Get all objects from the camera's memory card
                 var objects = _camera.GetObjects(null, false);
                 
@@ -1414,9 +1372,17 @@ namespace Photobooth.Services
                     return false;
                 }
                 
-                // Get the most recent video file (assuming it's the last one)
-                var latestVideo = videoFiles[videoFiles.Count - 1];
-                System.Diagnostics.Debug.WriteLine($"[VIDEO] Latest video file: {latestVideo.FileName}");
+                // Log all video files in order
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Found {videoFiles.Count} video files in order:");
+                for (int i = 0; i < Math.Min(5, videoFiles.Count); i++)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO]   [{i}]: {videoFiles[i].FileName}");
+                }
+                
+                // Get the most recent video file 
+                // Based on logs, the newest video (MVI_9341) appears FIRST in the filtered list
+                var latestVideo = videoFiles[0];  // Take the first video, which should be the newest
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Selected video for download: {latestVideo.FileName}");
                 
                 // Download the video file to our expected location
                 if (!string.IsNullOrEmpty(_currentVideoPath))
@@ -1601,15 +1567,81 @@ namespace Photobooth.Services
         
         private void OnRecordingTimerElapsed(object sender, ElapsedEventArgs e)
         {
-            if (_isRecording)
+            if (_isRecording && !_isStopping) // Check _isStopping to prevent multiple calls
             {
-                RecordingProgress?.Invoke(this, ElapsedTime);
-                
-                // Check if we've reached max duration
+                // Check if we've reached max duration FIRST - this is the primary mechanism
                 if (MaxDuration > TimeSpan.Zero && ElapsedTime >= MaxDuration)
                 {
-                    _ = StopRecordingAsync();
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] *** MAX DURATION REACHED ({MaxDuration.TotalSeconds}s) - STOPPING CAMERA ***");
+                    // DO NOT set _isRecording = false here! Let StopRecordingAsync handle it
+                    _ = StopRecordingAsync(); // This will handle stopping timer and setting flags
+                    return;
                 }
+                
+                // Check if camera has stopped recording on its own (secondary check for Canon cameras)
+                if (!CheckCameraRecordingStatus())
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] *** CAMERA STOPPED RECORDING - SYNCING SERVICE STATE ***");
+                    // DO NOT set _isRecording = false here! Let StopRecordingAsync handle it
+                    _ = StopRecordingAsync();
+                    return; // Don't send progress update if camera stopped
+                }
+                
+                // Send progress update
+                RecordingProgress?.Invoke(this, ElapsedTime);
+            }
+        }
+        
+        /// <summary>
+        /// Check if the camera is actually still recording
+        /// </summary>
+        private bool CheckCameraRecordingStatus()
+        {
+            try
+            {
+                if (_camera == null) return false;
+                
+                // For Canon cameras, access the EosCamera.GetProperty method directly
+                if (_camera.GetType().Name.Contains("Canon"))
+                {
+                    // Get the Camera property (EosCamera) from the Canon device
+                    var cameraProperty = _camera.GetType().GetProperty("Camera", BindingFlags.Public | BindingFlags.Instance);
+                    if (cameraProperty != null)
+                    {
+                        var eosCamera = cameraProperty.GetValue(_camera);
+                        if (eosCamera != null)
+                        {
+                            // Call GetProperty on the EosCamera object
+                            var getPropertyMethod = eosCamera.GetType().GetMethod("GetProperty", BindingFlags.Public | BindingFlags.Instance);
+                            if (getPropertyMethod != null)
+                            {
+                                // Use Edsdk.PropID_Record constant (0x00000510)
+                                const uint PropID_Record = 0x00000510;
+                                var recordStatus = getPropertyMethod.Invoke(eosCamera, new object[] { PropID_Record });
+                                int status = recordStatus != null ? Convert.ToInt32(recordStatus) : 0;
+                                
+                                // Canon T6: Status 4 = recording, Status 0 = not recording
+                                bool isRecording = status == 4;
+                                
+                                // Only log when status changes to reduce noise
+                                if (!isRecording)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[VIDEO] *** CAMERA STOPPED RECORDING - Status: {status} at {DateTime.Now:HH:mm:ss.fff} ***");
+                                }
+                                return isRecording;
+                            }
+                        }
+                    }
+                }
+                
+                // For other cameras or if property check fails, assume still recording
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error checking camera recording status: {ex.Message}");
+                // If we can't check, assume still recording to avoid premature stop
+                return true;
             }
         }
         
@@ -1736,6 +1768,42 @@ namespace Photobooth.Services
             }
             
             _recordingTimer?.Dispose();
+        }
+        
+        /// <summary>
+        /// Sanitize event name for safe folder creation
+        /// </summary>
+        private string GetSafeEventName(string eventName)
+        {
+            if (string.IsNullOrWhiteSpace(eventName))
+                return "Default_Event";
+            
+            // Remove invalid path characters
+            char[] invalidChars = Path.GetInvalidFileNameChars();
+            string safe = eventName;
+            
+            foreach (char c in invalidChars)
+            {
+                safe = safe.Replace(c.ToString(), "");
+            }
+            
+            // Also remove problematic characters
+            safe = safe.Replace(":", "")
+                      .Replace("*", "")
+                      .Replace("?", "")
+                      .Replace("\"", "")
+                      .Replace("<", "")
+                      .Replace(">", "")
+                      .Replace("|", "")
+                      .Replace("/", "_")
+                      .Replace("\\", "_")
+                      .Trim();
+            
+            // Ensure it's not empty after cleaning
+            if (string.IsNullOrWhiteSpace(safe))
+                safe = "Event";
+            
+            return safe;
         }
     }
 

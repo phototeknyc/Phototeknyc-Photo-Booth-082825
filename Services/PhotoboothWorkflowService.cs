@@ -604,11 +604,20 @@ namespace Photobooth.Services
                 
                 // Only resume video mode if it was previously active before capture
                 // Don't start it for the first time here - that should be done explicitly
-                if (videoModeService.IsEnabled && !videoModeService.IsVideoModeActive)
+                // BUT don't resume if we're in a photo session - wait until session completes
+                if (videoModeService.IsEnabled && !videoModeService.IsVideoModeActive && !_sessionService.IsSessionActive)
                 {
                     // Video mode is enabled but not active (was switched to photo mode for capture)
+                    // AND no active session - safe to resume
                     Log.Debug($"PhotoboothWorkflowService: Resuming video mode after capture (IsEnabled={videoModeService.IsEnabled})");
                     _ = videoModeService.ResumeVideoModeAfterCapture();
+                }
+                else if (videoModeService.IsEnabled && !videoModeService.IsVideoModeActive && _sessionService.IsSessionActive)
+                {
+                    // In a photo session from video mode - don't resume video mode yet
+                    Log.Debug("PhotoboothWorkflowService: Skipping video mode resume - photo session still active");
+                    // Just start normal live view for now
+                    CurrentCamera?.StartLiveView();
                 }
                 else if (!videoModeService.IsEnabled)
                 {

@@ -1426,5 +1426,113 @@ namespace Photobooth.Properties {
                 this["VideoModeLiveViewEnabled"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool CaptureModesEnabled {
+            get {
+                return ((bool)(this["CaptureModesEnabled"]));
+            }
+            set {
+                this["CaptureModesEnabled"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool CaptureModePhoto {
+            get {
+                return ((bool)(this["CaptureModePhoto"]));
+            }
+            set {
+                this["CaptureModePhoto"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool CaptureModeVideo {
+            get {
+                return ((bool)(this["CaptureModeVideo"]));
+            }
+            set {
+                this["CaptureModeVideo"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool CaptureModeBoomerang {
+            get {
+                return ((bool)(this["CaptureModeBoomerang"]));
+            }
+            set {
+                this["CaptureModeBoomerang"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool CaptureModeGif {
+            get {
+                return ((bool)(this["CaptureModeGif"]));
+            }
+            set {
+                this["CaptureModeGif"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool CaptureModeGreenScreen {
+            get {
+                return ((bool)(this["CaptureModeGreenScreen"]));
+            }
+            set {
+                this["CaptureModeGreenScreen"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool CaptureModeAI {
+            get {
+                return ((bool)(this["CaptureModeAI"]));
+            }
+            set {
+                this["CaptureModeAI"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool CaptureModeFlipbook {
+            get {
+                return ((bool)(this["CaptureModeFlipbook"]));
+            }
+            set {
+                this["CaptureModeFlipbook"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Photo")]
+        public string DefaultCaptureMode {
+            get {
+                return ((string)(this["DefaultCaptureMode"]));
+            }
+            set {
+                this["DefaultCaptureMode"] = value;
+            }
+        }
     }
 }

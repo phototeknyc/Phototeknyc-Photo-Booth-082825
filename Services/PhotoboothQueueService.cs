@@ -339,7 +339,7 @@ namespace Photobooth.Services
                     }
                 }
                 
-                Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: Cache miss - querying database for sessionId='{sessionId}', isGallerySession={isGallerySession}");
+                // Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: Cache miss - querying database for sessionId='{sessionId}', isGallerySession={isGallerySession}");
                 
                 string galleryUrl = null;
                 if (isGallerySession)
@@ -369,7 +369,7 @@ namespace Photobooth.Services
                     }
                 }
                 
-                Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: Retrieved and cached URL: {galleryUrl ?? "NULL"}");
+                // Log.Debug($"PhotoboothQueueService.GetValidGalleryUrl: Retrieved and cached URL: {galleryUrl ?? "NULL"}");
                 return galleryUrl;
             }
             catch (Exception ex)

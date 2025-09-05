@@ -102,8 +102,61 @@
         <!-- Capture Modes Overlay -->
         <controls:CaptureModesOverlay x:Name="CaptureModesOverlay"
                                       Grid.RowSpan="3"
-                                      Panel.ZIndex="998"
-                                      Visibility="Collapsed"/>
+                                      Panel.ZIndex="998"/>
+        
+        <!-- Video Recording Indicator -->
+        <Grid x:Name="VideoRecordingGrid"
+              Grid.RowSpan="3"
+              Panel.ZIndex="997"
+              Visibility="Collapsed">
+            <!-- Recording Indicator -->
+            <Border HorizontalAlignment="Center"
+                    VerticalAlignment="Top"
+                    Margin="0,20,0,0"
+                    Background="#CC000000"
+                    CornerRadius="5"
+                    Padding="20,10">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse Width="15" Height="15" Fill="Red" Margin="0,0,10,0">
+                        <Ellipse.Triggers>
+                            <EventTrigger RoutedEvent="Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                       From="1" To="0.3" Duration="0:0:0.5"
+                                                       AutoReverse="True" RepeatBehavior="Forever"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </Ellipse.Triggers>
+                    </Ellipse>
+                    <TextBlock Text="RECORDING" 
+                             Foreground="White" 
+                             FontSize="18" 
+                             FontWeight="Bold"
+                             Margin="0,0,15,0"/>
+                    <TextBlock x:Name="RecordingDurationText" 
+                             Text="00:00" 
+                             Foreground="White" 
+                             FontSize="18"/>
+                </StackPanel>
+            </Border>
+            
+            <!-- Stop Recording Button -->
+            <Button x:Name="StopVideoButton"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,0,100"
+                    Width="200"
+                    Height="60"
+                    Click="StopVideoButton_Click"
+                    Style="{StaticResource TouchButtonStyle}">
+                <StackPanel Orientation="Horizontal">
+                    <Rectangle Width="20" Height="20" Fill="Red" Margin="0,0,10,0"/>
+                    <TextBlock Text="STOP RECORDING" FontSize="16" FontWeight="Bold"/>
+                </StackPanel>
+            </Button>
+        </Grid>
         
         <!-- Main Live View Area -->
         <Grid Grid.Row="0">
@@ -252,6 +305,46 @@
                         </Button.Template>
                     </Button>
                     
+                    <!-- Video Recording Indicator -->
+                    <Border x:Name="videoRecordingIndicator"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Top"
+                            Margin="0,20,0,0"
+                            Background="#CCFF0000"
+                            CornerRadius="10"
+                            Padding="15,8"
+                            Visibility="Collapsed"
+                            Panel.ZIndex="1001">
+                        <StackPanel Orientation="Horizontal">
+                            <!-- Recording dot animation -->
+                            <Ellipse Width="12" Height="12" Fill="White" Margin="0,0,10,0">
+                                <Ellipse.Triggers>
+                                    <EventTrigger RoutedEvent="Ellipse.Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                From="1.0" To="0.3" Duration="0:0:1"
+                                                                AutoReverse="True"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Ellipse.Triggers>
+                            </Ellipse>
+                            <TextBlock Text="RECORDING" 
+                                       Foreground="White" 
+                                       FontWeight="Bold" 
+                                       FontSize="14"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="recordingDurationText" 
+                                       Text=" 00:00" 
+                                       Foreground="White" 
+                                       FontWeight="Normal" 
+                                       FontSize="14"
+                                       VerticalAlignment="Center"
+                                       Margin="10,0,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    
                     <!-- Cancel Session Button (only visible during active session) -->
                     <Button x:Name="cancelSessionButton"
                             Width="120"
@@ -388,6 +481,113 @@
                             </Border>
                         </Grid>
                     </Border>
+                    
+                    <!-- Video Playback Controls -->
+                    <Grid x:Name="VideoPlaybackControls"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Bottom"
+                          Margin="0,0,0,30"
+                          Visibility="Collapsed"
+                          Panel.ZIndex="1000">
+                        <Border Background="#AA000000" 
+                                CornerRadius="25"
+                                Padding="20,10">
+                            <StackPanel Orientation="Horizontal">
+                                <!-- Play/Pause Button -->
+                                <Button x:Name="PlayPauseButton"
+                                        Width="60"
+                                        Height="60"
+                                        Click="PlayPauseButton_Click"
+                                        Cursor="Hand"
+                                        ToolTip="Play/Pause"
+                                        Margin="0,0,10,0">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="PlayPauseBorder" Background="#FF4CAF50" 
+                                                    CornerRadius="30">
+                                                <Border.Effect>
+                                                    <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="2" Opacity="0.3"/>
+                                                </Border.Effect>
+                                                <TextBlock x:Name="PlayPauseIcon"
+                                                           Text="⏸"
+                                                           FontSize="28"
+                                                           FontWeight="Bold"
+                                                           Foreground="White"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="PlayPauseBorder" Property="Background" Value="#FF5CBF5C"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                
+                                <!-- Stop Button -->
+                                <Button x:Name="VideoStopButton"
+                                        Width="60"
+                                        Height="60"
+                                        Click="VideoStopButton_Click"
+                                        Cursor="Hand"
+                                        ToolTip="Stop"
+                                        Margin="0,0,10,0">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="StopBorder" Background="#FFFF5252" 
+                                                    CornerRadius="30">
+                                                <Border.Effect>
+                                                    <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="2" Opacity="0.3"/>
+                                                </Border.Effect>
+                                                <TextBlock Text="⏹"
+                                                           FontSize="28"
+                                                           FontWeight="Bold"
+                                                           Foreground="White"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="StopBorder" Property="Background" Value="#FFFF6B6B"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                
+                                <!-- Replay Button -->
+                                <Button x:Name="VideoReplayButton"
+                                        Width="60"
+                                        Height="60"
+                                        Click="VideoReplayButton_Click"
+                                        Cursor="Hand"
+                                        ToolTip="Replay">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="ReplayBorder" Background="#FF2196F3" 
+                                                    CornerRadius="30">
+                                                <Border.Effect>
+                                                    <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="2" Opacity="0.3"/>
+                                                </Border.Effect>
+                                                <TextBlock Text="↻"
+                                                           FontSize="32"
+                                                           FontWeight="Bold"
+                                                           Foreground="White"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ReplayBorder" Property="Background" Value="#FF42A5F5"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                     
                     <!-- Info Panel - Bottom Left -->
                     <Border VerticalAlignment="Bottom" 
@@ -1746,8 +1946,5 @@
                                    Visibility="Collapsed"
                                    Grid.RowSpan="10"
                                    Panel.ZIndex="9999"/>
-        <!-- Capture Modes Overlay -->
-        <controls:CaptureModesOverlay x:Name="captureModesOverlay" 
-                                       Visibility="Collapsed"/>
     </Grid>
 </Page>
