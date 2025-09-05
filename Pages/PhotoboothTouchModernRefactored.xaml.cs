@@ -3294,21 +3294,14 @@ namespace Photobooth.Pages
                 var device = DeviceManager?.SelectedCameraDevice;
                 if (device?.IsConnected == true)
                 {
-                    // OPTIMIZATION: Reduce frame rate during video recording to conserve CPU
-                    // Skip frames during recording - only update every 3rd frame (3.33 FPS instead of 10 FPS)
+                    // Track frames during recording for logging purposes
                     if (isVideoRecording)
                     {
                         _recordingFrameCounter++;
                         
-                        // Skip 2 out of 3 frames during recording
-                        if (_recordingFrameCounter % 3 != 0)
+                        if (_recordingFrameCounter % 60 == 0) // Log every ~6 seconds at 10fps
                         {
-                            return; // Skip this frame to reduce CPU load
-                        }
-                        
-                        if (_recordingFrameCounter % 60 == 0) // Log every ~6 seconds with reduced frame rate
-                        {
-                            Log.Debug("[RECORDING] LiveViewTimer_Tick: Processing live view frame during recording (reduced rate)");
+                            Log.Debug("[RECORDING] LiveViewTimer_Tick: Processing live view frame during recording");
                         }
                     }
                     else
@@ -3329,35 +3322,19 @@ namespace Photobooth.Pages
                         }
                     }
                     
-                    // Reduce logging frequency during recording to minimize overhead
-                    if (isVideoRecording && _recordingFrameCounter % 180 == 0) // Log every ~18 seconds
+                    // Minimal logging during recording to reduce overhead
+                    if (isVideoRecording && _recordingFrameCounter % 100 == 0) // Log every ~10 seconds
                     {
-                        if (liveViewData == null)
+                        if (liveViewData?.ImageData != null && liveViewData.ImageData.Length > 0)
                         {
-                            Log.Debug("[RECORDING] GetLiveViewImage returned null - no frame available");
-                        }
-                        else if (liveViewData.ImageData == null)
-                        {
-                            Log.Debug("[RECORDING] GetLiveViewImage returned LiveViewData but ImageData is null");
-                        }
-                        else if (liveViewData.ImageData.Length == 0)
-                        {
-                            Log.Debug("[RECORDING] GetLiveViewImage returned LiveViewData but ImageData is empty (0 bytes)");
-                        }
-                        else
-                        {
-                            Log.Debug($"[RECORDING] GetLiveViewImage SUCCESS: Got {liveViewData.ImageData.Length} bytes (FPS: ~3.33)");
+                            Log.Debug($"[RECORDING] Live view active: {liveViewData.ImageData.Length} bytes");
                         }
                     }
                     
                     if (liveViewData?.ImageData != null && liveViewData.ImageData.Length > 0)
                     {
-                        if (isVideoRecording && _recordingFrameCounter % 180 == 0)
-                        {
-                            Log.Debug($"[RECORDING] Displaying live view frame with {liveViewData.ImageData.Length} bytes (reduced rate)");
-                        }
                         DisplayLiveView(liveViewData.ImageData);
-                        if (isVideoRecording && _recordingFrameCounter % 180 == 0)
+                        if (isVideoRecording && _recordingFrameCounter % 100 == 0)
                         {
                             Log.Debug("[RECORDING] DisplayLiveView called successfully");
                         }
@@ -3388,23 +3365,12 @@ namespace Photobooth.Pages
                     bitmap.BeginInit();
                     bitmap.CacheOption = BitmapCacheOption.OnLoad;
                     bitmap.StreamSource = ms;
-                    
-                    // OPTIMIZATION: Reduce quality during recording to save CPU
-                    if (isVideoRecording)
-                    {
-                        bitmap.DecodePixelWidth = 640; // Decode at lower resolution during recording
-                    }
-                    
                     bitmap.EndInit();
                     bitmap.Freeze();
                     
-                    if (isVideoRecording)
+                    if (isVideoRecording && _recordingFrameCounter % 100 == 0)
                     {
-                        // Reduce logging overhead - only log every ~18 seconds
-                        if (_recordingFrameCounter % 180 == 0)
-                        {
-                            Log.Debug($"[RECORDING] DisplayLiveView: Bitmap {bitmap.PixelWidth}x{bitmap.PixelHeight} (optimized)");
-                        }
+                        Log.Debug($"[RECORDING] DisplayLiveView: Bitmap {bitmap.PixelWidth}x{bitmap.PixelHeight}");
                     }
                     
                     if (liveViewImage != null)
@@ -6387,12 +6353,6 @@ namespace Photobooth.Pages
                     CaptureModesOverlay.Hide();
                 }
                 
-                // OPTIMIZATION: Reduce live view timer frequency during recording
-                // Switch from 100ms (10 FPS) to 300ms (3.33 FPS) to reduce CPU load
-                _liveViewTimer.Stop();
-                _liveViewTimer.Interval = TimeSpan.FromMilliseconds(300);
-                _liveViewTimer.Start();
-                
                 // Clear display flags to ensure live view can be shown during recording
                 _isDisplayingCapturedPhoto = false;
                 SetDisplayingSessionResult(false);
@@ -6686,13 +6646,11 @@ namespace Photobooth.Pages
                     // Stop the recording duration timer
                     StopRecordingDurationTimer();
                     
-                    // OPTIMIZATION: Restore normal live view timer frequency after recording
-                    // Switch back from 300ms to 100ms (10 FPS) for normal operation
-                    if (_liveViewTimer != null)
+                    // Stop live view timer since we'll show video
+                    if (_liveViewTimer != null && _liveViewTimer.IsEnabled)
                     {
                         _liveViewTimer.Stop();
-                        _liveViewTimer.Interval = TimeSpan.FromMilliseconds(100);
-                        Log.Debug("Restored normal live view timer frequency (100ms) after recording");
+                        Log.Debug("Stopped live view timer to show video playback");
                     }
                     
                     // Wait for video file to be fully downloaded
