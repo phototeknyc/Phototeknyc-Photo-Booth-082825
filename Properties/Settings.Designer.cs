@@ -1570,5 +1570,173 @@ namespace Photobooth.Properties {
                 this["VideoUploadResolution"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string DeviceId {
+            get {
+                return ((string)(this["DeviceId"]));
+            }
+            set {
+                this["DeviceId"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string S3BucketName {
+            get {
+                return ((string)(this["S3BucketName"]));
+            }
+            set {
+                this["S3BucketName"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string S3AccessKey {
+            get {
+                return ((string)(this["S3AccessKey"]));
+            }
+            set {
+                this["S3AccessKey"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string S3SecretKey {
+            get {
+                return ((string)(this["S3SecretKey"]));
+            }
+            set {
+                this["S3SecretKey"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("us-east-1")]
+        public string S3Region {
+            get {
+                return ((string)(this["S3Region"]));
+            }
+            set {
+                this["S3Region"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool EnableCloudSync {
+            get {
+                return ((bool)(this["EnableCloudSync"]));
+            }
+            set {
+                this["EnableCloudSync"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string GalleryBaseUrl {
+            get {
+                return ((string)(this["GalleryBaseUrl"]));
+            }
+            set {
+                this["GalleryBaseUrl"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool SyncTemplates {
+            get {
+                return ((bool)(this["SyncTemplates"]));
+            }
+            set {
+                this["SyncTemplates"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool SyncSettings {
+            get {
+                return ((bool)(this["SyncSettings"]));
+            }
+            set {
+                this["SyncSettings"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool SyncEvents {
+            get {
+                return ((bool)(this["SyncEvents"]));
+            }
+            set {
+                this["SyncEvents"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int SelectedEventId {
+            get {
+                return ((int)(this["SelectedEventId"]));
+            }
+            set {
+                this["SelectedEventId"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool AutoSyncOnStartup {
+            get {
+                return ((bool)(this["AutoSyncOnStartup"]));
+            }
+            set {
+                this["AutoSyncOnStartup"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string LastSyncTime {
+            get {
+                return ((string)(this["LastSyncTime"]));
+            }
+            set {
+                this["LastSyncTime"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("30")]
+        public int SyncIntervalMinutes {
+            get {
+                return ((int)(this["SyncIntervalMinutes"]));
+            }
+            set {
+                this["SyncIntervalMinutes"] = value;
+            }
+        }
     }
 }

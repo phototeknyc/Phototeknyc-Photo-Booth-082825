@@ -1,4 +1,6 @@
 using System;
+using System.Drawing.Printing;
+using System.Management;
 using System.Windows;
 using System.Windows.Media;
 using CameraControl.Devices;
@@ -24,6 +26,9 @@ namespace Photobooth.Services
         private System.Threading.Timer _statusUpdateTimer;
         private bool _isDisposed = false;
         private CameraSessionManager _cameraManager;
+        private DateTime _lastPrinterCheck = DateTime.MinValue;
+        private bool _lastPrinterStatus = false;
+        private readonly TimeSpan _printerCheckCooldown = TimeSpan.FromSeconds(3);
         #endregion
 
         #region Constructor and Initialization
@@ -38,15 +43,15 @@ namespace Photobooth.Services
         {
             try
             {
-                // Start periodic status updates (every 2 minutes to reduce load)
+                // Start periodic status updates (every 15 seconds for better responsiveness)
                 _statusUpdateTimer = new System.Threading.Timer(
                     UpdateAllStatuses, 
                     null, 
-                    TimeSpan.FromSeconds(10), // Start after 10 seconds 
-                    TimeSpan.FromMinutes(2) // Update every 2 minutes
+                    TimeSpan.FromSeconds(5), // Start after 5 seconds 
+                    TimeSpan.FromSeconds(15) // Update every 15 seconds
                 );
                 
-                Log.Debug("Status update timer initialized - updates every 30 seconds");
+                Log.Debug("Status update timer initialized - updates every 15 seconds");
             }
             catch (Exception ex)
             {
@@ -69,6 +74,22 @@ namespace Photobooth.Services
             catch (Exception ex)
             {
                 Log.Error($"Error refreshing all statuses: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Force refresh of printer status only
+        /// </summary>
+        public void RefreshPrinterStatus()
+        {
+            try
+            {
+                Log.Debug("Manual refresh of printer status requested");
+                UpdatePrinterStatusInternal();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error refreshing printer status: {ex.Message}");
             }
         }
 
@@ -171,19 +192,35 @@ namespace Photobooth.Services
                 {
                     // Get printer information
                     status.Name = printerName.Length > 20 ? printerName.Substring(0, 17) + "..." : printerName;
-                    status.ConnectionText = " (USB)";
-                    status.ConnectionColor = Colors.LightGreen;
-                    status.StatusText = "Ready";
-                    status.StatusColor = Color.FromRgb(76, 175, 80); // Green
-                    status.QueueCount = 0; // Would come from actual print service
-                    status.IsOnline = true;
-                    status.HasError = false;
                     
+                    // Check if printer is actually online
+                    bool isOnline = CheckPrinterOnline(printerName);
+                    
+                    if (isOnline)
+                    {
+                        status.ConnectionText = " (USB)";
+                        status.ConnectionColor = Colors.LightGreen;
+                        status.StatusText = "Ready";
+                        status.StatusColor = Color.FromRgb(76, 175, 80); // Green
+                        status.IsOnline = true;
+                        status.HasError = false;
+                    }
+                    else
+                    {
+                        status.ConnectionText = " (Offline)";
+                        status.ConnectionColor = Color.FromRgb(255, 152, 0); // Orange
+                        status.StatusText = "Offline";
+                        status.StatusColor = Color.FromRgb(255, 152, 0); // Orange
+                        status.IsOnline = false;
+                        status.HasError = false;
+                    }
+                    
+                    status.QueueCount = 0; // Would come from actual print service
                     // Media info would come from printer service if available
                     status.MediaRemaining = 0;
                     status.ShowMediaRemaining = false;
                     
-                    Log.Debug($"Printer status updated: {status.Name}");
+                    Log.Debug($"Printer status updated: {status.Name} - {(isOnline ? "Online" : "Offline")}");
                 }
                 else
                 {
@@ -352,6 +389,77 @@ namespace Photobooth.Services
         }
         #endregion
 
+        #region Printer Status Checking
+        private bool CheckPrinterOnline(string printerName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(printerName))
+                    return false;
+                
+                // Use cached result if checked recently
+                if (DateTime.Now - _lastPrinterCheck < _printerCheckCooldown)
+                {
+                    return _lastPrinterStatus;
+                }
+                
+                // First check if printer is valid
+                var settings = new PrinterSettings();
+                settings.PrinterName = printerName;
+                
+                if (!settings.IsValid)
+                {
+                    _lastPrinterCheck = DateTime.Now;
+                    _lastPrinterStatus = false;
+                    return false;
+                }
+                
+                bool isOnline = false;
+                
+                // Check printer status using WMI with timeout
+                try
+                {
+                    // Use more specific WMI query for better performance
+                    string query = $"SELECT WorkOffline, PrinterStatus FROM Win32_Printer WHERE Name = '{printerName.Replace("\\", "\\\\")}'";
+                    using (var searcher = new ManagementObjectSearcher(query))
+                    {
+                        searcher.Options.Timeout = TimeSpan.FromSeconds(2); // Add timeout
+                        
+                        foreach (ManagementObject printer in searcher.Get())
+                        {
+                            // Check PrinterStatus: 3 = Idle/Ready, 4 = Printing
+                            int printerStatus = Convert.ToInt32(printer["PrinterStatus"] ?? 0);
+                            bool isOffline = Convert.ToBoolean(printer["WorkOffline"] ?? false);
+                            
+                            // Printer is online if it's not offline and status is idle (3) or printing (4) or unknown (0)
+                            isOnline = !isOffline && (printerStatus == 3 || printerStatus == 4 || printerStatus == 0);
+                            break; // We found the printer, no need to continue
+                        }
+                    }
+                }
+                catch (Exception wmiEx)
+                {
+                    Log.Debug($"WMI check failed, falling back to IsValid: {wmiEx.Message}");
+                    // If WMI fails, just check if printer is valid
+                    isOnline = settings.IsValid;
+                }
+                
+                // Cache the result
+                _lastPrinterCheck = DateTime.Now;
+                _lastPrinterStatus = isOnline;
+                
+                return isOnline;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error checking printer online status: {ex.Message}");
+                _lastPrinterCheck = DateTime.Now;
+                _lastPrinterStatus = false;
+                return false;
+            }
+        }
+        #endregion
+
         #region Cleanup
         public void Dispose()
         {
@@ -432,6 +540,31 @@ namespace Photobooth.Services
         public bool IsConfigured { get; set; } = false;
         public bool ShowUploadProgress { get; set; } = false;
         public bool HasError { get; set; } = false;
+    }
+    
+    public class CameraStatusData
+    {
+        public string CameraName { get; set; } = "No Camera";
+        public string StatusText { get; set; } = "Not Connected";
+        public Color StatusColor { get; set; } = Color.FromRgb(255, 152, 0);
+        public bool IsConnected { get; set; } = false;
+        public bool IsReady { get; set; } = false;
+        public string ErrorMessage { get; set; }
+    }
+    
+    public class PhotoCountData
+    {
+        public int SessionPhotos { get; set; } = 0;
+        public int TotalPhotos { get; set; } = 0;
+        public int RemainingPhotos { get; set; } = 0;
+    }
+    
+    public class SyncProgressData
+    {
+        public bool IsActive { get; set; } = false;
+        public double ProgressPercentage { get; set; } = 0;
+        public string StatusMessage { get; set; } = "";
+        public string CurrentItem { get; set; } = "";
     }
     #endregion
 }

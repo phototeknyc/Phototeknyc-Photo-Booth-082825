@@ -780,20 +780,20 @@
                                        Margin="0,5,0,0"
                                        Visibility="Collapsed"/>
                             
-                            <!-- Separator for Cloud Status -->
+                            <!-- Separator for Cloud Share Status -->
                             <Border Height="1" 
                                     Background="#666" 
                                     Margin="0,10,0,10"/>
                             
-                            <!-- Cloud Sync Status Header -->
-                            <TextBlock Text="CLOUD SYNC" 
+                            <!-- Cloud Share Status Header -->
+                            <TextBlock Text="CLOUD SHARE" 
                                        FontSize="11" 
                                        FontWeight="Bold"
                                        Foreground="#00B4D8" 
                                        HorizontalAlignment="Center"
                                        Margin="0,0,0,5"/>
                             
-                            <!-- Cloud Status -->
+                            <!-- Cloud Share Status -->
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <TextBlock FontFamily="{StaticResource SegoeMDL2}"
                                            Text="{StaticResource MDL2_Cloud}"
@@ -829,6 +829,58 @@
                                            Text="Uploading..." 
                                            FontSize="10" 
                                            Foreground="#4CAF50"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <!-- Separator for Cloud Sync Status -->
+                            <Border Height="1" 
+                                    Background="#666" 
+                                    Margin="0,10,0,10"/>
+                            
+                            <!-- Cloud Sync Status Header -->
+                            <TextBlock Text="CLOUD SYNC" 
+                                       FontSize="11" 
+                                       FontWeight="Bold"
+                                       Foreground="#00B4D8" 
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,5"/>
+                            
+                            <!-- Cloud Sync Status (Settings/Templates/Events) -->
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock FontFamily="{StaticResource SegoeMDL2}"
+                                           Text="{StaticResource MDL2_Sync}"
+                                           FontSize="14"
+                                           x:Name="cloudRealSyncIcon"
+                                           Foreground="#888"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,0"/>
+                                <StackPanel>
+                                    <TextBlock x:Name="cloudRealSyncStatusText" 
+                                               Text="Sync Disabled" 
+                                               FontSize="12" 
+                                               Foreground="#888"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="cloudRealSyncInfoText" 
+                                               Text="Enable in settings" 
+                                               FontSize="10" 
+                                               Foreground="#888"
+                                               Visibility="Visible"/>
+                                </StackPanel>
+                            </StackPanel>
+                            
+                            <!-- Sync Progress (shown during sync) -->
+                            <StackPanel x:Name="cloudRealSyncProgressPanel" 
+                                        Visibility="Collapsed"
+                                        Margin="0,5,0,0">
+                                <ProgressBar x:Name="cloudRealSyncProgress" 
+                                             Height="3"
+                                             Margin="0,2"
+                                             Foreground="#2196F3"
+                                             Background="#333"/>
+                                <TextBlock x:Name="cloudRealSyncProgressText" 
+                                           Text="Syncing..." 
+                                           FontSize="10" 
+                                           Foreground="#2196F3"
                                            HorizontalAlignment="Center"/>
                             </StackPanel>
                         </StackPanel>

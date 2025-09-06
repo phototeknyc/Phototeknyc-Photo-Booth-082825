@@ -83,6 +83,7 @@
     <sys:String x:Key="MDL2_Play">&#xE768;</sys:String>
     <sys:String x:Key="MDL2_TouchPointer">&#xE7C9;</sys:String>
     <sys:String x:Key="MDL2_Cloud">&#xE753;</sys:String>
+    <sys:String x:Key="MDL2_Sync">&#xE895;</sys:String>
     <sys:String x:Key="MDL2_Shield">&#xE730;</sys:String>
     
     <!-- Communication and Sharing -->

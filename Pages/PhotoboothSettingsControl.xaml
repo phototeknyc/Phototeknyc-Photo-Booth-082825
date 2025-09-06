@@ -2981,6 +2981,246 @@
                             <ComboBoxItem Content="Flipbook"/>
                         </ComboBox>
                     </StackPanel>
+                    
+                    <!-- Cloud Sync Settings Section -->
+                    <Separator Background="#44FFFFFF" Height="1" Margin="0,30,0,20"/>
+                    
+                    <TextBlock Text="CLOUD SYNC SETTINGS" 
+                               FontSize="16" FontWeight="Bold" 
+                               Foreground="White" 
+                               Margin="0,0,0,15"/>
+                    
+                    <!-- Enable Cloud Sync -->
+                    <CheckBox x:Name="EnableCloudSyncCheckBox" 
+                              Content="Enable Cloud Synchronization"
+                              IsChecked="False"
+                              FontSize="14" Foreground="White"
+                              Margin="0,0,0,15"
+                              Checked="EnableCloudSync_Changed"
+                              Unchecked="EnableCloudSync_Changed"
+                              ToolTip="Sync templates and settings across multiple photo booths using cloud storage"/>
+                    
+                    <!-- Cloud Provider Selection -->
+                    <TextBlock Text="Cloud Storage Provider" 
+                               FontSize="14" 
+                               Foreground="White" FontWeight="SemiBold"
+                               Margin="0,0,0,10"
+                               IsEnabled="{Binding ElementName=EnableCloudSyncCheckBox, Path=IsChecked}"/>
+                    <ComboBox x:Name="CloudProviderCombo"
+                              Width="250" HorizontalAlignment="Left"
+                              IsEnabled="{Binding ElementName=EnableCloudSyncCheckBox, Path=IsChecked}"
+                              SelectionChanged="CloudProvider_SelectionChanged"
+                              Margin="0,0,0,15">
+                        <ComboBoxItem Content="Amazon S3" IsSelected="True"/>
+                        <ComboBoxItem Content="Azure Blob Storage"/>
+                        <ComboBoxItem Content="Google Cloud Storage"/>
+                    </ComboBox>
+                    
+                    <!-- Sync Settings -->
+                    <Grid IsEnabled="{Binding ElementName=EnableCloudSyncCheckBox, Path=IsChecked}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <!-- S3 Bucket Name -->
+                        <TextBlock Text="S3 Bucket Name:" 
+                                   Grid.Row="0" Grid.Column="0"
+                                   FontSize="14" Foreground="White"
+                                   Margin="0,0,15,10"
+                                   VerticalAlignment="Center"/>
+                        <TextBox x:Name="S3BucketNameTextBox"
+                                 Grid.Row="0" Grid.Column="1"
+                                 Width="300" HorizontalAlignment="Left"
+                                 Margin="0,0,0,10"
+                                 Text="{Binding Source={x:Static properties:Settings.Default}, Path=S3BucketName, Mode=TwoWay}"/>
+                        
+                        <!-- Access Key -->
+                        <TextBlock Text="Access Key ID:" 
+                                   Grid.Row="1" Grid.Column="0"
+                                   FontSize="14" Foreground="White"
+                                   Margin="0,0,15,10"
+                                   VerticalAlignment="Center"/>
+                        <PasswordBox x:Name="S3AccessKeyBox"
+                                     Grid.Row="1" Grid.Column="1"
+                                     Width="300" HorizontalAlignment="Left"
+                                     Margin="0,0,0,10"
+                                     PasswordChanged="S3AccessKey_Changed"/>
+                        
+                        <!-- Secret Key -->
+                        <TextBlock Text="Secret Access Key:" 
+                                   Grid.Row="2" Grid.Column="0"
+                                   FontSize="14" Foreground="White"
+                                   Margin="0,0,15,10"
+                                   VerticalAlignment="Center"/>
+                        <PasswordBox x:Name="S3SecretKeyBox"
+                                     Grid.Row="2" Grid.Column="1"
+                                     Width="300" HorizontalAlignment="Left"
+                                     Margin="0,0,0,10"
+                                     PasswordChanged="S3SecretKey_Changed"/>
+                        
+                        <!-- Region -->
+                        <TextBlock Text="AWS Region:" 
+                                   Grid.Row="3" Grid.Column="0"
+                                   FontSize="14" Foreground="White"
+                                   Margin="0,0,15,10"
+                                   VerticalAlignment="Center"/>
+                        <ComboBox x:Name="S3RegionCombo"
+                                  Grid.Row="3" Grid.Column="1"
+                                  Width="300" HorizontalAlignment="Left"
+                                  Margin="0,0,0,10"
+                                  SelectionChanged="S3Region_SelectionChanged">
+                            <ComboBoxItem Content="us-east-1" IsSelected="True"/>
+                            <ComboBoxItem Content="us-west-2"/>
+                            <ComboBoxItem Content="eu-west-1"/>
+                            <ComboBoxItem Content="ap-southeast-1"/>
+                        </ComboBox>
+                        
+                        <!-- Device ID -->
+                        <TextBlock Text="Device ID:" 
+                                   Grid.Row="4" Grid.Column="0"
+                                   FontSize="14" Foreground="White"
+                                   Margin="0,0,15,10"
+                                   VerticalAlignment="Center"/>
+                        <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
+                            <TextBox x:Name="DeviceIdTextBox"
+                                     Width="200" HorizontalAlignment="Left"
+                                     IsReadOnly="True"
+                                     Background="#33FFFFFF"
+                                     Text="{Binding Source={x:Static properties:Settings.Default}, Path=DeviceId, Mode=OneWay}"/>
+                            <Button x:Name="GenerateDeviceIdButton"
+                                    Content="Generate New"
+                                    Margin="10,0,0,0"
+                                    Padding="10,5"
+                                    Click="GenerateDeviceId_Click"/>
+                        </StackPanel>
+                    </Grid>
+                    
+                    <!-- Sync Options -->
+                    <StackPanel Margin="0,20,0,0"
+                                IsEnabled="{Binding ElementName=EnableCloudSyncCheckBox, Path=IsChecked}">
+                        <TextBlock Text="Sync Options" 
+                                   FontSize="14" 
+                                   Foreground="White" FontWeight="SemiBold"
+                                   Margin="0,0,0,10"/>
+                        
+                        <CheckBox x:Name="SyncTemplatesCheckBox" 
+                                  Content="Sync Templates"
+                                  IsChecked="True"
+                                  FontSize="13" Foreground="White"
+                                  Margin="0,0,0,8"
+                                  Checked="SyncOption_Changed"
+                                  Unchecked="SyncOption_Changed"/>
+                        
+                        <CheckBox x:Name="SyncSettingsCheckBox" 
+                                  Content="Sync Settings"
+                                  IsChecked="True"
+                                  FontSize="13" Foreground="White"
+                                  Margin="0,0,0,8"
+                                  Checked="SyncOption_Changed"
+                                  Unchecked="SyncOption_Changed"/>
+                        
+                        <CheckBox x:Name="SyncEventsCheckBox" 
+                                  Content="Sync Events (with workflow settings)"
+                                  IsChecked="True"
+                                  FontSize="13" Foreground="White"
+                                  Margin="0,0,0,8"
+                                  Checked="SyncOption_Changed"
+                                  Unchecked="SyncOption_Changed"
+                                  ToolTip="Sync event configurations including all workflow settings, templates, and print options across photobooths"/>
+                        
+                        <CheckBox x:Name="AutoSyncCheckBox" 
+                                  Content="Auto-sync on startup"
+                                  IsChecked="False"
+                                  FontSize="13" Foreground="White"
+                                  Margin="0,0,0,8"
+                                  Checked="SyncOption_Changed"
+                                  Unchecked="SyncOption_Changed"/>
+                        
+                        <!-- Sync Interval -->
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="Sync Interval:" 
+                                       FontSize="13" Foreground="White"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,10,0"/>
+                            <ComboBox x:Name="SyncIntervalCombo"
+                                      Width="150"
+                                      SelectionChanged="SyncInterval_SelectionChanged">
+                                <ComboBoxItem Content="Every 15 minutes"/>
+                                <ComboBoxItem Content="Every 30 minutes" IsSelected="True"/>
+                                <ComboBoxItem Content="Every hour"/>
+                                <ComboBoxItem Content="Every 2 hours"/>
+                                <ComboBoxItem Content="Manual only"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </StackPanel>
+                    
+                    <!-- Sync Actions -->
+                    <StackPanel Orientation="Horizontal" 
+                                Margin="0,25,0,0"
+                                IsEnabled="{Binding ElementName=EnableCloudSyncCheckBox, Path=IsChecked}">
+                        <Button x:Name="TestConnectionButton"
+                                Content="Test Connection"
+                                Width="120"
+                                Padding="10,8"
+                                Margin="0,0,10,0"
+                                Click="TestConnection_Click">
+                            <Button.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#667EEA" Offset="0"/>
+                                    <GradientStop Color="#764BA2" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Button.Background>
+                        </Button>
+                        
+                        <Button x:Name="SyncNowButton"
+                                Content="Sync Now"
+                                Width="120"
+                                Padding="10,8"
+                                Margin="0,0,10,0"
+                                Click="SyncNow_Click">
+                            <Button.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#48BB78" Offset="0"/>
+                                    <GradientStop Color="#38A169" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Button.Background>
+                        </Button>
+                        
+                        <Button x:Name="ViewSyncLogButton"
+                                Content="View Log"
+                                Width="100"
+                                Padding="10,8"
+                                Click="ViewSyncLog_Click"/>
+                    </StackPanel>
+                    
+                    <!-- Sync Status -->
+                    <Border x:Name="SyncStatusBorder"
+                            Background="#1A48BB78"
+                            BorderBrush="#48BB78"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="10"
+                            Margin="0,20,0,0"
+                            Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock x:Name="SyncStatusText"
+                                       Text="Last sync: Never"
+                                       FontSize="13"
+                                       Foreground="#48BB78"/>
+                            <ProgressBar x:Name="SyncProgressBar"
+                                         Height="4"
+                                         Margin="0,8,0,0"
+                                         Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
         </StackPanel>

@@ -2265,5 +2265,151 @@ namespace Photobooth.Services
                 return false;
             }
         }
+        
+        #region Sync Methods for PhotoBoothSyncService
+        
+        /// <summary>
+        /// Upload data to S3 for sync
+        /// </summary>
+        public async Task<bool> UploadAsync(string key, byte[] data)
+        {
+            try
+            {
+                if (_s3Client == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("CloudShareServiceRuntime: S3 client not initialized");
+                    return false;
+                }
+                
+                // Create put object request
+                dynamic request = Activator.CreateInstance(_putObjectRequestType);
+                request.BucketName = _bucketName;
+                request.Key = key;
+                request.ContentBody = Convert.ToBase64String(data);
+                request.ContentType = "application/octet-stream";
+                
+                // Upload
+                await Task.Run(() => _s3Client.PutObject(request));
+                
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Uploaded {key} ({data.Length} bytes)");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Upload failed for {key}: {ex.Message}");
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Download data from S3 for sync
+        /// </summary>
+        public async Task<byte[]> DownloadAsync(string key)
+        {
+            try
+            {
+                if (_s3Client == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("CloudShareServiceRuntime: S3 client not initialized");
+                    return null;
+                }
+                
+                // Create get object request
+                var getObjectRequestType = _s3ClientType.Assembly.GetType("Amazon.S3.Model.GetObjectRequest");
+                dynamic request = Activator.CreateInstance(getObjectRequestType);
+                request.BucketName = _bucketName;
+                request.Key = key;
+                
+                // Download
+                dynamic response = await Task.Run(() => _s3Client.GetObject(request));
+                
+                using (var stream = response.ResponseStream as Stream)
+                using (var memoryStream = new MemoryStream())
+                {
+                    await stream.CopyToAsync(memoryStream);
+                    var data = memoryStream.ToArray();
+                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Downloaded {key} ({data.Length} bytes)");
+                    return data;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Download failed for {key}: {ex.Message}");
+                return null;
+            }
+        }
+        
+        /// <summary>
+        /// Delete object from S3
+        /// </summary>
+        public async Task<bool> DeleteAsync(string key)
+        {
+            try
+            {
+                if (_s3Client == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("CloudShareServiceRuntime: S3 client not initialized");
+                    return false;
+                }
+                
+                // Create delete object request
+                var deleteObjectRequestType = _s3ClientType.Assembly.GetType("Amazon.S3.Model.DeleteObjectRequest");
+                dynamic request = Activator.CreateInstance(deleteObjectRequestType);
+                request.BucketName = _bucketName;
+                request.Key = key;
+                
+                // Delete
+                await Task.Run(() => _s3Client.DeleteObject(request));
+                
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Deleted {key}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Delete failed for {key}: {ex.Message}");
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Upload file to S3 for sync
+        /// </summary>
+        public async Task<bool> UploadFileAsync(string key, string filePath)
+        {
+            try
+            {
+                var data = await Task.Run(() => File.ReadAllBytes(filePath));
+                return await UploadAsync(key, data);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Upload file failed for {filePath}: {ex.Message}");
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Download file from S3 for sync
+        /// </summary>
+        public async Task<bool> DownloadFileAsync(string key, string filePath)
+        {
+            try
+            {
+                var data = await DownloadAsync(key);
+                if (data != null)
+                {
+                    await Task.Run(() => File.WriteAllBytes(filePath, data));
+                    return true;
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Download file failed for {key}: {ex.Message}");
+                return false;
+            }
+        }
+        
+        #endregion
     }
 }

@@ -104,6 +104,7 @@ namespace Photobooth.Pages
         private CameraSessionManager _cameraManager;
         private PhotoboothTouchModernViewModel _viewModel;
         private SessionManager _sessionManager;
+        private Services.InfoPanelUIService _infoPanelUIService;
         
         // Database connection
         private DatabaseOperations _database;
@@ -202,6 +203,10 @@ namespace Photobooth.Pages
             _galleryService = new Services.EventGalleryService();
             _galleryBrowserService = new Services.GalleryBrowserService();
             _infoPanelService = new Services.InfoPanelService(_cameraManager);
+            _infoPanelUIService = Services.InfoPanelUIService.Instance;
+            
+            // Connect InfoPanelUIService to InfoPanelService
+            _infoPanelUIService.SetInfoPanelService(_infoPanelService);
             
             // Initialize existing services from Services folder
             _eventTemplateService = new EventTemplateService();
@@ -694,6 +699,15 @@ namespace Photobooth.Pages
                 _infoPanelService.SyncProgressUpdated += OnInfoPanelSyncProgressUpdated;
             }
             
+            // Subscribe to InfoPanelUIService events for clean UI updates
+            if (_infoPanelUIService != null)
+            {
+                _infoPanelUIService.CloudSyncUIUpdateRequested += OnCloudSyncUIUpdate;
+                _infoPanelUIService.CloudShareUIUpdateRequested += OnCloudShareUIUpdate;
+                _infoPanelUIService.PrinterStatusUIUpdateRequested += OnPrinterStatusUIUpdate;
+                _infoPanelUIService.CameraStatusUIUpdateRequested += OnCameraStatusUIUpdate;
+            }
+            
             // Subscribe to queue service events for status indicators
             var queueService = PhotoboothQueueService.Instance;
             if (queueService != null)
@@ -809,6 +823,16 @@ namespace Photobooth.Pages
                 _infoPanelService.PhotoCountUpdated -= OnInfoPanelPhotoCountUpdated;
                 _infoPanelService.SyncProgressUpdated -= OnInfoPanelSyncProgressUpdated;
                 _infoPanelService.Dispose();
+            }
+            
+            // Unsubscribe from InfoPanelUIService events
+            if (_infoPanelUIService != null)
+            {
+                _infoPanelUIService.CloudSyncUIUpdateRequested -= OnCloudSyncUIUpdate;
+                _infoPanelUIService.CloudShareUIUpdateRequested -= OnCloudShareUIUpdate;
+                _infoPanelUIService.PrinterStatusUIUpdateRequested -= OnPrinterStatusUIUpdate;
+                _infoPanelUIService.CameraStatusUIUpdateRequested -= OnCameraStatusUIUpdate;
+                _infoPanelUIService.Dispose();
             }
             
             // Unsubscribe from queue service events
@@ -7098,6 +7122,88 @@ namespace Photobooth.Pages
                 // Set rapid capture for flipbook
                 await _workflowService.StartPhotoCaptureWorkflowAsync();
             }
+        }
+        
+        #endregion
+        
+        #region Info Panel UI Updates (Clean Architecture - UI Only)
+        
+        /// <summary>
+        /// Handle cloud sync UI updates from service (UI updates only)
+        /// </summary>
+        private void OnCloudSyncUIUpdate(object sender, Services.CloudSyncUIUpdateEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var state = e.State;
+                
+                // Update UI elements with provided state
+                cloudRealSyncStatusText.Text = state.StatusText;
+                cloudRealSyncStatusText.Foreground = new SolidColorBrush(state.StatusColor);
+                cloudRealSyncIcon.Foreground = new SolidColorBrush(state.IconColor);
+                cloudRealSyncInfoText.Text = state.InfoText;
+                cloudRealSyncInfoText.Foreground = new SolidColorBrush(state.InfoColor);
+                
+                // Update progress panel
+                cloudRealSyncProgressPanel.Visibility = state.ShowProgress ? Visibility.Visible : Visibility.Collapsed;
+                if (state.ShowProgress)
+                {
+                    cloudRealSyncProgress.IsIndeterminate = state.IsProgressIndeterminate;
+                    if (!state.IsProgressIndeterminate)
+                    {
+                        cloudRealSyncProgress.Value = state.ProgressValue;
+                    }
+                    cloudRealSyncProgressText.Text = state.ProgressText;
+                }
+            });
+        }
+        
+        /// <summary>
+        /// Handle cloud share UI updates from service (UI updates only)
+        /// </summary>
+        private void OnCloudShareUIUpdate(object sender, Services.CloudShareUIUpdateEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var state = e.State;
+                
+                // Update cloud share UI elements
+                cloudSyncStatusText.Text = state.StatusText;
+                cloudSyncStatusText.Foreground = new SolidColorBrush(state.StatusColor);
+                cloudSyncIcon.Foreground = new SolidColorBrush(state.IconColor);
+                cloudSyncBucketText.Text = state.BucketText;
+                cloudSyncBucketText.Foreground = new SolidColorBrush(state.BucketColor);
+                
+                // Update upload progress
+                cloudUploadStatusPanel.Visibility = state.ShowUploadProgress ? Visibility.Visible : Visibility.Collapsed;
+                if (state.ShowUploadProgress)
+                {
+                    cloudUploadProgress.Value = state.UploadProgress;
+                    cloudUploadStatusText.Text = state.UploadText;
+                }
+            });
+        }
+        
+        /// <summary>
+        /// Handle printer status UI updates from service (UI updates only)
+        /// </summary>
+        private void OnPrinterStatusUIUpdate(object sender, Services.PrinterStatusUIUpdateEventArgs e)
+        {
+            // Forward to existing printer status handler
+            OnInfoPanelPrinterStatusUpdated(sender, new Services.PrinterStatusUpdatedEventArgs { Status = e.Status });
+        }
+        
+        /// <summary>
+        /// Handle camera status UI updates from service (UI updates only)
+        /// </summary>
+        private void OnCameraStatusUIUpdate(object sender, Services.CameraStatusUIUpdateEventArgs e)
+        {
+            // Forward to existing camera status handler
+            OnInfoPanelCameraStatusUpdated(sender, new Services.CameraStatusUpdatedEventArgs 
+            { 
+                Status = e.Status?.CameraName ?? "No Camera",
+                IsConnected = e.Status?.IsConnected ?? false
+            });
         }
         
         #endregion

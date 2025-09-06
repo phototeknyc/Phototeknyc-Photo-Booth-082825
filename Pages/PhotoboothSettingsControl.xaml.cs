@@ -3397,6 +3397,18 @@ namespace Photobooth.Pages
                 optimizePhotosCheckBox.IsChecked = Environment.GetEnvironmentVariable("CLOUD_OPTIMIZE_PHOTOS", EnvironmentVariableTarget.User) != "False";
                 cleanupAfterShareCheckBox.IsChecked = Environment.GetEnvironmentVariable("CLOUD_CLEANUP_AFTER", EnvironmentVariableTarget.User) == "True";
                 
+                // Load cloud sync settings
+                if (EnableCloudSyncCheckBox != null)
+                    EnableCloudSyncCheckBox.IsChecked = Properties.Settings.Default.EnableCloudSync;
+                if (SyncTemplatesCheckBox != null)
+                    SyncTemplatesCheckBox.IsChecked = Properties.Settings.Default.SyncTemplates;
+                if (SyncSettingsCheckBox != null)
+                    SyncSettingsCheckBox.IsChecked = Properties.Settings.Default.SyncSettings;
+                if (SyncEventsCheckBox != null)
+                    SyncEventsCheckBox.IsChecked = Properties.Settings.Default.SyncEvents;
+                if (AutoSyncCheckBox != null)
+                    AutoSyncCheckBox.IsChecked = Properties.Settings.Default.AutoSyncOnStartup;
+                
                 // Update UI state
                 EnableCloudSharing_Changed(null, null);
                 EnableSms_Changed(null, null);
@@ -3812,6 +3824,342 @@ namespace Photobooth.Pages
                 }
             }
         }
+        
+        #region Cloud Sync Event Handlers
+        
+        private void EnableCloudSync_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (EnableCloudSyncCheckBox != null)
+                {
+                    Properties.Settings.Default.EnableCloudSync = EnableCloudSyncCheckBox.IsChecked == true;
+                    Properties.Settings.Default.Save();
+                    
+                    // Show/hide sync status if needed
+                    if (SyncStatusBorder != null)
+                    {
+                        SyncStatusBorder.Visibility = EnableCloudSyncCheckBox.IsChecked == true ? 
+                            Visibility.Visible : Visibility.Collapsed;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"EnableCloudSync_Changed error: {ex.Message}");
+            }
+        }
+        
+        private void CloudProvider_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                if (CloudProviderCombo?.SelectedItem is ComboBoxItem selectedItem)
+                {
+                    string provider = selectedItem.Content.ToString();
+                    // For now we only support S3, but this is extensible
+                    System.Diagnostics.Debug.WriteLine($"Cloud provider selected: {provider}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CloudProvider_SelectionChanged error: {ex.Message}");
+            }
+        }
+        
+        private void S3AccessKey_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (S3AccessKeyBox != null)
+                {
+                    Properties.Settings.Default.S3AccessKey = S3AccessKeyBox.Password;
+                    Properties.Settings.Default.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"S3AccessKey_Changed error: {ex.Message}");
+            }
+        }
+        
+        private void S3SecretKey_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (S3SecretKeyBox != null)
+                {
+                    Properties.Settings.Default.S3SecretKey = S3SecretKeyBox.Password;
+                    Properties.Settings.Default.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"S3SecretKey_Changed error: {ex.Message}");
+            }
+        }
+        
+        private void S3Region_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                if (S3RegionCombo?.SelectedItem is ComboBoxItem selectedItem)
+                {
+                    string region = selectedItem.Content.ToString();
+                    Properties.Settings.Default.S3Region = region;
+                    Properties.Settings.Default.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"S3Region_SelectionChanged error: {ex.Message}");
+            }
+        }
+        
+        private void GenerateDeviceId_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Generate new device ID
+                string newDeviceId = Guid.NewGuid().ToString();
+                Properties.Settings.Default.DeviceId = newDeviceId;
+                Properties.Settings.Default.Save();
+                
+                // Update UI
+                if (DeviceIdTextBox != null)
+                {
+                    DeviceIdTextBox.Text = newDeviceId;
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"Generated new Device ID: {newDeviceId}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"GenerateDeviceId_Click error: {ex.Message}");
+            }
+        }
+        
+        private void SyncOption_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is CheckBox checkBox)
+                {
+                    switch (checkBox.Name)
+                    {
+                        case "SyncTemplatesCheckBox":
+                            Properties.Settings.Default.SyncTemplates = checkBox.IsChecked == true;
+                            break;
+                        case "SyncSettingsCheckBox":
+                            Properties.Settings.Default.SyncSettings = checkBox.IsChecked == true;
+                            break;
+                        case "SyncEventsCheckBox":
+                            Properties.Settings.Default.SyncEvents = checkBox.IsChecked == true;
+                            break;
+                        case "AutoSyncCheckBox":
+                            Properties.Settings.Default.AutoSyncOnStartup = checkBox.IsChecked == true;
+                            break;
+                    }
+                    Properties.Settings.Default.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"SyncOption_Changed error: {ex.Message}");
+            }
+        }
+        
+        private void SyncInterval_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                if (SyncIntervalCombo?.SelectedItem is ComboBoxItem selectedItem)
+                {
+                    string intervalText = selectedItem.Content.ToString();
+                    int intervalMinutes = 30; // Default
+                    
+                    if (intervalText.Contains("15 minutes"))
+                        intervalMinutes = 15;
+                    else if (intervalText.Contains("30 minutes"))
+                        intervalMinutes = 30;
+                    else if (intervalText.Contains("hour") && !intervalText.Contains("2"))
+                        intervalMinutes = 60;
+                    else if (intervalText.Contains("2 hours"))
+                        intervalMinutes = 120;
+                    else if (intervalText.Contains("Manual"))
+                        intervalMinutes = 0;
+                    
+                    Properties.Settings.Default.SyncIntervalMinutes = intervalMinutes;
+                    Properties.Settings.Default.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"SyncInterval_SelectionChanged error: {ex.Message}");
+            }
+        }
+        
+        private async void TestConnection_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Check if S3 credentials are configured
+                if (string.IsNullOrEmpty(Properties.Settings.Default.S3AccessKey) || 
+                    string.IsNullOrEmpty(Properties.Settings.Default.S3SecretKey))
+                {
+                    if (SyncStatusText != null)
+                    {
+                        SyncStatusText.Text = "Please configure S3 credentials in the Cloud Sharing section first.";
+                        SyncStatusText.Foreground = new SolidColorBrush(Colors.OrangeRed);
+                    }
+                    return;
+                }
+                
+                // Show progress
+                if (SyncProgressBar != null)
+                {
+                    SyncProgressBar.Visibility = Visibility.Visible;
+                    SyncProgressBar.IsIndeterminate = true;
+                }
+                
+                if (SyncStatusText != null)
+                {
+                    SyncStatusText.Text = "Testing connection using Cloud Sharing S3 credentials...";
+                }
+                
+                // Test S3 connection
+                var syncService = Photobooth.Services.PhotoBoothSyncService.Instance;
+                bool connected = await syncService.TestConnectionAsync();
+                
+                // Update status
+                if (SyncStatusText != null)
+                {
+                    SyncStatusText.Text = connected ? 
+                        "Connection successful! Using shared S3 credentials." : 
+                        "Connection failed. Check S3 credentials in Cloud Sharing section.";
+                    SyncStatusText.Foreground = new SolidColorBrush(
+                        connected ? Colors.LightGreen : Colors.OrangeRed);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (SyncStatusText != null)
+                {
+                    SyncStatusText.Text = $"Error: {ex.Message}";
+                    SyncStatusText.Foreground = new SolidColorBrush(Colors.OrangeRed);
+                }
+            }
+            finally
+            {
+                if (SyncProgressBar != null)
+                {
+                    SyncProgressBar.Visibility = Visibility.Collapsed;
+                    SyncProgressBar.IsIndeterminate = false;
+                }
+            }
+        }
+        
+        private async void SyncNow_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Check if S3 credentials are configured
+                if (string.IsNullOrEmpty(Properties.Settings.Default.S3AccessKey) || 
+                    string.IsNullOrEmpty(Properties.Settings.Default.S3SecretKey))
+                {
+                    if (SyncStatusText != null)
+                    {
+                        SyncStatusText.Text = "Please configure S3 credentials in the Cloud Sharing section first.";
+                        SyncStatusText.Foreground = new SolidColorBrush(Colors.OrangeRed);
+                    }
+                    return;
+                }
+                
+                // Show progress
+                if (SyncProgressBar != null)
+                {
+                    SyncProgressBar.Visibility = Visibility.Visible;
+                    SyncProgressBar.IsIndeterminate = false;
+                    SyncProgressBar.Value = 0;
+                }
+                
+                if (SyncStatusText != null)
+                {
+                    SyncStatusText.Text = "Starting sync with S3...";
+                }
+                
+                // Perform sync
+                var syncService = Photobooth.Services.PhotoBoothSyncService.Instance;
+                
+                // Subscribe to progress events
+                syncService.SyncProgress += (s, args) =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (SyncProgressBar != null)
+                        {
+                            SyncProgressBar.Value = args.ProgressPercentage;
+                        }
+                        if (SyncStatusText != null)
+                        {
+                            SyncStatusText.Text = args.Message;
+                        }
+                    });
+                };
+                
+                await syncService.PerformSyncAsync();
+                
+                // Update status
+                if (SyncStatusText != null)
+                {
+                    SyncStatusText.Text = $"Last sync: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+                    SyncStatusText.Foreground = new SolidColorBrush(Colors.LightGreen);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (SyncStatusText != null)
+                {
+                    SyncStatusText.Text = $"Sync failed: {ex.Message}";
+                    SyncStatusText.Foreground = new SolidColorBrush(Colors.OrangeRed);
+                }
+            }
+            finally
+            {
+                if (SyncProgressBar != null)
+                {
+                    SyncProgressBar.Visibility = Visibility.Collapsed;
+                }
+            }
+        }
+        
+        private void ViewSyncLog_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Open sync log file or window
+                string logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "PhotoBooth", "Logs", "sync.log"
+                );
+                
+                if (System.IO.File.Exists(logPath))
+                {
+                    System.Diagnostics.Process.Start(logPath);
+                }
+                else
+                {
+                    MessageBox.Show("No sync log available yet.", "Sync Log", 
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ViewSyncLog_Click error: {ex.Message}");
+            }
+        }
+        
+        #endregion
         
         #endregion
     }
