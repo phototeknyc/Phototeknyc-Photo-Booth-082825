@@ -1263,6 +1263,20 @@
                             <TextBlock Text="Templates" FontSize="16" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    
+                    <!-- Touch Template Designer Button -->
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Background="#9C27B0"
+                            Width="160" 
+                            Height="50" 
+                            Margin="5"
+                            Click="TouchTemplateDesignerButton_Click"
+                            ToolTip="Open Touch Template Designer">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="✋" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock Text="Touch Designer" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

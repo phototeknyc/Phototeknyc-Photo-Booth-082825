@@ -7333,6 +7333,58 @@ namespace Photobooth.Pages
             });
         }
         
+        /// <summary>
+        /// Touch Template Designer button click handler
+        /// </summary>
+        private void TouchTemplateDesignerButton_Click(object sender, RoutedEventArgs e)
+        {
+            Log.Debug("Touch Template Designer button clicked");
+            
+            // Hide the bottom control bar
+            if (bottomControlBar != null)
+            {
+                bottomControlBar.Visibility = Visibility.Collapsed;
+                bottomBarToggleChevron.Text = "⚙"; // Reset to gear icon
+            }
+            
+            // Create and show the touch template designer overlay
+            var touchDesignerOverlay = new Photobooth.Controls.TouchTemplateDesignerOverlay();
+            
+            // Add to the main grid (which should be the parent of this page)
+            if (this.Parent is Grid parentGrid)
+            {
+                parentGrid.Children.Add(touchDesignerOverlay);
+                Panel.SetZIndex(touchDesignerOverlay, 1000); // Ensure it's on top
+            }
+            else
+            {
+                // Find the root grid and add the overlay
+                var window = Window.GetWindow(this);
+                if (window?.Content is Grid mainGrid)
+                {
+                    mainGrid.Children.Add(touchDesignerOverlay);
+                    Panel.SetZIndex(touchDesignerOverlay, 1000);
+                }
+                else if (window?.Content is Panel panel)
+                {
+                    panel.Children.Add(touchDesignerOverlay);
+                    Panel.SetZIndex(touchDesignerOverlay, 1000);
+                }
+                else
+                {
+                    // Create a new window for the designer if we can't find a suitable parent
+                    var designerWindow = new Window
+                    {
+                        Title = "Touch Template Designer",
+                        WindowState = WindowState.Maximized,
+                        WindowStyle = WindowStyle.None,
+                        Content = touchDesignerOverlay
+                    };
+                    designerWindow.Show();
+                }
+            }
+        }
+        
         #endregion
     }
 }

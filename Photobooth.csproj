@@ -197,6 +197,12 @@
     <Compile Include="Controls\TemplateDesignerOverlay.xaml.cs">
       <DependentUpon>TemplateDesignerOverlay.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\TouchTemplateDesigner.xaml.cs">
+      <DependentUpon>TouchTemplateDesigner.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\TouchTemplateDesignerOverlay.xaml.cs">
+      <DependentUpon>TouchTemplateDesignerOverlay.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\PinEntryOverlay.xaml.cs">
       <DependentUpon>PinEntryOverlay.xaml</DependentUpon>
     </Compile>
@@ -438,6 +444,14 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\TouchTemplateDesigner.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\TouchTemplateDesignerOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\PinEntryOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -580,6 +594,7 @@
     <Compile Include="MVVM\Models\RelayCommand.cs" />
     <Compile Include="MVVM\ViewModels\BaseViewModel.cs" />
     <Compile Include="MVVM\ViewModels\Designer\DesignerVM.cs" />
+    <Compile Include="MVVM\ViewModels\Designer\TouchTemplateDesignerViewModel.cs" />
     <Compile Include="Models\Template.cs" />
     <Compile Include="Pages\BackgroundSettingControl.xaml.cs">
       <DependentUpon>BackgroundSettingControl.xaml</DependentUpon>

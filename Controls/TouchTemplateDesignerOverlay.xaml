@@ -1,0 +1,54 @@
+<UserControl x:Class="Photobooth.Controls.TouchTemplateDesignerOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Photobooth.Controls"
+             mc:Ignorable="d" 
+             d:DesignHeight="1080" d:DesignWidth="1920">
+    
+    <Grid x:Name="MainOverlay">
+        <!-- Full screen opaque background -->
+        <Rectangle Fill="#0F0F0F" Opacity="1"/>
+        
+        <!-- Touch Template Designer - Full Screen -->
+        <local:TouchTemplateDesigner x:Name="TouchDesigner"/>
+        
+        <!-- Floating close button in top-right corner -->
+        <Button x:Name="CloseButton" 
+                HorizontalAlignment="Right" 
+                VerticalAlignment="Top"
+                Width="60" 
+                Height="60"
+                Margin="20"
+                Background="#FF6B6B"
+                BorderThickness="0"
+                Click="CloseButton_Click"
+                Panel.ZIndex="100">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}" 
+                            CornerRadius="30">
+                        <Border.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="3" Opacity="0.5"/>
+                        </Border.Effect>
+                        <TextBlock Text="✕" 
+                                  FontSize="28" 
+                                  FontWeight="Bold"
+                                  Foreground="White"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#FF5555"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter Property="Background" Value="#CC4444"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+    </Grid>
+</UserControl>
