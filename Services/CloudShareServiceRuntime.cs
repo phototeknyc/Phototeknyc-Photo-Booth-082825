@@ -318,6 +318,32 @@ namespace Photobooth.Services
                                             System.Diagnostics.Debug.WriteLine($"  Original: {originalSize / 1024.0 / 1024.0:F2} MB");
                                             System.Diagnostics.Debug.WriteLine($"  Compressed: {compressedSize / 1024.0 / 1024.0:F2} MB");
                                             System.Diagnostics.Debug.WriteLine($"  Reduction: {reductionPercent:F1}%");
+                                            
+                                            // Save a copy of the compressed video locally in webupload folder
+                                            try
+                                            {
+                                                // Get the event folder from the original video path
+                                                string originalDir = Path.GetDirectoryName(photoPath);
+                                                string videoEventFolder = Path.GetDirectoryName(originalDir); // Go up from videos folder to event folder
+                                                string webUploadFolder = Path.Combine(videoEventFolder, "webupload");
+                                                
+                                                // Create webupload folder if it doesn't exist
+                                                if (!Directory.Exists(webUploadFolder))
+                                                {
+                                                    Directory.CreateDirectory(webUploadFolder);
+                                                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Created webupload folder: {webUploadFolder}");
+                                                }
+                                                
+                                                // Copy compressed video to webupload folder
+                                                string originalFileName = Path.GetFileNameWithoutExtension(photoPath);
+                                                string localCompressedPath = Path.Combine(webUploadFolder, $"{originalFileName}_webupload.mp4");
+                                                File.Copy(resultPath, localCompressedPath, true);
+                                                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Saved compressed video locally: {localCompressedPath}");
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Failed to save compressed video locally: {ex.Message}");
+                                            }
                                         }
                                         else
                                         {

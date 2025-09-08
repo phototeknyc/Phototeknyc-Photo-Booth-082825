@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Timers;
 using CameraControl.Devices;
 using CameraControl.Devices.Classes;
+using Photobooth.Database;
 using Photobooth.Properties;
 
 namespace Photobooth.Services
@@ -22,6 +23,9 @@ namespace Photobooth.Services
         private readonly PhotoboothModulesConfig _config;
         private string _originalCameraMode; // Store original mode to restore it
         private Database.EventData _currentEvent; // Store current event for folder structure
+        private int _currentSessionId; // Store database session ID
+        private string _currentSessionGuid; // Store session GUID for tracking
+        private Database.TemplateDatabase _database; // Database instance
         
         // Store photo settings to restore after video
         private class PhotoSettings
@@ -49,6 +53,7 @@ namespace Photobooth.Services
             _config = PhotoboothModulesConfig.Instance;
             _recordingTimer = new System.Timers.Timer(100); // Update every 100ms - balanced between responsiveness and performance
             _recordingTimer.Elapsed += OnRecordingTimerElapsed;
+            _database = new Database.TemplateDatabase();
         }
 
         public void Initialize(ICameraDevice camera)
@@ -143,9 +148,17 @@ namespace Photobooth.Services
             }
         }
 
+        public void SetSessionInfo(int sessionId, string sessionGuid)
+        {
+            _currentSessionId = sessionId;
+            _currentSessionGuid = sessionGuid;
+            System.Diagnostics.Debug.WriteLine($"[VIDEO] *** SESSION INFO SET *** - ID: {sessionId}, GUID: {sessionGuid}");
+        }
+        
         public async Task<bool> StartRecordingAsync(string outputPath = null, Database.EventData currentEvent = null)
         {
             System.Diagnostics.Debug.WriteLine($"[VIDEO] StartRecordingAsync called. Camera: {_camera?.DeviceName ?? "NULL"}, Already recording: {_isRecording}");
+            System.Diagnostics.Debug.WriteLine($"[VIDEO] Current session info - ID: {_currentSessionId}, GUID: {_currentSessionGuid}");
             
             // Store current event for use in other methods
             _currentEvent = currentEvent;
@@ -195,15 +208,16 @@ namespace Photobooth.Services
                 // Generate output path if not provided
                 if (string.IsNullOrEmpty(outputPath))
                 {
-                    // Videos are saved in event-based folder structure
-                    string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                    string photoboothDir = Path.Combine(documentsPath, "PhotoBooth");
+                    // Videos are saved in event-based folder structure (same as photos)
+                    // Use Pictures folder as primary location to match photo storage
+                    string picturesPath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+                    string photoboothDir = Path.Combine(picturesPath, "PhotoBooth");
                     
-                    // If PhotoBooth directory doesn't exist in Documents, try Pictures
+                    // If PhotoBooth directory doesn't exist in Pictures, try Documents as fallback
                     if (!Directory.Exists(photoboothDir))
                     {
-                        string picturesPath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-                        photoboothDir = Path.Combine(picturesPath, "PhotoBooth");
+                        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                        photoboothDir = Path.Combine(documentsPath, "PhotoBooth");
                     }
                     
                     // Always use event-based folder structure
@@ -212,8 +226,8 @@ namespace Photobooth.Services
                     
                     if (currentEvent != null && !string.IsNullOrEmpty(currentEvent.Name))
                     {
-                        // Use provided event
-                        eventName = GetSafeEventName(currentEvent.Name);
+                        // Use provided event name directly - it's already a valid folder name
+                        eventName = currentEvent.Name;
                         System.Diagnostics.Debug.WriteLine($"[VIDEO] Using provided event: {eventName}");
                     }
                     else
@@ -243,6 +257,49 @@ namespace Photobooth.Services
                 }
                 
                 _currentVideoPath = outputPath;
+                
+                // Create database session for video (like photo sessions) ONLY if not already set
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Checking if need to create session - CurrentSessionId: {_currentSessionId}, CurrentEvent: {currentEvent?.Name}");
+                
+                if (currentEvent != null && _currentSessionId <= 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] !!! CREATING NEW SESSION (this should not happen if session was passed) !!!");
+                    try
+                    {
+                        // Generate session GUID for tracking
+                        _currentSessionGuid = Guid.NewGuid().ToString();
+                        
+                        // Get template ID (use default or first available)
+                        int templateId = 1; // Default template ID
+                        var templates = _database.GetAllTemplates();
+                        if (templates != null && templates.Count > 0)
+                        {
+                            templateId = templates[0].Id;
+                        }
+                        
+                        // Create photo session in database (videos and photos share same session table)
+                        _currentSessionId = _database.CreatePhotoSession(
+                            currentEvent.Id, 
+                            templateId, 
+                            $"Video Session {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+                            _currentSessionGuid);
+                        
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Created database session ID: {_currentSessionId}, GUID: {_currentSessionGuid}, EventId: {currentEvent.Id}, EventName: {currentEvent.Name}");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Failed to create database session: {ex.Message}");
+                        // Continue even if database fails
+                    }
+                }
+                else if (_currentSessionId > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] *** USING EXISTING SESSION *** ID: {_currentSessionId}, GUID: {_currentSessionGuid}");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] WARNING: No session will be created (no event or session already exists)");
+                }
                 
                 System.Diagnostics.Debug.WriteLine($"[VIDEO] Calling camera.StartRecordMovie()...");
                 
@@ -417,6 +474,15 @@ namespace Photobooth.Services
                     var fileInfo = new FileInfo(_currentVideoPath);
                     System.Diagnostics.Debug.WriteLine($"[VIDEO] *** SUCCESS! Video file created: {_currentVideoPath} ***");
                     System.Diagnostics.Debug.WriteLine($"[VIDEO] File size: {fileInfo.Length / 1024.0 / 1024.0:F2} MB");
+                    
+                    // Compress video and save as webupload version
+                    await CompressAndSaveWebUploadVersion(_currentVideoPath);
+                    
+                    // Save video path to database (like photos)
+                    SaveVideoToDatabase(_currentVideoPath, fileInfo.Length, (int)duration.TotalSeconds);
+                    
+                    // Don't end the session here - it's managed by PhotoboothSessionService
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Video saved to database session {_currentSessionId}");
                 }
                 else
                 {
@@ -468,6 +534,11 @@ namespace Photobooth.Services
             {
                 _isStopping = false; // Reset flag to allow future stop operations
                 _isRecording = false; // Ensure recording state is false
+                
+                // Reset session info after recording completes to prevent reuse
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Resetting session info after recording (was ID: {_currentSessionId}, GUID: {_currentSessionGuid})");
+                _currentSessionId = 0;
+                _currentSessionGuid = null;
             }
         }
 
@@ -1393,17 +1464,21 @@ namespace Photobooth.Services
                     return false;
                 }
                 
-                // Log all video files in order
-                System.Diagnostics.Debug.WriteLine($"[VIDEO] Found {videoFiles.Count} video files in order:");
+                // Sort video files alphabetically by filename - this will put the highest numbered file last
+                videoFiles.Sort((a, b) => string.Compare(a.FileName, b.FileName, StringComparison.OrdinalIgnoreCase));
+                
+                // Log all video files after sorting
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Found {videoFiles.Count} video files (sorted):");
                 for (int i = 0; i < Math.Min(5, videoFiles.Count); i++)
                 {
                     System.Diagnostics.Debug.WriteLine($"[VIDEO]   [{i}]: {videoFiles[i].FileName}");
                 }
                 
                 // Get the most recent video file 
-                // Based on logs, the newest video (MVI_9341) appears FIRST in the filtered list
-                var latestVideo = videoFiles[0];  // Take the first video, which should be the newest
-                System.Diagnostics.Debug.WriteLine($"[VIDEO] Selected video for download: {latestVideo.FileName}");
+                // The video files are now sorted alphabetically, so the highest numbered file is the newest
+                // MVI_9371 is newer than MVI_9370, so we need the LAST item in the sorted list
+                var latestVideo = videoFiles[videoFiles.Count - 1];  // Take the last video, which is the newest
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Selected video for download: {latestVideo.FileName} (newest)");
                 
                 // Download the video file to our expected location
                 if (!string.IsNullOrEmpty(_currentVideoPath))
@@ -1443,6 +1518,20 @@ namespace Photobooth.Services
                         var fileInfo = new FileInfo(_currentVideoPath);
                         System.Diagnostics.Debug.WriteLine($"[VIDEO] *** SUCCESS! Video downloaded: {_currentVideoPath} ***");
                         System.Diagnostics.Debug.WriteLine($"[VIDEO] File size: {fileInfo.Length / 1024.0 / 1024.0:F2} MB");
+                        
+                        // Generate thumbnail now that video exists
+                        await GenerateVideoThumbnail(_currentVideoPath);
+                        
+                        // Compress and save webupload version
+                        await CompressAndSaveWebUploadVersion(_currentVideoPath);
+                        
+                        // Save video path to database with duration
+                        var duration = DateTime.Now - _recordingStartTime;
+                        SaveVideoToDatabase(_currentVideoPath, fileInfo.Length, (int)duration.TotalSeconds);
+                        
+                        // Don't end the session here - it's managed by PhotoboothSessionService
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Video saved to database session {_currentSessionId}");
+                        
                         return true;
                     }
                 }
@@ -1825,6 +1914,208 @@ namespace Photobooth.Services
                 safe = "Event";
             
             return safe;
+        }
+        
+        /// <summary>
+        /// Generate thumbnail for video
+        /// </summary>
+        private async Task<string> GenerateVideoThumbnail(string videoPath)
+        {
+            try
+            {
+                if (!File.Exists(videoPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Cannot generate thumbnail - video not found: {videoPath}");
+                    return null;
+                }
+                
+                // Check if VideoCompressionService is available (it has FFmpeg)
+                var compressionService = VideoCompressionService.Instance;
+                if (compressionService == null || !compressionService.IsFFmpegAvailable())
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] FFmpeg not available for thumbnail generation");
+                    return null;
+                }
+                
+                // Generate thumbnail path
+                string videoDir = Path.GetDirectoryName(videoPath);
+                string videoName = Path.GetFileNameWithoutExtension(videoPath);
+                string thumbnailPath = Path.Combine(videoDir, $"{videoName}_thumb.jpg");
+                
+                // Check if thumbnail already exists
+                if (File.Exists(thumbnailPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Thumbnail already exists: {thumbnailPath}");
+                    return thumbnailPath;
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Generating thumbnail for: {videoPath}");
+                
+                // Generate thumbnail at 2 seconds into the video
+                string result = await compressionService.GenerateThumbnailAsync(videoPath, thumbnailPath, 2);
+                
+                if (!string.IsNullOrEmpty(result) && File.Exists(thumbnailPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Thumbnail generated successfully: {thumbnailPath}");
+                    
+                    // Update database with thumbnail path if we have a session
+                    if (_currentSessionId > 0)
+                    {
+                        var fileInfo = new FileInfo(videoPath);
+                        var duration = DateTime.Now - _recordingStartTime;
+                        _database.UpdateSessionWithVideoData(_currentSessionId, videoPath, thumbnailPath, 
+                            fileInfo.Length, (int)duration.TotalSeconds);
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Updated database with thumbnail path");
+                    }
+                    
+                    return thumbnailPath;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] Thumbnail generation failed");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error generating thumbnail: {ex.Message}");
+                return null;
+            }
+        }
+        
+        /// <summary>
+        /// Compress video and save as webupload version
+        /// </summary>
+        private async Task CompressAndSaveWebUploadVersion(string originalVideoPath)
+        {
+            try
+            {
+                if (!File.Exists(originalVideoPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Cannot compress - original video not found: {originalVideoPath}");
+                    return;
+                }
+                
+                // Check if VideoCompressionService is available
+                var compressionService = VideoCompressionService.Instance;
+                if (compressionService == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] VideoCompressionService not available");
+                    return;
+                }
+                
+                // Generate webupload filename in subfolder
+                string directory = Path.GetDirectoryName(originalVideoPath);
+                string eventFolder = Path.GetDirectoryName(directory); // Go up from videos folder to event folder
+                string webUploadFolder = Path.Combine(eventFolder, "webupload");
+                
+                // Create webupload folder if it doesn't exist
+                if (!Directory.Exists(webUploadFolder))
+                {
+                    Directory.CreateDirectory(webUploadFolder);
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Created webupload folder: {webUploadFolder}");
+                }
+                
+                string filename = Path.GetFileNameWithoutExtension(originalVideoPath);
+                string webUploadPath = Path.Combine(webUploadFolder, $"{filename}_webupload.mp4");
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Starting compression of {originalVideoPath}");
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] WebUpload output: {webUploadPath}");
+                
+                // Compress the video
+                string compressedPath = await compressionService.CompressVideoAsync(originalVideoPath, webUploadPath);
+                
+                if (!string.IsNullOrEmpty(compressedPath) && File.Exists(webUploadPath))
+                {
+                    var originalSize = new FileInfo(originalVideoPath).Length;
+                    var compressedSize = new FileInfo(webUploadPath).Length;
+                    double compressionRatio = (1.0 - (double)compressedSize / originalSize) * 100;
+                    
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Compression successful!");
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Original size: {originalSize / 1024.0 / 1024.0:F2} MB");
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Compressed size: {compressedSize / 1024.0 / 1024.0:F2} MB");
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Compression ratio: {compressionRatio:F1}%");
+                    
+                    // Also save compressed video path to database
+                    if (_currentSessionId > 0)
+                    {
+                        SaveVideoToDatabase(webUploadPath, compressedSize, 0, "WebUpload");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] Compression failed or output file not created");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error compressing video: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Save video path to database (like photos)
+        /// </summary>
+        private void SaveVideoToDatabase(string videoPath, long fileSize, int durationSeconds, string videoType = "Original")
+        {
+            try
+            {
+                if (_currentSessionId <= 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] No session ID - cannot save to database");
+                    return;
+                }
+                
+                if (!File.Exists(videoPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Video file not found, cannot save to database: {videoPath}");
+                    return;
+                }
+                
+                // Extract just the filename for database
+                string fileName = Path.GetFileName(videoPath);
+                
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Saving video to database - Session: {_currentSessionId}, File: {fileName}, Type: {videoType}");
+                
+                // Use the Photos table to store video path (videos and photos share same structure)
+                // PhotoType field will indicate it's a video
+                var photo = new Database.PhotoData
+                {
+                    SessionId = _currentSessionId,
+                    FileName = fileName,
+                    FilePath = videoPath,
+                    FileSize = fileSize,
+                    PhotoType = $"Video_{videoType}", // Mark as Video_Original or Video_WebUpload
+                    SequenceNumber = 1,
+                    IsActive = true
+                };
+                
+                int photoId = _database.SavePhoto(photo);
+                
+                if (photoId > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VIDEO] Successfully saved to database with ID: {photoId}");
+                    
+                    // Update session with video-specific data if it's the original video
+                    if (videoType == "Original" && durationSeconds > 0)
+                    {
+                        // Generate thumbnail path
+                        string thumbnailPath = Path.ChangeExtension(videoPath, ".jpg");
+                        
+                        // Update session with video metadata
+                        _database.UpdateSessionWithVideoData(_currentSessionId, videoPath, thumbnailPath, fileSize, durationSeconds);
+                        System.Diagnostics.Debug.WriteLine($"[VIDEO] Updated session with video metadata");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[VIDEO] Failed to save video to database");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VIDEO] Error saving video to database: {ex.Message}");
+            }
         }
     }
 

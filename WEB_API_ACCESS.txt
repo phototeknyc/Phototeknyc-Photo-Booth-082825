@@ -1,0 +1,59 @@
+=====================================
+  PHOTOBOOTH WEB API ACCESS GUIDE
+=====================================
+
+The Photobooth Web API now includes a built-in web server that serves the control panel!
+
+HOW TO ACCESS THE WEB CONTROL PANEL:
+=====================================
+1. Start the Photobooth application
+2. Open any web browser (Chrome, Firefox, Edge, Safari)
+3. Navigate to: http://localhost:8080/
+
+That's it! No need to find or open any HTML files.
+
+AVAILABLE URLS:
+=====================================
+http://localhost:8080/          - Full control panel interface
+http://localhost:8080/client    - Same as above
+http://localhost:8080/webclient - Same as above
+http://localhost:8080/health     - API health check (JSON)
+
+ACCESS FROM OTHER DEVICES:
+=====================================
+To access from another device on the same network:
+1. Find your computer's IP address (run 'ipconfig' in Command Prompt)
+2. Replace 'localhost' with your IP address
+3. Example: http://192.168.1.100:8080/
+
+FEATURES AVAILABLE IN WEB INTERFACE:
+=====================================
+✓ Live Preview Display
+✓ Camera Control (capture, settings, live view)
+✓ Session Management (start, stop, list sessions)
+✓ Print Controls
+✓ Event Selection
+✓ Settings Management (with tabs)
+✓ System Health Monitoring
+
+API ENDPOINTS:
+=====================================
+The REST API is available at:
+http://localhost:8080/api/
+
+Documentation of all endpoints is shown in the web interface.
+
+TROUBLESHOOTING:
+=====================================
+If you can't access the web interface:
+1. Make sure the Photobooth application is running
+2. Check that port 8080 is not blocked by firewall
+3. Ensure you ran SetupWebApi.bat as administrator
+4. Try accessing http://127.0.0.1:8080/ instead
+
+MOBILE ACCESS:
+=====================================
+The web interface is responsive and works on mobile devices!
+Just open the URL in your mobile browser while on the same network.
+
+=====================================

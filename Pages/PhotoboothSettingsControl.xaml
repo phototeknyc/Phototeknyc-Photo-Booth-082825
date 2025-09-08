@@ -861,6 +861,8 @@
                     <CheckBox x:Name="showCountdownCheckBox" 
                               Content="Show countdown in status text (bottom)" 
                               IsChecked="True"
+                              Checked="ShowCountdownCheckBox_Changed"
+                              Unchecked="ShowCountdownCheckBox_Changed"
                               Style="{StaticResource SettingsCheckBoxStyle}"
                               ToolTip="Shows 'Get ready! 3, 2, 1...' text at bottom during countdown. Main countdown overlay still visible."/>
                         </StackPanel>
@@ -1092,7 +1094,7 @@
                         <Slider x:Name="frameRateSlider" 
                                 Minimum="15" 
                                 Maximum="30" 
-                                Value="30" 
+                                Value="{Binding Source={x:Static properties:Settings.Default}, Path=LiveViewFrameRate, Mode=TwoWay}" 
                                 TickPlacement="BottomRight" 
                                 TickFrequency="5" 
                                 IsSnapToTickEnabled="True"
@@ -1117,7 +1119,8 @@
                 <Expander.HeaderTemplate>
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="🎬" FontSize="18" Margin="0,0,15,0"/>
+                            <TextBlock Text="{StaticResource MDL2_Video}" FontFamily="{StaticResource SegoeMDL2}" 
+                                       Style="{StaticResource SectionIconStyle}" Margin="0,0,15,0"/>
                             <TextBlock Text="{Binding}" Style="{StaticResource SectionTitleStyle}"/>
                         </StackPanel>
                     </DataTemplate>
@@ -1221,6 +1224,86 @@
                                            Foreground="#AAD4E7" 
                                            FontStyle="Italic"/>
                             </StackPanel>
+                            
+                            <!-- Advanced Video Settings -->
+                            <Separator Background="#44FFFFFF" Height="1" Margin="0,15,0,15"/>
+                            <TextBlock Text="Advanced Video Settings" Style="{StaticResource SettingsTextStyle}" FontWeight="SemiBold"/>
+                            
+                            <CheckBox x:Name="videoModeLiveViewEnabledCheckBox" 
+                                      Content="Enable live view during video recording" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=VideoModeLiveViewEnabled, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"
+                                      IsEnabled="{Binding IsChecked, ElementName=enableVideoModuleCheckBox}"/>
+                            
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                
+                                <!-- ISO -->
+                                <TextBlock Grid.Column="0" Grid.Row="0" Text="ISO:" Style="{StaticResource SettingsTextStyle}" FontSize="13"/>
+                                <ComboBox Grid.Column="1" Grid.Row="0" x:Name="videoISOComboBox" 
+                                          Margin="5,5,5,5"
+                                          Style="{StaticResource SettingsComboBoxStyle}"
+                                          IsEnabled="{Binding IsChecked, ElementName=enableVideoModuleCheckBox}"
+                                          SelectedValue="{Binding Source={x:Static properties:Settings.Default}, Path=VideoISO, Mode=TwoWay}">
+                                    <ComboBoxItem Content="Auto" Tag="Auto"/>
+                                    <ComboBoxItem Content="100" Tag="100"/>
+                                    <ComboBoxItem Content="200" Tag="200"/>
+                                    <ComboBoxItem Content="400" Tag="400"/>
+                                    <ComboBoxItem Content="800" Tag="800"/>
+                                    <ComboBoxItem Content="1600" Tag="1600"/>
+                                </ComboBox>
+                                
+                                <!-- Aperture -->
+                                <TextBlock Grid.Column="0" Grid.Row="1" Text="Aperture:" Style="{StaticResource SettingsTextStyle}" FontSize="13"/>
+                                <ComboBox Grid.Column="1" Grid.Row="1" x:Name="videoApertureComboBox" 
+                                          Margin="5,5,5,5"
+                                          Style="{StaticResource SettingsComboBoxStyle}"
+                                          IsEnabled="{Binding IsChecked, ElementName=enableVideoModuleCheckBox}"
+                                          SelectedValue="{Binding Source={x:Static properties:Settings.Default}, Path=VideoAperture, Mode=TwoWay}">
+                                    <ComboBoxItem Content="Auto" Tag="Auto"/>
+                                    <ComboBoxItem Content="f/1.8" Tag="1.8"/>
+                                    <ComboBoxItem Content="f/2.8" Tag="2.8"/>
+                                    <ComboBoxItem Content="f/4.0" Tag="4.0"/>
+                                    <ComboBoxItem Content="f/5.6" Tag="5.6"/>
+                                    <ComboBoxItem Content="f/8.0" Tag="8.0"/>
+                                </ComboBox>
+                                
+                                <!-- Shutter Speed -->
+                                <TextBlock Grid.Column="0" Grid.Row="2" Text="Shutter Speed:" Style="{StaticResource SettingsTextStyle}" FontSize="13"/>
+                                <ComboBox Grid.Column="1" Grid.Row="2" x:Name="videoShutterSpeedComboBox" 
+                                          Margin="5,5,5,5"
+                                          Style="{StaticResource SettingsComboBoxStyle}"
+                                          IsEnabled="{Binding IsChecked, ElementName=enableVideoModuleCheckBox}"
+                                          SelectedValue="{Binding Source={x:Static properties:Settings.Default}, Path=VideoShutterSpeed, Mode=TwoWay}">
+                                    <ComboBoxItem Content="Auto" Tag="Auto"/>
+                                    <ComboBoxItem Content="1/30" Tag="1/30"/>
+                                    <ComboBoxItem Content="1/60" Tag="1/60"/>
+                                    <ComboBoxItem Content="1/125" Tag="1/125"/>
+                                    <ComboBoxItem Content="1/250" Tag="1/250"/>
+                                    <ComboBoxItem Content="1/500" Tag="1/500"/>
+                                </ComboBox>
+                                
+                                <!-- Frame Rate -->
+                                <TextBlock Grid.Column="0" Grid.Row="3" Text="Frame Rate:" Style="{StaticResource SettingsTextStyle}" FontSize="13"/>
+                                <ComboBox Grid.Column="1" Grid.Row="3" x:Name="videoFrameRateComboBox" 
+                                          Margin="5,5,5,5"
+                                          Style="{StaticResource SettingsComboBoxStyle}"
+                                          IsEnabled="{Binding IsChecked, ElementName=enableVideoModuleCheckBox}"
+                                          SelectedValue="{Binding Source={x:Static properties:Settings.Default}, Path=VideoFrameRate, Mode=TwoWay}">
+                                    <ComboBoxItem Content="24 fps" Tag="24"/>
+                                    <ComboBoxItem Content="30 fps" Tag="30"/>
+                                    <ComboBoxItem Content="60 fps" Tag="60"/>
+                                </ComboBox>
+                            </Grid>
                         </StackPanel>
                     </Border>
                     
@@ -1596,7 +1679,7 @@
                         <Slider x:Name="gifFrameDelaySlider" 
                                 Minimum="0.5" 
                                 Maximum="5" 
-                                Value="1.5" 
+                                Value="{Binding Source={x:Static properties:Settings.Default}, Path=GifFrameDelay, Mode=TwoWay}" 
                                 TickPlacement="BottomRight" 
                                 TickFrequency="0.5" 
                                 IsSnapToTickEnabled="True"
@@ -1669,7 +1752,7 @@
                         <Slider x:Name="gifQualitySlider" 
                                 Minimum="50" 
                                 Maximum="100" 
-                                Value="75" 
+                                Value="{Binding Source={x:Static properties:Settings.Default}, Path=GifQuality, Mode=TwoWay}" 
                                 TickPlacement="BottomRight" 
                                 TickFrequency="10" 
                                 IsSnapToTickEnabled="True"
@@ -1744,6 +1827,238 @@
                 </StackPanel>
             </Expander>
             
+            <!-- Print Settings -->
+            <Expander Header="Print Settings" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{StaticResource MDL2_Print}" FontFamily="{StaticResource SegoeMDL2}" 
+                                       Style="{StaticResource SectionIconStyle}" Margin="0,0,15,0"/>
+                            <TextBlock Text="{Binding}" Style="{StaticResource SectionTitleStyle}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="20,15,20,20">
+                    
+                    <!-- Basic Print Settings -->
+                    <TextBlock Text="Basic Print Settings" Style="{StaticResource SectionTitleStyle}" Margin="0,0,0,15"/>
+                    <Border Style="{StaticResource GlassSectionStyle}">
+                        <StackPanel>
+                            <CheckBox x:Name="enablePrintingCheckBox" 
+                                      Content="Enable printing" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=EnablePrinting, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="showPrintButtonCheckBox" 
+                                      Content="Show print button" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=ShowPrintButton, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="printOnlyOriginalsCheckBox" 
+                                      Content="Print only original photos" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=PrintOnlyOriginals, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="allowReprintsCheckBox" 
+                                      Content="Allow reprints" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=AllowReprints, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="showPrintDialogCheckBox" 
+                                      Content="Show print dialog" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=ShowPrintDialog, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="autoRoutePrinterCheckBox" 
+                                      Content="Auto route to printer based on size" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=AutoRoutePrinter, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="duplicate2x6To4x6CheckBox" 
+                                      Content="Duplicate 2x6 prints to 4x6" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=Duplicate2x6To4x6, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="autoRotateForPrintingCheckBox" 
+                                      Content="Auto rotate for printing" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=AutoRotateForPrinting, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Print Limits -->
+                    <TextBlock Text="Print Limits" Style="{StaticResource SectionTitleStyle}" Margin="0,20,0,15"/>
+                    <Border Style="{StaticResource GlassSectionStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Max prints per session:" Style="{StaticResource SettingsTextStyle}"/>
+                            <Slider x:Name="maxSessionPrintsSlider" 
+                                    Minimum="0" 
+                                    Maximum="50" 
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=MaxSessionPrints, Mode=TwoWay}"
+                                    TickFrequency="5"
+                                    IsSnapToTickEnabled="True"
+                                    TickPlacement="BottomRight"
+                                    Style="{StaticResource SettingsSliderStyle}"/>
+                            <TextBlock Text="{Binding ElementName=maxSessionPrintsSlider, Path=Value, StringFormat='Current: {0} prints'}" 
+                                       Style="{StaticResource SettingsTextStyle}" 
+                                       Foreground="#8A8BA3" 
+                                       FontSize="13"/>
+                            
+                            <TextBlock Text="Max prints per event:" Style="{StaticResource SettingsTextStyle}" Margin="0,15,0,0"/>
+                            <Slider x:Name="maxEventPrintsSlider" 
+                                    Minimum="0" 
+                                    Maximum="500" 
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=MaxEventPrints, Mode=TwoWay}"
+                                    TickFrequency="50"
+                                    IsSnapToTickEnabled="True"
+                                    TickPlacement="BottomRight"
+                                    Style="{StaticResource SettingsSliderStyle}"/>
+                            <TextBlock Text="{Binding ElementName=maxEventPrintsSlider, Path=Value, StringFormat='Current: {0} prints'}" 
+                                       Style="{StaticResource SettingsTextStyle}" 
+                                       Foreground="#8A8BA3" 
+                                       FontSize="13"/>
+                            
+                            <TextBlock Text="Default print copies:" Style="{StaticResource SettingsTextStyle}" Margin="0,15,0,0"/>
+                            <Slider x:Name="defaultPrintCopiesSlider" 
+                                    Minimum="1" 
+                                    Maximum="10" 
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=DefaultPrintCopies, Mode=TwoWay}"
+                                    TickFrequency="1"
+                                    IsSnapToTickEnabled="True"
+                                    TickPlacement="BottomRight"
+                                    Style="{StaticResource SettingsSliderStyle}"/>
+                            <TextBlock Text="{Binding ElementName=defaultPrintCopiesSlider, Path=Value, StringFormat='Current: {0} copies'}" 
+                                       Style="{StaticResource SettingsTextStyle}" 
+                                       Foreground="#8A8BA3" 
+                                       FontSize="13"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Advanced Print Settings -->
+                    <TextBlock Text="Advanced Print Settings" Style="{StaticResource SectionTitleStyle}" Margin="0,20,0,15"/>
+                    <Border Style="{StaticResource GlassSectionStyle}">
+                        <StackPanel>
+                            <CheckBox x:Name="printLandscapeCheckBox" 
+                                      Content="Print in landscape orientation" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=PrintLandscape, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="printBorderlessCheckBox" 
+                                      Content="Borderless printing" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=PrintBorderless, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="printFitToPageCheckBox" 
+                                      Content="Fit to page" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=PrintFitToPage, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <TextBlock Text="Print quality:" Style="{StaticResource SettingsTextStyle}" Margin="0,15,0,0"/>
+                            <Slider x:Name="printQualitySlider" 
+                                    Minimum="1" 
+                                    Maximum="5" 
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=PrintQuality, Mode=TwoWay}"
+                                    TickFrequency="1"
+                                    IsSnapToTickEnabled="True"
+                                    TickPlacement="BottomRight"
+                                    Style="{StaticResource SettingsSliderStyle}"/>
+                            <TextBlock Foreground="#8A8BA3" 
+                                       FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource SettingsTextStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ElementName=printQualitySlider, Path=Value}" Value="1">
+                                                <Setter Property="Text" Value="Quality: Draft"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ElementName=printQualitySlider, Path=Value}" Value="2">
+                                                <Setter Property="Text" Value="Quality: Normal"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ElementName=printQualitySlider, Path=Value}" Value="3">
+                                                <Setter Property="Text" Value="Quality: Good"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ElementName=printQualitySlider, Path=Value}" Value="4">
+                                                <Setter Property="Text" Value="Quality: High"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ElementName=printQualitySlider, Path=Value}" Value="5">
+                                                <Setter Property="Text" Value="Quality: Best"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- DNP Printer Settings -->
+                    <TextBlock Text="DNP Printer Settings" Style="{StaticResource SectionTitleStyle}" Margin="0,20,0,15"/>
+                    <Border Style="{StaticResource GlassSectionStyle}">
+                        <StackPanel>
+                            <CheckBox x:Name="dnpOvercoatCheckBox" 
+                                      Content="Apply overcoat protection" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=DnpOvercoat, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="dnpLusterFinishCheckBox" 
+                                      Content="Luster finish" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=DnpLusterFinish, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <CheckBox x:Name="dnp2InchCutCheckBox" 
+                                      Content="Enable 2 inch cut for 2x6 prints" 
+                                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=Dnp2InchCut, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsCheckBoxStyle}"/>
+                            
+                            <TextBlock Text="Print density adjustment:" Style="{StaticResource SettingsTextStyle}" Margin="0,15,0,0"/>
+                            <Slider x:Name="dnpPrintDensitySlider" 
+                                    Minimum="-50" 
+                                    Maximum="50" 
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=DnpPrintDensity, Mode=TwoWay}"
+                                    TickFrequency="10"
+                                    IsSnapToTickEnabled="True"
+                                    TickPlacement="BottomRight"
+                                    Style="{StaticResource SettingsSliderStyle}"/>
+                            <TextBlock Text="{Binding ElementName=dnpPrintDensitySlider, Path=Value, StringFormat='Density: {0}'}" 
+                                       Style="{StaticResource SettingsTextStyle}" 
+                                       Foreground="#8A8BA3" 
+                                       FontSize="13"/>
+                            
+                            <TextBlock Text="Color balance adjustments:" Style="{StaticResource SettingsTextStyle}" Margin="0,15,0,0"/>
+                            
+                            <TextBlock Text="Cyan/Red:" Style="{StaticResource SettingsTextStyle}" FontSize="13"/>
+                            <Slider x:Name="dnpCyanRedSlider" 
+                                    Minimum="-50" 
+                                    Maximum="50" 
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=DnpCyanRed, Mode=TwoWay}"
+                                    TickFrequency="10"
+                                    IsSnapToTickEnabled="True"
+                                    TickPlacement="BottomRight"
+                                    Style="{StaticResource SettingsSliderStyle}"/>
+                            
+                            <TextBlock Text="Magenta/Green:" Style="{StaticResource SettingsTextStyle}" FontSize="13"/>
+                            <Slider x:Name="dnpMagentaGreenSlider" 
+                                    Minimum="-50" 
+                                    Maximum="50" 
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=DnpMagentaGreen, Mode=TwoWay}"
+                                    TickFrequency="10"
+                                    IsSnapToTickEnabled="True"
+                                    TickPlacement="BottomRight"
+                                    Style="{StaticResource SettingsSliderStyle}"/>
+                            
+                            <TextBlock Text="Yellow/Blue:" Style="{StaticResource SettingsTextStyle}" FontSize="13"/>
+                            <Slider x:Name="dnpYellowBlueSlider" 
+                                    Minimum="-50" 
+                                    Maximum="50" 
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=DnpYellowBlue, Mode=TwoWay}"
+                                    TickFrequency="10"
+                                    IsSnapToTickEnabled="True"
+                                    TickPlacement="BottomRight"
+                                    Style="{StaticResource SettingsSliderStyle}"/>
+                        </StackPanel>
+                    </Border>
+                    
+                </StackPanel>
+            </Expander>
+            
             <!-- User Interface & Display Settings -->
             <Expander Header="User Interface &amp; Display" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
                 <Expander.HeaderTemplate>
@@ -1775,7 +2090,7 @@
                         <Slider x:Name="buttonSizeSlider" 
                                 Minimum="0.8" 
                                 Maximum="1.5" 
-                                Value="1.0" 
+                                Value="{Binding Source={x:Static properties:Settings.Default}, Path=ButtonSizeScale, Mode=TwoWay}" 
                                 TickPlacement="BottomRight" 
                                 TickFrequency="0.1" 
                                 IsSnapToTickEnabled="True"
@@ -1790,474 +2105,6 @@
                                    FontWeight="Bold"
                                    FontSize="18"/>
                     </StackPanel>
-                    
-                    <!-- Print Settings within Touch Interface -->
-                    <Border Background="Transparent" 
-                            BorderBrush="#4A5568" 
-                            BorderThickness="1" 
-                            CornerRadius="20" 
-                            Padding="25" 
-                            Margin="0,25,0,0">
-                        <Border.Effect>
-                            <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="4" Opacity="0.2"/>
-                        </Border.Effect>
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
-                                <TextBlock Text="🖨️" 
-                                           FontSize="24" 
-                                           Foreground="#667EEA" 
-                                           Margin="0,0,15,0" 
-                                           VerticalAlignment="Center"/>
-                                <TextBlock Text="Print Settings" 
-                                           Style="{StaticResource SectionTitleStyle}"
-                                           FontSize="20"/>
-                            </StackPanel>
-                            
-                            <CheckBox x:Name="enablePrintingCheckBox" 
-                                      Content="Enable printing functionality" 
-                                      Style="{StaticResource SettingsCheckBoxStyle}"
-                                      IsChecked="True"/>
-                            
-                            <CheckBox x:Name="showPrintButtonCheckBox" 
-                                      Content="Show print button in gallery" 
-                                      Style="{StaticResource SettingsCheckBoxStyle}"
-                                      IsChecked="True"
-                                      IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                            
-                            <CheckBox x:Name="printOnlyOriginalsCheckBox" 
-                                      Content="Print only original photos (no filtered/templates)" 
-                                      Style="{StaticResource SettingsCheckBoxStyle}"
-                                      IsChecked="True"
-                                      IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                            
-                            <CheckBox x:Name="allowReprintsCheckBox" 
-                                      Content="Allow reprints of same photos" 
-                                      Style="{StaticResource SettingsCheckBoxStyle}"
-                                      IsChecked="True"
-                                      IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                            
-                            <CheckBox x:Name="showPrintDialogCheckBox" 
-                                      Content="Show print dialog before printing" 
-                                      Style="{StaticResource SettingsCheckBoxStyle}"
-                                      IsChecked="False"
-                                      IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                            
-                            <!-- Automatic Size-Based Routing -->
-                            <CheckBox x:Name="autoRoutePrinterCheckBox" 
-                              Content="Automatically route 2x6 strips to dedicated strip printer" 
-                              Style="{StaticResource SettingsCheckBoxStyle}"
-                              IsChecked="True"
-                              IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                              ToolTip="2x6 strips go to Strip Printer, all other sizes go to Default Printer"
-                              Margin="0,10,0,10"/>
-                    
-                    <!-- Printer Profile Configuration -->
-                    <Border Background="#3A3A3A" CornerRadius="5" Padding="10" Margin="0,5">
-                        <StackPanel>
-                            <TextBlock Text="Printer Profile Management" 
-                                       Style="{StaticResource SettingsTextStyle}"
-                                       FontWeight="Bold"
-                                       FontSize="14"
-                                       Foreground="#2196F3"
-                                       Margin="0,0,0,10"/>
-                            
-                            <TextBlock Text="Configure persistent printer settings for each paper size and orientation" 
-                                       Foreground="#AAA"
-                                       FontSize="12"
-                                       TextWrapping="Wrap"
-                                       Margin="0,0,0,10"/>
-                            
-                            <Button Content="🖨️ Configure Printer Profiles" 
-                                    Width="250"
-                                    Height="40"
-                                    FontSize="14"
-                                    FontWeight="Bold"
-                                    Click="ConfigurePrinterProfiles_Click"
-                                    IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                    Style="{StaticResource ModernButtonStyle}"
-                                    ToolTip="Open printer profile configuration window">
-                                <Button.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                        <GradientStop Color="#2196F3" Offset="0"/>
-                                        <GradientStop Color="#1976D2" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </Button.Background>
-                            </Button>
-                        </StackPanel>
-                    </Border>
-                    
-                    <!-- Default Printer Selection (for all standard photo sizes) -->
-                    <Border Background="#3A3A3A" CornerRadius="5" Padding="10" Margin="0,5">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Default Printer (4x6, 5x7, 8x10, etc.)" 
-                                           Style="{StaticResource SettingsTextStyle}"
-                                           FontWeight="Bold"
-                                           FontSize="14"
-                                           Foreground="#FFD700"/>
-                                <CheckBox x:Name="defaultPoolingCheckBox" 
-                                          Content="Enable Pooling" 
-                                          Margin="20,0,0,0"
-                                          Foreground="#4CAF50"
-                                          FontWeight="Bold"
-                                          IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                          ToolTip="Enable printer pooling for high-volume printing"
-                                          Click="DefaultPooling_Changed"/>
-                            </StackPanel>
-                            
-                            <!-- Primary Printer -->
-                            <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-                                <TextBlock Text="Primary:" 
-                                           Width="80"
-                                           VerticalAlignment="Center"
-                                           Foreground="White"/>
-                                <ComboBox x:Name="printer4x6ComboBox" 
-                                          Width="200"
-                                          Height="30"
-                                          IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                          ToolTip="Select primary printer for standard photos"/>
-                                <Button Width="48"
-                                        Height="48"
-                                        Margin="10,0,0,0"
-                                        FontSize="14"
-                                        Click="RefreshPrinters_Click"
-                                        IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                        Style="{StaticResource ModernButtonStyle}"
-                                        ToolTip="Refresh printer list">
-                                    <Button.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#718096" Offset="0"/>
-                                            <GradientStop Color="#4A5568" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Button.Background>
-                                </Button>
-                                <Button Content="🧪" 
-                                        Width="48"
-                                        Height="48"
-                                        Margin="8,0,0,0"
-                                        FontSize="14"
-                                        Click="Test4x6Print_Click"
-                                        ToolTip="Print a test page using paper size from settings"
-                                        IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                        Style="{StaticResource ModernButtonStyle}">
-                                    <Button.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#ECC94B" Offset="0"/>
-                                            <GradientStop Color="#D69E2E" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Button.Background>
-                                </Button>
-                                <Button Content="⚙️" 
-                                        Width="48"
-                                        Height="48"
-                                        Margin="8,0,0,0"
-                                        FontSize="14"
-                                        Click="AdvancedDriver4x6_Click"
-                                        ToolTip="Configure default printer driver settings"
-                                        IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                        Style="{StaticResource ModernButtonStyle}">
-                                    <Button.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#48BB78" Offset="0"/>
-                                            <GradientStop Color="#38A169" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Button.Background>
-                                </Button>
-                            </StackPanel>
-                            
-                            <!-- Printer Pool (shown when pooling is enabled) -->
-                            <StackPanel x:Name="defaultPoolPanel" Visibility="Collapsed">
-                                <Separator Margin="0,5" Background="#555"/>
-                                
-                                <!-- Pool Strategy -->
-                                <StackPanel Orientation="Horizontal" Margin="0,5">
-                                    <TextBlock Text="Strategy:" 
-                                               Width="80"
-                                               VerticalAlignment="Center"
-                                               Foreground="#AAA"/>
-                                    <ComboBox x:Name="defaultPoolStrategyComboBox" 
-                                              Width="120"
-                                              Height="25"
-                                              IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}">
-                                        <ComboBoxItem Content="Round-Robin" IsSelected="True"/>
-                                        <ComboBoxItem Content="Load Balance"/>
-                                        <ComboBoxItem Content="Failover Only"/>
-                                    </ComboBox>
-                                    <TextBlock Text="(How to distribute jobs)" 
-                                               Margin="10,0,0,0"
-                                               VerticalAlignment="Center"
-                                               Foreground="#888"
-                                               FontSize="11"/>
-                                </StackPanel>
-                                
-                                <!-- Additional Printers -->
-                                <TextBlock Text="Additional Pool Printers:" 
-                                           Foreground="#AAA"
-                                           FontSize="12"
-                                           Margin="0,5,0,2"/>
-                                
-                                <StackPanel Orientation="Horizontal" Margin="0,2">
-                                    <CheckBox x:Name="defaultPool2CheckBox" 
-                                              Width="20"
-                                              IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                                    <TextBlock Text="Printer 2:" 
-                                               Width="60"
-                                               VerticalAlignment="Center"
-                                               Foreground="#AAA"
-                                               FontSize="11"/>
-                                    <ComboBox x:Name="defaultPool2ComboBox" 
-                                              Width="180"
-                                              Height="24"
-                                              FontSize="11"
-                                              IsEnabled="{Binding IsChecked, ElementName=defaultPool2CheckBox}"/>
-                                </StackPanel>
-                                
-                                <StackPanel Orientation="Horizontal" Margin="0,2">
-                                    <CheckBox x:Name="defaultPool3CheckBox" 
-                                              Width="20"
-                                              IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                                    <TextBlock Text="Printer 3:" 
-                                               Width="60"
-                                               VerticalAlignment="Center"
-                                               Foreground="#AAA"
-                                               FontSize="11"/>
-                                    <ComboBox x:Name="defaultPool3ComboBox" 
-                                              Width="180"
-                                              Height="24"
-                                              FontSize="11"
-                                              IsEnabled="{Binding IsChecked, ElementName=defaultPool3CheckBox}"/>
-                                </StackPanel>
-                                
-                                <StackPanel Orientation="Horizontal" Margin="0,2">
-                                    <CheckBox x:Name="defaultPool4CheckBox" 
-                                              Width="20"
-                                              IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                                    <TextBlock Text="Printer 4:" 
-                                               Width="60"
-                                               VerticalAlignment="Center"
-                                               Foreground="#AAA"
-                                               FontSize="11"/>
-                                    <ComboBox x:Name="defaultPool4ComboBox" 
-                                              Width="180"
-                                              Height="24"
-                                              FontSize="11"
-                                              IsEnabled="{Binding IsChecked, ElementName=defaultPool4CheckBox}"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-                    
-                    <!-- 2x6 Printer Selection -->
-                    <Border Background="#3A3A3A" CornerRadius="5" Padding="10" Margin="0,5">
-                        <StackPanel>
-                            <TextBlock Text="2x6 Strip Printer (with 2-inch cut)" 
-                                       Style="{StaticResource SettingsTextStyle}"
-                                       FontWeight="Bold"
-                                       FontSize="14"
-                                       Foreground="#00BCD4"
-                                       Margin="0,0,0,5"/>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Printer:" 
-                                           Width="80"
-                                           VerticalAlignment="Center"
-                                           Foreground="White"/>
-                                <ComboBox x:Name="printer2x6ComboBox" 
-                                          Width="200"
-                                          Height="30"
-                                          IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                          ToolTip="Select printer for 2x6 photo strips"/>
-                                <Button Width="48"
-                                        Height="48"
-                                        Margin="10,0,0,0"
-                                        FontSize="14"
-                                        Click="RefreshPrinters_Click"
-                                        IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                        Style="{StaticResource ModernButtonStyle}"
-                                        ToolTip="Refresh printer list">
-                                    <Button.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#718096" Offset="0"/>
-                                            <GradientStop Color="#4A5568" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Button.Background>
-                                </Button>
-                                <Button Content="📏" 
-                                        Width="48"
-                                        Height="48"
-                                        Margin="8,0,0,0"
-                                        FontSize="14"
-                                        Click="Test2x6Print_Click"
-                                        ToolTip="Print a test 2x6 strip"
-                                        IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                        Style="{StaticResource ModernButtonStyle}">
-                                    <Button.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#00BCD4" Offset="0"/>
-                                            <GradientStop Color="#0097A7" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Button.Background>
-                                </Button>
-                                <Button Content="⚙️" 
-                                        Width="48"
-                                        Height="48"
-                                        Margin="8,0,0,0"
-                                        FontSize="14"
-                                        Click="AdvancedDriver2x6_Click"
-                                        ToolTip="Configure 2x6 printer driver settings (enable 2-inch cut here)"
-                                        IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                        Style="{StaticResource ModernButtonStyle}">
-                                    <Button.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#48BB78" Offset="0"/>
-                                            <GradientStop Color="#38A169" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Button.Background>
-                                </Button>
-                                <Button Content="🎯" 
-                                        Width="48"
-                                        Height="48"
-                                        Margin="8,0,0,0"
-                                        FontSize="20"
-                                        Click="PrinterAlignment_Click"
-                                        ToolTip="Printer alignment and calibration for both printers"
-                                        IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                        Style="{StaticResource ModernButtonStyle}">
-                                    <Button.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#FF6B6B" Offset="0"/>
-                                            <GradientStop Color="#FF5252" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Button.Background>
-                                </Button>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-                    
-                    <!-- Legacy single printer (hidden) -->
-                    <StackPanel x:Name="legacyPrinterPanel" Visibility="Collapsed">
-                        <ComboBox x:Name="printerComboBox" Width="200" Height="30"/>
-                    </StackPanel>
-                    
-                    <StackPanel Orientation="Horizontal" Margin="0,5">
-                        <TextBlock Text="Paper Size:" 
-                                   Width="120"
-                                   VerticalAlignment="Center"
-                                   Foreground="White"/>
-                        <ComboBox x:Name="paperSizeComboBox" 
-                                  Width="150"
-                                  Height="30"
-                                  IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}">
-                            <ComboBoxItem Content="4x6" IsSelected="True"/>
-                            <ComboBoxItem Content="5x7"/>
-                            <ComboBoxItem Content="8x10"/>
-                            <ComboBoxItem Content="Letter"/>
-                            <ComboBoxItem Content="A4"/>
-                        </ComboBox>
-                    </StackPanel>
-                    
-                    <CheckBox x:Name="printLandscapeCheckBox" 
-                              Content="Print in landscape orientation" 
-                              Style="{StaticResource SettingsCheckBoxStyle}"
-                              IsChecked="False"
-                              IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                    
-                    <StackPanel Orientation="Horizontal" Margin="0,10,0,5">
-                        <TextBlock Text="Max prints per session:" 
-                                   Width="150"
-                                   VerticalAlignment="Center"
-                                   Foreground="White"/>
-                        <TextBox x:Name="maxSessionPrintsTextBox" 
-                                 Width="60"
-                                 Height="25"
-                                 Text="5"
-                                 Background="#5A5A5A"
-                                 Foreground="White"
-                                 BorderBrush="#666666"
-                                 IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                        <TextBlock Text="(0 = unlimited)" 
-                                   Margin="10,0,0,0"
-                                   VerticalAlignment="Center"
-                                   Foreground="#AAAAAA"
-                                   FontSize="12"/>
-                    </StackPanel>
-                    
-                    <StackPanel Orientation="Horizontal" Margin="0,5">
-                        <TextBlock Text="Max prints per event:" 
-                                   Width="150"
-                                   VerticalAlignment="Center"
-                                   Foreground="White"/>
-                        <TextBox x:Name="maxEventPrintsTextBox" 
-                                 Width="60"
-                                 Height="25"
-                                 Text="100"
-                                 Background="#5A5A5A"
-                                 Foreground="White"
-                                 BorderBrush="#666666"
-                                 IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                        <TextBlock Text="(0 = unlimited)" 
-                                   Margin="10,0,0,0"
-                                   VerticalAlignment="Center"
-                                   Foreground="#AAAAAA"
-                                   FontSize="12"/>
-                    </StackPanel>
-                    
-                    <StackPanel Orientation="Horizontal" Margin="0,5">
-                        <TextBlock Text="Default copies:" 
-                                   Width="150"
-                                   VerticalAlignment="Center"
-                                   Foreground="White"/>
-                        <TextBox x:Name="defaultCopiesTextBox" 
-                                 Width="60"
-                                 Height="25"
-                                 Text="1"
-                                 Background="#5A5A5A"
-                                 Foreground="White"
-                                 BorderBrush="#666666"
-                                 IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"/>
-                    </StackPanel>
-                    
-                    <!-- Print Copies Selection Modal Settings -->
-                    <Border Background="#3A3A3A" CornerRadius="5" Padding="10" Margin="0,10,0,5">
-                        <StackPanel>
-                            <CheckBox x:Name="showPrintCopiesModalCheckBox" 
-                                      Content="Show print copies selection window" 
-                                      Style="{StaticResource SettingsCheckBoxStyle}"
-                                      IsChecked="False"
-                                      IsEnabled="{Binding IsChecked, ElementName=enablePrintingCheckBox}"
-                                      ToolTip="When enabled, users can select number of copies before printing"/>
-                            
-                            <StackPanel Orientation="Horizontal" Margin="20,10,0,0"
-                                       IsEnabled="{Binding IsChecked, ElementName=showPrintCopiesModalCheckBox}">
-                                <TextBlock Text="Maximum copies in selection:" 
-                                           Style="{StaticResource SettingsTextStyle}"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,10,0"/>
-                                <ComboBox x:Name="maxCopiesComboBox"
-                                          Width="80"
-                                          Height="30">
-                                    <ComboBoxItem Content="1"/>
-                                    <ComboBoxItem Content="2"/>
-                                    <ComboBoxItem Content="3"/>
-                                    <ComboBoxItem Content="4"/>
-                                    <ComboBoxItem Content="5" IsSelected="True"/>
-                                    <ComboBoxItem Content="6"/>
-                                    <ComboBoxItem Content="7"/>
-                                    <ComboBoxItem Content="8"/>
-                                    <ComboBoxItem Content="9"/>
-                                    <ComboBoxItem Content="10"/>
-                                </ComboBox>
-                                <TextBlock Text="(Users can select 1 to this number)" 
-                                           Style="{StaticResource SettingsTextStyle}"
-                                           FontSize="11"
-                                           Foreground="#888"
-                                           VerticalAlignment="Center"
-                                           Margin="10,0,0,0"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-                    
-                        </StackPanel>
-                    </Border>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -2396,7 +2243,7 @@
                         <Slider x:Name="autoLockTimeoutSlider" 
                                 Minimum="0" 
                                 Maximum="60" 
-                                Value="0" 
+                                Value="{Binding Source={x:Static properties:Settings.Default}, Path=AutoLockTimeout, Mode=TwoWay}" 
                                 TickPlacement="BottomRight" 
                                 TickFrequency="5" 
                                 IsSnapToTickEnabled="True"
@@ -2751,8 +2598,9 @@
                 <Expander.HeaderTemplate>
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="🐛" FontSize="16" Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding}" FontSize="14" FontWeight="SemiBold"/>
+                            <TextBlock Text="{StaticResource MDL2_Settings}" FontFamily="{StaticResource SegoeMDL2}" 
+                                       Style="{StaticResource SectionIconStyle}" Margin="0,0,15,0"/>
+                            <TextBlock Text="{Binding}" Style="{StaticResource SectionTitleStyle}"/>
                         </StackPanel>
                     </DataTemplate>
                 </Expander.HeaderTemplate>
@@ -2848,28 +2696,658 @@
                 </StackPanel>
             </Expander>
             
-            <!-- Action Buttons -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,40,0,40">
-                <Button Content="Save Settings" 
-                        Click="SaveSettings_Click"
-                        Style="{StaticResource SaveButtonStyle}"/>
-                
-                <Button Content="Reset to Defaults" 
-                        Click="ResetSettings_Click"
-                        Style="{StaticResource ResetButtonStyle}"/>
-                
-                <Button Content="Open Photobooth" 
-                        Click="OpenPhotobooth_Click"
-                        Style="{StaticResource OpenButtonStyle}"/>
-            </StackPanel>
+            <!-- Helper Settings Section -->
+            <Expander Header="Helper Settings" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{StaticResource MDL2_Settings}" FontFamily="{StaticResource SegoeMDL2}" 
+                                       Style="{StaticResource SectionIconStyle}" Margin="0,0,15,0"/>
+                            <TextBlock Text="{Binding}" Style="{StaticResource SectionTitleStyle}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="20,15,20,20">
+                    
+                    <!-- Web API Settings -->
+                    <Border Style="{StaticResource GlassSectionStyle}" Margin="0,10,0,10">
+                        <StackPanel Margin="30">
+                            <TextBlock Text="Web API Control Panel" 
+                                       Foreground="White"
+                                       FontSize="18" FontWeight="Bold" Margin="0,0,0,20"/>
+                            
+                            <!-- Web API Status -->
+                            <Grid Margin="0,10,0,20">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <TextBlock Grid.Column="0" Text="Status:" 
+                                           Foreground="#B0B0B0" FontSize="14"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Column="1" x:Name="WebApiStatusText"
+                                           FontSize="14" FontWeight="SemiBold"
+                                           Foreground="#90EE90"
+                                           Text="Active on http://localhost:8080/"/>
+                            </Grid>
+                            
+                            <!-- Quick Access Buttons -->
+                            <TextBlock Text="Quick Access" 
+                                       Foreground="White"
+                                       FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            
+                            <WrapPanel Margin="0,0,0,20">
+                                <Button x:Name="OpenWebControlButton"
+                                        Content="🌐 Open Web Control Panel" 
+                                        Click="OpenWebControl_Click"
+                                        Margin="0,5,10,5"
+                                        Padding="15,8"
+                                        Background="#FF4CAF50"
+                                        Foreground="White"
+                                        FontWeight="Bold"
+                                        Cursor="Hand">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    BorderBrush="#FF45A049"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4">
+                                                <ContentPresenter HorizontalAlignment="Center" 
+                                                                  VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#FF5CBF60"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                
+                                <Button x:Name="TestApiHealthButton"
+                                        Content="🔍 Test API Health" 
+                                        Click="TestApiHealth_Click"
+                                        Margin="0,5,10,5"
+                                        Padding="15,8"
+                                        Background="#FF2196F3"
+                                        Foreground="White"
+                                        FontWeight="Bold"
+                                        Cursor="Hand">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    BorderBrush="#FF1976D2"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4">
+                                                <ContentPresenter HorizontalAlignment="Center" 
+                                                                  VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#FF42A5F5"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                
+                                <Button x:Name="ShowApiDocsButton"
+                                        Content="📖 View API Docs" 
+                                        Click="ShowApiDocs_Click"
+                                        Margin="0,5,10,5"
+                                        Padding="15,8"
+                                        Background="#FF9C27B0"
+                                        Foreground="White"
+                                        FontWeight="Bold"
+                                        Cursor="Hand">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    BorderBrush="#FF7B1FA2"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4">
+                                                <ContentPresenter HorizontalAlignment="Center" 
+                                                                  VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#FFAB47BC"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </WrapPanel>
+                            
+                            <!-- Web API Configuration -->
+                            <TextBlock Text="Configuration" 
+                                       Foreground="White"
+                                       FontSize="14" FontWeight="SemiBold" Margin="0,10,0,10"/>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                
+                                <!-- Port Setting -->
+                                <TextBlock Grid.Row="0" Grid.Column="0"
+                                           Text="Port:" 
+                                           Foreground="#B0B0B0" FontSize="13"
+                                           VerticalAlignment="Center" Margin="0,5"/>
+                                <TextBox Grid.Row="0" Grid.Column="1"
+                                         x:Name="WebApiPortTextBox"
+                                         Text="8080"
+                                         IsReadOnly="True"
+                                         Background="#FF3A3A3A"
+                                         Foreground="White"
+                                         BorderBrush="#FF555555"
+                                         Padding="8,5"
+                                         Margin="0,5"/>
+                                <TextBlock Grid.Row="0" Grid.Column="2"
+                                           Text="(Requires restart to change)"
+                                           Foreground="#FF888888" FontSize="11"
+                                           VerticalAlignment="Center" Margin="10,5,0,5"/>
+                                
+                                <!-- Enable/Disable -->
+                                <TextBlock Grid.Row="1" Grid.Column="0"
+                                           Text="Auto-start:" 
+                                           Foreground="#B0B0B0" FontSize="13"
+                                           VerticalAlignment="Center" Margin="0,5"/>
+                                <CheckBox Grid.Row="1" Grid.Column="1"
+                                          x:Name="WebApiAutoStartCheckBox"
+                                          IsChecked="True"
+                                          Content="Enabled"
+                                          Foreground="White"
+                                          VerticalAlignment="Center"
+                                          Margin="0,5"/>
+                                
+                                <!-- Network Access -->
+                                <TextBlock Grid.Row="2" Grid.Column="0"
+                                           Text="Network Access:" 
+                                           Foreground="#B0B0B0" FontSize="13"
+                                           VerticalAlignment="Center" Margin="0,5"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1"
+                                           x:Name="NetworkAccessText"
+                                           Text="Local + Network"
+                                           Foreground="#90EE90" FontSize="13"
+                                           VerticalAlignment="Center" Margin="0,5"/>
+                            </Grid>
+                            
+                            <!-- Mobile Access Info -->
+                            <Border Background="#FF2A2A2A" 
+                                    BorderBrush="#FF444444" 
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Margin="0,20,0,0"
+                                    Padding="15">
+                                <StackPanel>
+                                    <TextBlock Text="📱 Mobile &amp; Remote Access" 
+                                               Foreground="#FFB3E5FC"
+                                               FontSize="14" FontWeight="SemiBold" 
+                                               Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap"
+                                               Foreground="#B0B0B0" FontSize="12">
+                                        <Run Text="Access from any device on your network:"/>
+                                        <LineBreak/>
+                                        <Run Text="• " FontWeight="Bold"/>
+                                        <Run x:Name="NetworkUrlText" Text="http://[YOUR-IP]:8080/" Foreground="#90EE90"/>
+                                        <LineBreak/>
+                                        <Run Text="• Works on phones, tablets, and other computers"/>
+                                        <LineBreak/>
+                                        <Run Text="• Responsive design adapts to screen size"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Sync Services Settings -->
+                    <Border Style="{StaticResource GlassSectionStyle}" Margin="0,10,0,10">
+                        <StackPanel Margin="30">
+                            <TextBlock Text="Cloud Sync Services" 
+                                       Foreground="White"
+                                       FontSize="18" FontWeight="Bold" Margin="0,0,0,20"/>
+                            
+                            <!-- Service Status Grid -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                
+                                <!-- Settings Sync -->
+                                <CheckBox Grid.Row="0" Grid.Column="0"
+                                          x:Name="EnableSettingsSyncCheckBox"
+                                          Content="Settings Sync Service"
+                                          Foreground="White"
+                                          FontWeight="SemiBold"
+                                          IsChecked="False"
+                                          Margin="0,5"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                           x:Name="SettingsSyncStatusText"
+                                           Text="Inactive"
+                                           Foreground="#FFE57373"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0"/>
+                                <Button Grid.Row="0" Grid.Column="2"
+                                        x:Name="TestSettingsSyncButton"
+                                        Content="Test"
+                                        Click="TestSettingsSync_Click"
+                                        Padding="10,3"
+                                        Margin="5,0"
+                                        FontSize="11"/>
+                                
+                                <!-- Template Sync -->
+                                <CheckBox Grid.Row="1" Grid.Column="0"
+                                          x:Name="EnableTemplateSyncCheckBox"
+                                          Content="Template Sync Service"
+                                          Foreground="White"
+                                          FontWeight="SemiBold"
+                                          IsChecked="False"
+                                          Margin="0,5"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1"
+                                           x:Name="TemplateSyncStatusText"
+                                           Text="Inactive"
+                                           Foreground="#FFE57373"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0"/>
+                                <Button Grid.Row="1" Grid.Column="2"
+                                        x:Name="TestTemplateSyncButton"
+                                        Content="Test"
+                                        Click="TestTemplateSync_Click"
+                                        Padding="10,3"
+                                        Margin="5,0"
+                                        FontSize="11"/>
+                                
+                                <!-- PhotoBooth Sync -->
+                                <CheckBox Grid.Row="2" Grid.Column="0"
+                                          x:Name="EnablePhotoBoothSyncCheckBox"
+                                          Content="PhotoBooth Sync Service"
+                                          Foreground="White"
+                                          FontWeight="SemiBold"
+                                          IsChecked="False"
+                                          Margin="0,5"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1"
+                                           x:Name="PhotoBoothSyncStatusText"
+                                           Text="Inactive"
+                                           Foreground="#FFE57373"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0"/>
+                                <Button Grid.Row="2" Grid.Column="2"
+                                        x:Name="TestPhotoBoothSyncButton"
+                                        Content="Test"
+                                        Click="TestPhotoBoothSync_Click"
+                                        Padding="10,3"
+                                        Margin="5,0"
+                                        FontSize="11"/>
+                            </Grid>
+                            
+                            <!-- Sync Configuration Button -->
+                            <Button x:Name="ConfigureSyncButton"
+                                    Content="⚙️ Configure Sync Settings"
+                                    Click="ConfigureSync_Click"
+                                    Margin="0,20,0,0"
+                                    Padding="15,8"
+                                    HorizontalAlignment="Left"
+                                    Background="#FF607D8B"
+                                    Foreground="White"
+                                    FontWeight="Bold"
+                                    Cursor="Hand">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                BorderBrush="#FF455A64"
+                                                BorderThickness="1"
+                                                CornerRadius="4">
+                                            <ContentPresenter HorizontalAlignment="Center" 
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#FF78909C"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Device Triggers Section -->
+                    <Border Style="{StaticResource GlassSectionStyle}" Margin="0,10,0,10">
+                        <StackPanel Margin="30">
+                            <TextBlock Text="Device Triggers (Arduino, LED, IoT)" 
+                                       Foreground="White"
+                                       FontSize="18" FontWeight="Bold" Margin="0,0,0,20"/>
+                            
+                            <TextBlock Text="Connect external devices to trigger on photo events" 
+                                       Foreground="#B0B0B0"
+                                       FontSize="12" Margin="0,0,0,20"/>
+                            
+                            <!-- Available Serial Ports -->
+                            <Grid Margin="0,0,0,20">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="200"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <TextBlock Grid.Column="0" Text="Serial Ports:" 
+                                           Foreground="#B0B0B0" FontSize="13"
+                                           VerticalAlignment="Center"/>
+                                
+                                <ComboBox Grid.Column="1" x:Name="SerialPortsComboBox"
+                                          Background="#FF3A3A3A"
+                                          Foreground="White"
+                                          BorderBrush="#FF555555"/>
+                                
+                                <Button Grid.Column="2" x:Name="RefreshPortsButton"
+                                        Content="🔄 Refresh"
+                                        Click="RefreshPorts_Click"
+                                        Margin="10,0,0,0"
+                                        Padding="10,5"
+                                        HorizontalAlignment="Left"
+                                        Background="#FF607D8B"
+                                        Foreground="White"/>
+                            </Grid>
+                            
+                            <!-- Bluetooth Devices -->
+                            <Grid Margin="0,0,0,20">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="200"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <TextBlock Grid.Column="0" Text="Bluetooth Devices:" 
+                                           Foreground="#B0B0B0" FontSize="13"
+                                           VerticalAlignment="Center"/>
+                                
+                                <ComboBox Grid.Column="1" x:Name="BluetoothDevicesComboBox"
+                                          Background="#FF3A3A3A"
+                                          Foreground="White"
+                                          BorderBrush="#FF555555"
+                                          DisplayMemberPath="Name"
+                                          SelectedValuePath="Address"/>
+                                
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <Button x:Name="DiscoverBluetoothButton"
+                                            Content="🔍 Discover"
+                                            Click="DiscoverBluetooth_Click"
+                                            Margin="10,0,0,0"
+                                            Padding="10,5"
+                                            Background="#FF2196F3"
+                                            Foreground="White"/>
+                                    
+                                    <TextBlock x:Name="BluetoothStatusText"
+                                               Text=""
+                                               Foreground="#FFB3E5FC"
+                                               FontSize="11"
+                                               VerticalAlignment="Center"
+                                               Margin="10,0,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <!-- Configured Triggers List -->
+                            <TextBlock Text="Configured Triggers" 
+                                       Foreground="White"
+                                       FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            
+                            <Border Background="#FF2A2A2A" 
+                                    BorderBrush="#FF444444" 
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    MinHeight="100"
+                                    MaxHeight="200"
+                                    Margin="0,0,0,15">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ListBox x:Name="TriggersListBox"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             SelectionChanged="TriggerSelected_Changed">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="#FF3A3A3A" 
+                                                        BorderBrush="#FF555555"
+                                                        BorderThickness="1"
+                                                        CornerRadius="3"
+                                                        Margin="2"
+                                                        Padding="10,5">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Text="{Binding Name}" 
+                                                                       Foreground="White" 
+                                                                       FontWeight="SemiBold"/>
+                                                            <TextBlock Text="{Binding ConnectionString}" 
+                                                                       Foreground="#B0B0B0" 
+                                                                       FontSize="11"/>
+                                                        </StackPanel>
+                                                        
+                                                        <CheckBox Grid.Column="1"
+                                                                  IsChecked="{Binding IsEnabled}"
+                                                                  Content="Enabled"
+                                                                  Foreground="White"
+                                                                  Margin="10,0"/>
+                                                        
+                                                        <Button Grid.Column="2"
+                                                                Content="❌"
+                                                                Click="RemoveTrigger_Click"
+                                                                Tag="{Binding Id}"
+                                                                Background="Transparent"
+                                                                Foreground="#FFE57373"
+                                                                BorderThickness="0"
+                                                                Padding="5"
+                                                                Cursor="Hand"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </ScrollViewer>
+                            </Border>
+                            
+                            <!-- Quick Add Buttons -->
+                            <TextBlock Text="Quick Add Device" 
+                                       Foreground="White"
+                                       FontSize="14" FontWeight="SemiBold" Margin="0,10,0,10"/>
+                            
+                            <WrapPanel Margin="0,0,0,20">
+                                <Button x:Name="AddArduinoLedButton"
+                                        Content="➕ Arduino LED Strip" 
+                                        Click="AddArduinoLed_Click"
+                                        Margin="0,5,10,5"
+                                        Padding="12,6"
+                                        Background="#FF4CAF50"
+                                        Foreground="White"
+                                        FontWeight="Bold"/>
+                                
+                                <Button x:Name="AddRelayButton"
+                                        Content="➕ Relay Controller" 
+                                        Click="AddRelay_Click"
+                                        Margin="0,5,10,5"
+                                        Padding="12,6"
+                                        Background="#FF2196F3"
+                                        Foreground="White"
+                                        FontWeight="Bold"/>
+                                
+                                <Button x:Name="AddDmxButton"
+                                        Content="➕ DMX Lights" 
+                                        Click="AddDmx_Click"
+                                        Margin="0,5,10,5"
+                                        Padding="12,6"
+                                        Background="#FF9C27B0"
+                                        Foreground="White"
+                                        FontWeight="Bold"/>
+                                
+                                <Button x:Name="AddWledButton"
+                                        Content="➕ WLED WiFi" 
+                                        Click="AddWled_Click"
+                                        Margin="0,5,10,5"
+                                        Padding="12,6"
+                                        Background="#FFFF9800"
+                                        Foreground="White"
+                                        FontWeight="Bold"/>
+                                
+                                <Button x:Name="AddBluetoothESP32Button"
+                                        Content="➕ Bluetooth ESP32" 
+                                        Click="AddBluetoothESP32_Click"
+                                        Margin="0,5,10,5"
+                                        Padding="12,6"
+                                        Background="#FF00BCD4"
+                                        Foreground="White"
+                                        FontWeight="Bold"/>
+                                
+                                <Button x:Name="AddBluetoothHC05Button"
+                                        Content="➕ Bluetooth HC-05" 
+                                        Click="AddBluetoothHC05_Click"
+                                        Margin="0,5,10,5"
+                                        Padding="12,6"
+                                        Background="#FF009688"
+                                        Foreground="White"
+                                        FontWeight="Bold"/>
+                                
+                                <Button x:Name="AddCustomButton"
+                                        Content="➕ Custom Device" 
+                                        Click="AddCustomDevice_Click"
+                                        Margin="0,5,10,5"
+                                        Padding="12,6"
+                                        Background="#FF607D8B"
+                                        Foreground="White"
+                                        FontWeight="Bold"/>
+                            </WrapPanel>
+                            
+                            <!-- Test Trigger Button -->
+                            <Button x:Name="TestTriggerButton"
+                                    Content="⚡ Test Selected Trigger"
+                                    Click="TestTrigger_Click"
+                                    Margin="0,10,0,0"
+                                    Padding="15,8"
+                                    HorizontalAlignment="Left"
+                                    Background="#FFE91E63"
+                                    Foreground="White"
+                                    FontWeight="Bold"
+                                    IsEnabled="False">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                BorderBrush="#FFC2185B"
+                                                BorderThickness="1"
+                                                CornerRadius="4">
+                                            <ContentPresenter HorizontalAlignment="Center" 
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#FFEC407A"/>
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter Property="Opacity" Value="0.5"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            
+                            <!-- Arduino Sample Code Info -->
+                            <Border Background="#FF1A1A1A" 
+                                    BorderBrush="#FF444444" 
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Margin="0,20,0,0"
+                                    Padding="15">
+                                <StackPanel>
+                                    <TextBlock Text="💡 Arduino Sample Code" 
+                                               Foreground="#FFB3E5FC"
+                                               FontSize="14" FontWeight="SemiBold" 
+                                               Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap"
+                                               Foreground="#B0B0B0" FontSize="11"
+                                               FontFamily="Consolas">
+                                        <Run Text="// Arduino LED Control Example"/>
+                                        <LineBreak/>
+                                        <Run Text="void setup() {"/>
+                                        <LineBreak/>
+                                        <Run Text="  Serial.begin(9600);"/>
+                                        <LineBreak/>
+                                        <Run Text="  pinMode(LED_BUILTIN, OUTPUT);"/>
+                                        <LineBreak/>
+                                        <Run Text="}"/>
+                                        <LineBreak/>
+                                        <LineBreak/>
+                                        <Run Text="void loop() {"/>
+                                        <LineBreak/>
+                                        <Run Text="  if (Serial.available()) {"/>
+                                        <LineBreak/>
+                                        <Run Text="    String cmd = Serial.readStringUntil('\n');"/>
+                                        <LineBreak/>
+                                        <Run Text="    if (cmd == &quot;LED:FLASH:BRIGHT&quot;) {"/>
+                                        <LineBreak/>
+                                        <Run Text="      // Flash LED for photo capture"/>
+                                        <LineBreak/>
+                                        <Run Text="      digitalWrite(LED_BUILTIN, HIGH);"/>
+                                        <LineBreak/>
+                                        <Run Text="      delay(100);"/>
+                                        <LineBreak/>
+                                        <Run Text="      digitalWrite(LED_BUILTIN, LOW);"/>
+                                        <LineBreak/>
+                                        <Run Text="    }"/>
+                                        <LineBreak/>
+                                        <Run Text="  }"/>
+                                        <LineBreak/>
+                                        <Run Text="}"/>
+                                    </TextBlock>
+                                    
+                                    <Button x:Name="ViewFullArduinoCodeButton"
+                                            Content="View Full Arduino Examples"
+                                            Click="ViewFullArduinoCode_Click"
+                                            Margin="0,10,0,0"
+                                            Padding="10,5"
+                                            Background="#FF4CAF50"
+                                            Foreground="White"
+                                            HorizontalAlignment="Left"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                    
+                </StackPanel>
+            </Expander>
             
             <!-- Capture Modes Section -->
-            <Border Style="{StaticResource GlassSectionStyle}" 
-                    Margin="0,30,0,30" Background="#FF2E2E2E">
-                <StackPanel Margin="30">
-                    <TextBlock Text="Capture Modes" 
-                               Foreground="White"
-                               FontSize="22" FontWeight="Bold" Margin="0,0,0,20"/>
+            <Expander Header="Capture Modes" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{StaticResource MDL2_Camera}" FontFamily="{StaticResource SegoeMDL2}" 
+                                       Style="{StaticResource SectionIconStyle}" Margin="0,0,15,0"/>
+                            <TextBlock Text="{Binding}" Style="{StaticResource SectionTitleStyle}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="20,15,20,20">
                     
                     <!-- Enable Capture Modes -->
                     <CheckBox x:Name="EnableCaptureModesCheckBox"
@@ -2982,13 +3460,21 @@
                         </ComboBox>
                     </StackPanel>
                     
-                    <!-- Cloud Sync Settings Section -->
-                    <Separator Background="#44FFFFFF" Height="1" Margin="0,30,0,20"/>
-                    
-                    <TextBlock Text="CLOUD SYNC SETTINGS" 
-                               FontSize="16" FontWeight="Bold" 
-                               Foreground="White" 
-                               Margin="0,0,0,15"/>
+                </StackPanel>
+            </Expander>
+            
+            <!-- Cloud Sync Settings Section -->
+            <Expander Header="Cloud Synchronization" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{StaticResource MDL2_Cloud}" FontFamily="{StaticResource SegoeMDL2}" 
+                                       Style="{StaticResource SectionIconStyle}" Margin="0,0,15,0"/>
+                            <TextBlock Text="{Binding}" Style="{StaticResource SectionTitleStyle}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="20,15,20,20">
                     
                     <!-- Enable Cloud Sync -->
                     <CheckBox x:Name="EnableCloudSyncCheckBox" 
@@ -3222,7 +3708,57 @@
                         </StackPanel>
                     </Border>
                 </StackPanel>
-            </Border>
+            </Expander>
+            
+            <!-- Actions Section -->
+            <Expander Header="Actions" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{StaticResource MDL2_Settings}" FontFamily="{StaticResource SegoeMDL2}" 
+                                       Style="{StaticResource SectionIconStyle}" Margin="0,0,15,0"/>
+                            <TextBlock Text="{Binding}" Style="{StaticResource SectionTitleStyle}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="20,15,20,20">
+                    
+                    <!-- Auto-Save Notice -->
+                    <Border Background="#1A4CAF50" 
+                            BorderBrush="#4CAF50" 
+                            BorderThickness="1" 
+                            CornerRadius="8" 
+                            Padding="15" 
+                            Margin="0,0,0,20">
+                        <StackPanel>
+                            <TextBlock Text="ℹ Auto-Save Enabled" 
+                                       FontWeight="SemiBold" 
+                                       FontSize="14" 
+                                       Foreground="#4CAF50" 
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="All settings are automatically saved as you change them. No manual save required." 
+                                       TextWrapping="Wrap" 
+                                       Foreground="#B0B0B0" 
+                                       FontSize="12"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Action Buttons -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Content="Reset to Defaults" 
+                                Click="ResetSettings_Click"
+                                Style="{StaticResource ResetButtonStyle}"
+                                ToolTip="Reset all settings to their default values"/>
+                        
+                        <Button Content="Open Photobooth" 
+                                Click="OpenPhotobooth_Click"
+                                Style="{StaticResource OpenButtonStyle}"
+                                ToolTip="Open the main photobooth application"/>
+                    </StackPanel>
+                    
+                </StackPanel>
+            </Expander>
+            
         </StackPanel>
     </ScrollViewer>
 </UserControl>

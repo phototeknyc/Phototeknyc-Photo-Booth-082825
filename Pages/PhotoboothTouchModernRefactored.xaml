@@ -1249,6 +1249,20 @@
                             <TextBlock Text="Settings" FontSize="16" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    
+                    <!-- Template Designer Button -->
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Background="#FF5722"
+                            Width="160" 
+                            Height="50" 
+                            Margin="5"
+                            Click="TemplateDesignerButton_Click"
+                            ToolTip="Open Template Designer">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎨" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock Text="Templates" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -1992,6 +2006,15 @@
                                    Visibility="Collapsed"
                                    Grid.RowSpan="10"
                                    Panel.ZIndex="1000"/>
+        
+        <!-- Template Designer Overlay - Full Screen -->
+        <controls:TemplateDesignerOverlay x:Name="TemplateDesignerOverlayControl"
+                                           Visibility="Collapsed"
+                                           Grid.Row="0"
+                                           Grid.Column="0"
+                                           Grid.RowSpan="10"
+                                           Grid.ColumnSpan="10"
+                                           Panel.ZIndex="2000"/>
         
         <!-- PIN Entry Overlay (highest z-index for security) -->
         <controls:PinEntryOverlay x:Name="PinEntryOverlayControl"

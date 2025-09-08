@@ -181,7 +181,17 @@ namespace Photobooth.Controls
         {
             CameraControl.Devices.Log.Debug($"CaptureModesOverlay: Mode selected - {mode}");
             
-            // Let service handle the business logic
+            // For Video mode, don't start the session here - let PhotoboothTouchModernRefactored handle it
+            // This prevents duplicate session creation as PhotoboothTouchModernRefactored needs to pass session info
+            if (mode == Photobooth.Services.CaptureMode.Video)
+            {
+                CameraControl.Devices.Log.Debug("CaptureModesOverlay: Video mode - deferring to parent page for session management");
+                ModeSelected?.Invoke(this, mode);
+                Hide();
+                return;
+            }
+            
+            // For other modes, let service handle the business logic
             var success = await _captureModesService.StartCaptureSession(mode);
             
             if (success)

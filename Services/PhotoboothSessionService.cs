@@ -65,6 +65,11 @@ namespace Photobooth.Services
         public string CurrentSessionId => _currentSessionId;
         public List<string> CapturedPhotoPaths => new List<string>(_capturedPhotoPaths);
         
+        public DatabaseOperations GetDatabaseOperations()
+        {
+            return _databaseOperations;
+        }
+        
         /// <summary>
         /// Replace a photo at a specific index (for retakes)
         /// </summary>
@@ -159,6 +164,9 @@ namespace Photobooth.Services
                 _isSessionActive = true;
                 Log.Debug($"★★★ Session marked as active - SessionId: {_currentSessionId}, _isSessionActive: {_isSessionActive}");
 
+                // Trigger device event for session start
+                _ = DeviceTriggerService.Instance.FireTriggerEvent(TriggerEvent.SessionStart);
+                
                 // Notify session started
                 SessionStarted?.Invoke(this, new SessionStartedEventArgs
                 {
@@ -796,6 +804,9 @@ namespace Photobooth.Services
                 {
                     Log.Error("★★★ WARNING: No subscribers for SessionCompleted event!");
                 }
+                
+                // Trigger device event for session end
+                _ = DeviceTriggerService.Instance.FireTriggerEvent(TriggerEvent.SessionEnd);
                 
                 SessionCompleted?.Invoke(this, new SessionCompletedEventArgs
                 {

@@ -125,11 +125,11 @@ namespace Photobooth.Services
         /// <summary>
         /// Start a video recording session with live view
         /// </summary>
-        public async Task<bool> StartVideoSessionAsync(string outputPath = null, Database.EventData currentEvent = null)
+        public async Task<bool> StartVideoSessionAsync(string outputPath = null, Database.EventData currentEvent = null, int sessionId = 0, string sessionGuid = null)
         {
             try
             {
-                Log.Debug("VideoRecordingCoordinatorService: Starting video session");
+                Log.Debug($"VideoRecordingCoordinatorService: Starting video session (sessionId: {sessionId}, sessionGuid: {sessionGuid})");
                 
                 // Check if already recording to prevent duplicate attempts
                 if (IsRecording)
@@ -181,7 +181,18 @@ namespace Photobooth.Services
                     camera.IsBusy = false;
                 }
                 
-                // Step 5: Start actual recording
+                // Step 5: Set session info if provided
+                if (sessionId > 0 && !string.IsNullOrEmpty(sessionGuid))
+                {
+                    Log.Debug($"VideoRecordingCoordinatorService: Setting session info - ID: {sessionId}, GUID: {sessionGuid}");
+                    _recordingService.SetSessionInfo(sessionId, sessionGuid);
+                }
+                else
+                {
+                    Log.Debug($"VideoRecordingCoordinatorService: No session info to set - ID: {sessionId}, GUID: {sessionGuid}");
+                }
+                
+                // Step 6: Start actual recording
                 Log.Debug("VideoRecordingCoordinatorService: Starting video recording");
                 bool recordingStarted = await _recordingService.StartRecordingAsync(outputPath, currentEvent);
                 if (!recordingStarted)

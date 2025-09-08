@@ -261,7 +261,7 @@ namespace Photobooth.Services
             return _modeConfigurations.ContainsKey(mode) && _modeConfigurations[mode].IsEnabled;
         }
 
-        public async Task<bool> StartCaptureSession(CaptureMode mode)
+        public async Task<bool> StartCaptureSession(CaptureMode mode, int sessionId = 0, string sessionGuid = null)
         {
             if (!IsModeEnabled(mode))
             {
@@ -272,13 +272,13 @@ namespace Photobooth.Services
             CurrentMode = mode;
             var modeInfo = _modeConfigurations[mode];
             
-            CameraControl.Devices.Log.Debug($"CaptureModesService: Starting {mode} session - Photos: {modeInfo.PhotoCount}, Video: {modeInfo.RequiresVideo}");
+            CameraControl.Devices.Log.Debug($"CaptureModesService: Starting {mode} session - Photos: {modeInfo.PhotoCount}, Video: {modeInfo.RequiresVideo}, SessionId: {sessionId}, SessionGuid: {sessionGuid}");
             
             // Mode-specific initialization
             switch (mode)
             {
                 case CaptureMode.Video:
-                    return await StartVideoCapture();
+                    return await StartVideoCapture(sessionId, sessionGuid);
                     
                 case CaptureMode.Boomerang:
                     return await StartBoomerangCapture();
@@ -311,16 +311,81 @@ namespace Photobooth.Services
             return true;
         }
 
-        private async Task<bool> StartVideoCapture()
+        private async Task<bool> StartVideoCapture(int sessionId = 0, string sessionGuid = null)
         {
             // Video recording - use the coordinator service for proper integration
             try
             {
                 var videoCoordinator = VideoRecordingCoordinatorService.Instance;
                 
-                // Start video session with live view
-                CameraControl.Devices.Log.Debug("CaptureModesService: Starting video recording session");
-                bool success = await videoCoordinator.StartVideoSessionAsync();
+                // Get the current event from settings
+                Database.EventData currentEvent = null;
+                int selectedEventId = Properties.Settings.Default.SelectedEventId;
+                CameraControl.Devices.Log.Debug($"CaptureModesService: SelectedEventId from settings: {selectedEventId}");
+                CameraControl.Devices.Log.Debug($"CaptureModesService: Received SessionId: {sessionId}, SessionGuid: {sessionGuid}");
+                
+                if (selectedEventId > 0)
+                {
+                    var database = new Database.TemplateDatabase();
+                    var events = database.GetAllEvents();
+                    CameraControl.Devices.Log.Debug($"CaptureModesService: Found {events.Count} events in database");
+                    
+                    currentEvent = events.FirstOrDefault(e => e.Id == selectedEventId);
+                    if (currentEvent != null)
+                    {
+                        CameraControl.Devices.Log.Debug($"CaptureModesService: Using event '{currentEvent.Name}' (ID: {currentEvent.Id}) for video recording");
+                    }
+                    else
+                    {
+                        CameraControl.Devices.Log.Debug($"CaptureModesService: No event found with ID {selectedEventId}");
+                        
+                        // Try PhotoboothService.CurrentEvent first
+                        currentEvent = PhotoboothService.CurrentEvent;
+                        if (currentEvent != null)
+                        {
+                            CameraControl.Devices.Log.Debug($"CaptureModesService: Using PhotoboothService.CurrentEvent '{currentEvent.Name}' (ID: {currentEvent.Id})");
+                        }
+                        else
+                        {
+                            // Try to get the first active event as fallback
+                            currentEvent = events.FirstOrDefault(e => e.IsActive);
+                            if (currentEvent != null)
+                            {
+                                CameraControl.Devices.Log.Debug($"CaptureModesService: Using first active event '{currentEvent.Name}' (ID: {currentEvent.Id}) as fallback");
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    CameraControl.Devices.Log.Debug($"CaptureModesService: No SelectedEventId set in settings (value: {selectedEventId})");
+                    
+                    // Try to get event from PhotoboothService (this is how the main UI stores the current event)
+                    currentEvent = PhotoboothService.CurrentEvent;
+                    if (currentEvent != null)
+                    {
+                        CameraControl.Devices.Log.Debug($"CaptureModesService: Using PhotoboothService.CurrentEvent '{currentEvent.Name}' (ID: {currentEvent.Id})");
+                    }
+                    else
+                    {
+                        // Try to get any active event as final fallback
+                        var database = new Database.TemplateDatabase();
+                        var events = database.GetAllEvents();
+                        currentEvent = events.FirstOrDefault(e => e.IsActive);
+                        if (currentEvent != null)
+                        {
+                            CameraControl.Devices.Log.Debug($"CaptureModesService: Using first active event '{currentEvent.Name}' (ID: {currentEvent.Id}) as fallback");
+                        }
+                        else
+                        {
+                            CameraControl.Devices.Log.Debug("CaptureModesService: No event found - will use default event folder");
+                        }
+                    }
+                }
+                
+                // Start video session with live view, current event, and session info
+                CameraControl.Devices.Log.Debug($"CaptureModesService: Starting video recording session with SessionId: {sessionId}, SessionGuid: {sessionGuid}");
+                bool success = await videoCoordinator.StartVideoSessionAsync(null, currentEvent, sessionId, sessionGuid);
                 
                 if (success)
                 {

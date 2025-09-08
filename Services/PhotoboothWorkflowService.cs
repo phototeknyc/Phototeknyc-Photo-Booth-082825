@@ -313,6 +313,9 @@ namespace Photobooth.Services
                     StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Capturing..." });
                 }
 
+                // Trigger device events for photo capture
+                _ = DeviceTriggerService.Instance.FireTriggerEvent(TriggerEvent.PhotoCapture);
+                
                 // Capture the photo - the camera's PhotoCaptured event will handle the result
                 // The event subscription is already ensured in StartPhotoCaptureWorkflowAsync
                 Log.Debug($"PhotoboothWorkflowService: About to call camera.CapturePhoto()");
@@ -384,6 +387,9 @@ namespace Photobooth.Services
                 Log.Debug("===== WORKFLOW: OnCaptureCompleted CALLED =====");
                 Log.Debug($"PhotoboothWorkflowService: Photo capture completed - File: {args?.FileName}");
                 Log.Debug($"PhotoboothWorkflowService: File exists: {System.IO.File.Exists(args?.FileName)}");
+                
+                // Trigger device event for photo captured
+                _ = DeviceTriggerService.Instance.FireTriggerEvent(TriggerEvent.PhotoCaptured);
                 
                 CaptureCompleted?.Invoke(this, new CaptureEventArgs 
                 { 

@@ -1738,5 +1738,17 @@ namespace Photobooth.Properties {
                 this["SyncIntervalMinutes"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string DeviceTriggers {
+            get {
+                return ((string)(this["DeviceTriggers"]));
+            }
+            set {
+                this["DeviceTriggers"] = value;
+            }
+        }
     }
 }

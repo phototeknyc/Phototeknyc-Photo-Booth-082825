@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Runtime.InteropServices;
+using Photobooth.Services;
 
 namespace Photobooth
 {
@@ -55,6 +56,57 @@ namespace Photobooth
 				typeof(Window),
 				new FrameworkPropertyMetadata(TextFormattingMode.Display));
 			
+			// Initialize Web API if enabled
+			// For now, always enable Web API on default port
+			// You can add settings later if needed
+			bool enableWebApi = true;
+			// Port 8080 - requires running SetupWebApi.bat as admin first
+			int webApiPort = 8080; // Standard port (setup completed)
+			
+			try
+			{
+				if (enableWebApi)
+				{
+					System.Diagnostics.Debug.WriteLine($"Starting Web API on port {webApiPort}...");
+					Services.WebApiStartup.Initialize(webApiPort);
+					System.Diagnostics.Debug.WriteLine($"Web API started successfully!");
+					System.Diagnostics.Debug.WriteLine($"");
+					System.Diagnostics.Debug.WriteLine($"==========================================");
+					System.Diagnostics.Debug.WriteLine($"  Web Control Panel Available!");
+					System.Diagnostics.Debug.WriteLine($"  Open your browser and go to:");
+					System.Diagnostics.Debug.WriteLine($"  http://localhost:{webApiPort}/");
+					System.Diagnostics.Debug.WriteLine($"==========================================");
+					System.Diagnostics.Debug.WriteLine($"");
+					System.Diagnostics.Debug.WriteLine($"API endpoints available at http://localhost:{webApiPort}/api/");
+				}
+				else
+				{
+					System.Diagnostics.Debug.WriteLine("Web API is disabled");
+				}
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Failed to start Web API: {ex.Message}");
+				System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+				
+				// Show a message box for debugging
+				System.Windows.MessageBox.Show(
+					$"Web API failed to start on port {webApiPort}:\n\n{ex.Message}\n\n" +
+					"This is usually due to:\n" +
+					"• Port already in use\n" +
+					"• Missing URL reservation (for ports below 49152)\n\n" +
+					"The app is using port {webApiPort} which should work without admin.\n\n" +
+					"To use port 8080 instead:\n" +
+					"1. Run SetupWebApi.bat as administrator\n" +
+					"2. Change webApiPort to 8080 in App.xaml.cs",
+					"Web API Warning",
+					System.Windows.MessageBoxButton.OK,
+					System.Windows.MessageBoxImage.Warning);
+				
+				// Don't fail the entire application if Web API fails to start
+				// It might be a port conflict or permission issue
+			}
+			
 			base.OnStartup(e);
 		}
 		
@@ -63,6 +115,13 @@ namespace Photobooth
 			try
 			{
 				System.Diagnostics.Debug.WriteLine("Application shutting down - cleaning up resources...");
+				
+				// Stop Web API if running
+				if (Services.WebApiStartup.IsRunning)
+				{
+					System.Diagnostics.Debug.WriteLine("Stopping Web API...");
+					Services.WebApiStartup.Stop();
+				}
 				
 				// Stop all live view operations
 				if (_deviceManager != null && _deviceManager.ConnectedDevices != null)

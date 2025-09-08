@@ -1,0 +1,936 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using CameraControl.Devices;
+using CameraControl.Devices.Classes;
+using Photobooth.Database;
+
+namespace Photobooth.Services
+{
+    /// <summary>
+    /// Web API service for remote control of photobooth settings and camera
+    /// Provides RESTful endpoints for integration with external systems
+    /// </summary>
+    public class WebApiService : IDisposable
+    {
+        #region Singleton
+        private static WebApiService _instance;
+        private static readonly object _lock = new object();
+        
+        public static WebApiService Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    lock (_lock)
+                    {
+                        if (_instance == null)
+                        {
+                            _instance = new WebApiService();
+                        }
+                    }
+                }
+                return _instance;
+            }
+        }
+        #endregion
+
+        #region Fields
+        private HttpListener _listener;
+        private Thread _listenerThread;
+        private bool _isRunning;
+        private int _port = 8080;
+        private string _baseUrl;
+        
+        // Service references - created on demand
+        private PhotoboothSessionService _sessionService;
+        private PhotoboothWorkflowService _workflowService;
+        private CaptureModesService _captureModesService;
+        private PhotoboothUIService _uiService;
+        private PrintingService _printingService;
+        private DatabaseOperations _databaseOps;
+        #endregion
+
+        #region Properties
+        public bool IsRunning => _isRunning;
+        public int Port => _port;
+        public string BaseUrl => _baseUrl;
+        #endregion
+
+        #region Constructor
+        private WebApiService()
+        {
+            // Services will be created on demand
+            _databaseOps = new DatabaseOperations();
+        }
+        #endregion
+
+        #region Public Methods
+        
+        /// <summary>
+        /// Start the Web API server
+        /// </summary>
+        public void Start(int port = 8080)
+        {
+            if (_isRunning)
+            {
+                CameraControl.Devices.Log.Debug("WebApiService: Already running");
+                return;
+            }
+
+            _port = port;
+            _baseUrl = $"http://+:{_port}/";
+            
+            try
+            {
+                _listener = new HttpListener();
+                _listener.Prefixes.Add(_baseUrl);
+                
+                // Add specific endpoint prefixes
+                _listener.Prefixes.Add($"http://+:{_port}/api/");
+                _listener.Prefixes.Add($"http://+:{_port}/health/");
+                
+                _listener.Start();
+                _isRunning = true;
+                
+                // Start listener thread
+                _listenerThread = new Thread(ListenForRequests)
+                {
+                    IsBackground = true,
+                    Name = "WebAPI Listener"
+                };
+                _listenerThread.Start();
+                
+                CameraControl.Devices.Log.Debug($"WebApiService: Started on port {_port}");
+                CameraControl.Devices.Log.Debug($"WebApiService: Listening at {_baseUrl}");
+                CameraControl.Devices.Log.Debug($"WebApiService: API endpoints available at http://localhost:{_port}/api/");
+            }
+            catch (Exception ex)
+            {
+                CameraControl.Devices.Log.Error($"WebApiService: Failed to start - {ex.Message}");
+                _isRunning = false;
+                throw;
+            }
+        }
+        
+        /// <summary>
+        /// Stop the Web API server
+        /// </summary>
+        public void Stop()
+        {
+            if (!_isRunning)
+                return;
+            
+            try
+            {
+                _isRunning = false;
+                _listener?.Stop();
+                _listener?.Close();
+                _listenerThread?.Join(2000);
+                
+                CameraControl.Devices.Log.Debug("WebApiService: Stopped");
+            }
+            catch (Exception ex)
+            {
+                CameraControl.Devices.Log.Error($"WebApiService: Error stopping - {ex.Message}");
+            }
+        }
+        
+        #endregion
+
+        #region Request Processing
+        
+        private void ListenForRequests()
+        {
+            while (_isRunning)
+            {
+                try
+                {
+                    var context = _listener.GetContext();
+                    ThreadPool.QueueUserWorkItem(_ => ProcessRequest(context));
+                }
+                catch (HttpListenerException ex) when (!_isRunning)
+                {
+                    // Expected when stopping the listener
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    CameraControl.Devices.Log.Error($"WebApiService: Listener error - {ex.Message}");
+                }
+            }
+        }
+        
+        private async void ProcessRequest(HttpListenerContext context)
+        {
+            var request = context.Request;
+            var response = context.Response;
+            
+            // Enable CORS for web clients
+            response.Headers.Add("Access-Control-Allow-Origin", "*");
+            response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            
+            try
+            {
+                CameraControl.Devices.Log.Debug($"WebApiService: {request.HttpMethod} {request.Url.AbsolutePath}");
+                
+                // Handle OPTIONS for CORS preflight
+                if (request.HttpMethod == "OPTIONS")
+                {
+                    response.StatusCode = 200;
+                    response.Close();
+                    return;
+                }
+                
+                // Route the request
+                await RouteRequest(request, response);
+            }
+            catch (Exception ex)
+            {
+                CameraControl.Devices.Log.Error($"WebApiService: Request processing error - {ex.Message}");
+                SendErrorResponse(response, 500, "Internal server error");
+            }
+            finally
+            {
+                response.Close();
+            }
+        }
+        
+        private async Task RouteRequest(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            var path = request.Url.AbsolutePath.ToLower();
+            var method = request.HttpMethod;
+            
+            // Health check endpoint
+            if (path == "/health" || path == "/api/health")
+            {
+                await HandleHealthCheck(response);
+                return;
+            }
+            
+            // Camera control endpoints
+            if (path.StartsWith("/api/camera"))
+            {
+                await HandleCameraEndpoints(path, method, request, response);
+                return;
+            }
+            
+            // Session management endpoints
+            if (path.StartsWith("/api/session"))
+            {
+                await HandleSessionEndpoints(path, method, request, response);
+                return;
+            }
+            
+            // Settings endpoints
+            if (path.StartsWith("/api/settings"))
+            {
+                await HandleSettingsEndpoints(path, method, request, response);
+                return;
+            }
+            
+            // Event management endpoints
+            if (path.StartsWith("/api/events"))
+            {
+                await HandleEventEndpoints(path, method, request, response);
+                return;
+            }
+            
+            // Template management endpoints
+            if (path.StartsWith("/api/templates"))
+            {
+                await HandleTemplateEndpoints(path, method, request, response);
+                return;
+            }
+            
+            // Print control endpoints
+            if (path.StartsWith("/api/print"))
+            {
+                await HandlePrintEndpoints(path, method, request, response);
+                return;
+            }
+            
+            // Default: API documentation
+            if (path == "/" || path == "/api" || path == "/api/")
+            {
+                await SendApiDocumentation(response);
+                return;
+            }
+            
+            // Not found
+            SendErrorResponse(response, 404, "Endpoint not found");
+        }
+        
+        #endregion
+
+        #region Endpoint Handlers
+        
+        private async Task HandleHealthCheck(HttpListenerResponse response)
+        {
+            var health = new
+            {
+                status = "healthy",
+                timestamp = DateTime.Now,
+                services = new
+                {
+                    camera = CameraSessionManager.Instance?.DeviceManager?.SelectedCameraDevice != null,
+                    session = _sessionService?.IsSessionActive ?? false,
+                    printing = _printingService?.IsPrinterAvailable() ?? false
+                }
+            };
+            
+            await SendJsonResponse(response, health);
+        }
+        
+        private async Task HandleCameraEndpoints(string path, string method, HttpListenerRequest request, HttpListenerResponse response)
+        {
+            var cameraManager = CameraSessionManager.Instance?.DeviceManager;
+            var camera = cameraManager?.SelectedCameraDevice;
+            
+            switch (path)
+            {
+                case "/api/camera/status":
+                    if (method == "GET")
+                    {
+                        var status = new
+                        {
+                            connected = camera != null,
+                            name = camera?.DeviceName,
+                            model = camera?.DisplayName,
+                            isBusy = camera?.IsBusy ?? false,
+                            isLiveViewOn = camera?.LiveViewOn ?? false,
+                            batteryLevel = camera?.Battery?.Value
+                        };
+                        await SendJsonResponse(response, status);
+                    }
+                    break;
+                    
+                case "/api/camera/capture":
+                    if (method == "POST")
+                    {
+                        if (camera == null)
+                        {
+                            SendErrorResponse(response, 400, "No camera connected");
+                            return;
+                        }
+                        
+                        var body = await ReadRequestBody(request);
+                        var captureRequest = JsonConvert.DeserializeObject<CaptureRequest>(body);
+                        
+                        // Determine capture mode
+                        var mode = captureRequest?.mode ?? "photo";
+                        
+                        try
+                        {
+                            if (mode.ToLower() == "video")
+                            {
+                                // Start video recording
+                                var videoCoordinator = VideoRecordingCoordinatorService.Instance;
+                                var success = await videoCoordinator.StartVideoSessionAsync();
+                                
+                                await SendJsonResponse(response, new { 
+                                    success, 
+                                    message = success ? "Video recording started" : "Failed to start video",
+                                    isRecording = videoCoordinator.IsRecording
+                                });
+                            }
+                            else
+                            {
+                                // Take photo
+                                await _workflowService.StartPhotoCaptureWorkflowAsync();
+                                
+                                await SendJsonResponse(response, new { 
+                                    success = true, 
+                                    message = "Photo capture initiated" 
+                                });
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            SendErrorResponse(response, 500, $"Capture failed: {ex.Message}");
+                        }
+                    }
+                    break;
+                    
+                case "/api/camera/liveview":
+                    if (method == "GET")
+                    {
+                        var liveviewStatus = new
+                        {
+                            enabled = camera?.LiveViewOn ?? false,
+                            canEnable = camera != null
+                        };
+                        await SendJsonResponse(response, liveviewStatus);
+                    }
+                    else if (method == "POST")
+                    {
+                        if (camera == null)
+                        {
+                            SendErrorResponse(response, 400, "No camera connected");
+                            return;
+                        }
+                        
+                        var body = await ReadRequestBody(request);
+                        var liveViewRequest = JsonConvert.DeserializeObject<LiveViewRequest>(body);
+                        
+                        if (liveViewRequest?.enable == true)
+                        {
+                            camera.StartLiveView();
+                        }
+                        else
+                        {
+                            camera.StopLiveView();
+                        }
+                        
+                        await SendJsonResponse(response, new { 
+                            success = true,
+                            liveViewOn = camera.LiveViewOn
+                        });
+                    }
+                    break;
+                    
+                case "/api/camera/settings":
+                    if (method == "GET")
+                    {
+                        if (camera == null)
+                        {
+                            SendErrorResponse(response, 400, "No camera connected");
+                            return;
+                        }
+                        
+                        var settings = new
+                        {
+                            iso = camera.IsoNumber?.Value,
+                            aperture = camera.FNumber?.Value,
+                            shutterSpeed = camera.ShutterSpeed?.Value,
+                            whiteBalance = camera.WhiteBalance?.Value,
+                            mode = camera.Mode?.Value,
+                            availableIso = camera.IsoNumber?.Values,
+                            availableAperture = camera.FNumber?.Values,
+                            availableShutterSpeed = camera.ShutterSpeed?.Values
+                        };
+                        
+                        await SendJsonResponse(response, settings);
+                    }
+                    else if (method == "PUT")
+                    {
+                        if (camera == null)
+                        {
+                            SendErrorResponse(response, 400, "No camera connected");
+                            return;
+                        }
+                        
+                        var body = await ReadRequestBody(request);
+                        var settingsRequest = JsonConvert.DeserializeObject<CameraSettingsRequest>(body);
+                        
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(settingsRequest?.iso))
+                                camera.IsoNumber?.SetValue(settingsRequest.iso);
+                                
+                            if (!string.IsNullOrEmpty(settingsRequest?.aperture))
+                                camera.FNumber?.SetValue(settingsRequest.aperture);
+                                
+                            if (!string.IsNullOrEmpty(settingsRequest?.shutterSpeed))
+                                camera.ShutterSpeed?.SetValue(settingsRequest.shutterSpeed);
+                            
+                            await SendJsonResponse(response, new { 
+                                success = true,
+                                message = "Settings updated"
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            SendErrorResponse(response, 400, $"Failed to update settings: {ex.Message}");
+                        }
+                    }
+                    break;
+                    
+                default:
+                    SendErrorResponse(response, 404, "Camera endpoint not found");
+                    break;
+            }
+        }
+        
+        private async Task HandleSessionEndpoints(string path, string method, HttpListenerRequest request, HttpListenerResponse response)
+        {
+            switch (path)
+            {
+                case "/api/session/status":
+                    if (method == "GET")
+                    {
+                        var status = new
+                        {
+                            active = _sessionService.IsSessionActive,
+                            sessionId = _sessionService.CurrentSessionId,
+                            photosTaken = _sessionService.PhotosTaken,
+                            totalPhotosNeeded = _sessionService.TotalPhotosNeeded
+                        };
+                        await SendJsonResponse(response, status);
+                    }
+                    break;
+                    
+                case "/api/session/start":
+                    if (method == "POST")
+                    {
+                        var body = await ReadRequestBody(request);
+                        var sessionRequest = JsonConvert.DeserializeObject<SessionStartRequest>(body);
+                        
+                        // Get event and template
+                        EventData selectedEvent = null;
+                        TemplateData selectedTemplate = null;
+                        
+                        if (sessionRequest?.eventId > 0)
+                        {
+                            var db = new TemplateDatabase();
+                            selectedEvent = db.GetAllEvents().FirstOrDefault(e => e.Id == sessionRequest.eventId);
+                        }
+                        
+                        if (sessionRequest?.templateId > 0)
+                        {
+                            var db = new TemplateDatabase();
+                            selectedTemplate = db.GetTemplate(sessionRequest.templateId);
+                        }
+                        
+                        var success = await _sessionService.StartSessionAsync(
+                            selectedEvent, 
+                            selectedTemplate, 
+                            sessionRequest?.photoCount ?? 1
+                        );
+                        
+                        await SendJsonResponse(response, new { 
+                            success,
+                            sessionId = _sessionService.CurrentSessionId,
+                            message = success ? "Session started" : "Failed to start session"
+                        });
+                    }
+                    break;
+                    
+                case "/api/session/end":
+                    if (method == "POST")
+                    {
+                        if (!_sessionService.IsSessionActive)
+                        {
+                            SendErrorResponse(response, 400, "No active session");
+                            return;
+                        }
+                        
+                        await _sessionService.CompleteSessionAsync();
+                        
+                        await SendJsonResponse(response, new { 
+                            success = true,
+                            message = "Session ended"
+                        });
+                    }
+                    break;
+                    
+                case "/api/session/cancel":
+                    if (method == "POST")
+                    {
+                        if (!_sessionService.IsSessionActive)
+                        {
+                            SendErrorResponse(response, 400, "No active session");
+                            return;
+                        }
+                        
+                        await _sessionService.CancelSessionAsync();
+                        
+                        await SendJsonResponse(response, new { 
+                            success = true,
+                            message = "Session cancelled"
+                        });
+                    }
+                    break;
+                    
+                default:
+                    SendErrorResponse(response, 404, "Session endpoint not found");
+                    break;
+            }
+        }
+        
+        private async Task HandleSettingsEndpoints(string path, string method, HttpListenerRequest request, HttpListenerResponse response)
+        {
+            var settings = Properties.Settings.Default;
+            
+            switch (path)
+            {
+                case "/api/settings":
+                case "/api/settings/all":
+                    if (method == "GET")
+                    {
+                        var allSettings = new
+                        {
+                            photobooth = new
+                            {
+                                autostart = settings.Autostart,
+                                fullscreen = settings.StartInFullscreen,
+                                requireEventSelection = settings.RequireEventSelection,
+                                selectedEventId = settings.SelectedEventId,
+                                countdown = settings.CountDown,
+                                photoCount = settings.PhotoCount,
+                                sessionTimeout = settings.SessionTimeout,
+                                autoClearTime = settings.AutoClearTime
+                            },
+                            camera = new
+                            {
+                                cameraMode = settings.CameraMode,
+                                liveViewEnabled = settings.LiveViewEnabled,
+                                mirrorLiveView = settings.MirrorLiveView,
+                                saveToCamera = settings.SaveToCamera,
+                                saveToComputer = settings.SaveToComputer
+                            },
+                            capture = new
+                            {
+                                captureModesEnabled = settings.CaptureModesEnabled,
+                                photoMode = settings.CaptureModePhoto,
+                                videoMode = settings.CaptureModeVideo,
+                                gifMode = settings.CaptureModeGif,
+                                boomerangMode = settings.CaptureModeBoomerang,
+                                defaultMode = settings.DefaultCaptureMode
+                            },
+                            printing = new
+                            {
+                                enablePrinting = settings.EnablePrinting,
+                                autoPrint = settings.AutoPrint,
+                                printCount = settings.PrintCount,
+                                selectedPrinter = settings.SelectedPrinter
+                            },
+                            sharing = new
+                            {
+                                enableSharing = settings.EnableSharing,
+                                cloudShareEnabled = settings.CloudShareEnabled,
+                                smsEnabled = settings.EnableSMS,
+                                emailEnabled = settings.EnableEmail,
+                                qrCodeEnabled = settings.EnableQRCode
+                            }
+                        };
+                        
+                        await SendJsonResponse(response, allSettings);
+                    }
+                    break;
+                    
+                case "/api/settings/update":
+                    if (method == "PUT" || method == "POST")
+                    {
+                        var body = await ReadRequestBody(request);
+                        var updateRequest = JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
+                        
+                        try
+                        {
+                            foreach (var kvp in updateRequest)
+                            {
+                                var property = settings.GetType().GetProperty(kvp.Key);
+                                if (property != null && property.CanWrite)
+                                {
+                                    var value = Convert.ChangeType(kvp.Value, property.PropertyType);
+                                    property.SetValue(settings, value);
+                                }
+                            }
+                            
+                            settings.Save();
+                            
+                            await SendJsonResponse(response, new { 
+                                success = true,
+                                message = "Settings updated",
+                                updatedCount = updateRequest.Count
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            SendErrorResponse(response, 400, $"Failed to update settings: {ex.Message}");
+                        }
+                    }
+                    break;
+                    
+                default:
+                    SendErrorResponse(response, 404, "Settings endpoint not found");
+                    break;
+            }
+        }
+        
+        private async Task HandleEventEndpoints(string path, string method, HttpListenerRequest request, HttpListenerResponse response)
+        {
+            var db = new TemplateDatabase();
+            
+            switch (path)
+            {
+                case "/api/events":
+                case "/api/events/list":
+                    if (method == "GET")
+                    {
+                        var events = db.GetAllEvents();
+                        var eventList = events.Select(e => new
+                        {
+                            id = e.Id,
+                            name = e.Name,
+                            date = e.Date,
+                            location = e.Location,
+                            isActive = e.IsActive,
+                            sessionCount = db.GetPhotoSessions(e.Id).Count
+                        });
+                        
+                        await SendJsonResponse(response, eventList);
+                    }
+                    break;
+                    
+                case "/api/events/active":
+                    if (method == "GET")
+                    {
+                        var activeEvent = db.GetAllEvents().FirstOrDefault(e => e.IsActive);
+                        if (activeEvent != null)
+                        {
+                            await SendJsonResponse(response, new
+                            {
+                                id = activeEvent.Id,
+                                name = activeEvent.Name,
+                                date = activeEvent.Date,
+                                location = activeEvent.Location
+                            });
+                        }
+                        else
+                        {
+                            SendErrorResponse(response, 404, "No active event");
+                        }
+                    }
+                    break;
+                    
+                case "/api/events/select":
+                    if (method == "POST")
+                    {
+                        var body = await ReadRequestBody(request);
+                        var selectRequest = JsonConvert.DeserializeObject<EventSelectRequest>(body);
+                        
+                        if (selectRequest?.eventId > 0)
+                        {
+                            Properties.Settings.Default.SelectedEventId = selectRequest.eventId;
+                            Properties.Settings.Default.Save();
+                            
+                            await SendJsonResponse(response, new { 
+                                success = true,
+                                eventId = selectRequest.eventId,
+                                message = "Event selected"
+                            });
+                        }
+                        else
+                        {
+                            SendErrorResponse(response, 400, "Invalid event ID");
+                        }
+                    }
+                    break;
+                    
+                default:
+                    SendErrorResponse(response, 404, "Event endpoint not found");
+                    break;
+            }
+        }
+        
+        private async Task HandleTemplateEndpoints(string path, string method, HttpListenerRequest request, HttpListenerResponse response)
+        {
+            var db = new TemplateDatabase();
+            
+            switch (path)
+            {
+                case "/api/templates":
+                case "/api/templates/list":
+                    if (method == "GET")
+                    {
+                        var templates = db.GetAllTemplates();
+                        var templateList = templates.Select(t => new
+                        {
+                            id = t.Id,
+                            name = t.Name,
+                            category = t.Category,
+                            photoCount = t.PhotoCount,
+                            layoutType = t.LayoutType,
+                            isActive = t.IsActive
+                        });
+                        
+                        await SendJsonResponse(response, templateList);
+                    }
+                    break;
+                    
+                default:
+                    SendErrorResponse(response, 404, "Template endpoint not found");
+                    break;
+            }
+        }
+        
+        private async Task HandlePrintEndpoints(string path, string method, HttpListenerRequest request, HttpListenerResponse response)
+        {
+            switch (path)
+            {
+                case "/api/print/status":
+                    if (method == "GET")
+                    {
+                        var status = new
+                        {
+                            enabled = Properties.Settings.Default.EnablePrinting,
+                            printerAvailable = _printingService?.IsPrinterAvailable() ?? false,
+                            selectedPrinter = Properties.Settings.Default.SelectedPrinter,
+                            queueSize = _printingService?.GetPrintQueueSize() ?? 0
+                        };
+                        await SendJsonResponse(response, status);
+                    }
+                    break;
+                    
+                case "/api/print/send":
+                    if (method == "POST")
+                    {
+                        var body = await ReadRequestBody(request);
+                        var printRequest = JsonConvert.DeserializeObject<PrintRequest>(body);
+                        
+                        if (!string.IsNullOrEmpty(printRequest?.imagePath) && File.Exists(printRequest.imagePath))
+                        {
+                            _printingService?.PrintImage(printRequest.imagePath, printRequest.copies ?? 1);
+                            
+                            await SendJsonResponse(response, new { 
+                                success = true,
+                                message = "Print job submitted"
+                            });
+                        }
+                        else
+                        {
+                            SendErrorResponse(response, 400, "Invalid image path");
+                        }
+                    }
+                    break;
+                    
+                default:
+                    SendErrorResponse(response, 404, "Print endpoint not found");
+                    break;
+            }
+        }
+        
+        private async Task SendApiDocumentation(HttpListenerResponse response)
+        {
+            var documentation = new
+            {
+                title = "Photobooth Web API",
+                version = "1.0",
+                baseUrl = $"http://localhost:{_port}/api",
+                endpoints = new[]
+                {
+                    new { method = "GET", path = "/health", description = "Health check and service status" },
+                    new { method = "GET", path = "/api/camera/status", description = "Get camera connection status" },
+                    new { method = "POST", path = "/api/camera/capture", description = "Trigger photo/video capture" },
+                    new { method = "GET", path = "/api/camera/liveview", description = "Get live view status" },
+                    new { method = "POST", path = "/api/camera/liveview", description = "Enable/disable live view" },
+                    new { method = "GET", path = "/api/camera/settings", description = "Get camera settings" },
+                    new { method = "PUT", path = "/api/camera/settings", description = "Update camera settings" },
+                    new { method = "GET", path = "/api/session/status", description = "Get current session status" },
+                    new { method = "POST", path = "/api/session/start", description = "Start new photo session" },
+                    new { method = "POST", path = "/api/session/end", description = "End current session" },
+                    new { method = "POST", path = "/api/session/cancel", description = "Cancel current session" },
+                    new { method = "GET", path = "/api/settings/all", description = "Get all application settings" },
+                    new { method = "PUT", path = "/api/settings/update", description = "Update application settings" },
+                    new { method = "GET", path = "/api/events/list", description = "List all events" },
+                    new { method = "GET", path = "/api/events/active", description = "Get active event" },
+                    new { method = "POST", path = "/api/events/select", description = "Select active event" },
+                    new { method = "GET", path = "/api/templates/list", description = "List all templates" },
+                    new { method = "GET", path = "/api/print/status", description = "Get printer status" },
+                    new { method = "POST", path = "/api/print/send", description = "Send image to printer" }
+                }
+            };
+            
+            await SendJsonResponse(response, documentation);
+        }
+        
+        #endregion
+
+        #region Helper Methods
+        
+        private async Task<string> ReadRequestBody(HttpListenerRequest request)
+        {
+            using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+            {
+                return await reader.ReadToEndAsync();
+            }
+        }
+        
+        private async Task SendJsonResponse(HttpListenerResponse response, object data)
+        {
+            response.ContentType = "application/json";
+            response.StatusCode = 200;
+            
+            var json = JsonConvert.SerializeObject(data, Formatting.Indented);
+            var buffer = Encoding.UTF8.GetBytes(json);
+            
+            response.ContentLength64 = buffer.Length;
+            await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+        }
+        
+        private void SendErrorResponse(HttpListenerResponse response, int statusCode, string message)
+        {
+            response.StatusCode = statusCode;
+            response.ContentType = "application/json";
+            
+            var error = new { error = message, statusCode };
+            var json = JsonConvert.SerializeObject(error);
+            var buffer = Encoding.UTF8.GetBytes(json);
+            
+            response.ContentLength64 = buffer.Length;
+            response.OutputStream.Write(buffer, 0, buffer.Length);
+        }
+        
+        #endregion
+
+        #region Request/Response Models
+        
+        private class CaptureRequest
+        {
+            public string mode { get; set; } // "photo" or "video"
+            public int? count { get; set; }
+        }
+        
+        private class LiveViewRequest
+        {
+            public bool enable { get; set; }
+        }
+        
+        private class CameraSettingsRequest
+        {
+            public string iso { get; set; }
+            public string aperture { get; set; }
+            public string shutterSpeed { get; set; }
+            public string whiteBalance { get; set; }
+        }
+        
+        private class SessionStartRequest
+        {
+            public int? eventId { get; set; }
+            public int? templateId { get; set; }
+            public int? photoCount { get; set; }
+        }
+        
+        private class EventSelectRequest
+        {
+            public int eventId { get; set; }
+        }
+        
+        private class PrintRequest
+        {
+            public string imagePath { get; set; }
+            public int? copies { get; set; }
+        }
+        
+        #endregion
+
+        #region IDisposable
+        
+        public void Dispose()
+        {
+            Stop();
+            _listener?.Close();
+        }
+        
+        #endregion
+    }
+}

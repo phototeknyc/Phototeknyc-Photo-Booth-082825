@@ -306,15 +306,23 @@ namespace Photobooth.Services
                 var sessions = new List<GallerySessionInfo>();
                 
                 // Get only recent photo sessions from database filtered by event ID
+                System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Calling GetPhotoSessions with eventId={_currentEventId.Value}");
                 var dbSessions = _database.GetPhotoSessions(eventId: _currentEventId.Value, limit: limit, offset: offset);
+                System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: GetPhotoSessions returned {dbSessions.Count} sessions");
                 
                 // Process sessions quickly without loading all photo details
                 foreach (var dbSession in dbSessions)
                 {
+                    System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Processing session ID={dbSession.Id}, GUID={dbSession.SessionGuid}, IsVideo={dbSession.IsVideoSession}, EventId={dbSession.EventId}");
                     var session = LoadSessionFromDatabaseOptimized(dbSession);
                     if (session != null)
                     {
                         sessions.Add(session);
+                        System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Added session to list - {session.SessionName}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Session was null after LoadSessionFromDatabaseOptimized");
                     }
                 }
                 
@@ -414,7 +422,7 @@ namespace Photobooth.Services
         {
             try
             {
-                // Create lightweight session info with just first photo for thumbnail
+                // Create lightweight session info with just first photo/video for thumbnail
                 var sessionInfo = new GallerySessionInfo
                 {
                     SessionId = dbSession.SessionGuid,
@@ -422,38 +430,101 @@ namespace Photobooth.Services
                     EventName = dbSession.EventName,
                     SessionFolder = dbSession.SessionGuid, // Use GUID as folder reference
                     CreatedTime = dbSession.StartTime,
-                    PhotoCount = dbSession.ActualPhotoCount + dbSession.ComposedImageCount,
-                    Photos = new List<GalleryPhotoInfo>()
+                    PhotoCount = dbSession.IsVideoSession ? 1 : (dbSession.ActualPhotoCount + dbSession.ComposedImageCount), // Videos count as 1 item
+                    Photos = new List<GalleryPhotoInfo>(),
+                    IsVideoSession = dbSession.IsVideoSession,
+                    VideoPath = dbSession.VideoPath,
+                    VideoDurationSeconds = dbSession.VideoDurationSeconds
                 };
                 
-                // Load just the first photo for thumbnail display
-                // First try to get a composed image (better for thumbnail)
-                var composedImage = _database.GetSessionComposedImages(dbSession.Id).FirstOrDefault();
-                if (composedImage != null && File.Exists(composedImage.FilePath))
+                // For video sessions, use video thumbnail if available
+                if (dbSession.IsVideoSession && !string.IsNullOrEmpty(dbSession.VideoThumbnailPath))
                 {
-                    sessionInfo.Photos.Add(new GalleryPhotoInfo
-                    {
-                        FilePath = composedImage.FilePath,
-                        ThumbnailPath = composedImage.ThumbnailPath ?? composedImage.FilePath,
-                        FileName = composedImage.FileName,
-                        PhotoType = "COMPOSED",
-                        FileSize = composedImage.FileSize ?? 0
-                    });
-                }
-                else
-                {
-                    // No composed image, get first regular photo
-                    var firstPhoto = _database.GetSessionPhotos(dbSession.Id).FirstOrDefault();
-                    if (firstPhoto != null && File.Exists(firstPhoto.FilePath))
+                    if (File.Exists(dbSession.VideoThumbnailPath))
                     {
                         sessionInfo.Photos.Add(new GalleryPhotoInfo
                         {
-                            FilePath = firstPhoto.FilePath,
-                            ThumbnailPath = firstPhoto.ThumbnailPath ?? firstPhoto.FilePath,
-                            FileName = firstPhoto.FileName,
-                            PhotoType = firstPhoto.PhotoType,
-                            FileSize = firstPhoto.FileSize ?? 0
+                            FilePath = dbSession.VideoThumbnailPath,
+                            ThumbnailPath = dbSession.VideoThumbnailPath,
+                            FileName = Path.GetFileName(dbSession.VideoThumbnailPath),
+                            PhotoType = "VIDEO_THUMBNAIL",
+                            FileSize = 0,
+                            IsVideoThumbnail = true
                         });
+                    }
+                    // If no thumbnail but video exists, try to generate one
+                    else if (!string.IsNullOrEmpty(dbSession.VideoPath) && File.Exists(dbSession.VideoPath))
+                    {
+                        // Try to generate a thumbnail
+                        System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Generating thumbnail for video: {dbSession.VideoPath}");
+                        var thumbnailPath = GenerateVideoThumbnail(dbSession.VideoPath);
+                        
+                        if (!string.IsNullOrEmpty(thumbnailPath))
+                        {
+                            sessionInfo.Photos.Add(new GalleryPhotoInfo
+                            {
+                                FilePath = thumbnailPath,
+                                ThumbnailPath = thumbnailPath,
+                                FileName = Path.GetFileName(thumbnailPath),
+                                PhotoType = "VIDEO_THUMBNAIL",
+                                FileSize = 0,
+                                IsVideoThumbnail = true
+                            });
+                            
+                            // Update database with thumbnail path
+                            _database.UpdateSessionWithVideoData(dbSession.Id, dbSession.VideoPath, thumbnailPath, 
+                                dbSession.VideoFileSize, dbSession.VideoDurationSeconds);
+                        }
+                        else
+                        {
+                            // If generation failed, use a placeholder or first frame
+                            sessionInfo.NeedsVideoThumbnail = true;
+                            
+                            // Create a placeholder thumbnail entry
+                            sessionInfo.Photos.Add(new GalleryPhotoInfo
+                            {
+                                FilePath = dbSession.VideoPath, // Use video path as fallback
+                                ThumbnailPath = null, // No thumbnail available
+                                FileName = Path.GetFileName(dbSession.VideoPath),
+                                PhotoType = "VIDEO",
+                                FileSize = dbSession.VideoFileSize,
+                                IsVideoThumbnail = false
+                            });
+                        }
+                    }
+                }
+                
+                // If not a video session or no video thumbnail, try regular photos
+                if (sessionInfo.Photos.Count == 0)
+                {
+                    // First try to get a composed image (better for thumbnail)
+                    var composedImage = _database.GetSessionComposedImages(dbSession.Id).FirstOrDefault();
+                    if (composedImage != null && File.Exists(composedImage.FilePath))
+                    {
+                        sessionInfo.Photos.Add(new GalleryPhotoInfo
+                        {
+                            FilePath = composedImage.FilePath,
+                            ThumbnailPath = composedImage.ThumbnailPath ?? composedImage.FilePath,
+                            FileName = composedImage.FileName,
+                            PhotoType = "COMPOSED",
+                            FileSize = composedImage.FileSize ?? 0
+                        });
+                    }
+                    else
+                    {
+                        // No composed image, get first regular photo
+                        var firstPhoto = _database.GetSessionPhotos(dbSession.Id).FirstOrDefault();
+                        if (firstPhoto != null && File.Exists(firstPhoto.FilePath))
+                        {
+                            sessionInfo.Photos.Add(new GalleryPhotoInfo
+                            {
+                                FilePath = firstPhoto.FilePath,
+                                ThumbnailPath = firstPhoto.ThumbnailPath ?? firstPhoto.FilePath,
+                                FileName = firstPhoto.FileName,
+                                PhotoType = firstPhoto.PhotoType,
+                                FileSize = firstPhoto.FileSize ?? 0
+                            });
+                        }
                     }
                 }
                 
@@ -589,6 +660,52 @@ namespace Photobooth.Services
                 TotalPhotos = sessions.Sum(s => s.PhotoCount)
             };
         }
+        
+        private string GenerateVideoThumbnail(string videoPath)
+        {
+            try
+            {
+                // Check if VideoCompressionService is available (it has FFmpeg)
+                var compressionService = VideoCompressionService.Instance;
+                if (compressionService == null || !compressionService.IsFFmpegAvailable())
+                {
+                    System.Diagnostics.Debug.WriteLine("GalleryBrowserService: FFmpeg not available for thumbnail generation");
+                    return null;
+                }
+                
+                // Generate thumbnail path
+                string videoDir = Path.GetDirectoryName(videoPath);
+                string videoName = Path.GetFileNameWithoutExtension(videoPath);
+                string thumbnailPath = Path.Combine(videoDir, $"{videoName}_thumb.jpg");
+                
+                // Check if thumbnail already exists
+                if (File.Exists(thumbnailPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Thumbnail already exists: {thumbnailPath}");
+                    return thumbnailPath;
+                }
+                
+                // Generate thumbnail at 2 seconds into the video
+                var task = compressionService.GenerateThumbnailAsync(videoPath, thumbnailPath, 2);
+                task.Wait(TimeSpan.FromSeconds(5)); // Wait max 5 seconds
+                
+                if (task.IsCompleted && !string.IsNullOrEmpty(task.Result))
+                {
+                    System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Generated thumbnail: {thumbnailPath}");
+                    return thumbnailPath;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("GalleryBrowserService: Thumbnail generation failed or timed out");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"GalleryBrowserService: Error generating thumbnail: {ex.Message}");
+                return null;
+            }
+        }
         #endregion
     }
 
@@ -609,10 +726,19 @@ namespace Photobooth.Services
         public DateTime CreatedTime { get; set; }
         public int PhotoCount { get; set; }
         public List<GalleryPhotoInfo> Photos { get; set; }
+        
+        // Video session properties
+        public bool IsVideoSession { get; set; }
+        public string VideoPath { get; set; }
+        public int VideoDurationSeconds { get; set; }
+        public bool NeedsVideoThumbnail { get; set; }
 
         // Display properties
         public string SessionTimeDisplay => CreatedTime.ToString("yyyy-MM-dd HH:mm");
-        public string PhotoCountDisplay => $"{PhotoCount} photo{(PhotoCount != 1 ? "s" : "")}";
+        public string PhotoCountDisplay => IsVideoSession ? 
+            $"Video ({VideoDurationSeconds}s)" : 
+            $"{PhotoCount} photo{(PhotoCount != 1 ? "s" : "")}";
+        public string SessionTypeIcon => IsVideoSession ? "🎬" : "📷";
     }
 
     public class GalleryPhotoInfo
@@ -620,8 +746,9 @@ namespace Photobooth.Services
         public string FilePath { get; set; }
         public string ThumbnailPath { get; set; }
         public string FileName { get; set; }
-        public string PhotoType { get; set; } // ORIG, COMP, GIF
+        public string PhotoType { get; set; } // ORIG, COMP, GIF, VIDEO_THUMBNAIL
         public long FileSize { get; set; }
+        public bool IsVideoThumbnail { get; set; }
         public string FileSizeDisplay => $"{FileSize / 1024:N0} KB";
     }
 

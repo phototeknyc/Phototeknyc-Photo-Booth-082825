@@ -587,8 +587,7 @@ namespace Photobooth.Pages
                     Properties.Settings.Default.PrintPaperSize = ((ComboBoxItem)paperSizeComboBox.SelectedItem)?.Content?.ToString() ?? "4x6";*/
 
                 // Parse numeric print settings with validation
-                // Now handled by data binding
-                /*if (maxSessionPrintsTextBox != null && int.TryParse(maxSessionPrintsTextBox.Text, out int maxSession))
+                if (maxSessionPrintsTextBox != null && int.TryParse(maxSessionPrintsTextBox.Text, out int maxSession))
                     Properties.Settings.Default.MaxSessionPrints = Math.Max(0, maxSession);
                 
                 if (maxEventPrintsTextBox != null && int.TryParse(maxEventPrintsTextBox.Text, out int maxEvent))
@@ -607,7 +606,7 @@ namespace Photobooth.Pages
                     {
                         PrintSettingsService.Instance.MaxCopiesInModal = maxCopies;
                     }
-                }*/
+                }
                 
                 // Save advanced driver settings
                 /*if (colorModeComboBox?.SelectedItem is ComboBoxItem colorModeItem)
@@ -817,12 +816,6 @@ namespace Photobooth.Pages
 
         private void DefaultPooling_Changed(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
-        }
-        
-        /*DISABLED CODE:
-        private void DefaultPooling_Changed_OLD(object sender, RoutedEventArgs e)
-        {
             if (defaultPoolPanel != null && defaultPoolingCheckBox != null)
             {
                 defaultPoolPanel.Visibility = defaultPoolingCheckBox.IsChecked == true ? 
@@ -834,15 +827,9 @@ namespace Photobooth.Pages
                     PopulatePoolDropdowns();
                 }
             }
-        }*/
-        
-        private void PopulatePoolDropdowns()
-        {
-            return; // Temporarily disabled - printer controls removed
         }
         
-        /*DISABLED CODE:
-        private void PopulatePoolDropdowns_OLD()
+        private void PopulatePoolDropdowns()
         {
             var printers = PrintService.GetAvailablePrinters();
             
@@ -870,7 +857,7 @@ namespace Photobooth.Pages
                 foreach (var printer in printers)
                     defaultPool4ComboBox.Items.Add(printer);
             }
-        }*/
+        }
         
         private void LoadPrintSettings()
         {
@@ -895,8 +882,7 @@ namespace Photobooth.Pages
                 if (printLandscapeCheckBox != null)
                     printLandscapeCheckBox.IsChecked = Properties.Settings.Default.PrintLandscape;
                     
-                // Now handled by data binding
-                /*if (maxSessionPrintsTextBox != null)
+                if (maxSessionPrintsTextBox != null)
                     maxSessionPrintsTextBox.Text = Properties.Settings.Default.MaxSessionPrints.ToString();
                     
                 if (maxEventPrintsTextBox != null)
@@ -922,7 +908,7 @@ namespace Photobooth.Pages
                             break;
                         }
                     }
-                }*/
+                }
                 
                 // Load advanced driver settings with null checks
                 /*if (colorModeComboBox != null)
@@ -989,8 +975,8 @@ namespace Photobooth.Pages
                 // Load printers
                 RefreshPrinters();
 
-                // Set paper size - REMOVED CONTROLS
-                /*if (paperSizeComboBox != null)
+                // Set paper size
+                if (paperSizeComboBox != null)
                 {
                     var paperSize = Properties.Settings.Default.PrintPaperSize;
                     foreach (ComboBoxItem item in paperSizeComboBox.Items)
@@ -1001,7 +987,7 @@ namespace Photobooth.Pages
                             break;
                         }
                     }
-                }*/
+                }
             }
             catch (Exception ex)
             {
@@ -1020,8 +1006,8 @@ namespace Photobooth.Pages
                 // Create a dictionary to store printer status info
                 var printerStatusMap = usbPrinters.ToDictionary(p => p.Name, p => p);
                 
-                // Refresh 4x6 printer combo box - REMOVED CONTROLS
-                /*if (printer4x6ComboBox != null)
+                // Refresh 4x6 printer combo box
+                if (printer4x6ComboBox != null)
                 {
                     printer4x6ComboBox.Items.Clear();
                     
@@ -1051,10 +1037,10 @@ namespace Photobooth.Pages
                             }
                         }
                     }
-                }*/
+                }
                 
-                // Refresh 2x6 printer combo box - REMOVED CONTROLS
-                /*if (printer2x6ComboBox != null)
+                // Refresh 2x6 printer combo box
+                if (printer2x6ComboBox != null)
                 {
                     printer2x6ComboBox.Items.Clear();
                     
@@ -1084,10 +1070,10 @@ namespace Photobooth.Pages
                             }
                         }
                     }
-                }*/
+                }
                 
-                // Also refresh legacy printer combo box (if visible) - REMOVED CONTROLS
-                /*if (printerComboBox != null)
+                // Also refresh legacy printer combo box (if visible)
+                if (printerComboBox != null)
                 {
                     printerComboBox.Items.Clear();
                     
@@ -1116,7 +1102,7 @@ namespace Photobooth.Pages
                             }
                         }
                     }
-                }*/
+                }
             }
             catch (Exception ex)
             {
@@ -1309,8 +1295,7 @@ namespace Photobooth.Pages
         
         private void AdvancedDriver4x6_Click(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
-            /*try
+            try
             {
                 if (printer4x6ComboBox?.SelectedItem != null)
                 {
@@ -1327,12 +1312,11 @@ namespace Photobooth.Pages
             {
                 MessageBox.Show($"Error opening 4x6 printer settings: {ex.Message}", "4x6 Printer Settings", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
-            }*/
+            }
         }
         
         private void PrinterAlignment_Click(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
             try
             {
                 var alignmentDialog = new PrinterAlignmentDialog();
@@ -1347,8 +1331,7 @@ namespace Photobooth.Pages
 
         private void AdvancedDriver2x6_Click(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
-            /*try
+            try
             {
                 if (printer2x6ComboBox?.SelectedItem != null)
                 {
@@ -1365,7 +1348,7 @@ namespace Photobooth.Pages
             {
                 MessageBox.Show($"Error opening 2x6 printer settings: {ex.Message}", "2x6 Printer Settings", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
-            }*/
+            }
         }
         
         private void ConfigureDriverSettings(string printerName, bool is2x6Format, string formatType)
@@ -1486,8 +1469,7 @@ namespace Photobooth.Pages
         
         private void AdvancedDriverSettings_Click(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
-            /*try
+            try
             {
                 if (printerComboBox?.SelectedItem == null)
                 {
@@ -1499,11 +1481,10 @@ namespace Photobooth.Pages
                 string printerName = ExtractPrinterName(printerComboBox.SelectedItem.ToString());
                 
                 // First, apply our 2-inch cut setting if it's a DNP printer
-                // Commented out nested block:
-                // if (printerName.ToLower().Contains("dnp") && dnp2InchCutCheckBox?.IsChecked == true)
-                // {
-                //     ApplyDnp2InchCutSetting(printerName, true);
-                // }
+                /*if (printerName.ToLower().Contains("dnp") && dnp2InchCutCheckBox?.IsChecked == true)
+                {
+                    ApplyDnp2InchCutSetting(printerName, true);
+                }*/
                 
                 // Create a PrintDialog to access printer settings
                 var printDialog = new System.Windows.Forms.PrintDialog();
@@ -1584,21 +1565,19 @@ namespace Photobooth.Pages
                             if (result2 == MessageBoxResult.Yes)
                             {
                                 // Auto-check the 2-inch cut checkbox
-                                // Commented out nested block:
-                                // if (dnp2InchCutCheckBox != null)
-                                // {
-                                //     dnp2InchCutCheckBox.IsChecked = true;
-                                // }
+                                /*if (dnp2InchCutCheckBox != null)
+                                {
+                                    dnp2InchCutCheckBox.IsChecked = true;
+                                }*/
                                 Properties.Settings.Default.Dnp2InchCut = true;
                             }
                             else if (result2 == MessageBoxResult.No)
                             {
                                 // Auto-uncheck the 2-inch cut checkbox
-                                // Commented out nested block:
-                                // if (dnp2InchCutCheckBox != null)
-                                // {
-                                //     dnp2InchCutCheckBox.IsChecked = false;
-                                // }
+                                /*if (dnp2InchCutCheckBox != null)
+                                {
+                                    dnp2InchCutCheckBox.IsChecked = false;
+                                }*/
                                 Properties.Settings.Default.Dnp2InchCut = false;
                             }
                             // If Cancel, leave the checkbox unchanged
@@ -1654,13 +1633,12 @@ namespace Photobooth.Pages
                 MessageBox.Show($"Error opening printer settings: {ex.Message}", "Print Settings", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 System.Diagnostics.Debug.WriteLine($"Advanced driver settings error: {ex}");
-            }*/
+            }
         }
 
         private void Verify2InchCut_Click(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
-            /*try
+            try
             {
                 if (printerComboBox?.SelectedItem != null)
                 {
@@ -1677,13 +1655,12 @@ namespace Photobooth.Pages
             {
                 MessageBox.Show($"Error verifying settings: {ex.Message}", "Verify Settings", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
-            }*/
+            }
         }
         
         private void Test4x6Print_Click(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
-            /*try
+            try
             {
                 if (printer4x6ComboBox?.SelectedItem != null)
                 {
@@ -1742,13 +1719,12 @@ namespace Photobooth.Pages
             {
                 MessageBox.Show($"Error during 4x6 test print: {ex.Message}", "Test Print 4x6", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
-            }*/
+            }
         }
         
         private void Test2x6Print_Click(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
-            /*try
+            try
             {
                 if (printer2x6ComboBox?.SelectedItem != null)
                 {
@@ -1802,13 +1778,12 @@ namespace Photobooth.Pages
             {
                 MessageBox.Show($"Error during 2x6 test print: {ex.Message}", "Test Print 2x6", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
-            }*/
+            }
         }
         
         private void TestPrint_Click(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
-            /*try
+            try
             {
                 if (printerComboBox?.SelectedItem != null)
                 {
@@ -1848,7 +1823,7 @@ namespace Photobooth.Pages
                 MessageBox.Show($"Error during test print: {ex.Message}", "Test Print", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 System.Diagnostics.Debug.WriteLine($"Test print error: {ex}");
-            }*/
+            }
         }
 
         private string CreateDefaultPrinterTestImage(string printerName, string paperSize)
@@ -2155,11 +2130,11 @@ namespace Photobooth.Pages
                         graphics.DrawString($"Date: {DateTime.Now:yyyy-MM-dd HH:mm:ss}", new System.Drawing.Font("Arial", 16), brush, 50, 150);
                         graphics.DrawString("Print Settings:", new System.Drawing.Font("Arial", 16), brush, 50, 200);
                         
-                        /*if (printerComboBox?.SelectedItem != null)
+                        if (printerComboBox?.SelectedItem != null)
                             graphics.DrawString($"Printer: {printerComboBox.SelectedItem}", new System.Drawing.Font("Arial", 12), brush, 50, 250);
                         
                         if (paperSizeComboBox?.SelectedItem is ComboBoxItem paperItem)
-                            graphics.DrawString($"Paper: {paperItem.Content}", new System.Drawing.Font("Arial", 12), brush, 50, 280);*/
+                            graphics.DrawString($"Paper: {paperItem.Content}", new System.Drawing.Font("Arial", 12), brush, 50, 280);
                         
                         /*if (colorModeComboBox?.SelectedItem is ComboBoxItem colorItem)
                             graphics.DrawString($"Color: {colorItem.Content}", new System.Drawing.Font("Arial", 12), brush, 50, 310);*/
@@ -2619,8 +2594,7 @@ namespace Photobooth.Pages
 
         private void SavePrinterProfile_Click(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
-            /*try
+            try
             {
                 if (printerComboBox?.SelectedItem != null)
                 {
@@ -2649,7 +2623,7 @@ namespace Photobooth.Pages
                                 PrinterName = printerName,
                                 PrinterSettings = SerializePrinterSettings(printDocument.PrinterSettings),
                                 RawDriverSettings = rawSettings,
-                                // Dnp2InchCut = dnp2InchCutCheckBox?.IsChecked ?? false,
+                                /*Dnp2InchCut = dnp2InchCutCheckBox?.IsChecked ?? false,*/
                                 CreatedDate = DateTime.Now
                             };
                             
@@ -2683,7 +2657,7 @@ namespace Photobooth.Pages
             {
                 MessageBox.Show($"Error saving printer profile: {ex.Message}", "Save Profile", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
-            }*/
+            }
         }
 
         private Dictionary<string, string> LoadPrinterProfiles()
@@ -2705,12 +2679,6 @@ namespace Photobooth.Pages
         }
         
         private void LoadPrinterProfile_Click(object sender, RoutedEventArgs e)
-        {
-            return; // Temporarily disabled - printer controls removed
-        }
-        
-        /*DISABLED CODE:
-        private void LoadPrinterProfile_Click_OLD(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -2780,13 +2748,12 @@ namespace Photobooth.Pages
                             }
                             
                             // Restore 2-inch cut setting
-                            // Commented out nested block:
-                            // if (profile.Dnp2InchCut != null && dnp2InchCutCheckBox != null)
-                            // {
-                            //     dnp2InchCutCheckBox.IsChecked = (bool)profile.Dnp2InchCut;
-                            //     Properties.Settings.Default.Dnp2InchCut = (bool)profile.Dnp2InchCut;
-                            //     Properties.Settings.Default.Save();
-                            // }
+                            /*if (profile.Dnp2InchCut != null && dnp2InchCutCheckBox != null)
+                            {
+                                dnp2InchCutCheckBox.IsChecked = (bool)profile.Dnp2InchCut;
+                                Properties.Settings.Default.Dnp2InchCut = (bool)profile.Dnp2InchCut;
+                                Properties.Settings.Default.Save();
+                            }*/
                             
                             if (success)
                             {
@@ -2812,7 +2779,7 @@ namespace Photobooth.Pages
                 MessageBox.Show($"Error loading printer profile: {ex.Message}", "Load Profile", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }*/
+        }
 
         public static void ApplyDnp2InchCutSetting(string printerName, bool enable2InchCut)
         {
@@ -2977,8 +2944,7 @@ namespace Photobooth.Pages
         
         private void ExportPrinterProfile_Click(object sender, RoutedEventArgs e)
         {
-            return; // Temporarily disabled - printer controls removed
-            /*try
+            try
             {
                 if (printerComboBox?.SelectedItem != null)
                 {
@@ -3021,7 +2987,7 @@ namespace Photobooth.Pages
             {
                 MessageBox.Show($"Error exporting printer profile: {ex.Message}", "Export Profile", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
-            }*/
+            }
         }
 
         private void ConfigurePrinterProfiles_Click(object sender, RoutedEventArgs e)

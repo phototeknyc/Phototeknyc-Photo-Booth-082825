@@ -1870,6 +1870,50 @@ namespace Photobooth.Database
             }
         }
         
+        public void UpdateSessionVideoCloudUrl(int sessionId, string videoCloudUrl)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string updateSession = @"
+                    UPDATE PhotoSessions 
+                    SET VideoCloudUrl = @videoCloudUrl
+                    WHERE Id = @sessionId";
+                
+                using (var command = new SQLiteCommand(updateSession, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionId", sessionId);
+                    command.Parameters.AddWithValue("@videoCloudUrl", videoCloudUrl ?? (object)DBNull.Value);
+                    command.ExecuteNonQuery();
+                    
+                    System.Diagnostics.Debug.WriteLine($"TemplateDatabase: Updated session {sessionId} with video cloud URL: {videoCloudUrl}");
+                }
+            }
+        }
+        
+        public void UpdateSessionVideoCloudUrlByGuid(string sessionGuid, string videoCloudUrl)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                
+                string updateSession = @"
+                    UPDATE PhotoSessions 
+                    SET VideoCloudUrl = @videoCloudUrl
+                    WHERE SessionGuid = @sessionGuid";
+                
+                using (var command = new SQLiteCommand(updateSession, connection))
+                {
+                    command.Parameters.AddWithValue("@sessionGuid", sessionGuid);
+                    command.Parameters.AddWithValue("@videoCloudUrl", videoCloudUrl ?? (object)DBNull.Value);
+                    int rowsAffected = command.ExecuteNonQuery();
+                    
+                    System.Diagnostics.Debug.WriteLine($"TemplateDatabase: Updated session {sessionGuid} with video cloud URL: {videoCloudUrl} ({rowsAffected} rows)");
+                }
+            }
+        }
+        
         public void EndPhotoSession(int sessionId)
         {
             using (var connection = new SQLiteConnection(connectionString))
@@ -2301,7 +2345,13 @@ namespace Photobooth.Database
                 EndTime = reader.IsDBNull(reader.GetOrdinal("EndTime")) ? (DateTime?)null : Convert.ToDateTime(reader["EndTime"]),
                 EventName = reader.IsDBNull(reader.GetOrdinal("EventName")) ? null : reader.GetString(reader.GetOrdinal("EventName")),
                 TemplateName = reader.IsDBNull(reader.GetOrdinal("TemplateName")) ? null : reader.GetString(reader.GetOrdinal("TemplateName")),
-                IsActive = Convert.ToBoolean(reader["IsActive"])
+                IsActive = Convert.ToBoolean(reader["IsActive"]),
+                // Video-related fields
+                IsVideoSession = reader.IsDBNull(reader.GetOrdinal("IsVideoSession")) ? false : Convert.ToBoolean(reader["IsVideoSession"]),
+                VideoPath = reader.IsDBNull(reader.GetOrdinal("VideoPath")) ? null : reader.GetString(reader.GetOrdinal("VideoPath")),
+                VideoThumbnailPath = reader.IsDBNull(reader.GetOrdinal("VideoThumbnailPath")) ? null : reader.GetString(reader.GetOrdinal("VideoThumbnailPath")),
+                VideoFileSize = reader.IsDBNull(reader.GetOrdinal("VideoFileSize")) ? 0 : Convert.ToInt64(reader["VideoFileSize"]),
+                VideoDurationSeconds = reader.IsDBNull(reader.GetOrdinal("VideoDurationSeconds")) ? 0 : Convert.ToInt32(reader["VideoDurationSeconds"])
             };
         }
         

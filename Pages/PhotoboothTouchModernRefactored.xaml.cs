@@ -3498,6 +3498,11 @@ namespace Photobooth.Pages
                 _eventTemplateService.SelectEvent(_currentEvent);
                 statusText.Text = $"Event: {_currentEvent.Name}";
                 
+                // Save the event ID to settings for use by other services
+                Properties.Settings.Default.SelectedEventId = _currentEvent.Id;
+                Properties.Settings.Default.Save();
+                Log.Debug($"LoadInitialEventTemplate: Saved SelectedEventId {_currentEvent.Id} to settings");
+                
                 // If we have an event but no template, initialize template selection
                 if (_currentTemplate == null)
                 {
@@ -3709,6 +3714,11 @@ namespace Photobooth.Pages
                 _currentEvent = selectedEvent;
                 _eventTemplateService.SelectEvent(_currentEvent);
                 
+                // Save the selected event ID to settings for use by other services
+                Properties.Settings.Default.SelectedEventId = selectedEvent.Id;
+                Properties.Settings.Default.Save();
+                Log.Debug($"OnEventSelectionOverlayEventSelected: Saved SelectedEventId {selectedEvent.Id} to settings");
+                
                 // Initialize template selection with the selected event
                 Log.Debug($"OnEventSelectionOverlayEventSelected: Initializing template selection for event ID {selectedEvent.Id}");
                 _templateSelectionService?.InitializeForEvent(selectedEvent);
@@ -3770,6 +3780,91 @@ namespace Photobooth.Pages
                 EventSelectionOverlayControl.ShowOverlay();
             }
         }
+        
+        #region Template Designer Overlay Methods
+        
+        /// <summary>
+        /// Show the template designer overlay
+        /// </summary>
+        public void ShowTemplateDesignerOverlay(string templatePath = null)
+        {
+            if (TemplateDesignerOverlayControl != null)
+            {
+                Log.Debug($"Showing template designer overlay {(string.IsNullOrEmpty(templatePath) ? "for new template" : $"for: {templatePath}")}");
+                TemplateDesignerOverlayControl.ShowOverlay(templatePath);
+            }
+        }
+        
+        /// <summary>
+        /// Template Designer button click handler
+        /// </summary>
+        private void TemplateDesignerButton_Click(object sender, RoutedEventArgs e)
+        {
+            Log.Debug("Template Designer button clicked");
+            
+            // Hide the bottom control bar
+            if (bottomControlBar != null)
+            {
+                bottomControlBar.Visibility = Visibility.Collapsed;
+                bottomBarToggleChevron.Text = "⚙"; // Reset to gear icon
+            }
+            
+            // Check if we have a current template to edit
+            TemplateData currentTemplateData = _eventTemplateService?.CurrentTemplate;
+            if (currentTemplateData == null)
+            {
+                currentTemplateData = _currentTemplate;
+            }
+            
+            // For now, always open a new template designer
+            // In the future, we could show a menu to choose between:
+            // - Create New Template
+            // - Edit Current Template
+            // - Browse Templates
+            ShowTemplateDesignerOverlay(null);
+            
+            // Optional: Show a message about the current template
+            if (currentTemplateData != null)
+            {
+                Log.Debug($"Current template available for editing: {currentTemplateData.Name}");
+            }
+        }
+        
+        /// <summary>
+        /// Example: Open template designer for editing current template
+        /// Can be called from a button click or menu item
+        /// </summary>
+        public void EditCurrentTemplate()
+        {
+            // Get the current template if one is selected
+            TemplateData currentTemplateData = _eventTemplateService?.SelectedTemplateForOverlay;
+            
+            if (currentTemplateData == null)
+            {
+                // Try to get from current template
+                currentTemplateData = _currentTemplate;
+            }
+            
+            // For database templates, we need to load them differently
+            // For now, just pass null to create a new template
+            // TODO: Implement loading from database if needed
+            string templatePath = null;
+            
+            // Show the template designer overlay
+            ShowTemplateDesignerOverlay(templatePath);
+        }
+        
+        /// <summary>
+        /// Example: Create a new template
+        /// Can be called from a button click or menu item
+        /// </summary>
+        public void CreateNewTemplate()
+        {
+            // Show the template designer overlay for a new template
+            ShowTemplateDesignerOverlay(null);
+        }
+        
+        #endregion
 
         private void ShowTemplateSelectionOverlay()
         {
@@ -4028,8 +4123,34 @@ namespace Photobooth.Pages
                     var database = new Database.TemplateDatabase();
                     database.UpdatePhotoSessionGalleryUrl(completedSession.SessionId, uploadResult.GalleryUrl);
                     
+                    // Note: Video cloud URL will be saved separately when available
+                    // The compressed video URL is embedded in the gallery HTML
+                    
                     Log.Debug($"Gallery URL saved to database for session {completedSession.SessionId}: {uploadResult.GalleryUrl}");
                     _uiService.UpdateStatus("Upload complete!");
+                    
+                    // Automatically show QR code after successful upload (must be on UI thread)
+                    if (_sharingUIService != null && uploadResult.QRCodeImage != null)
+                    {
+                        Log.Debug($"Auto-displaying QR code after successful upload for session {completedSession.SessionId}");
+                        
+                        // Use Dispatcher to ensure UI operations happen on the main thread
+                        Dispatcher.Invoke(() =>
+                        {
+                            try
+                            {
+                                _sharingUIService.ShowQrCodeOverlay(uploadResult.GalleryUrl, uploadResult.QRCodeImage);
+                            }
+                            catch (Exception uiEx)
+                            {
+                                Log.Error($"Error displaying QR code: {uiEx.Message}");
+                            }
+                        });
+                    }
+                    else
+                    {
+                        Log.Debug($"QR auto-display skipped - SharingUIService: {_sharingUIService != null}, QRCodeImage: {uploadResult.QRCodeImage != null}");
+                    }
                 }
                 else
                 {
@@ -6384,7 +6505,7 @@ namespace Photobooth.Pages
             
             try
             {
-                Log.Debug("Starting video recording session");
+                Log.Debug($"Starting video recording session - Current Event: {_currentEvent?.Name ?? "NULL"}, Event ID: {_currentEvent?.Id ?? 0}");
                 
                 // Subscribe to video recording completion event
                 videoCoordinator.RecordingStopped += OnVideoRecordingStopped;
@@ -6440,7 +6561,13 @@ namespace Photobooth.Pages
                 
                 try
                 {
-                    recordingStarted = await videoCoordinator.StartVideoSessionAsync(null, _currentEvent);
+                    // Get the session info from the database operations
+                    var dbOps = _sessionService?.GetDatabaseOperations();
+                    int sessionId = dbOps?.CurrentSessionId ?? 0;
+                    string sessionGuid = dbOps?.CurrentSessionGuid ?? _sessionService?.CurrentSessionId;
+                    
+                    Log.Debug($"Calling StartVideoSessionAsync with event: {_currentEvent?.Name ?? "NULL"} (ID: {_currentEvent?.Id ?? 0}), sessionId: {sessionId}, sessionGuid: {sessionGuid}");
+                    recordingStarted = await videoCoordinator.StartVideoSessionAsync(null, _currentEvent, sessionId, sessionGuid);
                 }
                 catch (Exception videoEx)
                 {

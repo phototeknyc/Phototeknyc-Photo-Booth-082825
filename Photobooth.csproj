@@ -78,6 +78,11 @@
     <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
+    <Reference Include="InTheHand.Net.Bluetooth, Version=4.0.36.0, Culture=neutral, PublicKeyToken=ea38caa273134499, processorArchitecture=MSIL">
+      <HintPath>packages\InTheHand.Net.Bluetooth.4.0.36\lib\net461\InTheHand.Net.Bluetooth.dll</HintPath>
+      <Private>True</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
     <Reference Include="ReachFramework" />
     <Reference Include="System" />
     <Reference Include="System.Buffers, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
@@ -189,6 +194,9 @@
     <Compile Include="Controls\SettingsOverlay.xaml.cs">
       <DependentUpon>SettingsOverlay.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\TemplateDesignerOverlay.xaml.cs">
+      <DependentUpon>TemplateDesignerOverlay.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\PinEntryOverlay.xaml.cs">
       <DependentUpon>PinEntryOverlay.xaml</DependentUpon>
     </Compile>
@@ -277,6 +285,7 @@
     <Compile Include="Services\EventTemplateService.cs" />
     <Compile Include="Services\EventSelectionService.cs" />
     <Compile Include="Services\PhotoCaptureService.cs" />
+    <Compile Include="Services\DeviceTriggerService.cs" />
     <Compile Include="Services\PrintingService.cs" />
     <Compile Include="Services\PrinterSettingsManager.cs" />
     <Compile Include="Services\SimplifiedPrintService.cs" />
@@ -422,6 +431,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\SettingsOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\TemplateDesignerOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -639,6 +652,8 @@
     <Compile Include="Services\GalleryBrowserService.cs" />
     <Compile Include="Services\InfoPanelService.cs" />
     <Compile Include="Services\InfoPanelUIService.cs" />
+    <Compile Include="Services\WebApiService.cs" />
+    <Compile Include="Services\WebApiStartup.cs" />
     <Compile Include="Pages\EventSelectionPage.xaml.cs">
       <DependentUpon>EventSelectionPage.xaml</DependentUpon>
     </Compile>
@@ -670,6 +685,9 @@
     <Content Include="fonts\fontawesome-webfont.eot" />
     <Content Include="fonts\fontawesome-webfont.woff" />
     <Content Include="fonts\fontawesome-webfont.woff2" />
+    <Content Include="WebApiClient.html">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
@@ -760,6 +778,8 @@
       REM Ensure AWS SDK DLLs are always copied
       xcopy /Y "$(ProjectDir)packages\AWSSDK.Core.4.0.0.22\lib\net472\AWSSDK.Core.dll" "$(TargetDir)" 2&gt;nul || echo AWS Core already present
       xcopy /Y "$(ProjectDir)packages\AWSSDK.S3.4.0.0\lib\net472\AWSSDK.S3.dll" "$(TargetDir)" 2&gt;nul || echo AWS S3 already present
+      REM Copy WebApiClient.html to output directory
+      xcopy /Y "$(ProjectDir)WebApiClient.html" "$(TargetDir)" 2&gt;nul || echo WebApiClient.html copied
     </PostBuildEvent>
   </PropertyGroup>
 </Project>

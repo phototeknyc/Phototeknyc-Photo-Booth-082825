@@ -467,6 +467,9 @@ namespace Photobooth.MVVM.ViewModels.Designer
 		public ICommand BrowseTemplatesCmd { get; }
 		public ICommand BrowseEventsCmd { get; }
 		public ICommand LaunchPhotoboothCmd { get; }
+		
+		// Public property to check for unsaved changes
+		public bool HasUnsavedChanges { get; private set; }
 		public ICommand UndoCmd { get; }
 		public ICommand RedoCmd { get; }
 		#endregion
@@ -620,6 +623,79 @@ namespace Photobooth.MVVM.ViewModels.Designer
 				Templates = templateFiles.Select(f => Template.LoadTemplateFromFile(f)).Where(t => t != null).ToList();
 			}
 		}
+		
+		#region Public Methods for Overlay
+		
+		/// <summary>
+		/// Load a template from file path
+		/// </summary>
+		public bool LoadTemplate(string templatePath)
+		{
+			try
+			{
+				if (!File.Exists(templatePath))
+				{
+					System.Diagnostics.Debug.WriteLine($"Template file not found: {templatePath}");
+					return false;
+				}
+				
+				var template = Template.LoadTemplateFromFile(templatePath);
+				if (template != null)
+				{
+					CurrentTemplate = template;  // This will call ApplyTemplate through the setter
+					HasUnsavedChanges = false;
+					return true;
+				}
+				return false;
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Error loading template: {ex.Message}");
+				return false;
+			}
+		}
+		
+		/// <summary>
+		/// Create a new blank template
+		/// </summary>
+		public void CreateNewTemplate()
+		{
+			try
+			{
+				CustomDesignerCanvas.ClearCanvas();
+				_currentTemplate = null;
+				HasUnsavedChanges = false;
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Error creating new template: {ex.Message}");
+			}
+		}
+		
+		/// <summary>
+		/// Save the current template
+		/// </summary>
+		public bool SaveTemplate()
+		{
+			try
+			{
+				// Execute the save template command
+				if (SaveTemplateCmd.CanExecute(null))
+				{
+					SaveTemplateCmd.Execute(null);
+					HasUnsavedChanges = false;
+					return true;
+				}
+				return false;
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Error saving template: {ex.Message}");
+				return false;
+			}
+		}
+		
+		#endregion
 
 		private async Task SaveAsTemplateAsync()
 		{
