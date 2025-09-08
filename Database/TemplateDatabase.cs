@@ -2540,6 +2540,9 @@ namespace Photobooth.Database
         
         // Asset mappings for import/export (not stored in database)
         public Dictionary<string, string> AssetMappings { get; set; }
+        
+        // Canvas items for import/export (not stored in database - items are stored separately)
+        public List<CanvasItemData> CanvasItems { get; set; }
     }
     
     public class CanvasItemData

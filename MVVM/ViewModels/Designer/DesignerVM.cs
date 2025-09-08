@@ -2885,7 +2885,161 @@ namespace Photobooth.MVVM.ViewModels.Designer
 				templateData.BackgroundColor = brush.Color.ToString();
 			}
 			
+			// Convert all canvas items to CanvasItemData for export
+			// Get items with their actual z-index from the canvas
+			var canvasItems = new List<CanvasItemData>();
+			
+			// Build a list of items with their actual z-index from the visual tree
+			var itemsWithZIndex = new List<(ICanvasItem item, int zIndex)>();
+			foreach (var item in CustomDesignerCanvas.Items)
+			{
+				if (item is ICanvasItem canvasItem)
+				{
+					// Get the actual container from the canvas to find its z-index
+					var container = CustomDesignerCanvas.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
+					int actualZIndex = 0;
+					
+					if (container?.Parent is Canvas canvas)
+					{
+						// Get the actual position in the canvas children collection
+						actualZIndex = canvas.Children.IndexOf(container);
+					}
+					
+					itemsWithZIndex.Add((canvasItem, actualZIndex));
+				}
+			}
+			
+			// Sort by actual z-index and convert to CanvasItemData
+			// Normalize z-indices to be sequential starting from 0
+			int normalizedZIndex = 0;
+			foreach (var (item, originalZIndex) in itemsWithZIndex.OrderBy(x => x.zIndex))
+			{
+				var itemData = ConvertCanvasItemToData(item, normalizedZIndex);
+				if (itemData != null)
+				{
+					canvasItems.Add(itemData);
+					normalizedZIndex++;
+				}
+			}
+			
+			// Store canvas items in the template data
+			// Note: We need to add a property to TemplateData to hold canvas items
+			templateData.CanvasItems = canvasItems;
+			
 			return templateData;
+		}
+		
+		// Helper method to convert canvas item to data (similar to TemplateService)
+		private CanvasItemData ConvertCanvasItemToData(ICanvasItem item, int zIndex)
+		{
+			var data = new CanvasItemData
+			{
+				ZIndex = zIndex,
+				IsVisible = true
+			};
+			
+			// Common properties for all items that implement IBoxCanvasItem
+			if (item is IBoxCanvasItem boxItem)
+			{
+				data.X = boxItem.Left;
+				data.Y = boxItem.Top;
+				data.Width = boxItem.Width;
+				data.Height = boxItem.Height;
+				data.LockedPosition = boxItem.LockedPosition;
+			}
+			
+			// Common properties - handle rotation and aspect ratio
+			if (item is CanvasItem canvasItem)
+			{
+				data.Rotation = canvasItem.Angle;
+				data.LockedAspectRatio = canvasItem.LockedAspectRatio;
+			}
+			else if (item is TextCanvasItem textCanvasItem)
+			{
+				data.Rotation = textCanvasItem.Angle;
+				data.LockedAspectRatio = textCanvasItem.LockedAspectRatio;
+			}
+			
+			// Type-specific properties
+			switch (item)
+			{
+				case TextCanvasItem textItem:
+					data.ItemType = "Text";
+					data.Name = $"Text: {textItem.Text?.Substring(0, Math.Min(20, textItem.Text?.Length ?? 0))}...";
+					data.Text = textItem.Text;
+					data.FontFamily = textItem.FontFamily;
+					data.FontSize = textItem.FontSize;
+					data.TextColor = BrushToColorString(textItem.Foreground);
+					data.IsBold = textItem.IsBold;
+					data.IsItalic = textItem.IsItalic;
+					data.IsUnderlined = textItem.IsUnderlined;
+					data.HasShadow = textItem.HasShadow;
+					data.ShadowOffsetX = textItem.ShadowOffsetX;
+					data.ShadowOffsetY = textItem.ShadowOffsetY;
+					data.ShadowBlurRadius = textItem.ShadowBlurRadius;
+					data.ShadowColor = ColorToString(textItem.ShadowColor);
+					data.HasOutline = textItem.HasOutline;
+					data.OutlineThickness = textItem.OutlineThickness;
+					data.OutlineColor = BrushToColorString(textItem.OutlineColor);
+					data.TextAlignment = textItem.TextAlignment.ToString();
+					break;
+					
+				case PlaceholderCanvasItem placeholderItem:
+					data.ItemType = "Placeholder";
+					data.Name = $"Placeholder {placeholderItem.PlaceholderNo}";
+					data.PlaceholderNumber = placeholderItem.PlaceholderNo;
+					// Store the placeholder color
+					data.PlaceholderColor = BrushToColorString(placeholderItem.Background);
+					break;
+					
+				case ImageCanvasItem imageItem:
+					data.ItemType = "Image";
+					data.Name = "Image";
+					if (imageItem.Image is BitmapImage bitmapImage && bitmapImage.UriSource != null)
+					{
+						string imagePath = bitmapImage.UriSource.ToString();
+						if (bitmapImage.UriSource.IsFile)
+						{
+							imagePath = bitmapImage.UriSource.LocalPath;
+						}
+						data.ImagePath = imagePath;
+					}
+					break;
+					
+				case ShapeCanvasItem shapeItem:
+					data.ItemType = "Shape";
+					data.Name = $"Shape: {shapeItem.ShapeType}";
+					data.ShapeType = shapeItem.ShapeType.ToString();
+					data.FillColor = BrushToColorString(shapeItem.Fill);
+					data.StrokeColor = BrushToColorString(shapeItem.Stroke);
+					data.StrokeThickness = shapeItem.StrokeThickness;
+					data.HasNoFill = shapeItem.HasNoFill;
+					data.HasNoStroke = shapeItem.HasNoStroke;
+					break;
+					
+				default:
+					data.ItemType = "Unknown";
+					data.Name = item.GetType().Name;
+					break;
+			}
+			
+			return data;
+		}
+		
+		// Helper method to convert Brush to color string
+		private string BrushToColorString(Brush brush)
+		{
+			if (brush is SolidColorBrush solidBrush)
+			{
+				return solidBrush.Color.ToString();
+			}
+			return null;
+		}
+		
+		// Helper method to convert Color to string
+		private string ColorToString(Color color)
+		{
+			return color.ToString();
 		}
 		
 		// Helper method to load imported template
@@ -2912,11 +3066,225 @@ namespace Photobooth.MVVM.ViewModels.Designer
 				}
 			}
 			
+			// Restore canvas items if available
+			if (templateData.CanvasItems != null && templateData.CanvasItems.Count > 0)
+			{
+				// Sort by ZIndex to ensure correct layering order
+				// Items with lower ZIndex should be added first (appear behind)
+				var sortedItems = templateData.CanvasItems.OrderBy(i => i.ZIndex).ToList();
+				
+				// First, add all items to the canvas
+				var addedItems = new List<(ICanvasItem item, int zIndex)>();
+				foreach (var itemData in sortedItems)
+				{
+					var canvasItem = ConvertDataToCanvasItem(itemData, templateData.AssetMappings);
+					if (canvasItem != null)
+					{
+						CustomDesignerCanvas.Items.Add(canvasItem);
+						addedItems.Add((canvasItem, itemData.ZIndex));
+					}
+				}
+				
+				// Then, explicitly set z-indices after all items are added
+				// This ensures proper layering especially for placeholders
+				Application.Current.Dispatcher.BeginInvoke(
+					System.Windows.Threading.DispatcherPriority.Loaded,
+					new Action(() =>
+					{
+						foreach (var (item, zIndex) in addedItems)
+						{
+							var container = CustomDesignerCanvas.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
+							if (container != null)
+							{
+								// Remove and re-add at the correct position to ensure proper z-order
+								var parent = container.Parent as Canvas;
+								if (parent != null)
+								{
+									parent.Children.Remove(container);
+									// Insert at the correct z-index position
+									if (zIndex < parent.Children.Count)
+									{
+										parent.Children.Insert(zIndex, container);
+									}
+									else
+									{
+										parent.Children.Add(container);
+									}
+								}
+							}
+						}
+					}));
+			}
+			
 			// Refresh layers
 			RefreshLayersList();
 			
 			MessageBox.Show("Template imported successfully!", "Import Complete", 
 				MessageBoxButton.OK, MessageBoxImage.Information);
+		}
+		
+		// Helper method to convert CanvasItemData back to ICanvasItem
+		private ICanvasItem ConvertDataToCanvasItem(CanvasItemData data, Dictionary<string, string> assetMappings)
+		{
+			ICanvasItem item = null;
+			
+			switch (data.ItemType)
+			{
+				case "Text":
+					var textItem = new TextCanvasItem();
+					textItem.SuppressAutoSize = true;
+					
+					// Set text properties
+					textItem.Text = data.Text ?? "";
+					if (!string.IsNullOrEmpty(data.FontFamily))
+						textItem.FontFamily = data.FontFamily;
+					if (data.FontSize.HasValue)
+						textItem.FontSize = data.FontSize.Value;
+					textItem.Foreground = ColorStringToBrush(data.TextColor);
+					textItem.IsBold = data.IsBold;
+					textItem.IsItalic = data.IsItalic;
+					textItem.IsUnderlined = data.IsUnderlined;
+					textItem.HasShadow = data.HasShadow;
+					textItem.ShadowOffsetX = data.ShadowOffsetX;
+					textItem.ShadowOffsetY = data.ShadowOffsetY;
+					textItem.ShadowBlurRadius = data.ShadowBlurRadius;
+					textItem.ShadowColor = ColorStringToColor(data.ShadowColor);
+					textItem.HasOutline = data.HasOutline;
+					textItem.OutlineThickness = data.OutlineThickness;
+					textItem.OutlineColor = ColorStringToBrush(data.OutlineColor);
+					if (!string.IsNullOrEmpty(data.TextAlignment) && 
+						Enum.TryParse<TextAlignment>(data.TextAlignment, out var alignment))
+					{
+						textItem.TextAlignment = alignment;
+					}
+					
+					// Re-enable auto-sizing
+					textItem.SuppressAutoSize = false;
+					// TextCanvasItem doesn't have UpdateSize method, the size will update automatically
+					item = textItem;
+					break;
+					
+				case "Placeholder":
+					var placeholderItem = new PlaceholderCanvasItem();
+					if (data.PlaceholderNumber.HasValue)
+						placeholderItem.PlaceholderNo = data.PlaceholderNumber.Value;
+					// PlaceholderCanvasItem uses Background property for its color
+					if (!string.IsNullOrEmpty(data.PlaceholderColor))
+						placeholderItem.Background = ColorStringToBrush(data.PlaceholderColor);
+					item = placeholderItem;
+					break;
+					
+				case "Image":
+					var imageItem = new ImageCanvasItem();
+					
+					// Resolve image path using asset mappings if available
+					string imagePath = data.ImagePath;
+					if (assetMappings != null && !string.IsNullOrEmpty(imagePath))
+					{
+						// Check if we have a new path for this asset
+						if (assetMappings.ContainsKey(imagePath))
+						{
+							imagePath = assetMappings[imagePath];
+						}
+					}
+					
+					// Load the image if path is valid
+					if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
+					{
+						try
+						{
+							var bitmap = new BitmapImage();
+							bitmap.BeginInit();
+							bitmap.CacheOption = BitmapCacheOption.OnLoad;
+							bitmap.UriSource = new Uri(imagePath, UriKind.Absolute);
+							bitmap.EndInit();
+							imageItem.Image = bitmap;
+						}
+						catch (Exception ex)
+						{
+							System.Diagnostics.Debug.WriteLine($"Failed to load image: {ex.Message}");
+						}
+					}
+					item = imageItem;
+					break;
+					
+				case "Shape":
+					// Parse shape type first
+					ShapeType shapeType = ShapeType.Rectangle;
+					if (!string.IsNullOrEmpty(data.ShapeType))
+					{
+						Enum.TryParse<ShapeType>(data.ShapeType, out shapeType);
+					}
+					
+					// Create shape with required constructor parameters
+					var shapeItem = new ShapeCanvasItem(data.X, data.Y, shapeType);
+					
+					// Set additional properties
+					shapeItem.Fill = ColorStringToBrush(data.FillColor);
+					shapeItem.Stroke = ColorStringToBrush(data.StrokeColor);
+					shapeItem.StrokeThickness = data.StrokeThickness;
+					shapeItem.HasNoFill = data.HasNoFill;
+					shapeItem.HasNoStroke = data.HasNoStroke;
+					item = shapeItem;
+					break;
+			}
+			
+			// Set common properties
+			if (item != null)
+			{
+				// Position and size
+				if (item is IBoxCanvasItem boxItem)
+				{
+					boxItem.Left = data.X;
+					boxItem.Top = data.Y;
+					boxItem.Width = data.Width;
+					boxItem.Height = data.Height;
+					boxItem.LockedPosition = data.LockedPosition;
+				}
+				
+				// Rotation and aspect ratio
+				if (item is CanvasItem canvasItem)
+				{
+					canvasItem.Angle = data.Rotation;
+					canvasItem.LockedAspectRatio = data.LockedAspectRatio;
+				}
+				else if (item is TextCanvasItem textCanvasItem)
+				{
+					textCanvasItem.Angle = data.Rotation;
+					textCanvasItem.LockedAspectRatio = data.LockedAspectRatio;
+				}
+			}
+			
+			return item;
+		}
+		
+		// Helper method to convert color string to Brush
+		private Brush ColorStringToBrush(string colorString)
+		{
+			if (!string.IsNullOrEmpty(colorString))
+			{
+				try
+				{
+					var color = (Color)ColorConverter.ConvertFromString(colorString);
+					return new SolidColorBrush(color);
+				}
+				catch { }
+			}
+			return null;
+		}
+		
+		// Helper method to convert color string to Color
+		private Color ColorStringToColor(string colorString)
+		{
+			if (!string.IsNullOrEmpty(colorString))
+			{
+				try
+				{
+					return (Color)ColorConverter.ConvertFromString(colorString);
+				}
+				catch { }
+			}
+			return Colors.Black;
 		}
 		
 		#endregion
