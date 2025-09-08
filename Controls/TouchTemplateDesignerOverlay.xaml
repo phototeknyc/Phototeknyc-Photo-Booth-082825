@@ -8,8 +8,8 @@
              d:DesignHeight="1080" d:DesignWidth="1920">
     
     <Grid x:Name="MainOverlay">
-        <!-- Full screen opaque background -->
-        <Rectangle Fill="#0F0F0F" Opacity="1"/>
+        <!-- Full screen opaque background - ensures nothing shows through -->
+        <Rectangle Fill="#FF0F0F0F" Opacity="1"/>
         
         <!-- Touch Template Designer - Full Screen -->
         <local:TouchTemplateDesigner x:Name="TouchDesigner"/>

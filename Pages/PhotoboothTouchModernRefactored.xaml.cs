@@ -7350,38 +7350,49 @@ namespace Photobooth.Pages
             // Create and show the touch template designer overlay
             var touchDesignerOverlay = new Photobooth.Controls.TouchTemplateDesignerOverlay();
             
-            // Add to the main grid (which should be the parent of this page)
-            if (this.Parent is Grid parentGrid)
+            // Add directly to the main grid of this page (not the parent)
+            // Find the main grid by looking for the first Grid child of this UserControl
+            Grid mainPageGrid = null;
+            
+            // The page's content should be a Grid
+            if (this.Content is Grid grid)
             {
-                parentGrid.Children.Add(touchDesignerOverlay);
-                Panel.SetZIndex(touchDesignerOverlay, 1000); // Ensure it's on top
+                mainPageGrid = grid;
+            }
+            
+            if (mainPageGrid != null)
+            {
+                // Add to the same grid that contains other overlays
+                mainPageGrid.Children.Add(touchDesignerOverlay);
+                
+                // Set grid row and column spans to cover entire area
+                Grid.SetRow(touchDesignerOverlay, 0);
+                Grid.SetRowSpan(touchDesignerOverlay, 10);
+                Grid.SetColumnSpan(touchDesignerOverlay, 10);
+                
+                // Set high z-index to appear above everything except PIN overlay
+                Panel.SetZIndex(touchDesignerOverlay, 3000); // Higher than TemplateDesignerOverlay (2000)
+                
+                // Make it visible
+                touchDesignerOverlay.Visibility = Visibility.Visible;
+                
+                // Handle close event to remove from grid
+                touchDesignerOverlay.CloseRequested += (s, args) =>
+                {
+                    mainPageGrid.Children.Remove(touchDesignerOverlay);
+                };
             }
             else
             {
-                // Find the root grid and add the overlay
-                var window = Window.GetWindow(this);
-                if (window?.Content is Grid mainGrid)
+                // Fallback: Create a new window for the designer if we can't find the grid
+                var designerWindow = new Window
                 {
-                    mainGrid.Children.Add(touchDesignerOverlay);
-                    Panel.SetZIndex(touchDesignerOverlay, 1000);
-                }
-                else if (window?.Content is Panel panel)
-                {
-                    panel.Children.Add(touchDesignerOverlay);
-                    Panel.SetZIndex(touchDesignerOverlay, 1000);
-                }
-                else
-                {
-                    // Create a new window for the designer if we can't find a suitable parent
-                    var designerWindow = new Window
-                    {
-                        Title = "Touch Template Designer",
-                        WindowState = WindowState.Maximized,
-                        WindowStyle = WindowStyle.None,
-                        Content = touchDesignerOverlay
-                    };
-                    designerWindow.Show();
-                }
+                    Title = "Touch Template Designer",
+                    WindowState = WindowState.Maximized,
+                    WindowStyle = WindowStyle.None,
+                    Content = touchDesignerOverlay
+                };
+                designerWindow.Show();
             }
         }
         
