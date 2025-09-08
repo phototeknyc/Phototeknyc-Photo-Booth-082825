@@ -721,7 +721,28 @@ namespace Photobooth.MVVM.ViewModels.Designer
 					if (result == MessageBoxResult.Yes)
 					{
 						// Update existing template
-						var canvasItems = CustomDesignerCanvas.Items.OfType<ICanvasItem>().ToList();
+						// Build a list of items with their actual z-index from the visual tree
+						var itemsWithZIndex = new List<(ICanvasItem item, int zIndex)>();
+						foreach (var item in CustomDesignerCanvas.Items)
+						{
+							if (item is ICanvasItem canvasItem)
+							{
+								// Get the actual z-index from the visual tree
+								var container = CustomDesignerCanvas.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
+								int actualZIndex = 0;
+								if (container?.Parent is Canvas canvas)
+								{
+									actualZIndex = canvas.Children.IndexOf(container);
+								}
+								itemsWithZIndex.Add((canvasItem, actualZIndex));
+							}
+						}
+						
+						// Sort by z-index to ensure proper ordering
+						itemsWithZIndex.Sort((a, b) => a.zIndex.CompareTo(b.zIndex));
+						
+						// Extract just the items in the correct order
+						var canvasItems = itemsWithZIndex.Select(x => x.item).ToList();
 						var canvasBackground = CustomDesignerCanvas.Background;
 						
 						// Update the template canvas items
@@ -1807,7 +1828,29 @@ namespace Photobooth.MVVM.ViewModels.Designer
 				
 				// Save current canvas to database with actual pixel dimensions
 				var templateService = new TemplateService();
-				var canvasItems = CustomDesignerCanvas.Items.OfType<ICanvasItem>().ToList();
+				
+				// Build a list of items with their actual z-index from the visual tree
+				var itemsWithZIndex = new List<(ICanvasItem item, int zIndex)>();
+				foreach (var item in CustomDesignerCanvas.Items)
+				{
+					if (item is ICanvasItem canvasItem)
+					{
+						// Get the actual z-index from the visual tree
+						var container = CustomDesignerCanvas.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
+						int actualZIndex = 0;
+						if (container?.Parent is Canvas canvas)
+						{
+							actualZIndex = canvas.Children.IndexOf(container);
+						}
+						itemsWithZIndex.Add((canvasItem, actualZIndex));
+					}
+				}
+				
+				// Sort by z-index to ensure proper ordering
+				itemsWithZIndex.Sort((a, b) => a.zIndex.CompareTo(b.zIndex));
+				
+				// Extract just the items in the correct order
+				var canvasItems = itemsWithZIndex.Select(x => x.item).ToList();
 				var canvasBackground = CustomDesignerCanvas.Background;
 				
 				var templateId = templateService.SaveCurrentCanvas(
