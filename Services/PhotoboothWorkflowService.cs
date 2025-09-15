@@ -647,7 +647,42 @@ namespace Photobooth.Services
         }
         #endregion
 
-        #region Dispose
+        #region Cleanup Methods
+        public void StopWorkflow()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("Stopping workflow...");
+                
+                // Stop countdown timer
+                _countdownTimer?.Stop();
+                
+                // Reset workflow state
+                _isCapturing = false;
+                _isCountdownActive = false;
+                _countdownValue = 0;
+                
+                // Stop any active camera operations
+                if (CurrentCamera != null && CurrentCamera.IsConnected)
+                {
+                    try
+                    {
+                        CurrentCamera.StopLiveView();
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error stopping live view: {ex.Message}");
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine("Workflow stopped");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error stopping workflow: {ex.Message}");
+            }
+        }
+        
         public void Dispose()
         {
             _countdownTimer?.Stop();

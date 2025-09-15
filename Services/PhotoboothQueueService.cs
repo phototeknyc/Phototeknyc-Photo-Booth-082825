@@ -16,7 +16,7 @@ namespace Photobooth.Services
     /// Manages QR code visibility based on external URL validity
     /// Follows business logic separation principles
     /// </summary>
-    public class PhotoboothQueueService
+    public class PhotoboothQueueService : IDisposable
     {
         #region Dependencies and Configuration
         private readonly string _dbPath;
@@ -73,11 +73,20 @@ namespace Photobooth.Services
             
             InitializeDatabase();
             
-            // Start background processor (check every 5 minutes to reduce database load)
+            // Start background processor - check more frequently (every 30 seconds)
+            // Initial delay of 5 seconds to let app initialize, then every 30 seconds
             _processingTimer = new Timer(ProcessQueueCallback, null, 
-                TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(5));
+                TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30));
             
             Log.Debug("PhotoboothQueueService: Initialized with clean architecture pattern");
+            
+            // Process any pending queues immediately on startup
+            Task.Run(async () => 
+            {
+                await Task.Delay(2000); // Small delay to let services initialize
+                Log.Debug("PhotoboothQueueService: Processing pending queues on startup");
+                await ProcessPendingQueues();
+            });
         }
 
         private void InitializeDatabase()
@@ -102,9 +111,28 @@ namespace Photobooth.Services
                             gallery_url TEXT,
                             status TEXT DEFAULT 'pending',
                             retry_count INTEGER DEFAULT 0,
-                            is_gallery_session BOOLEAN DEFAULT 0
+                            is_gallery_session BOOLEAN DEFAULT 0,
+                            failure_reason TEXT,
+                            is_permanent_failure BOOLEAN DEFAULT 0
                         )", conn);
                     smsCmd.ExecuteNonQuery();
+                    
+                    // Add new columns to existing table if they don't exist
+                    try
+                    {
+                        var addFailureReasonCmd = new SQLiteCommand(
+                            "ALTER TABLE sms_queue ADD COLUMN failure_reason TEXT", conn);
+                        addFailureReasonCmd.ExecuteNonQuery();
+                    }
+                    catch { /* Column might already exist */ }
+                    
+                    try
+                    {
+                        var addPermanentFailureCmd = new SQLiteCommand(
+                            "ALTER TABLE sms_queue ADD COLUMN is_permanent_failure BOOLEAN DEFAULT 0", conn);
+                        addPermanentFailureCmd.ExecuteNonQuery();
+                    }
+                    catch { /* Column might already exist */ }
                     
                     // QR code visibility tracking
                     var qrCmd = new SQLiteCommand(@"
@@ -202,6 +230,45 @@ namespace Photobooth.Services
                     Success = false,
                     Message = $"Failed to queue SMS: {ex.Message}"
                 };
+            }
+        }
+        
+        /// <summary>
+        /// Mark an SMS as permanently failed so it won't be retried
+        /// Used when Twilio returns permanent errors (invalid number, unsupported country, etc.)
+        /// </summary>
+        public async Task MarkSmsAsFailed(string phoneNumber, string errorMessage)
+        {
+            try
+            {
+                using (var conn = new SQLiteConnection($"Data Source={_dbPath}"))
+                {
+                    conn.Open();
+                    
+                    var cmd = new SQLiteCommand(@"
+                        UPDATE sms_queue 
+                        SET status = 'failed', 
+                            is_permanent_failure = 1, 
+                            failure_reason = @reason,
+                            processed_at = CURRENT_TIMESTAMP
+                        WHERE phone_number = @phone AND status = 'pending'", conn);
+                    
+                    cmd.Parameters.AddWithValue("@phone", phoneNumber);
+                    cmd.Parameters.AddWithValue("@reason", errorMessage ?? "Invalid phone number or unsupported region");
+                    
+                    int affected = cmd.ExecuteNonQuery();
+                    
+                    if (affected > 0)
+                    {
+                        Log.Debug($"PhotoboothQueueService: Marked {affected} SMS entries as permanently failed for {phoneNumber}");
+                        Log.Debug($"PhotoboothQueueService: Failure reason: {errorMessage}");
+                        NotifyQueueStatusChanged();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PhotoboothQueueService: Error marking SMS as failed: {ex.Message}");
             }
         }
         #endregion
@@ -475,11 +542,11 @@ namespace Photobooth.Services
                 {
                     conn.Open();
                     
-                    // Get pending SMS with retry limit
+                    // Get all pending SMS - skip permanent failures
                     var cmd = new SQLiteCommand(@"
                         SELECT id, session_id, phone_number, message_template, is_gallery_session, retry_count
                         FROM sms_queue 
-                        WHERE status = 'pending' AND retry_count < 3
+                        WHERE status = 'pending' AND is_permanent_failure = 0
                         ORDER BY requested_at", conn);
                     
                     var pendingSms = new List<dynamic>();
@@ -529,20 +596,67 @@ namespace Photobooth.Services
                                 }
                                 else
                                 {
-                                    // Increment retry count
-                                    IncrementRetryCount("sms_queue", sms.Id, conn);
+                                    // Send returned false - could be network issue or permanent failure
+                                    // The CloudShareServiceRuntime will have already marked permanent failures
+                                    // So if we get here and it's not marked as permanent, it's likely network
+                                    
+                                    // Check if it was marked as permanent failure
+                                    var checkCmd = new SQLiteCommand(@"
+                                        SELECT is_permanent_failure FROM sms_queue WHERE id = @id", conn);
+                                    checkCmd.Parameters.AddWithValue("@id", sms.Id);
+                                    var isPermanent = Convert.ToBoolean(checkCmd.ExecuteScalar() ?? false);
+                                    
+                                    if (!isPermanent)
+                                    {
+                                        // Network failure - keep as pending for retry later
+                                        Log.Debug($"PhotoboothQueueService: SMS send failed for {sms.PhoneNumber} - likely network issue, will retry later");
+                                        IncrementRetryCount("sms_queue", sms.Id, conn);
+                                    }
+                                    else
+                                    {
+                                        Log.Debug($"PhotoboothQueueService: SMS permanently failed for {sms.PhoneNumber} - will not retry");
+                                    }
                                 }
                             }
                             catch (Exception ex)
                             {
                                 Log.Error($"PhotoboothQueueService: Error sending SMS to {sms.PhoneNumber}: {ex.Message}");
-                                IncrementRetryCount("sms_queue", sms.Id, conn);
+                                
+                                // Check if it's a network error (usually contains "network", "connection", "timeout")
+                                var errorLower = ex.Message.ToLower();
+                                bool isNetworkError = errorLower.Contains("network") || 
+                                                      errorLower.Contains("connection") || 
+                                                      errorLower.Contains("timeout") ||
+                                                      errorLower.Contains("unreachable");
+                                
+                                if (isNetworkError)
+                                {
+                                    // Network error - keep as pending for retry
+                                    Log.Debug($"PhotoboothQueueService: Network error, will retry later");
+                                    IncrementRetryCount("sms_queue", sms.Id, conn);
+                                }
+                                else
+                                {
+                                    // Other error - might be configuration or permanent issue
+                                    // Check if already marked as permanent by CloudShareServiceRuntime
+                                    var checkCmd = new SQLiteCommand(@"
+                                        SELECT is_permanent_failure FROM sms_queue WHERE id = @id", conn);
+                                    checkCmd.Parameters.AddWithValue("@id", sms.Id);
+                                    var isPermanent = Convert.ToBoolean(checkCmd.ExecuteScalar() ?? false);
+                                    
+                                    if (!isPermanent)
+                                    {
+                                        // Not marked as permanent, increment retry cautiously
+                                        IncrementRetryCount("sms_queue", sms.Id, conn);
+                                    }
+                                }
                             }
                         }
                         else
                         {
-                            // Still no valid URL, increment retry but don't fail yet
-                            IncrementRetryCount("sms_queue", sms.Id, conn);
+                            // Still no valid URL - just log and keep waiting
+                            // Don't increment retry count as we haven't actually tried to send
+                            Log.Debug($"PhotoboothQueueService: Still waiting for valid URL for session {sms.SessionId}");
                         }
                     }
                 }
@@ -842,7 +956,17 @@ namespace Photobooth.Services
         #region Dispose
         public void Dispose()
         {
-            _processingTimer?.Dispose();
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("PhotoboothQueueService: Disposing...");
+                _processingTimer?.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+                _processingTimer?.Dispose();
+                System.Diagnostics.Debug.WriteLine("PhotoboothQueueService: Disposed");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PhotoboothQueueService: Error during dispose: {ex.Message}");
+            }
         }
         #endregion
     }

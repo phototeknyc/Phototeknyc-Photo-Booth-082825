@@ -442,20 +442,23 @@ namespace Photobooth.Services
                 // Use the phone number from our dedicated phone pad
                 string phoneNumber = _smsPhoneNumber;
                 
-                // Get gallery URL from current share result or use pending URL
+                // Get gallery URL from current share result
                 string galleryUrl = currentShareResult?.GalleryUrl;
                 string sessionId = currentSessionGuid ?? Guid.NewGuid().ToString();
                 
-                // If no gallery URL, this means photos are pending upload
-                if (string.IsNullOrEmpty(galleryUrl))
-                {
-                    galleryUrl = $"https://photos.app/pending/{sessionId}";
-                    Log.Debug($"SharingOperations.SendSms: Using pending URL: {galleryUrl}");
-                }
+                // Use PhotoboothQueueService for proper SMS queueing
+                // This will queue the SMS and only send when a valid URL is available
+                var queueService = PhotoboothQueueService.Instance;
                 
-                // Use cached offline queue service for SMS (works offline)
-                var queueService = GetOrCreateOfflineQueueService();
-                var queueResult = await queueService.QueueSMS(phoneNumber, galleryUrl, sessionId);
+                // Queue SMS for sending when URL is available
+                var queueResult = await queueService.QueueSmsAsync(sessionId, phoneNumber, 
+                    isGallerySession: false, customMessage: null);
+                
+                // If we already have a valid URL, process the queue immediately
+                if (!string.IsNullOrEmpty(galleryUrl))
+                {
+                    await queueService.ProcessPendingQueues();
+                }
                 
                 if (queueResult.Success)
                 {
@@ -465,8 +468,8 @@ namespace Photobooth.Services
                     try
                     {
                         var db = new TemplateDatabase();
-                        db.LogSMSSend(sessionId, phoneNumber, galleryUrl, queueResult.Immediate, 
-                                     queueResult.Immediate ? null : "Queued for sending when online");
+                        db.LogSMSSend(sessionId, phoneNumber, galleryUrl, queueResult.SentImmediately, 
+                                     queueResult.SentImmediately ? null : "Queued for sending when photos are uploaded");
                         Log.Debug($"Logged SMS queue result to database for session {sessionId}");
                     }
                     catch (Exception dbEx)
@@ -474,14 +477,28 @@ namespace Photobooth.Services
                         Log.Error($"Failed to log SMS to database: {dbEx.Message}");
                     }
                     
-                    // Show success message
-                    if (queueResult.Immediate)
+                    // Show success message with more specific status
+                    if (queueResult.SentImmediately)
                     {
                         _parent.ShowSimpleMessage("SMS sent successfully!");
                     }
                     else
                     {
-                        _parent.ShowSimpleMessage("SMS queued for sending when online");
+                        // Check if we're offline or just waiting for URL
+                        bool isOffline = !System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
+                        
+                        if (isOffline)
+                        {
+                            _parent.ShowSimpleMessage("SMS queued (offline) - will send when connection restored");
+                        }
+                        else if (string.IsNullOrEmpty(galleryUrl))
+                        {
+                            _parent.ShowSimpleMessage("SMS queued - will send when photos are uploaded");
+                        }
+                        else
+                        {
+                            _parent.ShowSimpleMessage("SMS queued - will send shortly");
+                        }
                     }
                     
                     return true;

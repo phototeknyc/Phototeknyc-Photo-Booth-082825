@@ -592,6 +592,33 @@ namespace Photobooth.Services
                 Log.Error($"PhotoboothUIService: Failed to display image: {ex.Message}");
             }
         }
+        
+        /// <summary>
+        /// Hide all UI controls - used during cleanup
+        /// </summary>
+        public void HideAllControls()
+        {
+            try
+            {
+                Log.Debug("PhotoboothUIService: Hiding all controls");
+                
+                // Hide all main controls
+                HideStartButton();
+                HideCountdown();
+                
+                // Clear any displayed content
+                ClearPhotoThumbnails();
+                
+                // Reset status
+                UpdateStatus("");
+                
+                Log.Debug("PhotoboothUIService: All controls hidden");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PhotoboothUIService: Error hiding all controls: {ex.Message}");
+            }
+        }
     }
 
     #region Event Args Classes

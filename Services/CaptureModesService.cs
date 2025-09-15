@@ -188,12 +188,14 @@ namespace Photobooth.Services
         private void LoadSettings()
         {
             var settings = Properties.Settings.Default;
+            var modulesConfig = PhotoboothModulesConfig.Instance;
             
             _isEnabled = settings.CaptureModesEnabled;
             
             // Load enabled state for each mode
             _modeConfigurations[CaptureMode.Photo].IsEnabled = settings.CaptureModePhoto;
-            _modeConfigurations[CaptureMode.Video].IsEnabled = settings.CaptureModeVideo;
+            // Use VideoEnabled from PhotoboothModulesConfig as the single source of truth for video
+            _modeConfigurations[CaptureMode.Video].IsEnabled = modulesConfig.VideoEnabled;
             _modeConfigurations[CaptureMode.Boomerang].IsEnabled = settings.CaptureModeBoomerang;
             _modeConfigurations[CaptureMode.Gif].IsEnabled = settings.CaptureModeGif;
             _modeConfigurations[CaptureMode.GreenScreen].IsEnabled = settings.CaptureModeGreenScreen;
@@ -212,12 +214,14 @@ namespace Photobooth.Services
         public void SaveSettings()
         {
             var settings = Properties.Settings.Default;
+            var modulesConfig = PhotoboothModulesConfig.Instance;
             
             settings.CaptureModesEnabled = _isEnabled;
             
             // Save enabled state for each mode
             settings.CaptureModePhoto = _modeConfigurations[CaptureMode.Photo].IsEnabled;
-            settings.CaptureModeVideo = _modeConfigurations[CaptureMode.Video].IsEnabled;
+            // Save video state to PhotoboothModulesConfig instead of settings
+            modulesConfig.VideoEnabled = _modeConfigurations[CaptureMode.Video].IsEnabled;
             settings.CaptureModeBoomerang = _modeConfigurations[CaptureMode.Boomerang].IsEnabled;
             settings.CaptureModeGif = _modeConfigurations[CaptureMode.Gif].IsEnabled;
             settings.CaptureModeGreenScreen = _modeConfigurations[CaptureMode.GreenScreen].IsEnabled;

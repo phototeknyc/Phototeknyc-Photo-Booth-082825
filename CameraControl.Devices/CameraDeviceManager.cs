@@ -35,6 +35,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
+using System.Threading.Tasks;
 using CameraControl.Devices.Canon;
 using CameraControl.Devices.Classes;
 using CameraControl.Devices.Custom;
@@ -95,6 +96,8 @@ namespace CameraControl.Devices
         public List<IWifiDeviceProvider> WifiDeviceProviders { get; set; }
 
         private ICameraDevice _selectedCameraDevice;
+        private volatile bool _wiaInitialized = false;
+        private readonly object _wiaLock = new object();
 
         /// <summary>
         /// Gets or sets the default selected camera device. When new camera connected this property set automatically to new device
@@ -249,19 +252,33 @@ namespace CameraControl.Devices
             WifiDeviceProviders = new List<IWifiDeviceProvider>();
 
 
-            // prevent program crash in something wrong with wia
-            try
+            // Defer WIA initialization to a background thread to improve startup time
+            Task.Run(() =>
             {
-                WiaDeviceManager = new DeviceManager();
-                WiaDeviceManager.RegisterEvent(Conts.wiaEventDeviceConnected, "*");
-                WiaDeviceManager.RegisterEvent(Conts.wiaEventDeviceDisconnected, "*");
-                WiaDeviceManager.OnEvent += DeviceManager_OnEvent;
-                Log.Error("Wia initialized");
-            }
-            catch (Exception exception)
-            {
-                Log.Error("Error initialize WIA", exception);
-            }
+                try
+                {
+                    Log.Debug("Starting WIA initialization in background...");
+                    WiaDeviceManager = new DeviceManager();
+                    WiaDeviceManager.RegisterEvent(Conts.wiaEventDeviceConnected, "*");
+                    WiaDeviceManager.RegisterEvent(Conts.wiaEventDeviceDisconnected, "*");
+                    WiaDeviceManager.OnEvent += DeviceManager_OnEvent;
+                    
+                    lock (_wiaLock)
+                    {
+                        _wiaInitialized = true;
+                    }
+                    
+                    Log.Debug("WIA initialized successfully");
+                }
+                catch (Exception exception)
+                {
+                    Log.Error("Error initializing WIA", exception);
+                    lock (_wiaLock)
+                    {
+                        _wiaInitialized = true; // Set to true even on error to prevent hanging
+                    }
+                }
+            });
 
             try
             {

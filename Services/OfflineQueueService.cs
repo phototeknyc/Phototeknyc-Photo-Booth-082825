@@ -10,7 +10,7 @@ namespace Photobooth.Services
     /// <summary>
     /// Manages offline queue for SMS and uploads
     /// </summary>
-    public class OfflineQueueService
+    public class OfflineQueueService : IDisposable
     {
         private readonly string _dbPath;
         private readonly IShareService _shareService;
@@ -22,8 +22,18 @@ namespace Photobooth.Services
         private double _uploadProgress = 0.0;
         private string _currentUploadName = "";
         
+        // Track processing to prevent duplicates and implement backoff
+        private readonly HashSet<string> _currentlyProcessing = new HashSet<string>();
+        private readonly Dictionary<string, DateTime> _lastFailedAttempt = new Dictionary<string, DateTime>();
+        private readonly Dictionary<string, int> _failureCount = new Dictionary<string, int>();
+        
         // Event for upload progress updates
         public event Action<double, string> UploadProgressChanged;
+        
+        // Public properties for status monitoring
+        public bool IsUploading => _isUploading;
+        public double UploadProgress => _uploadProgress;
+        public string CurrentUploadName => _currentUploadName;
 
         // Singleton pattern to avoid multiple instances
         private static OfflineQueueService _instance;
@@ -61,15 +71,24 @@ namespace Photobooth.Services
             InitializeDatabase();
             
             // Start background processor (check every 30 seconds)
+            // Initial delay of 5 seconds to let app initialize, then every 30 seconds
             _processTimer = new System.Threading.Timer(
                 ProcessQueue, 
                 null, 
-                TimeSpan.FromSeconds(30), 
+                TimeSpan.FromSeconds(5), 
                 TimeSpan.FromSeconds(30));
             
             // Check online status
             CheckOnlineStatus();
             System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Online status after check: {_isOnline}");
+            
+            // Process any pending queues immediately on startup
+            Task.Run(async () => 
+            {
+                await Task.Delay(3000); // Small delay to let services initialize
+                System.Diagnostics.Debug.WriteLine("OfflineQueueService: Processing pending queues on startup");
+                ProcessQueue(null); // Call the existing ProcessQueue method
+            });
         }
 
         private void InitializeDatabase()
@@ -87,12 +106,25 @@ namespace Photobooth.Services
                         phone_number TEXT NOT NULL,
                         message TEXT NOT NULL,
                         gallery_url TEXT NOT NULL,
+                        session_id TEXT,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         retry_count INTEGER DEFAULT 0,
                         sent_at DATETIME,
                         status TEXT DEFAULT 'pending'
                     )", conn);
                 cmd.ExecuteNonQuery();
+                
+                // Add session_id column if it doesn't exist (for migration)
+                try
+                {
+                    var alterCmd = new SQLiteCommand(@"
+                        ALTER TABLE sms_queue ADD COLUMN session_id TEXT", conn);
+                    alterCmd.ExecuteNonQuery();
+                }
+                catch
+                {
+                    // Column already exists, ignore
+                }
                 
                 // Upload queue table
                 var cmd2 = new SQLiteCommand(@"
@@ -118,11 +150,14 @@ namespace Photobooth.Services
         {
             try
             {
-                var message = $"Your photos are ready! 📸\nView and download: {galleryUrl}\nLink expires in 7 days.";
+                // Only send immediately if we have a valid external URL and are online
+                bool hasValidUrl = !string.IsNullOrEmpty(galleryUrl) && 
+                                  !galleryUrl.Contains("/pending/") && 
+                                  (galleryUrl.StartsWith("http://") || galleryUrl.StartsWith("https://"));
                 
-                // Try to send immediately if online
-                if (_isOnline)
+                if (_isOnline && hasValidUrl)
                 {
+                    var message = $"Your photos are ready! 📸\nView and download: {galleryUrl}\nLink expires in 7 days.";
                     var sent = await _shareService.SendSMSAsync(phoneNumber, galleryUrl);
                     if (sent)
                     {
@@ -135,17 +170,18 @@ namespace Photobooth.Services
                     }
                 }
                 
-                // Queue for later if offline or failed
+                // Queue for later - will send when valid URL is available
                 using (var conn = new SQLiteConnection($"Data Source={_dbPath}"))
                 {
                     conn.Open();
                     var cmd = new SQLiteCommand(@"
-                        INSERT INTO sms_queue (phone_number, message, gallery_url) 
-                        VALUES (@phone, @msg, @url)", conn);
+                        INSERT INTO sms_queue (phone_number, message, gallery_url, session_id) 
+                        VALUES (@phone, @msg, @url, @session)", conn);
                     
                     cmd.Parameters.AddWithValue("@phone", phoneNumber);
-                    cmd.Parameters.AddWithValue("@msg", message);
-                    cmd.Parameters.AddWithValue("@url", galleryUrl);
+                    cmd.Parameters.AddWithValue("@msg", "Your photos are ready! 📸\nView and download: {url}\nLink expires in 7 days.");
+                    cmd.Parameters.AddWithValue("@url", galleryUrl ?? "");
+                    cmd.Parameters.AddWithValue("@session", sessionId ?? "");
                     cmd.ExecuteNonQuery();
                 }
                 
@@ -153,7 +189,7 @@ namespace Photobooth.Services
                 { 
                     Success = true, 
                     Immediate = false,
-                    Message = "SMS queued for sending when online" 
+                    Message = hasValidUrl ? "SMS queued for sending when online" : "SMS queued - will send when photos are uploaded" 
                 };
             }
             catch (Exception ex)
@@ -175,59 +211,141 @@ namespace Photobooth.Services
             {
                 System.Diagnostics.Debug.WriteLine($"OfflineQueueService.QueuePhotosForUpload: Starting for session {sessionId}, {photoPaths?.Count ?? 0} photos, online={_isOnline}");
                 
-                // Try immediate upload if online
+                // Check if this session is already queued or being processed
+                if (_currentlyProcessing.Contains(sessionId))
+                {
+                    System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Session {sessionId} is already being processed, skipping");
+                    return new UploadQueueResult
+                    {
+                        Success = true,
+                        Immediate = false,
+                        Message = "Already processing this session"
+                    };
+                }
+                
+                // Check if already in queue
+                using (var conn = new SQLiteConnection($"Data Source={_dbPath}"))
+                {
+                    conn.Open();
+                    var checkCmd = new SQLiteCommand(
+                        "SELECT COUNT(*) FROM upload_queue WHERE session_id = @session AND status = 'pending'", conn);
+                    checkCmd.Parameters.AddWithValue("@session", sessionId);
+                    var count = Convert.ToInt32(checkCmd.ExecuteScalar());
+                    
+                    if (count > 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Session {sessionId} already in queue, skipping");
+                        return new UploadQueueResult
+                        {
+                            Success = true,
+                            Immediate = false,
+                            Message = "Already queued for upload"
+                        };
+                    }
+                }
+                
+                // Check if we should wait due to recent failure
+                if (_lastFailedAttempt.ContainsKey(sessionId))
+                {
+                    var timeSinceLastFail = DateTime.Now - _lastFailedAttempt[sessionId];
+                    var failCount = _failureCount.ContainsKey(sessionId) ? _failureCount[sessionId] : 0;
+                    var backoffSeconds = Math.Min(30 * Math.Pow(2, failCount), 600);
+                    
+                    if (timeSinceLastFail.TotalSeconds < backoffSeconds)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Session {sessionId} in backoff period, queuing instead");
+                        // Queue it instead of trying immediately
+                        _isOnline = false; // Force queuing
+                    }
+                }
+                
+                // Try immediate upload if online and not in backoff
                 if (_isOnline)
                 {
                     System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Online - attempting immediate upload");
                     
-                    // Set upload status and notify UI
-                    _isUploading = true;
-                    _currentUploadName = $"Session {sessionId}";
-                    _uploadProgress = 0.0;
-                    UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
+                    // Mark as processing
+                    _currentlyProcessing.Add(sessionId);
                     
-                    // Start a task to simulate progress
-                    var progressTask = Task.Run(async () =>
+                    try
                     {
-                        for (int i = 1; i <= 9; i++)
+                        // Set upload status and notify UI
+                        _isUploading = true;
+                        _currentUploadName = $"Session {sessionId}";
+                        _uploadProgress = 0.0;
+                        UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
+                        
+                        // Start a task to simulate progress
+                        var progressTask = Task.Run(async () =>
                         {
-                            await Task.Delay(200); // Simulate progress every 200ms
-                            if (_isUploading)
+                            for (int i = 1; i <= 9; i++)
                             {
-                                _uploadProgress = i * 0.1; // Progress from 10% to 90%
-                                UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
+                                await Task.Delay(200); // Simulate progress every 200ms
+                                if (_isUploading)
+                                {
+                                    _uploadProgress = i * 0.1; // Progress from 10% to 90%
+                                    UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
+                                }
                             }
-                        }
-                    });
-                    
-                    System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Calling CreateShareableGalleryAsync on {_shareService?.GetType().Name}");
-                    var shareResult = await _shareService.CreateShareableGalleryAsync(sessionId, photoPaths, eventName);
-                    
-                    // Cancel progress simulation and set to complete
-                    _uploadProgress = 1.0;
-                    UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
-                    
-                    // Reset upload status
-                    _isUploading = false;
-                    _uploadProgress = 0.0;
-                    _currentUploadName = "";
-                    UploadProgressChanged?.Invoke(0.0, "");
-                    
-                    if (shareResult.Success)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Upload successful! Gallery URL: {shareResult.GalleryUrl}");
-                        return new UploadQueueResult
+                        });
+                        
+                        System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Calling CreateShareableGalleryAsync on {_shareService?.GetType().Name}");
+                        var shareResult = await _shareService.CreateShareableGalleryAsync(sessionId, photoPaths, eventName);
+                        
+                        // Cancel progress simulation and set to complete
+                        _uploadProgress = 1.0;
+                        UploadProgressChanged?.Invoke(_uploadProgress, _currentUploadName);
+                        
+                        // Reset upload status
+                        _isUploading = false;
+                        _uploadProgress = 0.0;
+                        _currentUploadName = "";
+                        UploadProgressChanged?.Invoke(0.0, "");
+                        
+                        if (shareResult.Success)
                         {
-                            Success = true,
-                            Immediate = true,
-                            GalleryUrl = shareResult.GalleryUrl,
-                            ShortUrl = shareResult.ShortUrl,
-                            QRCodeImage = shareResult.QRCodeImage
-                        };
+                            System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Upload successful! Gallery URL: {shareResult.GalleryUrl}");
+                            
+                            // Clear failure tracking on success
+                            _lastFailedAttempt.Remove(sessionId);
+                            _failureCount.Remove(sessionId);
+                            
+                            return new UploadQueueResult
+                            {
+                                Success = true,
+                                Immediate = true,
+                                GalleryUrl = shareResult.GalleryUrl,
+                                ShortUrl = shareResult.ShortUrl,
+                                QRCodeImage = shareResult.QRCodeImage
+                            };
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Upload failed - {shareResult.ErrorMessage}");
+                            
+                            // Track failure for backoff
+                            _lastFailedAttempt[sessionId] = DateTime.Now;
+                            _failureCount[sessionId] = (_failureCount.ContainsKey(sessionId) ? _failureCount[sessionId] : 0) + 1;
+                            
+                            // Mark as offline to prevent further immediate attempts
+                            _isOnline = false;
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Upload failed - {shareResult.ErrorMessage}");
+                        System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Exception during upload: {ex.Message}");
+                        
+                        // Track failure for backoff
+                        _lastFailedAttempt[sessionId] = DateTime.Now;
+                        _failureCount[sessionId] = (_failureCount.ContainsKey(sessionId) ? _failureCount[sessionId] : 0) + 1;
+                        
+                        // Mark as offline
+                        _isOnline = false;
+                    }
+                    finally
+                    {
+                        // Always remove from processing set
+                        _currentlyProcessing.Remove(sessionId);
                     }
                 }
                 
@@ -278,7 +396,7 @@ namespace Photobooth.Services
         /// <summary>
         /// Process queued items when online
         /// </summary>
-        private async void ProcessQueue(object state)
+        public async void ProcessQueue(object state)
         {
             if (!_isOnline)
             {
@@ -301,9 +419,9 @@ namespace Photobooth.Services
                 {
                     conn.Open();
                     
-                    // Get pending uploads
+                    // Get all pending uploads - no retry limit, keep trying until successful
                     var cmd = new SQLiteCommand(
-                        "SELECT * FROM upload_queue WHERE status = 'pending' AND retry_count < 3", conn);
+                        "SELECT * FROM upload_queue WHERE status = 'pending'", conn);
                     
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -325,6 +443,32 @@ namespace Photobooth.Services
                         {
                             try
                             {
+                                // Check if already processing this session
+                                if (_currentlyProcessing.Contains(upload.SessionId))
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Skipping {upload.SessionId} - already processing");
+                                    continue;
+                                }
+                                
+                                // Check backoff period after failures
+                                if (_lastFailedAttempt.ContainsKey(upload.SessionId))
+                                {
+                                    var timeSinceLastFail = DateTime.Now - _lastFailedAttempt[upload.SessionId];
+                                    var failCount = _failureCount.ContainsKey(upload.SessionId) ? _failureCount[upload.SessionId] : 0;
+                                    
+                                    // Exponential backoff: 30s, 1m, 2m, 4m, 8m, then cap at 10m
+                                    var backoffSeconds = Math.Min(30 * Math.Pow(2, failCount), 600);
+                                    
+                                    if (timeSinceLastFail.TotalSeconds < backoffSeconds)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Skipping {upload.SessionId} - backoff for {backoffSeconds - timeSinceLastFail.TotalSeconds:F0}s more");
+                                        continue;
+                                    }
+                                }
+                                
+                                // Mark as processing
+                                _currentlyProcessing.Add(upload.SessionId);
+                                
                                 // Update progress tracking
                                 _isUploading = true;
                                 _currentUploadName = $"Session {upload.SessionId}";
@@ -356,18 +500,45 @@ namespace Photobooth.Services
                                     updateCmd.Parameters.AddWithValue("@id", upload.Id);
                                     updateCmd.ExecuteNonQuery();
                                     
+                                    // Clear failure tracking
+                                    _lastFailedAttempt.Remove(upload.SessionId);
+                                    _failureCount.Remove(upload.SessionId);
+                                    
+                                    // Update SMS queue with real URL
+                                    UpdateSMSQueueUrls(upload.SessionId, result.GalleryUrl);
+                                    
                                     // Notify UI that upload completed
                                     OnUploadCompleted?.Invoke(upload.SessionId, result.GalleryUrl);
                                 }
                                 else
                                 {
+                                    // Track failure for backoff
+                                    _lastFailedAttempt[upload.SessionId] = DateTime.Now;
+                                    _failureCount[upload.SessionId] = (_failureCount.ContainsKey(upload.SessionId) ? _failureCount[upload.SessionId] : 0) + 1;
+                                    
                                     // Increment retry count
                                     IncrementRetryCount("upload_queue", upload.Id, conn);
+                                    
+                                    // Mark as offline if we get connection errors
+                                    _isOnline = false;
+                                    System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Upload failed for {upload.SessionId}, marking as offline");
                                 }
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Exception processing {upload.SessionId}: {ex.Message}");
+                                
+                                // Track failure for backoff
+                                _lastFailedAttempt[upload.SessionId] = DateTime.Now;
+                                _failureCount[upload.SessionId] = (_failureCount.ContainsKey(upload.SessionId) ? _failureCount[upload.SessionId] : 0) + 1;
+                                
                                 IncrementRetryCount("upload_queue", upload.Id, conn);
+                                _isOnline = false;
+                            }
+                            finally
+                            {
+                                // Remove from processing set
+                                _currentlyProcessing.Remove(upload.SessionId);
                             }
                         }
                         
@@ -403,9 +574,9 @@ namespace Photobooth.Services
                 {
                     conn.Open();
                     
-                    // Get pending SMS
+                    // Get all pending SMS - no retry limit, keep trying until successful
                     var cmd = new SQLiteCommand(
-                        "SELECT * FROM sms_queue WHERE status = 'pending' AND retry_count < 3", conn);
+                        "SELECT * FROM sms_queue WHERE status = 'pending'", conn);
                     
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -420,11 +591,23 @@ namespace Photobooth.Services
                             });
                         }
                         
-                        // Send each SMS
+                        // Send each SMS - but only if we have a valid URL
                         foreach (var sms in messages)
                         {
                             try
                             {
+                                // Check if we have a valid URL (not a pending/fake URL)
+                                bool hasValidUrl = !string.IsNullOrEmpty(sms.GalleryUrl) && 
+                                                  !sms.GalleryUrl.Contains("/pending/") && 
+                                                  (sms.GalleryUrl.StartsWith("http://") || sms.GalleryUrl.StartsWith("https://"));
+                                
+                                if (!hasValidUrl)
+                                {
+                                    // Skip this SMS - URL not ready yet
+                                    System.Diagnostics.Debug.WriteLine($"Skipping SMS for {sms.PhoneNumber} - URL not ready: {sms.GalleryUrl}");
+                                    continue;
+                                }
+                                
                                 var sent = await _shareService.SendSMSAsync(
                                     sms.PhoneNumber, 
                                     sms.GalleryUrl);
@@ -463,6 +646,43 @@ namespace Photobooth.Services
         }
 
         /// <summary>
+        /// Update SMS queue with real gallery URL when available
+        /// </summary>
+        public void UpdateSMSQueueUrls(string sessionId, string galleryUrl)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(galleryUrl))
+                    return;
+                
+                using (var conn = new SQLiteConnection($"Data Source={_dbPath}"))
+                {
+                    conn.Open();
+                    var cmd = new SQLiteCommand(@"
+                        UPDATE sms_queue 
+                        SET gallery_url = @url 
+                        WHERE session_id = @session AND status = 'pending'", conn);
+                    
+                    cmd.Parameters.AddWithValue("@url", galleryUrl);
+                    cmd.Parameters.AddWithValue("@session", sessionId);
+                    var updated = cmd.ExecuteNonQuery();
+                    
+                    if (updated > 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Updated {updated} SMS entries with gallery URL for session {sessionId}");
+                        
+                        // Trigger immediate processing since we now have a valid URL
+                        Task.Run(async () => await ProcessSMSQueue());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating SMS queue URLs: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
         /// Check if we're online
         /// </summary>
         private void CheckOnlineStatus()
@@ -471,20 +691,21 @@ namespace Photobooth.Services
             
             try
             {
-                // For AWS uploads, we should always try - AWS SDK will handle retries
-                // Just assume we're online and let the AWS SDK handle connection issues
-                _isOnline = true;
-                System.Diagnostics.Debug.WriteLine("OfflineQueueService: Assuming online status for AWS uploads");
+                // Use .NET's network availability check
+                _isOnline = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
                 
-                /* Old connectivity check - not reliable in all network configurations
-                using (var client = new System.Net.WebClient())
+                if (_isOnline != !wasOffline)
                 {
-                    using (client.OpenRead("http://www.google.com"))
+                    System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Network status changed - Online: {_isOnline}");
+                    
+                    // If we just came online, clear failure tracking to retry immediately
+                    if (_isOnline && wasOffline)
                     {
-                        _isOnline = true;
+                        _lastFailedAttempt.Clear();
+                        _failureCount.Clear();
+                        System.Diagnostics.Debug.WriteLine("OfflineQueueService: Came online - clearing backoff timers");
                     }
                 }
-                */
             }
             catch (Exception ex)
             {
@@ -545,6 +766,23 @@ namespace Photobooth.Services
         public event Action<string, string> OnUploadCompleted;
         public event Action<string> OnSMSSent;
         public event Action<bool> OnOnlineStatusChanged;
+        
+        // IDisposable implementation
+        public void Dispose()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("OfflineQueueService: Disposing...");
+                _processTimer?.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+                _processTimer?.Dispose();
+                _processTimer = null;
+                System.Diagnostics.Debug.WriteLine("OfflineQueueService: Disposed");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"OfflineQueueService: Error during dispose: {ex.Message}");
+            }
+        }
     }
 
     public class QueueResult

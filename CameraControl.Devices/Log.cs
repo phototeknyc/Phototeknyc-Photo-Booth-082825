@@ -52,10 +52,41 @@ namespace CameraControl.Devices
 
         public static void Debug(object message, Exception exception)
         {
-            // Also write to console for debugging
-            Console.WriteLine($"[DEBUG] {message}");
-            if (exception != null)
-                Console.WriteLine($"[DEBUG] Exception: {exception}");
+            // Check if debug is enabled via DebugService (if available)
+            bool debugEnabled = true; // Default to true if service not available
+            try
+            {
+                var debugServiceType = Type.GetType("Photobooth.Services.DebugService, Photobooth");
+                if (debugServiceType != null)
+                {
+                    var instanceProperty = debugServiceType.GetProperty("Instance");
+                    if (instanceProperty != null)
+                    {
+                        var instance = instanceProperty.GetValue(null);
+                        if (instance != null)
+                        {
+                            var isEnabledProperty = debugServiceType.GetProperty("IsDebugEnabled");
+                            if (isEnabledProperty != null)
+                            {
+                                debugEnabled = (bool)isEnabledProperty.GetValue(instance);
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // If we can't access DebugService, default to enabled for backward compatibility
+                debugEnabled = true;
+            }
+            
+            // Only write to console if debug is enabled
+            if (debugEnabled)
+            {
+                Console.WriteLine($"[DEBUG] {message}");
+                if (exception != null)
+                    Console.WriteLine($"[DEBUG] Exception: {exception}");
+            }
             
             if (LogDebug != null)
                 LogDebug(new LogEventArgs() {Exception = exception, Message = message});

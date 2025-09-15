@@ -199,6 +199,17 @@ namespace Photobooth.Controls
                     SettingsCount = 4
                 });
                 
+                // Capture Modes Settings
+                var captureModesService = CaptureModesService.Instance;
+                var enabledModes = captureModesService.EnabledModes.Count;
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "Capture Modes",
+                    Icon = "🎬",
+                    Summary = $"Modes: {(Properties.Settings.Default.CaptureModesEnabled ? "Enabled" : "Disabled")}, Active: {enabledModes}",
+                    SettingsCount = 8
+                });
+                
                 // Sharing Settings
                 categories.Add(new CategoryViewModel
                 {
@@ -311,6 +322,13 @@ namespace Photobooth.Controls
             if (categoryName == "Live View")
             {
                 LoadLiveViewCameraSettings();
+                return;
+            }
+            
+            // Special handling for Capture Modes category
+            if (categoryName == "Capture Modes")
+            {
+                LoadCaptureModesSettings();
                 return;
             }
             
@@ -997,6 +1015,185 @@ namespace Photobooth.Controls
             
             container.Child = stackPanel;
             return container;
+        }
+        
+        #endregion
+        
+        #region Capture Modes Settings
+        
+        /// <summary>
+        /// Load capture modes settings
+        /// </summary>
+        private void LoadCaptureModesSettings()
+        {
+            try
+            {
+                var captureModesService = CaptureModesService.Instance;
+                var modulesConfig = PhotoboothModulesConfig.Instance;
+                
+                // Enable Multiple Capture Modes toggle
+                var enableModesSetting = new SettingItem
+                {
+                    Name = "CaptureModesEnabled",
+                    DisplayName = "Enable Multiple Capture Modes",
+                    Type = SettingType.Toggle,
+                    Value = Properties.Settings.Default.CaptureModesEnabled,
+                    Description = "Allow users to select different capture types"
+                };
+                var enableModesControl = CreateSettingControl(enableModesSetting, "CaptureModes");
+                SettingsListPanel.Children.Add(enableModesControl);
+                
+                // Individual mode toggles
+                var modesContainer = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                    CornerRadius = new CornerRadius(8),
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(15)
+                };
+                
+                var modesGrid = new Grid();
+                modesGrid.ColumnDefinitions.Add(new ColumnDefinition());
+                modesGrid.ColumnDefinitions.Add(new ColumnDefinition());
+                modesGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                modesGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                modesGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                modesGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                modesGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                
+                // Title
+                var titleText = new TextBlock
+                {
+                    Text = "Available Capture Modes",
+                    FontSize = 14,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Brushes.White,
+                    Margin = new Thickness(0, 0, 0, 10)
+                };
+                Grid.SetRow(titleText, 0);
+                Grid.SetColumnSpan(titleText, 2);
+                modesGrid.Children.Add(titleText);
+                
+                // Photo Mode
+                AddModeToggle(modesGrid, "Photo", Properties.Settings.Default.CaptureModePhoto, 1, 0,
+                    (value) => { Properties.Settings.Default.CaptureModePhoto = value; Properties.Settings.Default.Save(); });
+                
+                // Video Mode - uses modulesConfig
+                AddModeToggle(modesGrid, "Video", modulesConfig.VideoEnabled, 1, 1,
+                    (value) => { 
+                        modulesConfig.VideoEnabled = value; 
+                        captureModesService.SetModeEnabled(Photobooth.Services.CaptureMode.Video, value);
+                    });
+                
+                // Boomerang Mode
+                AddModeToggle(modesGrid, "Boomerang", Properties.Settings.Default.CaptureModeBoomerang, 2, 0,
+                    (value) => { Properties.Settings.Default.CaptureModeBoomerang = value; Properties.Settings.Default.Save(); });
+                
+                // GIF Mode
+                AddModeToggle(modesGrid, "GIF", Properties.Settings.Default.CaptureModeGif, 2, 1,
+                    (value) => { Properties.Settings.Default.CaptureModeGif = value; Properties.Settings.Default.Save(); });
+                
+                // Green Screen Mode
+                AddModeToggle(modesGrid, "Green Screen", Properties.Settings.Default.CaptureModeGreenScreen, 3, 0,
+                    (value) => { Properties.Settings.Default.CaptureModeGreenScreen = value; Properties.Settings.Default.Save(); });
+                
+                // AI Mode
+                AddModeToggle(modesGrid, "AI Photo", Properties.Settings.Default.CaptureModeAI, 3, 1,
+                    (value) => { Properties.Settings.Default.CaptureModeAI = value; Properties.Settings.Default.Save(); });
+                
+                // Flipbook Mode
+                AddModeToggle(modesGrid, "Flipbook", Properties.Settings.Default.CaptureModeFlipbook, 4, 0,
+                    (value) => { Properties.Settings.Default.CaptureModeFlipbook = value; Properties.Settings.Default.Save(); });
+                
+                modesContainer.Child = modesGrid;
+                SettingsListPanel.Children.Add(modesContainer);
+                
+                // Default Mode selection
+                var defaultModeContainer = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                    CornerRadius = new CornerRadius(8),
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(15)
+                };
+                
+                var defaultModePanel = new StackPanel();
+                
+                var defaultModeTitle = new TextBlock
+                {
+                    Text = "Default Capture Mode",
+                    FontSize = 14,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Brushes.White,
+                    Margin = new Thickness(0, 0, 0, 8)
+                };
+                defaultModePanel.Children.Add(defaultModeTitle);
+                
+                var defaultModeCombo = new ComboBox
+                {
+                    Width = 200,
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+                
+                // Add available modes to combo
+                var modes = new[] { "Photo", "Video", "Boomerang", "Gif", "GreenScreen", "AI", "Flipbook" };
+                foreach (var mode in modes)
+                {
+                    defaultModeCombo.Items.Add(new ComboBoxItem { Content = mode });
+                }
+                
+                // Set current selection
+                var currentDefault = Properties.Settings.Default.DefaultCaptureMode ?? "Photo";
+                for (int i = 0; i < defaultModeCombo.Items.Count; i++)
+                {
+                    if ((defaultModeCombo.Items[i] as ComboBoxItem)?.Content?.ToString() == currentDefault)
+                    {
+                        defaultModeCombo.SelectedIndex = i;
+                        break;
+                    }
+                }
+                
+                defaultModeCombo.SelectionChanged += (s, e) =>
+                {
+                    if (defaultModeCombo.SelectedItem is ComboBoxItem selectedItem)
+                    {
+                        var modeName = selectedItem.Content.ToString();
+                        Properties.Settings.Default.DefaultCaptureMode = modeName;
+                        Properties.Settings.Default.Save();
+                        
+                        if (Enum.TryParse<Photobooth.Services.CaptureMode>(modeName, out var mode))
+                        {
+                            captureModesService.CurrentMode = mode;
+                        }
+                    }
+                };
+                
+                defaultModePanel.Children.Add(defaultModeCombo);
+                defaultModeContainer.Child = defaultModePanel;
+                SettingsListPanel.Children.Add(defaultModeContainer);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Failed to load capture modes settings: {ex.Message}");
+            }
+        }
+        
+        private void AddModeToggle(Grid container, string modeName, bool isChecked, int row, int column, Action<bool> onChanged)
+        {
+            var checkBox = new CheckBox
+            {
+                Content = modeName,
+                IsChecked = isChecked,
+                Foreground = Brushes.White,
+                Margin = new Thickness(5)
+            };
+            
+            checkBox.Checked += (s, e) => onChanged(true);
+            checkBox.Unchecked += (s, e) => onChanged(false);
+            
+            Grid.SetRow(checkBox, row);
+            Grid.SetColumn(checkBox, column);
+            container.Children.Add(checkBox);
         }
         
         #endregion

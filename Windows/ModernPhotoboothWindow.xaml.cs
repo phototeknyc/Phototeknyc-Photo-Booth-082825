@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Runtime.InteropServices;
@@ -24,12 +25,21 @@ namespace Photobooth.Windows
         {
             InitializeComponent();
             
+            // Ensure this window is set as MainWindow if it's the startup window
+            if (Application.Current != null && Application.Current.MainWindow == null)
+            {
+                Application.Current.MainWindow = this;
+                System.Diagnostics.Debug.WriteLine("ModernPhotoboothWindow set as MainWindow");
+            }
+            
             // Navigate to the refactored modern photobooth page
             MainFrame.Navigate(new Pages.PhotoboothTouchModernRefactored());
             
             // Set up event handlers
             this.Loaded += OnWindowLoaded;
             this.KeyDown += OnKeyDown;
+            this.Closing += OnWindowClosing;
+            this.Closed += OnWindowClosed;
         }
         
         private void OnWindowLoaded(object sender, RoutedEventArgs e)
@@ -129,6 +139,64 @@ namespace Photobooth.Windows
                 // Toggle fullscreen with F11
                 bool isFullscreen = (this.WindowState == WindowState.Maximized && this.WindowStyle == WindowStyle.None);
                 SetFullscreen(!isFullscreen);
+            }
+        }
+        
+        private void OnWindowClosing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("ModernPhotoboothWindow closing - cleaning up...");
+                
+                // Get the current page and clean it up
+                var currentPage = MainFrame?.Content as Pages.PhotoboothTouchModernRefactored;
+                if (currentPage != null)
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine("Calling page cleanup...");
+                        currentPage.Cleanup();
+                    }
+                    catch (Exception pageEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error cleaning up page: {pageEx.Message}");
+                    }
+                }
+                
+                // Clear the frame content to release references
+                if (MainFrame != null)
+                {
+                    MainFrame.Content = null;
+                }
+                
+                // Don't try to stop cameras here - let App.OnExit handle it
+                // This avoids RCW cleanup race conditions
+                
+                System.Diagnostics.Debug.WriteLine("Window cleanup completed");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error during window closing: {ex.Message}");
+            }
+        }
+        
+        private void OnWindowClosed(object sender, EventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("ModernPhotoboothWindow closed");
+                
+                // Since ShutdownMode is OnMainWindowClose, we don't need to manually shutdown
+                // The app will shutdown automatically when the main window closes
+                // But we ensure it happens if this is the main window
+                if (Application.Current != null && Application.Current.MainWindow == this)
+                {
+                    System.Diagnostics.Debug.WriteLine("ModernPhotoboothWindow is main window - application will shutdown");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error during window closed: {ex.Message}");
             }
         }
     }

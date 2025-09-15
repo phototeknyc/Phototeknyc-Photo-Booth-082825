@@ -3386,12 +3386,14 @@
                             <TextBlock Text="Photo" Foreground="White" FontWeight="SemiBold"/>
                         </CheckBox>
 
-                        <!-- Video Mode -->
+                        <!-- Video Mode - Now uses the Video Module setting -->
                         <CheckBox Grid.Row="0" Grid.Column="1"
+                                  x:Name="CaptureModeVideoCheckBox"
                                   Style="{StaticResource SettingsCheckBoxStyle}"
-                                  IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=CaptureModeVideo}"
                                   IsEnabled="{Binding ElementName=EnableCaptureModesCheckBox, Path=IsChecked}"
-                                  Margin="0,5">
+                                  Margin="0,5"
+                                  Checked="CaptureModeVideo_Changed"
+                                  Unchecked="CaptureModeVideo_Changed">
                             <TextBlock Text="Video" Foreground="White" FontWeight="SemiBold"/>
                         </CheckBox>
 

@@ -29,6 +29,9 @@ namespace Photobooth
 		
 		protected override void OnStartup(StartupEventArgs e)
 		{
+			// Set shutdown mode to close when main window closes
+			this.ShutdownMode = ShutdownMode.OnMainWindowClose;
+			
 			// Enable DPI awareness for crisp rendering on high-DPI displays
 			if (Environment.OSVersion.Version.Major >= 6)
 			{
@@ -55,6 +58,24 @@ namespace Photobooth
 			TextOptions.TextFormattingModeProperty.OverrideMetadata(
 				typeof(Window),
 				new FrameworkPropertyMetadata(TextFormattingMode.Display));
+			
+			// Initialize queue services early to ensure they start processing
+			try
+			{
+				System.Diagnostics.Debug.WriteLine("Initializing queue services...");
+				
+				// Initialize PhotoboothQueueService - this will start processing pending items
+				var photoboothQueue = Photobooth.Services.PhotoboothQueueService.Instance;
+				System.Diagnostics.Debug.WriteLine("PhotoboothQueueService initialized");
+				
+				// Initialize OfflineQueueService - this will start processing pending uploads
+				var offlineQueue = Photobooth.Services.OfflineQueueService.Instance;
+				System.Diagnostics.Debug.WriteLine("OfflineQueueService initialized");
+			}
+			catch (Exception queueEx)
+			{
+				System.Diagnostics.Debug.WriteLine($"Error initializing queue services: {queueEx.Message}");
+			}
 			
 			// Initialize Web API if enabled
 			// For now, always enable Web API on default port
@@ -116,6 +137,32 @@ namespace Photobooth
 			{
 				System.Diagnostics.Debug.WriteLine("Application shutting down - cleaning up resources...");
 				
+				// Stop queue services first - these have background timers
+				try
+				{
+					System.Diagnostics.Debug.WriteLine("Stopping queue services...");
+					
+					// Dispose PhotoboothQueueService
+					var photoboothQueue = Photobooth.Services.PhotoboothQueueService.Instance;
+					if (photoboothQueue != null)
+					{
+						System.Diagnostics.Debug.WriteLine("Disposing PhotoboothQueueService...");
+						photoboothQueue.Dispose();
+					}
+					
+					// Dispose OfflineQueueService
+					var offlineQueue = Photobooth.Services.OfflineQueueService.Instance;
+					if (offlineQueue != null)
+					{
+						System.Diagnostics.Debug.WriteLine("Disposing OfflineQueueService...");
+						offlineQueue.Dispose();
+					}
+				}
+				catch (Exception queueEx)
+				{
+					System.Diagnostics.Debug.WriteLine($"Error stopping queue services: {queueEx.Message}");
+				}
+				
 				// Stop Web API if running
 				if (Services.WebApiStartup.IsRunning)
 				{
@@ -147,11 +194,22 @@ namespace Photobooth
 				if (_deviceManager != null)
 				{
 					System.Diagnostics.Debug.WriteLine("Closing all camera connections...");
-					_deviceManager.CloseAll();
+					try
+					{
+						_deviceManager.CloseAll();
+						_deviceManager = null;
+					}
+					catch (Exception camEx)
+					{
+						System.Diagnostics.Debug.WriteLine($"Error closing cameras: {camEx.Message}");
+					}
 				}
 				
-				// Allow time for cleanup
-				System.Threading.Thread.Sleep(500);
+				// Force garbage collection to release resources
+				System.Diagnostics.Debug.WriteLine("Forcing garbage collection...");
+				GC.Collect();
+				GC.WaitForPendingFinalizers();
+				GC.Collect();
 				
 				System.Diagnostics.Debug.WriteLine("Application cleanup completed");
 			}
@@ -160,7 +218,12 @@ namespace Photobooth
 				System.Diagnostics.Debug.WriteLine($"Error during application shutdown: {ex.Message}");
 			}
 			
-			base.OnExit(e);
+			// Don't call base.OnExit - it might be blocking
+			// base.OnExit(e);
+			
+			// Force immediate termination
+			System.Diagnostics.Debug.WriteLine("Forcing immediate process termination...");
+			System.Diagnostics.Process.GetCurrentProcess().Kill();
 		}
 		
 		private bool IsSurfaceDevice()

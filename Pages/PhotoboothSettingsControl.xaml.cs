@@ -146,6 +146,12 @@ namespace Photobooth.Pages
                 showVideoButtonCheckBox.IsChecked = modulesConfig.ShowVideoButton;
                 videoDurationSlider.Value = modulesConfig.VideoDuration;
                 
+                // Also set the capture mode video checkbox to match
+                if (CaptureModeVideoCheckBox != null)
+                {
+                    CaptureModeVideoCheckBox.IsChecked = modulesConfig.VideoEnabled;
+                }
+                
                 // Update the duration text display
                 int videoDuration = modulesConfig.VideoDuration;
                 if (videoDuration >= 60)
@@ -207,6 +213,9 @@ namespace Photobooth.Pages
                 allowFilterChangeCheckBox.IsChecked = Properties.Settings.Default.AllowFilterChange;
                 showFilterPreviewCheckBox.IsChecked = Properties.Settings.Default.ShowFilterPreview;
                 autoApplyFilterCheckBox.IsChecked = Properties.Settings.Default.AutoApplyFilter;
+                
+                // Load capture modes settings
+                LoadCaptureModesSettings();
                 
                 // Load enabled filters (default to all enabled if setting doesn't exist)
                 LoadEnabledFilters();
@@ -681,6 +690,40 @@ namespace Photobooth.Pages
             UpdateSliderTexts();
         }
 
+        private void LoadCaptureModesSettings()
+        {
+            try
+            {
+                // Initialize the default capture mode combo box
+                if (DefaultCaptureModeCombo != null)
+                {
+                    string defaultMode = Properties.Settings.Default.DefaultCaptureMode;
+                    if (!string.IsNullOrEmpty(defaultMode))
+                    {
+                        // Find and select the matching item
+                        for (int i = 0; i < DefaultCaptureModeCombo.Items.Count; i++)
+                        {
+                            if (DefaultCaptureModeCombo.Items[i] is ComboBoxItem item && 
+                                item.Content?.ToString() == defaultMode)
+                            {
+                                DefaultCaptureModeCombo.SelectedIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Default to Photo mode
+                        DefaultCaptureModeCombo.SelectedIndex = 0;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading capture modes settings: {ex.Message}");
+            }
+        }
+        
         private void LoadEnabledFilters()
         {
             // Load enabled filters from settings or default to all enabled
@@ -3642,6 +3685,30 @@ namespace Photobooth.Pages
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error updating video duration: {ex.Message}");
+            }
+        }
+        
+        private void CaptureModeVideo_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (CaptureModeVideoCheckBox != null)
+                {
+                    var modulesConfig = PhotoboothModulesConfig.Instance;
+                    var captureModesService = CaptureModesService.Instance;
+                    
+                    // Update the video module setting
+                    modulesConfig.VideoEnabled = CaptureModeVideoCheckBox.IsChecked == true;
+                    
+                    // Update the capture modes service
+                    captureModesService.SetModeEnabled(Photobooth.Services.CaptureMode.Video, CaptureModeVideoCheckBox.IsChecked == true);
+                    
+                    System.Diagnostics.Debug.WriteLine($"[SETTINGS] Video mode enabled: {CaptureModeVideoCheckBox.IsChecked == true}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CaptureModeVideo_Changed error: {ex.Message}");
             }
         }
         

@@ -624,6 +624,23 @@ namespace Photobooth.Services
                     System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: SMS sent successfully! SID: {message.Sid}");
                     return true;
                 }
+                catch (Twilio.Exceptions.ApiException twilioApiEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Twilio API error: {twilioApiEx.Message}");
+                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Twilio error code: {twilioApiEx.Code}");
+                    
+                    // Check for permanent failures that should NOT be retried
+                    bool isPermanentFailure = IsPermanentTwilioFailure(twilioApiEx);
+                    
+                    if (isPermanentFailure)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: PERMANENT FAILURE - Will not retry SMS to {formattedNumber}");
+                        // Mark as failed in database so it won't retry
+                        await MarkSmsAsPermanentlyFailed(phoneNumber, twilioApiEx.Message);
+                    }
+                    
+                    return false;
+                }
                 catch (Exception twilioEx)
                 {
                     System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Twilio error: {twilioEx.Message}");
@@ -2436,6 +2453,109 @@ namespace Photobooth.Services
             }
         }
         
+        #endregion
+
+        #region Twilio Error Handling
+        
+        /// <summary>
+        /// Determines if a Twilio error is permanent and should not be retried
+        /// </summary>
+        private bool IsPermanentTwilioFailure(Twilio.Exceptions.ApiException ex)
+        {
+            // Twilio error codes that indicate permanent failures
+            // Reference: https://www.twilio.com/docs/api/errors
+            
+            var permanentErrorCodes = new[] {
+                21211, // Invalid 'To' Phone Number
+                21212, // Invalid 'From' Phone Number  
+                21214, // 'To' phone number cannot be reached
+                21215, // Account not authorized to call this number
+                21216, // Account not allowed to call this premium number
+                21217, // Phone number does not appear to be valid
+                21219, // 'To' phone number not verified
+                21401, // Invalid Phone Number
+                21407, // This Phone Number type does not support SMS
+                21408, // Permission to send an SMS has not been enabled for the region
+                21421, // PhoneNumber is required
+                21422, // TOO MANY REQUESTS - rate limit exceeded
+                21451, // Invalid area code
+                21452, // No international authorization  
+                21453, // SMS is not supported in this region/country
+                21454, // This country is blocked
+                21601, // Phone number is not a valid SMS-capable number
+                21602, // Message body is required
+                21603, // 'From' phone number is required to send an SMS
+                21604, // 'To' phone number is required to send an SMS
+                21606, // The 'From' phone number is not a valid, SMS-capable Twilio phone number
+                21608, // The 'To' phone number is not currently reachable via SMS
+                21610, // Attempt to send to unsubscribed recipient
+                21611, // This 'From' number has exceeded the maximum allowed SMS messages per day
+                21612, // The 'To' phone number is not currently reachable via SMS  
+                21614, // 'To' number is not a valid mobile number
+                21617, // The concatenated message body exceeds the 1600 character limit
+                21635, // Invalid 'To' Phone Number (Permanently unreachable carrier)
+                30003, // Unreachable destination handset
+                30004, // Message blocked by carrier
+                30005, // Unknown destination handset
+                30006, // Landline or unreachable carrier
+                30007, // Carrier violation / Spam filter
+                30008, // Unknown error from carrier
+                30034  // Carrier temporarily unreachable (but we'll treat as permanent for wrong numbers)
+            };
+
+            if (permanentErrorCodes.Contains(ex.Code))
+            {
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Error code {ex.Code} is a permanent failure");
+                return true;
+            }
+
+            // Check message for permanent failure indicators
+            var message = ex.Message?.ToLower() ?? "";
+            var permanentPhrases = new[] {
+                "invalid phone number",
+                "not a valid",
+                "unsubscribed",
+                "blocked",
+                "not supported",
+                "not authorized",
+                "landline",
+                "does not support sms",
+                "country not supported",
+                "region not supported",
+                "not reachable",
+                "blacklist",
+                "stop message",
+                "opted out"
+            };
+
+            foreach (var phrase in permanentPhrases)
+            {
+                if (message.Contains(phrase))
+                {
+                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Message contains permanent failure phrase: {phrase}");
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Mark SMS as permanently failed in the database so it won't be retried
+        /// </summary>
+        private async Task MarkSmsAsPermanentlyFailed(string phoneNumber, string errorMessage)
+        {
+            try
+            {
+                var queueService = PhotoboothQueueService.Instance;
+                await queueService.MarkSmsAsFailed(phoneNumber, errorMessage);
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Marked SMS to {phoneNumber} as permanently failed");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Error marking SMS as failed: {ex.Message}");
+            }
+        }
         #endregion
     }
 }

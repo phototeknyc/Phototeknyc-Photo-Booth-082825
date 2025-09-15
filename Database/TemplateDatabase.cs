@@ -352,32 +352,40 @@ namespace Photobooth.Database
                 }
                 
                 // Add video columns to PhotoSessions table if they don't exist
-                string[] videoColumns = new string[]
+                // First check which columns already exist to avoid SQLite errors
+                var videoColumnsToAdd = new Dictionary<string, string>
                 {
-                    "ALTER TABLE PhotoSessions ADD COLUMN IsVideoSession BOOLEAN DEFAULT 0",
-                    "ALTER TABLE PhotoSessions ADD COLUMN VideoPath TEXT",
-                    "ALTER TABLE PhotoSessions ADD COLUMN VideoThumbnailPath TEXT",
-                    "ALTER TABLE PhotoSessions ADD COLUMN VideoFileSize INTEGER DEFAULT 0",
-                    "ALTER TABLE PhotoSessions ADD COLUMN VideoDurationSeconds INTEGER DEFAULT 0",
-                    "ALTER TABLE PhotoSessions ADD COLUMN VideoCloudUrl TEXT"
+                    { "IsVideoSession", "BOOLEAN DEFAULT 0" },
+                    { "VideoPath", "TEXT" },
+                    { "VideoThumbnailPath", "TEXT" },
+                    { "VideoFileSize", "INTEGER DEFAULT 0" },
+                    { "VideoDurationSeconds", "INTEGER DEFAULT 0" },
+                    { "VideoCloudUrl", "TEXT" }
                 };
                 
-                foreach (string alterCmd in videoColumns)
+                // Check existing columns
+                string checkColumnsQuery = "PRAGMA table_info(PhotoSessions)";
+                var existingColumns = new HashSet<string>();
+                using (var checkCmd = new SQLiteCommand(checkColumnsQuery, connection))
+                using (var reader = checkCmd.ExecuteReader())
                 {
-                    try
+                    while (reader.Read())
                     {
+                        existingColumns.Add(reader.GetString(1)); // Column name is at index 1
+                    }
+                }
+                
+                // Only add columns that don't exist
+                foreach (var column in videoColumnsToAdd)
+                {
+                    if (!existingColumns.Contains(column.Key))
+                    {
+                        string alterCmd = $"ALTER TABLE PhotoSessions ADD COLUMN {column.Key} {column.Value}";
                         using (var command = new SQLiteCommand(alterCmd, connection))
                         {
                             command.ExecuteNonQuery();
                         }
-                    }
-                    catch (SQLiteException ex)
-                    {
-                        // Column might already exist, continue
-                        if (!ex.Message.Contains("duplicate column"))
-                        {
-                            throw;
-                        }
+                        System.Diagnostics.Debug.WriteLine($"Added {column.Key} column to PhotoSessions table");
                     }
                 }
                 

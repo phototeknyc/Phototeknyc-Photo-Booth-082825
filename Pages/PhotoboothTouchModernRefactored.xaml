@@ -1165,8 +1165,9 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 
-                <!-- Left Panel - Back Button -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                <!-- All Buttons in Single Panel -->
+                <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Left">
+                    <!-- Back Button -->
                     <Button x:Name="backButton"
                             Style="{StaticResource TouchButtonStyle}"
                             Background="#2196F3"
@@ -1180,15 +1181,8 @@
                             <TextBlock Text="Back" FontSize="16" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                </StackPanel>
-                
-                <!-- Center Panel - Empty for balance -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
-                    <!-- Keep empty for visual balance -->
-                </StackPanel>
-                
-                <!-- Right Panel - Event, Print, Camera, Timer, Settings -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                    
+                    <!-- Event Button -->
                     <Button Style="{StaticResource TouchButtonStyle}"
                             Background="#9C27B0"
                             Width="120" 
@@ -1201,16 +1195,18 @@
                             <TextBlock Text="Event" FontSize="16" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    
+                    <!-- Print Settings Button -->
                     <Button Style="{StaticResource TouchButtonStyle}"
-                            Background="#4CAF50"
-                            Width="120" 
+                            Background="#66BB6A"
+                            Width="140" 
                             Height="50" 
                             Margin="5"
                             Click="PrintSettingsButton_Click"
                             ToolTip="Print Settings">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="🖨️" FontSize="18" Margin="0,0,6,0"/>
-                            <TextBlock Text="Print" FontSize="16" VerticalAlignment="Center"/>
+                            <TextBlock Text="⚙️🖨️" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock Text="Print Setup" FontSize="16" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource TouchButtonStyle}"
@@ -1264,6 +1260,20 @@
                         </StackPanel>
                     </Button>
                     
+                    <!-- Sharing Status Button -->
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Background="#607D8B"
+                            Width="160" 
+                            Height="50" 
+                            Margin="5"
+                            Click="SharingStatusButton_Click"
+                            ToolTip="View Upload &amp; Sharing Queue">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📤" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock Text="Queue Status" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
                     <!-- Touch Template Designer Button -->
                     <Button Style="{StaticResource TouchButtonStyle}"
                             Background="#9C27B0"
@@ -1275,6 +1285,21 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="✋" FontSize="18" Margin="0,0,6,0"/>
                             <TextBlock Text="Touch Designer" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Fullscreen Toggle Button -->
+                    <Button x:Name="FullscreenButton"
+                            Style="{StaticResource TouchButtonStyle}"
+                            Background="#37474F"
+                            Width="140" 
+                            Height="50" 
+                            Margin="5"
+                            Click="FullscreenButton_Click"
+                            ToolTip="Toggle Fullscreen">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="FullscreenIcon" Text="⛶" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock x:Name="FullscreenText" Text="Fullscreen" FontSize="16" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -2020,6 +2045,12 @@
                                    Visibility="Collapsed"
                                    Grid.RowSpan="10"
                                    Panel.ZIndex="1000"/>
+        
+        <!-- Sharing Status Overlay -->
+        <controls:SharingStatusOverlay x:Name="SharingStatusOverlayControl"
+                                       Visibility="Collapsed"
+                                       Grid.RowSpan="10"
+                                       Panel.ZIndex="1001"/>
         
         <!-- Template Designer Overlay - Full Screen -->
         <controls:TemplateDesignerOverlay x:Name="TemplateDesignerOverlayControl"

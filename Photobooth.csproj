@@ -182,6 +182,9 @@
     <Compile Include="Controls\CaptureModesOverlay.xaml.cs">
       <DependentUpon>CaptureModesOverlay.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\SharingStatusOverlay.xaml.cs">
+      <DependentUpon>SharingStatusOverlay.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\TimerSettingsOverlay.xaml.cs">
       <DependentUpon>TimerSettingsOverlay.xaml</DependentUpon>
     </Compile>
@@ -481,6 +484,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\CaptureModesOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\SharingStatusOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

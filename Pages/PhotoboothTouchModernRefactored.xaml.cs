@@ -559,22 +559,88 @@ namespace Photobooth.Pages
         {
             try
             {
+                Log.Debug("PhotoboothTouchModernRefactored cleanup starting...");
+                
+                // Stop all timers first
                 _liveViewTimer?.Stop();
                 _countdownTimer?.Stop();
                 _cameraReconnectTimer?.Stop();
                 _isReconnecting = false;
                 
-                // Stop live view through device
-                DeviceManager?.SelectedCameraDevice?.StopLiveView();
+                // Clean up services
+                if (_sessionService != null)
+                {
+                    try
+                    {
+                        _sessionService.ClearSession();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"Error clearing session: {ex.Message}");
+                    }
+                }
                 
-                RemoveEventHandlers();
+                if (_workflowService != null)
+                {
+                    try
+                    {
+                        _workflowService.StopWorkflow();
+                        _workflowService.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"Error stopping workflow: {ex.Message}");
+                    }
+                }
                 
-                _activeModule?.Cleanup();
-                _viewModel?.Cleanup();
+                if (_uiService != null)
+                {
+                    try
+                    {
+                        _uiService.HideAllControls();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"Error hiding controls: {ex.Message}");
+                    }
+                }
+                
+                // Stop live view - but don't try to access camera device here
+                // Let App.xaml.cs handle camera cleanup in OnExit
+                
+                try
+                {
+                    RemoveEventHandlers();
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"Error removing event handlers: {ex.Message}");
+                }
+                
+                try
+                {
+                    _activeModule?.Cleanup();
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"Error cleaning up module: {ex.Message}");
+                }
+                
+                try
+                {
+                    _viewModel?.Cleanup();
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"Error cleaning up viewmodel: {ex.Message}");
+                }
+                
+                Log.Debug("PhotoboothTouchModernRefactored cleanup completed");
             }
             catch (Exception ex)
             {
                 Log.Error($"Cleanup error: {ex.Message}");
+                Log.Debug($"Overall cleanup error: {ex.Message}");
             }
         }
 
@@ -3265,14 +3331,15 @@ namespace Photobooth.Pages
                         UpdateCameraStatus($"Connected: {device.DeviceName}");
                         
                         // Start live view if idle live view is enabled OR if video recording is supported
+                        var modulesConfig = PhotoboothModulesConfig.Instance;
                         bool shouldStartLiveView = Properties.Settings.Default.EnableIdleLiveView || 
-                                                 Properties.Settings.Default.CaptureModeVideo;
+                                                 modulesConfig.VideoEnabled;
                         
                         if (shouldStartLiveView)
                         {
                             device.StartLiveView();
                             _liveViewTimer.Start();
-                            Log.Debug($"InitializeCamera: Started live view (IdleLiveView: {Properties.Settings.Default.EnableIdleLiveView}, VideoModule: {Properties.Settings.Default.CaptureModeVideo})");
+                            Log.Debug($"InitializeCamera: Started live view (IdleLiveView: {Properties.Settings.Default.EnableIdleLiveView}, VideoModule: {modulesConfig.VideoEnabled})");
                         }
                         else
                         {
@@ -3291,14 +3358,15 @@ namespace Photobooth.Pages
                         UpdateCameraStatus($"Connected: {device.DeviceName}");
                         
                         // Start live view if idle live view is enabled OR if video recording is supported
+                        var modulesConfig = PhotoboothModulesConfig.Instance;
                         bool shouldStartLiveView = Properties.Settings.Default.EnableIdleLiveView || 
-                                                 Properties.Settings.Default.CaptureModeVideo;
+                                                 modulesConfig.VideoEnabled;
                         
                         if (shouldStartLiveView)
                         {
                             device.StartLiveView();
                             _liveViewTimer.Start();
-                            Log.Debug($"InitializeCamera: Started live view after auto-connect (IdleLiveView: {Properties.Settings.Default.EnableIdleLiveView}, VideoModule: {Properties.Settings.Default.CaptureModeVideo})");
+                            Log.Debug($"InitializeCamera: Started live view after auto-connect (IdleLiveView: {Properties.Settings.Default.EnableIdleLiveView}, VideoModule: {modulesConfig.VideoEnabled})");
                         }
                         else
                         {
@@ -3688,6 +3756,21 @@ namespace Photobooth.Pages
             }
         }
 
+        private void EventButton_Click(object sender, RoutedEventArgs e)
+        {
+            Log.Debug("EventButton_Click: Opening event selection overlay");
+            
+            // Show the event selection overlay
+            if (EventSelectionOverlayControl != null)
+            {
+                EventSelectionOverlayControl.ShowOverlay();
+            }
+            else
+            {
+                Log.Error("EventButton_Click: EventSelectionOverlayControl is null");
+            }
+        }
+        
         private void PrintSettingsButton_Click(object sender, RoutedEventArgs e)
         {
             Log.Debug("PrintSettingsButton_Click: Opening print settings overlay");
@@ -3798,6 +3881,24 @@ namespace Photobooth.Pages
         /// <summary>
         /// Template Designer button click handler
         /// </summary>
+        private void SharingStatusButton_Click(object sender, RoutedEventArgs e)
+        {
+            Log.Debug("Sharing Status button clicked");
+            
+            // Hide the bottom control bar
+            if (bottomControlBar != null)
+            {
+                bottomControlBar.Visibility = Visibility.Collapsed;
+                bottomBarToggleChevron.Text = "⚙"; // Reset to gear icon
+            }
+            
+            // Show the sharing status overlay
+            if (SharingStatusOverlayControl != null)
+            {
+                SharingStatusOverlayControl.Show();
+            }
+        }
+        
         private void TemplateDesignerButton_Click(object sender, RoutedEventArgs e)
         {
             Log.Debug("Template Designer button clicked");
@@ -4128,6 +4229,24 @@ namespace Photobooth.Pages
                     
                     Log.Debug($"Gallery URL saved to database for session {completedSession.SessionId}: {uploadResult.GalleryUrl}");
                     _uiService.UpdateStatus("Upload complete!");
+                    
+                    // Process any pending SMS for this session now that we have a valid URL
+                    try
+                    {
+                        // Update OfflineQueueService SMS entries with the real URL
+                        var offlineQueue = OfflineQueueService.Instance;
+                        offlineQueue.UpdateSMSQueueUrls(completedSession.SessionId, uploadResult.GalleryUrl);
+                        
+                        // Also process PhotoboothQueueService
+                        var queueService = PhotoboothQueueService.Instance;
+                        await queueService.ProcessPendingQueues();
+                        
+                        Log.Debug($"Triggered SMS queue processing after upload for session {completedSession.SessionId}");
+                    }
+                    catch (Exception queueEx)
+                    {
+                        Log.Error($"Error processing SMS queue after upload: {queueEx.Message}");
+                    }
                     
                     // Automatically show QR code after successful upload (must be on UI thread)
                     if (_sharingUIService != null && uploadResult.QRCodeImage != null)
@@ -4912,11 +5031,25 @@ namespace Photobooth.Pages
         {
             try
             {
-                // Navigate back to Surface home like original PhotoboothTouchModern
+                // Get the current parent window
                 var parentWindow = Window.GetWindow(this);
+                
+                // Check if we're in SurfacePhotoBoothWindow (original navigation)
                 if (parentWindow is SurfacePhotoBoothWindow surfaceWindow)
                 {
                     surfaceWindow.NavigateBack();
+                }
+                // If we're in ModernPhotoboothWindow, open SurfacePhotoBoothWindow
+                else if (parentWindow != null)
+                {
+                    Log.Debug("BackButton_Click: Opening SurfacePhotoBoothWindow");
+                    
+                    // Create and show the Surface window
+                    var surfacePhotoBoothWindow = new SurfacePhotoBoothWindow();
+                    surfacePhotoBoothWindow.Show();
+                    
+                    // Close the modern window
+                    parentWindow.Close();
                 }
                 else if (NavigationService != null && NavigationService.CanGoBack)
                 {
@@ -4924,8 +5057,8 @@ namespace Photobooth.Pages
                 }
                 else
                 {
-                    // Last resort - close the window
-                    parentWindow?.Close();
+                    // No navigation available
+                    Log.Debug("BackButton_Click: No navigation available");
                 }
             }
             catch (Exception ex)
@@ -6315,7 +6448,11 @@ namespace Photobooth.Pages
                 Log.Debug($"Queue status changed - Pending SMS: {status.PendingSMSCount}, Waiting for URLs: {status.SessionsWaitingForUrls}");
                 // Only update SMS indicator based on queue status
                 // QR indicator should only be updated by OnQRCodeVisibilityChanged for the specific session
-                UpdateSMSStatusIndicator(status.PendingSMSCount == 0, status.PendingSMSCount > 0 ? "SMS queued" : "SMS ready");
+                bool isOffline = !System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
+                string smsMessage = status.PendingSMSCount > 0 ? 
+                    (isOffline ? "SMS queued (offline)" : "SMS queued") : 
+                    "SMS ready";
+                UpdateSMSStatusIndicator(status.PendingSMSCount == 0, smsMessage);
                 
                 // Don't update QR indicator here as it's session-specific
                 // The queue having items doesn't mean THIS session's QR isn't ready
@@ -7336,6 +7473,45 @@ namespace Photobooth.Pages
         /// <summary>
         /// Touch Template Designer button click handler
         /// </summary>
+        private void FullscreenButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var parentWindow = Window.GetWindow(this);
+                if (parentWindow != null)
+                {
+                    if (parentWindow.WindowState == WindowState.Maximized && parentWindow.WindowStyle == WindowStyle.None)
+                    {
+                        // Exit fullscreen
+                        parentWindow.WindowState = WindowState.Normal;
+                        parentWindow.WindowStyle = WindowStyle.SingleBorderWindow;
+                        
+                        // Update button text
+                        if (FullscreenText != null) FullscreenText.Text = "Fullscreen";
+                        if (FullscreenIcon != null) FullscreenIcon.Text = "⛶";
+                        
+                        Log.Debug("Exited fullscreen mode");
+                    }
+                    else
+                    {
+                        // Enter fullscreen
+                        parentWindow.WindowStyle = WindowStyle.None;
+                        parentWindow.WindowState = WindowState.Maximized;
+                        
+                        // Update button text
+                        if (FullscreenText != null) FullscreenText.Text = "Exit Fullscreen";
+                        if (FullscreenIcon != null) FullscreenIcon.Text = "⛶";
+                        
+                        Log.Debug("Entered fullscreen mode");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"FullscreenButton_Click error: {ex.Message}");
+            }
+        }
+        
         private void TouchTemplateDesignerButton_Click(object sender, RoutedEventArgs e)
         {
             Log.Debug("Touch Template Designer button clicked");
