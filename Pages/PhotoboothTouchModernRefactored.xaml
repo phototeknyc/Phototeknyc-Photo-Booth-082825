@@ -1153,9 +1153,9 @@
         </Grid>
         
         <!-- Bottom Control Bar (Collapsible) -->
-        <Border x:Name="bottomControlBar" 
-                Grid.Row="2" 
-                Background="#333333" 
+        <Border x:Name="bottomControlBar"
+                Grid.Row="2"
+                Background="#333333"
                 Padding="20"
                 Visibility="Collapsed">
             <Grid>

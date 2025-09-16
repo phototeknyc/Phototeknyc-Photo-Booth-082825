@@ -7,6 +7,8 @@ using System.Windows.Threading;
 using System.Windows.Input;
 using Photobooth.MVVM.ViewModels.Designer;
 using Photobooth.Services;
+using Photobooth.Database;
+using CameraControl.Devices;
 
 namespace Photobooth.Pages
 {
@@ -44,10 +46,20 @@ namespace Photobooth.Pages
             _instance = this;
             
             // Set up canvas scaling
-            this.Loaded += (s, e) => 
+            this.Loaded += (s, e) =>
             {
                 DebugService.LogDebug("MainPage Loaded event fired");
                 UpdateCanvasScale();
+
+                // Connect the browse templates command to show overlay
+                if (ViewModel != null)
+                {
+                    ViewModel.BrowseTemplatesRequested += OnBrowseTemplatesRequested;
+                }
+
+                // Set up template browser overlay events
+                TemplateBrowserOverlay.TemplateSelected += OnTemplateSelectedFromOverlay;
+                TemplateBrowserOverlay.SelectionCancelled += OnTemplateSelectionCancelled;
                 // Set focus to enable keyboard shortcuts
                 this.Focus();
                 
@@ -311,5 +323,61 @@ namespace Photobooth.Pages
         {
             ToggleRightSidebar();
         }
+
+        #region Template Browser Overlay Events
+
+        private void OnBrowseTemplatesRequested(object sender, EventArgs e)
+        {
+            try
+            {
+                Log.Debug("MainPage: Opening Template Browser Overlay");
+
+                // Get the last template ID from ViewModel if available
+                int lastTemplateId = ViewModel?.LastTemplateId ?? -1;
+
+                // Show the template browser overlay
+                TemplateBrowserOverlay.Visibility = Visibility.Visible;
+                TemplateBrowserOverlay.ShowOverlay(lastTemplateId);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"MainPage: Failed to open template browser: {ex.Message}");
+                MessageBox.Show($"Failed to open template browser: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void OnTemplateSelectedFromOverlay(object sender, TemplateData template)
+        {
+            try
+            {
+                Log.Debug($"MainPage: Loading template {template.Name} from overlay");
+
+                if (ViewModel != null)
+                {
+                    // Load the selected template into the designer
+                    await ViewModel.LoadTemplateFromData(template);
+
+                    // Store the selected template
+                    ViewModel.SelectedTemplate = template;
+
+                    // Save as the last template
+                    ViewModel.SaveLastTemplateId(template.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"MainPage: Failed to load template: {ex.Message}");
+                MessageBox.Show($"Failed to load template: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void OnTemplateSelectionCancelled(object sender, EventArgs e)
+        {
+            Log.Debug("MainPage: Template selection cancelled");
+        }
+
+        #endregion
     }
 }

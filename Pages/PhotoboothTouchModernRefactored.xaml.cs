@@ -18,6 +18,7 @@ using Photobooth.Models;
 using Photobooth.Services;
 using Photobooth.ViewModels;
 using Photobooth.Properties;
+using Photobooth.Windows;
 using static Photobooth.Services.PhotoboothSessionService;
 using static Photobooth.Services.PhotoboothWorkflowService;
 using static Photobooth.Services.PhotoboothUIService;
@@ -248,6 +249,9 @@ namespace Photobooth.Pages
                 EventSelectionOverlayControl.EventSelected += OnEventSelectionOverlayEventSelected;
                 EventSelectionOverlayControl.SelectionCancelled += OnEventSelectionOverlayCancelled;
             }
+
+            // Subscribe to event expiration from EventSelectionService
+            EventSelectionService.Instance.EventExpired += OnEventExpired;
             
             // Initialize unified action service (requires other services including SharingUIService)
             _galleryActionService = new Services.GalleryActionService(
@@ -551,6 +555,9 @@ namespace Photobooth.Pages
                 parentWindow.Closing -= ParentWindow_Closing;
                 parentWindow.PreviewKeyDown -= ParentWindow_PreviewKeyDown;
             }
+
+            // Unsubscribe from event expiration
+            EventSelectionService.Instance.EventExpired -= OnEventExpired;
             
             Cleanup();
         }
@@ -3553,14 +3560,28 @@ namespace Photobooth.Pages
         private void LoadInitialEventTemplate()
         {
             Log.Debug("LoadInitialEventTemplate: Starting event/template loading");
-            
-            // Load from PhotoboothService static properties
-            _currentEvent = PhotoboothService.CurrentEvent;
+
+            // First check if there's a saved event that hasn't expired
+            EventSelectionService.Instance.CheckAndRestoreSavedEvent();
+
+            // If a saved event was restored, use it
+            if (EventSelectionService.Instance.SelectedEvent != null)
+            {
+                _currentEvent = EventSelectionService.Instance.SelectedEvent;
+                PhotoboothService.CurrentEvent = _currentEvent;
+                Log.Debug($"LoadInitialEventTemplate: Restored saved event '{_currentEvent.Name}' from settings");
+            }
+            else
+            {
+                // Load from PhotoboothService static properties
+                _currentEvent = PhotoboothService.CurrentEvent;
+            }
+
             _currentTemplate = PhotoboothService.CurrentTemplate;
-            
+
             Log.Debug($"LoadInitialEventTemplate: CurrentEvent = {_currentEvent?.Name ?? "null"}");
             Log.Debug($"LoadInitialEventTemplate: CurrentTemplate = {_currentTemplate?.Name ?? "null"}");
-            
+
             if (_currentEvent != null)
             {
                 _eventTemplateService.SelectEvent(_currentEvent);
@@ -3796,11 +3817,17 @@ namespace Photobooth.Pages
                 
                 _currentEvent = selectedEvent;
                 _eventTemplateService.SelectEvent(_currentEvent);
-                
-                // Save the selected event ID to settings for use by other services
+
+                // Update EventSelectionService with the selected event and start timer
+                // This will also trigger the 5-hour expiration timer
+                EventSelectionService.Instance.SelectedEvent = selectedEvent;
+                EventSelectionService.Instance.StartTimerForCurrentEvent();
+
+                // Save the selected event ID and timestamp to settings for use by other services
                 Properties.Settings.Default.SelectedEventId = selectedEvent.Id;
+                Properties.Settings.Default.EventSelectionTime = DateTime.Now;
                 Properties.Settings.Default.Save();
-                Log.Debug($"OnEventSelectionOverlayEventSelected: Saved SelectedEventId {selectedEvent.Id} to settings");
+                Log.Debug($"OnEventSelectionOverlayEventSelected: Saved SelectedEventId {selectedEvent.Id} and timestamp to settings");
                 
                 // Initialize template selection with the selected event
                 Log.Debug($"OnEventSelectionOverlayEventSelected: Initializing template selection for event ID {selectedEvent.Id}");
@@ -3811,7 +3838,7 @@ namespace Photobooth.Pages
         private void OnEventSelectionOverlayCancelled(object sender, EventArgs e)
         {
             Log.Debug("OnEventSelectionOverlayCancelled: Event selection cancelled");
-            
+
             // Show start button for basic photo capture if no event selected
             if (_currentEvent == null)
             {
@@ -3819,7 +3846,50 @@ namespace Photobooth.Pages
                 startButtonOverlay.Visibility = Visibility.Visible;
             }
         }
-        
+
+        private void OnEventExpired(object sender, EventArgs e)
+        {
+            Log.Debug("OnEventExpired: Event has expired after 5 hours, returning to event selection");
+
+            // Clear current event and template
+            _currentEvent = null;
+            _currentTemplate = null;
+
+            // Clear settings
+            Properties.Settings.Default.SelectedEventId = 0;
+            Properties.Settings.Default.Save();
+
+            // Clear template service state
+            _eventTemplateService?.ClearSelections();
+            _templateSelectionService?.ClearSelection();
+
+            // Update UI on the main thread
+            Dispatcher.Invoke(() =>
+            {
+                // Hide any active overlays first
+                if (templateSelectionOverlay?.Visibility == Visibility.Visible)
+                {
+                    templateSelectionOverlay.Visibility = Visibility.Collapsed;
+                }
+                if (templateSelectionOverlayNew?.Visibility == Visibility.Visible)
+                {
+                    templateSelectionOverlayNew.Visibility = Visibility.Collapsed;
+                }
+
+                // Show event expired message briefly
+                statusText.Text = "Event session expired. Please select an event to continue.";
+
+                // Show event selection overlay after a short delay
+                var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                timer.Tick += (s, args) =>
+                {
+                    timer.Stop();
+                    ShowEventSelectionOverlay();
+                };
+                timer.Start();
+            });
+        }
+
         // Legacy handler - keeping for old inline overlay (to be removed)
         private void EventItem_Click(object sender, RoutedEventArgs e)
         {
@@ -5031,48 +5101,91 @@ namespace Photobooth.Pages
         {
             try
             {
+                Log.Debug("BackButton_Click: Starting navigation back to Surface Launcher");
+
                 // Get the current parent window
                 var parentWindow = Window.GetWindow(this);
-                
+
                 // Check if we're in SurfacePhotoBoothWindow (original navigation)
                 if (parentWindow is SurfacePhotoBoothWindow surfaceWindow)
                 {
+                    Log.Debug("BackButton_Click: In SurfacePhotoBoothWindow, calling NavigateBack");
                     surfaceWindow.NavigateBack();
                 }
-                // If we're in ModernPhotoboothWindow, open SurfacePhotoBoothWindow
-                else if (parentWindow != null)
+                // If we're in ModernPhotoboothWindow or any other window, open SurfacePhotoBoothWindow
+                else if (parentWindow is ModernPhotoboothWindow || parentWindow != null)
                 {
-                    Log.Debug("BackButton_Click: Opening SurfacePhotoBoothWindow");
-                    
+                    Log.Debug($"BackButton_Click: In {parentWindow?.GetType().Name}, opening SurfacePhotoBoothWindow");
+
                     // Create and show the Surface window
                     var surfacePhotoBoothWindow = new SurfacePhotoBoothWindow();
+
+                    // Set window state to match current window
+                    if (parentWindow.WindowState == WindowState.Maximized)
+                    {
+                        surfacePhotoBoothWindow.WindowState = WindowState.Maximized;
+                    }
+                    else
+                    {
+                        surfacePhotoBoothWindow.Width = parentWindow.Width;
+                        surfacePhotoBoothWindow.Height = parentWindow.Height;
+                        surfacePhotoBoothWindow.Left = parentWindow.Left;
+                        surfacePhotoBoothWindow.Top = parentWindow.Top;
+                    }
+
                     surfacePhotoBoothWindow.Show();
-                    
-                    // Close the modern window
+
+                    // Make it the main window if needed
+                    if (Application.Current.MainWindow == parentWindow)
+                    {
+                        Application.Current.MainWindow = surfacePhotoBoothWindow;
+                    }
+
+                    // Close the modern window after showing Surface window
                     parentWindow.Close();
+
+                    Log.Debug("BackButton_Click: Successfully opened SurfacePhotoBoothWindow and closed previous window");
                 }
                 else if (NavigationService != null && NavigationService.CanGoBack)
                 {
+                    Log.Debug("BackButton_Click: Using NavigationService.GoBack");
                     NavigationService.GoBack();
                 }
                 else
                 {
-                    // No navigation available
-                    Log.Debug("BackButton_Click: No navigation available");
+                    // No navigation available - try opening Surface window anyway
+                    Log.Debug("BackButton_Click: No parent window found, attempting to open SurfacePhotoBoothWindow directly");
+
+                    var surfacePhotoBoothWindow = new SurfacePhotoBoothWindow();
+                    surfacePhotoBoothWindow.WindowState = WindowState.Maximized;
+                    surfacePhotoBoothWindow.Show();
+
+                    // If there's a current main window, close it
+                    if (Application.Current?.MainWindow != null && Application.Current.MainWindow != surfacePhotoBoothWindow)
+                    {
+                        Application.Current.MainWindow.Close();
+                    }
+
+                    Application.Current.MainWindow = surfacePhotoBoothWindow;
                 }
             }
             catch (Exception ex)
             {
                 Log.Error($"BackButton navigation error: {ex.Message}");
-                // Fallback - just close the window
+                MessageBox.Show($"Error navigating back: {ex.Message}", "Navigation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+
+                // Last resort - try to open Surface window
                 try
                 {
+                    var surfacePhotoBoothWindow = new SurfacePhotoBoothWindow();
+                    surfacePhotoBoothWindow.Show();
+
                     var parentWindow = Window.GetWindow(this);
                     parentWindow?.Close();
                 }
-                catch (Exception closeEx)
+                catch (Exception fallbackEx)
                 {
-                    Log.Error($"Window close fallback failed: {closeEx.Message}");
+                    Log.Error($"Fallback navigation also failed: {fallbackEx.Message}");
                 }
             }
         }

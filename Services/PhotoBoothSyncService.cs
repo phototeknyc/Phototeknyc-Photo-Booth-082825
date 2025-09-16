@@ -23,7 +23,7 @@ namespace Photobooth.Services
         #region Services
         private readonly TemplateSyncService _templateSync;
         private readonly SettingsSyncService _settingsSync;
-        private readonly CloudShareServiceRuntime _cloudService;
+        private CloudShareServiceRuntime _cloudService; // Removed readonly to allow reinitialization
         #endregion
 
         #region Properties
@@ -33,12 +33,91 @@ namespace Photobooth.Services
         private bool _isSyncing;
         private DateTime _lastSyncTime;
         private string _boothId;
+        private System.Timers.Timer _syncTimer;
 
         public bool IsSyncing => _isSyncing;
         public DateTime LastSyncTime => _lastSyncTime;
         public string BoothId => _boothId;
         public SyncConfiguration Config => _config;
-        
+
+        /// <summary>
+        /// Get sync status information
+        /// </summary>
+        public SyncStatus GetSyncStatus()
+        {
+            return new SyncStatus
+            {
+                IsEnabled = _config.IsEnabled,
+                IsAutoSyncEnabled = _config.AutoSync,
+                IsSyncing = _isSyncing,
+                LastSyncTime = _lastSyncTime,
+                NextSyncTime = GetNextSyncTime(),
+                SyncIntervalMinutes = _config.SyncInterval,
+                BoothId = _boothId
+            };
+        }
+
+        /// <summary>
+        /// Calculate next sync time
+        /// </summary>
+        private DateTime? GetNextSyncTime()
+        {
+            if (!_config.IsEnabled || !_config.AutoSync || _config.SyncInterval <= 0)
+                return null;
+
+            if (_lastSyncTime == DateTime.MinValue)
+                return DateTime.Now;
+
+            return _lastSyncTime.AddMinutes(_config.SyncInterval);
+        }
+
+        /// <summary>
+        /// Get the cloud service instance for testing
+        /// </summary>
+        public CloudShareServiceRuntime GetCloudService()
+        {
+            return _cloudService;
+        }
+
+        /// <summary>
+        /// Reinitialize the cloud service with updated credentials
+        /// </summary>
+        public void ReinitializeCloudService()
+        {
+            try
+            {
+                Debug.WriteLine("PhotoBoothSyncService: Reinitializing cloud service with updated credentials");
+
+                // Set environment variables from current settings
+                SetEnvironmentVariablesFromSettings();
+
+                // Create new cloud service instance with updated credentials
+                _cloudService = new CloudShareServiceRuntime();
+
+                Debug.WriteLine("PhotoBoothSyncService: Cloud service reinitialized successfully");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error reinitializing cloud service: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Get the remote manifest for testing/display
+        /// </summary>
+        public async Task<SyncManifest> GetRemoteManifestAsync()
+        {
+            try
+            {
+                return await DownloadManifestAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error getting remote manifest: {ex.Message}");
+                return null;
+            }
+        }
+
         // Sync paths in S3
         private const string SYNC_ROOT = "photobooth-sync/";
         private const string MANIFEST_FILE = "sync-manifest.json";
@@ -53,6 +132,9 @@ namespace Photobooth.Services
         public event EventHandler<SyncProgressEventArgs> SyncProgress;
         public event EventHandler<SyncErrorEventArgs> SyncError;
         public event EventHandler<ConflictEventArgs> ConflictDetected;
+        public event EventHandler<TemplateUpdateEventArgs> TemplateUpdating;
+        public event EventHandler<SettingsUpdateEventArgs> SettingsUpdating;
+        public event EventHandler<EventUpdateEventArgs> EventUpdating;
         #endregion
 
         #region Constructor
@@ -68,7 +150,10 @@ namespace Photobooth.Services
             
             InitializeConfiguration();
             LoadLocalManifest();
-            
+
+            // Initialize automatic sync timer
+            InitializeAutoSyncTimer();
+
             Debug.WriteLine($"PhotoBoothSyncService: Initialized with booth ID: {_boothId}");
         }
         #endregion
@@ -84,29 +169,35 @@ namespace Photobooth.Services
                 var settings = Properties.Settings.Default;
                 
                 // Set AWS credentials from application settings
+                // Set both in process environment (for immediate use) and user environment (for persistence)
                 if (!string.IsNullOrEmpty(settings.S3AccessKey))
                 {
+                    Environment.SetEnvironmentVariable("AWS_ACCESS_KEY_ID", settings.S3AccessKey, EnvironmentVariableTarget.Process);
                     Environment.SetEnvironmentVariable("AWS_ACCESS_KEY_ID", settings.S3AccessKey, EnvironmentVariableTarget.User);
                 }
-                
+
                 if (!string.IsNullOrEmpty(settings.S3SecretKey))
                 {
+                    Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", settings.S3SecretKey, EnvironmentVariableTarget.Process);
                     Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", settings.S3SecretKey, EnvironmentVariableTarget.User);
                 }
-                
+
                 if (!string.IsNullOrEmpty(settings.S3BucketName))
                 {
+                    Environment.SetEnvironmentVariable("S3_BUCKET_NAME", settings.S3BucketName, EnvironmentVariableTarget.Process);
                     Environment.SetEnvironmentVariable("S3_BUCKET_NAME", settings.S3BucketName, EnvironmentVariableTarget.User);
                 }
-                
+
                 if (!string.IsNullOrEmpty(settings.S3Region))
                 {
+                    Environment.SetEnvironmentVariable("S3_REGION", settings.S3Region, EnvironmentVariableTarget.Process);
                     Environment.SetEnvironmentVariable("S3_REGION", settings.S3Region, EnvironmentVariableTarget.User);
                 }
-                
+
                 // Also set the gallery base URL if available
                 if (!string.IsNullOrEmpty(settings.GalleryBaseUrl))
                 {
+                    Environment.SetEnvironmentVariable("GALLERY_BASE_URL", settings.GalleryBaseUrl, EnvironmentVariableTarget.Process);
                     Environment.SetEnvironmentVariable("GALLERY_BASE_URL", settings.GalleryBaseUrl, EnvironmentVariableTarget.User);
                 }
                 
@@ -154,6 +245,102 @@ namespace Photobooth.Services
             return $"BOOTH-{machineName}-{randomPart}";
         }
 
+        /// <summary>
+        /// Initialize automatic sync timer
+        /// </summary>
+        private void InitializeAutoSyncTimer()
+        {
+            try
+            {
+                if (_syncTimer != null)
+                {
+                    _syncTimer.Stop();
+                    _syncTimer.Dispose();
+                }
+
+                // Create timer but don't start it yet
+                _syncTimer = new System.Timers.Timer();
+                _syncTimer.Elapsed += async (sender, e) => await OnAutoSyncTimerElapsed();
+
+                // Configure and start timer if auto-sync is enabled
+                UpdateAutoSyncTimer();
+
+                Debug.WriteLine($"PhotoBoothSyncService: Auto-sync timer initialized");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error initializing auto-sync timer: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Update auto-sync timer settings
+        /// </summary>
+        public void UpdateAutoSyncTimer()
+        {
+            try
+            {
+                if (_syncTimer == null) return;
+
+                _syncTimer.Stop();
+
+                if (_config.IsEnabled && _config.AutoSync && _config.SyncInterval > 0)
+                {
+                    // Convert minutes to milliseconds
+                    double intervalMs = _config.SyncInterval * 60 * 1000;
+
+                    // Minimum interval of 1 minute
+                    if (intervalMs < 60000) intervalMs = 60000;
+
+                    _syncTimer.Interval = intervalMs;
+                    _syncTimer.Start();
+
+                    Debug.WriteLine($"PhotoBoothSyncService: Auto-sync timer started with interval of {_config.SyncInterval} minutes");
+                }
+                else
+                {
+                    Debug.WriteLine("PhotoBoothSyncService: Auto-sync timer stopped (disabled or interval is 0)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error updating auto-sync timer: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handle auto-sync timer elapsed
+        /// </summary>
+        private async Task OnAutoSyncTimerElapsed()
+        {
+            try
+            {
+                if (_isSyncing)
+                {
+                    Debug.WriteLine("PhotoBoothSyncService: Auto-sync skipped - sync already in progress");
+                    return;
+                }
+
+                Debug.WriteLine("PhotoBoothSyncService: Auto-sync timer elapsed, starting sync...");
+
+                // Perform sync
+                var result = await SyncAsync();
+
+                if (result.Success)
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Auto-sync completed successfully");
+                }
+                else
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Auto-sync failed: {result.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error during auto-sync: {ex.Message}");
+            }
+        }
+
         private void LoadLocalManifest()
         {
             string manifestPath = GetLocalManifestPath();
@@ -174,6 +361,213 @@ namespace Photobooth.Services
             else
             {
                 _localManifest = new SyncManifest { BoothId = _boothId };
+            }
+
+            // Scan and add local templates to manifest
+            ScanAndAddLocalTemplates();
+        }
+
+        private void ScanAndAddLocalTemplates()
+        {
+            try
+            {
+                string templatesDir = GetTemplatesDirectory();
+                if (!Directory.Exists(templatesDir))
+                {
+                    Directory.CreateDirectory(templatesDir);
+                }
+
+                // Export templates from database to files for syncing
+                ExportTemplatesFromDatabase(templatesDir);
+
+                // Get all template files (assuming .xaml or .pbtpl extensions)
+                var templateFiles = Directory.GetFiles(templatesDir, "*.*", SearchOption.TopDirectoryOnly)
+                    .Where(f => f.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase) ||
+                               f.EndsWith(".pbtpl", StringComparison.OrdinalIgnoreCase) ||
+                               f.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                foreach (var templateFile in templateFiles)
+                {
+                    try
+                    {
+                        var fileName = Path.GetFileName(templateFile);
+                        var fileInfo = new FileInfo(templateFile);
+                        var hash = CalculateFileHash(templateFile);
+
+                        // Check if this template already exists in manifest
+                        var existingItem = _localManifest.Items.FirstOrDefault(i =>
+                            i.Type == SyncItemType.Template && i.FileName == fileName);
+
+                        if (existingItem != null)
+                        {
+                            // Update existing item if hash changed
+                            if (existingItem.Hash != hash)
+                            {
+                                existingItem.Hash = hash;
+                                existingItem.LastModified = fileInfo.LastWriteTime;
+                                Debug.WriteLine($"PhotoBoothSyncService: Updated template in manifest: {fileName}");
+                            }
+                        }
+                        else
+                        {
+                            // Add new template to manifest
+                            var syncItem = new SyncItem
+                            {
+                                Id = Guid.NewGuid().ToString(),
+                                Type = SyncItemType.Template,
+                                FileName = fileName,
+                                CloudPath = $"{SYNC_ROOT}{TEMPLATES_PATH}{fileName}",
+                                Hash = hash,
+                                LastModified = fileInfo.LastWriteTime,
+                                Metadata = new Dictionary<string, object>
+                                {
+                                    ["BoothId"] = _boothId,
+                                    ["CreatedAt"] = DateTime.Now
+                                }
+                            };
+
+                            _localManifest.Items.Add(syncItem);
+                            Debug.WriteLine($"PhotoBoothSyncService: Added new template to manifest: {fileName}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"PhotoBoothSyncService: Error processing template {templateFile}: {ex.Message}");
+                    }
+                }
+
+                // Remove templates from manifest that no longer exist locally
+                var templateItems = _localManifest.Items.Where(i => i.Type == SyncItemType.Template).ToList();
+                foreach (var item in templateItems)
+                {
+                    var localPath = Path.Combine(templatesDir, item.FileName);
+                    if (!File.Exists(localPath))
+                    {
+                        _localManifest.Items.Remove(item);
+                        Debug.WriteLine($"PhotoBoothSyncService: Removed missing template from manifest: {item.FileName}");
+                    }
+                }
+
+                Debug.WriteLine($"PhotoBoothSyncService: Scanned {templateFiles.Count} templates, manifest now has {_localManifest.Items.Count(i => i.Type == SyncItemType.Template)} template items");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error scanning local templates: {ex.Message}");
+            }
+        }
+
+        private void ExportTemplatesFromDatabase(string templatesDir)
+        {
+            try
+            {
+                var templateDb = new Database.TemplateDatabase();
+                var templates = templateDb.GetAllTemplates();
+
+                Debug.WriteLine($"PhotoBoothSyncService: Found {templates.Count} templates in database");
+
+                // Clean up orphaned template JSON files that no longer exist in database
+                var existingTemplateFiles = Directory.GetFiles(templatesDir, "template_*.json");
+                var validTemplateIds = new HashSet<int>(templates.Select(t => t.Id));
+
+                foreach (var file in existingTemplateFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (fileName.StartsWith("template_") && fileName.EndsWith(".json"))
+                    {
+                        var idStr = fileName.Substring(9, fileName.Length - 14); // Extract ID from template_ID.json
+                        if (int.TryParse(idStr, out int templateId))
+                        {
+                            if (!validTemplateIds.Contains(templateId))
+                            {
+                                // This template JSON file is orphaned - delete it
+                                File.Delete(file);
+                                Debug.WriteLine($"PhotoBoothSyncService: Deleted orphaned template file: {fileName}");
+                            }
+                        }
+                    }
+                }
+
+                foreach (var template in templates)
+                {
+                    try
+                    {
+                        // Don't upload assets here - just export JSON with local paths
+                        // Assets will be uploaded during the actual sync process
+
+                        // Create a JSON representation of the template
+                        var templateExport = new
+                        {
+                            template.Id,
+                            template.Name,
+                            template.Description,
+                            template.CanvasWidth,
+                            template.CanvasHeight,
+                            template.BackgroundColor,
+                            template.BackgroundImagePath,
+                            template.ThumbnailImagePath,
+                            template.CreatedDate,
+                            template.ModifiedDate,
+                            template.IsActive,
+                            Items = GetTemplateItems(templateDb, template.Id)
+                        };
+
+                        string fileName = $"template_{template.Id}.json";
+                        string filePath = Path.Combine(templatesDir, fileName);
+
+                        string json = JsonConvert.SerializeObject(templateExport, Formatting.Indented);
+                        File.WriteAllText(filePath, json);
+
+                        Debug.WriteLine($"PhotoBoothSyncService: Exported template {template.Name} to {fileName}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"PhotoBoothSyncService: Error exporting template {template.Id}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error exporting templates from database: {ex.Message}");
+            }
+        }
+
+        private async Task<string> UploadTemplateAssetAsync(int templateId, string localPath, string assetType)
+        {
+            try
+            {
+                if (!File.Exists(localPath))
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Asset file not found: {localPath}");
+                    return null;
+                }
+
+                // Generate S3 path for the asset
+                string fileExtension = Path.GetExtension(localPath);
+                string s3FileName = $"template_{templateId}_{assetType}{fileExtension}";
+                string s3Path = $"{SYNC_ROOT}{TEMPLATES_PATH}assets/{s3FileName}";
+
+                // Upload the file to S3
+                bool uploaded = await _cloudService.UploadFileAsync(s3Path, localPath);
+
+                if (uploaded)
+                {
+                    // Return the S3 URL
+                    string bucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME") ?? "phototeknyc";
+                    string s3Url = $"https://{bucketName}.s3.amazonaws.com/{s3Path}";
+                    Debug.WriteLine($"PhotoBoothSyncService: Uploaded asset {assetType} for template {templateId} to {s3Url}");
+                    return s3Url;
+                }
+                else
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Failed to upload asset {assetType} for template {templateId}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error uploading template asset: {ex.Message}");
+                return null;
             }
         }
 
@@ -206,11 +600,15 @@ namespace Photobooth.Services
 
             _isSyncing = true;
             var result = new SyncResult();
-            
+
             try
             {
                 Debug.WriteLine("PhotoBoothSyncService: Starting sync operation");
                 SyncStarted?.Invoke(this, new SyncEventArgs { BoothId = _boothId });
+
+                // Step 0: Rescan local templates to ensure manifest is up to date
+                UpdateProgress("Scanning local templates", 5);
+                ScanAndAddLocalTemplates();
 
                 // Step 1: Download remote manifest
                 UpdateProgress("Downloading sync manifest", 10);
@@ -224,8 +622,21 @@ namespace Photobooth.Services
                 if (_config.SyncTemplates && (options?.SyncTemplates ?? true))
                 {
                     UpdateProgress("Syncing templates", 30);
-                    // Templates are synced via manifest comparison
-                    result.TemplatesSynced = syncPlan.TemplatesToSync.Count;
+
+                    // Download remote templates
+                    foreach (var template in syncPlan.TemplatesToSync)
+                    {
+                        await DownloadTemplateAsync(template);
+                    }
+
+                    // Upload local templates that need syncing
+                    var templatesToUpload = syncPlan.ItemsToUpload.Where(i => i.Type == SyncItemType.Template).ToList();
+                    foreach (var template in templatesToUpload)
+                    {
+                        await UploadTemplateAsync(template);
+                    }
+
+                    result.TemplatesSynced = syncPlan.TemplatesToSync.Count + templatesToUpload.Count;
                 }
 
                 // Step 4: Sync settings if enabled
@@ -308,7 +719,7 @@ namespace Photobooth.Services
                 string cloudPath = $"{SYNC_ROOT}{TEMPLATES_PATH}{fileName}";
                 
                 // Upload to cloud
-                bool uploaded = await _cloudService.UploadFileAsync(templatePath, cloudPath);
+                bool uploaded = await _cloudService.UploadFileAsync(cloudPath, templatePath);
                 
                 if (uploaded)
                 {
@@ -376,12 +787,53 @@ namespace Photobooth.Services
         {
             if (!_config.AutoSync || !_config.IsEnabled)
                 return false;
-                
+
             if (_lastSyncTime == DateTime.MinValue)
                 return true;
-                
+
             var timeSinceLastSync = DateTime.Now - _lastSyncTime;
             return timeSinceLastSync.TotalMinutes >= _config.SyncInterval;
+        }
+
+        /// <summary>
+        /// Enable or disable auto-sync
+        /// </summary>
+        public void SetAutoSyncEnabled(bool enabled)
+        {
+            _config.AutoSync = enabled;
+            Properties.Settings.Default.AutoSyncOnStartup = enabled;
+            Properties.Settings.Default.Save();
+
+            UpdateAutoSyncTimer();
+
+            Debug.WriteLine($"PhotoBoothSyncService: Auto-sync {(enabled ? "enabled" : "disabled")}");
+        }
+
+        /// <summary>
+        /// Set sync interval in minutes
+        /// </summary>
+        public void SetSyncInterval(int minutes)
+        {
+            if (minutes < 1) minutes = 1; // Minimum 1 minute
+
+            _config.SyncInterval = minutes;
+            Properties.Settings.Default.SyncIntervalMinutes = minutes;
+            Properties.Settings.Default.Save();
+
+            UpdateAutoSyncTimer();
+
+            Debug.WriteLine($"PhotoBoothSyncService: Sync interval set to {minutes} minutes");
+        }
+
+        /// <summary>
+        /// Update configuration from settings
+        /// </summary>
+        public void RefreshConfiguration()
+        {
+            InitializeConfiguration();
+            UpdateAutoSyncTimer();
+
+            Debug.WriteLine("PhotoBoothSyncService: Configuration refreshed from settings");
         }
 
         #endregion
@@ -427,12 +879,16 @@ namespace Photobooth.Services
             // Find items to download (in remote but not in local or newer in remote)
             foreach (var remoteItem in _remoteManifest.Items)
             {
-                var localItem = _localManifest.Items.FirstOrDefault(i => i.Id == remoteItem.Id);
-                
+                // For templates, compare by FileName instead of Id since IDs are auto-generated locally
+                var localItem = remoteItem.Type == SyncItemType.Template
+                    ? _localManifest.Items.FirstOrDefault(i => i.Type == SyncItemType.Template && i.FileName == remoteItem.FileName)
+                    : _localManifest.Items.FirstOrDefault(i => i.Id == remoteItem.Id);
+
                 if (localItem == null)
                 {
                     // New item - download it
                     plan.ItemsToDownload.Add(remoteItem);
+                    Debug.WriteLine($"PhotoBoothSyncService: Will download {remoteItem.Type} - {remoteItem.FileName}");
                 }
                 else if (remoteItem.Hash != localItem.Hash)
                 {
@@ -466,7 +922,12 @@ namespace Photobooth.Services
             // Find items to upload (in local but not in remote)
             foreach (var localItem in _localManifest.Items)
             {
-                if (!_remoteManifest.Items.Any(i => i.Id == localItem.Id))
+                // For templates, compare by FileName instead of Id
+                bool existsInRemote = localItem.Type == SyncItemType.Template
+                    ? _remoteManifest.Items.Any(i => i.Type == SyncItemType.Template && i.FileName == localItem.FileName)
+                    : _remoteManifest.Items.Any(i => i.Id == localItem.Id);
+
+                if (!existsInRemote)
                 {
                     plan.ItemsToUpload.Add(localItem);
                 }
@@ -521,8 +982,9 @@ namespace Photobooth.Services
                     string localPath = GetLocalPathForItem(item);
                     if (File.Exists(localPath))
                     {
-                        await _cloudService.UploadFileAsync(localPath, item.CloudPath);
-                        Debug.WriteLine($"PhotoBoothSyncService: Uploaded {item.FileName}");
+                        // Fixed parameter order: cloudPath first, then localPath
+                        await _cloudService.UploadFileAsync(item.CloudPath, localPath);
+                        Debug.WriteLine($"PhotoBoothSyncService: Uploaded {item.FileName} to {item.CloudPath}");
                     }
                 }
                 catch (Exception ex)
@@ -590,7 +1052,7 @@ namespace Photobooth.Services
                 
                 // Upload to cloud
                 string cloudPath = $"{SYNC_ROOT}{MANIFEST_FILE}";
-                await _cloudService.UploadFileAsync(localPath, cloudPath);
+                await _cloudService.UploadFileAsync(cloudPath, localPath);
                 
                 Debug.WriteLine("PhotoBoothSyncService: Manifest updated and uploaded");
             }
@@ -772,14 +1234,76 @@ namespace Photobooth.Services
                 var localPath = Path.Combine(GetTemplatesDirectory(), template.FileName);
                 if (File.Exists(localPath))
                 {
+                    // Upload the template JSON file
                     var cloudPath = $"{SYNC_ROOT}{TEMPLATES_PATH}{template.FileName}";
                     await _cloudService.UploadFileAsync(cloudPath, localPath);
                     Debug.WriteLine($"PhotoBoothSyncService: Uploaded template {template.FileName}");
+
+                    // Now upload the template's assets (background, thumbnail, item images)
+                    await UploadTemplateAssetsAsync(localPath);
                 }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"PhotoBoothSyncService: Error uploading template: {ex.Message}");
+            }
+        }
+
+        private async Task UploadTemplateAssetsAsync(string templateJsonPath)
+        {
+            try
+            {
+                // Read the template JSON to get asset paths
+                string json = File.ReadAllText(templateJsonPath);
+                dynamic templateData = JsonConvert.DeserializeObject(json);
+
+                // Extract template ID from filename (template_X.json)
+                string fileName = Path.GetFileNameWithoutExtension(templateJsonPath);
+                int templateId = int.Parse(fileName.Replace("template_", ""));
+
+                // Upload background image if it exists
+                string backgroundPath = (string)templateData.BackgroundImagePath;
+                if (!string.IsNullOrEmpty(backgroundPath) && File.Exists(backgroundPath))
+                {
+                    string bgUrl = await UploadTemplateAssetAsync(templateId, backgroundPath, "background");
+                    if (!string.IsNullOrEmpty(bgUrl))
+                    {
+                        Debug.WriteLine($"PhotoBoothSyncService: Uploaded background for template {templateId}");
+                    }
+                }
+
+                // Upload thumbnail image if it exists
+                string thumbnailPath = (string)templateData.ThumbnailImagePath;
+                if (!string.IsNullOrEmpty(thumbnailPath) && File.Exists(thumbnailPath))
+                {
+                    string thumbUrl = await UploadTemplateAssetAsync(templateId, thumbnailPath, "thumbnail");
+                    if (!string.IsNullOrEmpty(thumbUrl))
+                    {
+                        Debug.WriteLine($"PhotoBoothSyncService: Uploaded thumbnail for template {templateId}");
+                    }
+                }
+
+                // Upload item images if they exist
+                if (templateData.Items != null)
+                {
+                    foreach (var item in templateData.Items)
+                    {
+                        string itemImagePath = (string)item.ImagePath;
+                        if (!string.IsNullOrEmpty(itemImagePath) && File.Exists(itemImagePath))
+                        {
+                            int itemId = (int)item.Id;
+                            string itemUrl = await UploadTemplateAssetAsync(templateId, itemImagePath, $"item_{itemId}");
+                            if (!string.IsNullOrEmpty(itemUrl))
+                            {
+                                Debug.WriteLine($"PhotoBoothSyncService: Uploaded image for item {itemId} in template {templateId}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error uploading template assets: {ex.Message}");
             }
         }
         
@@ -789,12 +1313,378 @@ namespace Photobooth.Services
             {
                 var cloudPath = $"{SYNC_ROOT}{TEMPLATES_PATH}{template.FileName}";
                 var localPath = Path.Combine(GetTemplatesDirectory(), template.FileName);
-                await _cloudService.DownloadFileAsync(cloudPath, localPath);
-                Debug.WriteLine($"PhotoBoothSyncService: Downloaded template {template.FileName}");
+
+                // Download the template file from S3
+                bool downloaded = await _cloudService.DownloadFileAsync(cloudPath, localPath);
+
+                if (downloaded && File.Exists(localPath))
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Downloaded template {template.FileName}");
+
+                    // Import the template into the database
+                    ImportTemplateToDatabase(localPath);
+                }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"PhotoBoothSyncService: Error downloading template: {ex.Message}");
+            }
+        }
+
+        private List<object> GetTemplateItems(Database.TemplateDatabase templateDb, int templateId)
+        {
+            try
+            {
+                // Get canvas items from database
+                var items = templateDb.GetCanvasItems(templateId);
+                var exportItems = new List<object>();
+
+                foreach (var item in items)
+                {
+                    // Don't upload images here - just export with local paths
+                    // Images will be uploaded during the actual sync process
+
+                    // Create export object
+                    var exportItem = new
+                    {
+                        item.Id,
+                        item.TemplateId,
+                        item.ItemType,
+                        item.Name,
+                        item.X,
+                        item.Y,
+                        item.Width,
+                        item.Height,
+                        item.Rotation,
+                        item.ZIndex,
+                        item.LockedPosition,
+                        item.LockedSize,
+                        item.LockedAspectRatio,
+                        item.IsVisible,
+                        item.IsLocked,
+                        item.ImagePath,
+                        item.ImageHash,
+                        item.Text,
+                        item.FontFamily,
+                        item.FontSize,
+                        item.FontWeight,
+                        item.FontStyle,
+                        item.TextColor,
+                        item.TextAlignment,
+                        item.IsBold,
+                        item.IsItalic,
+                        item.IsUnderlined,
+                        item.HasShadow,
+                        item.ShadowOffsetX,
+                        item.ShadowOffsetY,
+                        item.ShadowBlurRadius,
+                        item.ShadowColor,
+                        item.HasOutline,
+                        item.OutlineThickness,
+                        item.OutlineColor,
+                        item.PlaceholderNumber,
+                        item.PlaceholderColor,
+                        item.ShapeType,
+                        item.FillColor,
+                        item.StrokeColor,
+                        item.StrokeThickness,
+                        item.HasNoFill,
+                        item.HasNoStroke
+                    };
+
+                    exportItems.Add(exportItem);
+                }
+
+                return exportItems;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error getting template items: {ex.Message}");
+                return new List<object>();
+            }
+        }
+
+        private void SaveTemplateItemToDatabase(Database.TemplateDatabase templateDb, int templateId, dynamic item)
+        {
+            try
+            {
+                // Download item image if it's an S3 URL
+                string localImagePath = null;
+                if (item.ImagePath != null)
+                {
+                    string imageUrl = (string)item.ImagePath;
+                    if (!string.IsNullOrEmpty(imageUrl) && imageUrl.Contains(".s3.amazonaws.com"))
+                    {
+                        localImagePath = DownloadItemAsset(imageUrl, templateId, (int)item.Id);
+                    }
+                    else
+                    {
+                        localImagePath = imageUrl;
+                    }
+                }
+
+                // Create CanvasItemData object
+                var canvasItem = new Database.CanvasItemData
+                {
+                    TemplateId = templateId,
+                    ItemType = item.ItemType,
+                    Name = item.Name,
+                    X = item.X,
+                    Y = item.Y,
+                    Width = item.Width,
+                    Height = item.Height,
+                    Rotation = item.Rotation,
+                    ZIndex = item.ZIndex,
+                    LockedPosition = item.LockedPosition ?? false,
+                    LockedSize = item.LockedSize ?? false,
+                    LockedAspectRatio = item.LockedAspectRatio ?? false,
+                    IsVisible = item.IsVisible ?? true,
+                    IsLocked = item.IsLocked ?? false,
+                    ImagePath = localImagePath ?? (string)item.OriginalImagePath,
+                    ImageHash = item.ImageHash,
+                    Text = item.Text,
+                    FontFamily = item.FontFamily,
+                    FontSize = item.FontSize ?? 0,
+                    FontWeight = item.FontWeight,
+                    FontStyle = item.FontStyle,
+                    TextColor = item.TextColor,
+                    TextAlignment = item.TextAlignment,
+                    IsBold = item.IsBold ?? false,
+                    IsItalic = item.IsItalic ?? false,
+                    IsUnderlined = item.IsUnderlined ?? false,
+                    HasShadow = item.HasShadow ?? false,
+                    ShadowOffsetX = item.ShadowOffsetX ?? 0,
+                    ShadowOffsetY = item.ShadowOffsetY ?? 0,
+                    ShadowBlurRadius = item.ShadowBlurRadius ?? 0,
+                    ShadowColor = item.ShadowColor,
+                    HasOutline = item.HasOutline ?? false,
+                    OutlineThickness = item.OutlineThickness ?? 0,
+                    OutlineColor = item.OutlineColor,
+                    PlaceholderNumber = item.PlaceholderNumber ?? 0,
+                    PlaceholderColor = item.PlaceholderColor,
+                    ShapeType = item.ShapeType,
+                    FillColor = item.FillColor,
+                    StrokeColor = item.StrokeColor,
+                    StrokeThickness = item.StrokeThickness ?? 0,
+                    HasNoFill = item.HasNoFill ?? false,
+                    HasNoStroke = item.HasNoStroke ?? false
+                };
+
+                // Save to database
+                templateDb.SaveCanvasItem(canvasItem);
+                Debug.WriteLine($"PhotoBoothSyncService: Saved template item {canvasItem.Name} for template {templateId}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error saving template item: {ex.Message}");
+            }
+        }
+
+        private string DownloadItemAsset(string assetUrl, int templateId, int itemId)
+        {
+            try
+            {
+                // Extract the S3 path from the URL
+                Uri uri = new Uri(assetUrl);
+                string s3Path = uri.AbsolutePath.TrimStart('/');
+
+                // Create local path for the asset
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string assetsDir = Path.Combine(appData, "PhotoBooth", "Templates", "Assets", $"Template_{templateId}");
+
+                if (!Directory.Exists(assetsDir))
+                {
+                    Directory.CreateDirectory(assetsDir);
+                }
+
+                string fileExtension = Path.GetExtension(assetUrl);
+                string localFileName = $"item_{itemId}{fileExtension}";
+                string localPath = Path.Combine(assetsDir, localFileName);
+
+                // Download the file from S3
+                bool downloaded = _cloudService.DownloadFileAsync(s3Path, localPath).Result;
+
+                if (downloaded && File.Exists(localPath))
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Downloaded item asset for item {itemId} to {localPath}");
+                    return localPath;
+                }
+                else
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Failed to download item asset for item {itemId}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error downloading item asset: {ex.Message}");
+                return null;
+            }
+        }
+
+        private void ImportTemplateToDatabase(string templateFilePath)
+        {
+            try
+            {
+                // Read the JSON file
+                string json = File.ReadAllText(templateFilePath);
+                dynamic templateData = JsonConvert.DeserializeObject(json);
+
+                var templateDb = new Database.TemplateDatabase();
+
+                // Check if template already exists
+                int templateId = (int)templateData.Id;
+                var existingTemplate = templateDb.GetTemplate(templateId);
+
+                // Download image assets if they are S3 URLs
+                string localBackgroundPath = DownloadTemplateAsset(templateData, "BackgroundImagePath", templateId, "background");
+                string localThumbnailPath = DownloadTemplateAsset(templateData, "ThumbnailImagePath", templateId, "thumbnail");
+
+                if (existingTemplate != null)
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Template {templateId} already exists, updating...");
+
+                    // Notify that template is being updated
+                    TemplateUpdating?.Invoke(this, new TemplateUpdateEventArgs
+                    {
+                        TemplateId = templateId,
+                        TemplateName = existingTemplate.Name,
+                        UpdateType = TemplateUpdateType.Modified,
+                        Message = $"Updating template '{existingTemplate.Name}' from cloud sync..."
+                    });
+
+                    // Update existing template
+                    existingTemplate.Name = templateData.Name;
+                    existingTemplate.Description = templateData.Description;
+                    existingTemplate.CanvasWidth = templateData.CanvasWidth;
+                    existingTemplate.CanvasHeight = templateData.CanvasHeight;
+                    existingTemplate.BackgroundColor = templateData.BackgroundColor;
+                    existingTemplate.BackgroundImagePath = localBackgroundPath ?? (string)templateData.OriginalBackgroundPath ?? existingTemplate.BackgroundImagePath;
+                    existingTemplate.ThumbnailImagePath = localThumbnailPath ?? (string)templateData.OriginalThumbnailPath ?? existingTemplate.ThumbnailImagePath;
+                    existingTemplate.IsActive = templateData.IsActive;
+                    existingTemplate.ModifiedDate = DateTime.Now;
+
+                    templateDb.UpdateTemplate(existingTemplate.Id, existingTemplate);
+
+                    // Clear and re-import canvas items for the template
+                    templateDb.DeleteCanvasItems(templateId);
+                    Debug.WriteLine($"PhotoBoothSyncService: Cleared existing canvas items for template {templateId} during update");
+
+                    // Import template items if they exist
+                    if (templateData.Items != null)
+                    {
+                        Debug.WriteLine($"PhotoBoothSyncService: Importing {templateData.Items.Count} items for updated template {templateId}");
+                        foreach (var item in templateData.Items)
+                        {
+                            SaveTemplateItemToDatabase(templateDb, templateId, item);
+                        }
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Importing new template {templateId}");
+
+                    // Create new template
+                    var newTemplate = new Database.TemplateData
+                    {
+                        Id = templateId,
+                        Name = templateData.Name,
+                        Description = templateData.Description,
+                        CanvasWidth = templateData.CanvasWidth,
+                        CanvasHeight = templateData.CanvasHeight,
+                        BackgroundColor = templateData.BackgroundColor,
+                        BackgroundImagePath = localBackgroundPath ?? (string)templateData.OriginalBackgroundPath,
+                        ThumbnailImagePath = localThumbnailPath ?? (string)templateData.OriginalThumbnailPath,
+                        CreatedDate = templateData.CreatedDate ?? DateTime.Now,
+                        ModifiedDate = DateTime.Now,
+                        IsActive = templateData.IsActive ?? true
+                    };
+
+                    // Save the template with its original ID to maintain event associations
+                    templateDb.SaveTemplateWithId(newTemplate);
+
+                    // Clear canvas items AFTER saving the template (so the template exists for the foreign key)
+                    // This prevents duplicates when re-importing
+                    templateDb.DeleteCanvasItems(templateId);
+                    Debug.WriteLine($"PhotoBoothSyncService: Cleared canvas items for template {templateId} before import");
+
+                    // Import template items if they exist
+                    if (templateData.Items != null)
+                    {
+                        Debug.WriteLine($"PhotoBoothSyncService: Importing {templateData.Items.Count} items for template {templateId}");
+                        foreach (var item in templateData.Items)
+                        {
+                            // Template items are saved separately via the database's item methods
+                            SaveTemplateItemToDatabase(templateDb, templateId, item);
+                        }
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"PhotoBoothSyncService: No items found in template data for template {templateId}");
+                    }
+                }
+
+                Debug.WriteLine($"PhotoBoothSyncService: Successfully imported template from {templateFilePath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error importing template to database: {ex.Message}");
+            }
+        }
+
+        private string DownloadTemplateAsset(dynamic templateData, string propertyName, int templateId, string assetType)
+        {
+            try
+            {
+                string assetUrl = templateData[propertyName];
+
+                if (string.IsNullOrEmpty(assetUrl))
+                {
+                    return null;
+                }
+
+                // Check if it's an S3 URL
+                if (!assetUrl.Contains(".s3.amazonaws.com"))
+                {
+                    // It's a local path, not an S3 URL
+                    return assetUrl;
+                }
+
+                // Extract the S3 path from the URL
+                Uri uri = new Uri(assetUrl);
+                string s3Path = uri.AbsolutePath.TrimStart('/');
+
+                // Create local path for the asset
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string assetsDir = Path.Combine(appData, "PhotoBooth", "Templates", "Assets");
+
+                if (!Directory.Exists(assetsDir))
+                {
+                    Directory.CreateDirectory(assetsDir);
+                }
+
+                string fileExtension = Path.GetExtension(assetUrl);
+                string localFileName = $"template_{templateId}_{assetType}{fileExtension}";
+                string localPath = Path.Combine(assetsDir, localFileName);
+
+                // Download the file from S3
+                bool downloaded = _cloudService.DownloadFileAsync(s3Path, localPath).Result;
+
+                if (downloaded && File.Exists(localPath))
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Downloaded asset {assetType} for template {templateId} to {localPath}");
+                    return localPath;
+                }
+                else
+                {
+                    Debug.WriteLine($"PhotoBoothSyncService: Failed to download asset {assetType} for template {templateId}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PhotoBoothSyncService: Error downloading template asset: {ex.Message}");
+                return null;
             }
         }
         
@@ -945,15 +1835,103 @@ namespace Photobooth.Services
         /// </summary>
         private async Task SyncSettingsAsync(ManifestDifferences differences)
         {
-            // Implementation for settings sync
-            foreach (var setting in differences.SettingsToUpload)
+            try
             {
-                await UploadSettingAsync(setting);
+                Debug.WriteLine("PhotoBoothSyncService: Starting settings sync");
+
+                // Export all current settings to a JSON file
+                var settingsJson = await _settingsSync.ExportSettingsAsync();
+                if (!string.IsNullOrEmpty(settingsJson))
+                {
+                    // Save settings JSON locally
+                    string settingsDir = GetSettingsDirectory();
+                    if (!Directory.Exists(settingsDir))
+                    {
+                        Directory.CreateDirectory(settingsDir);
+                    }
+
+                    string localSettingsPath = Path.Combine(settingsDir, "settings.json");
+                    File.WriteAllText(localSettingsPath, settingsJson);
+
+                    // Upload settings to S3
+                    string s3SettingsPath = $"{SYNC_ROOT}settings/settings.json";
+                    bool uploaded = await _cloudService.UploadFileAsync(s3SettingsPath, localSettingsPath);
+
+                    if (uploaded)
+                    {
+                        Debug.WriteLine("PhotoBoothSyncService: Settings uploaded successfully");
+
+                        // Add to manifest
+                        var settingsItem = new SyncItem
+                        {
+                            Id = "settings_main",
+                            Type = SyncItemType.Setting,
+                            FileName = "settings.json",
+                            CloudPath = s3SettingsPath,
+                            Hash = CalculateFileHash(localSettingsPath),
+                            LastModified = DateTime.Now,
+                            Metadata = new Dictionary<string, object>
+                            {
+                                ["BoothId"] = _boothId,
+                                ["DeviceId"] = Properties.Settings.Default.DeviceId
+                            }
+                        };
+
+                        // Update or add in local manifest
+                        var existingSettings = _localManifest.Items.FirstOrDefault(i => i.Id == "settings_main");
+                        if (existingSettings != null)
+                        {
+                            _localManifest.Items.Remove(existingSettings);
+                        }
+                        _localManifest.Items.Add(settingsItem);
+                    }
+                }
+
+                // Download remote settings if they exist and are newer
+                if (_remoteManifest != null)
+                {
+                    var remoteSettings = _remoteManifest.Items.FirstOrDefault(i => i.Id == "settings_main");
+                    var localSettings = _localManifest.Items.FirstOrDefault(i => i.Id == "settings_main");
+
+                    if (remoteSettings != null && (localSettings == null || remoteSettings.LastModified > localSettings.LastModified))
+                    {
+                        // Download remote settings
+                        string localSettingsPath = Path.Combine(GetSettingsDirectory(), "settings_remote.json");
+                        bool downloaded = await _cloudService.DownloadFileAsync(remoteSettings.CloudPath, localSettingsPath);
+
+                        if (downloaded && File.Exists(localSettingsPath))
+                        {
+                            // Notify that settings are being updated
+                            SettingsUpdating?.Invoke(this, new SettingsUpdateEventArgs
+                            {
+                                Message = "Updating application settings from cloud sync...",
+                                UpdateType = SettingsUpdateType.Imported
+                            });
+
+                            // Import the settings
+                            string remoteSettingsJson = File.ReadAllText(localSettingsPath);
+                            bool imported = await _settingsSync.ImportSettingsAsync(remoteSettingsJson);
+
+                            if (imported)
+                            {
+                                Debug.WriteLine("PhotoBoothSyncService: Remote settings imported successfully");
+
+                                // Update local manifest with remote settings info
+                                if (localSettings != null)
+                                {
+                                    _localManifest.Items.Remove(localSettings);
+                                }
+                                _localManifest.Items.Add(remoteSettings);
+                            }
+                        }
+                    }
+                }
+
+                Debug.WriteLine("PhotoBoothSyncService: Settings sync completed");
             }
-            
-            foreach (var setting in differences.SettingsToDownload)
+            catch (Exception ex)
             {
-                await DownloadSettingAsync(setting);
+                Debug.WriteLine($"PhotoBoothSyncService: Error syncing settings: {ex.Message}");
             }
         }
         
@@ -1022,6 +2000,14 @@ namespace Photobooth.Services
                         
                         if (existingEvent == null)
                         {
+                            // Notify that new event is being added
+                            EventUpdating?.Invoke(this, new EventUpdateEventArgs
+                            {
+                                EventName = remoteConfig.EventName,
+                                UpdateType = EventUpdateType.Added,
+                                Message = $"Adding new event '{remoteConfig.EventName}' from cloud sync..."
+                            });
+
                             // Create new event with configuration
                             await CreateEventFromConfigurationAsync(remoteConfig);
                             syncedCount++;
@@ -1033,6 +2019,15 @@ namespace Photobooth.Services
                             var localConfig = localConfigs.FirstOrDefault(c => c.EventId == existingEvent.Id);
                             if (localConfig == null || remoteConfig.ModifiedDate > localConfig.ModifiedDate)
                             {
+                                // Notify that event is being updated
+                                EventUpdating?.Invoke(this, new EventUpdateEventArgs
+                                {
+                                    EventId = existingEvent.Id,
+                                    EventName = remoteConfig.EventName,
+                                    UpdateType = EventUpdateType.Modified,
+                                    Message = $"Updating event '{remoteConfig.EventName}' from cloud sync..."
+                                });
+
                                 await UpdateEventConfigurationAsync(existingEvent.Id, remoteConfig);
                                 syncedCount++;
                                 Debug.WriteLine($"PhotoBoothSyncService: Updated event from remote: {remoteConfig.EventName}");
@@ -1087,7 +2082,7 @@ namespace Photobooth.Services
                     {
                         TemplateId = template.Id,
                         TemplateName = template.Name,
-                        TemplateFile = template.Name, // Use name as file reference
+                        TemplateFile = $"template_{template.Id}.json", // Use consistent file naming
                         IsDefault = false, // Will be set based on database
                         SortOrder = 0
                     });
@@ -1175,15 +2170,37 @@ namespace Photobooth.Services
                     // Attach templates
                     foreach (var templateConfig in config.Templates)
                     {
-                        // Try to find template by name
                         var templateService = new TemplateService();
                         var templates = templateService.GetAllTemplates();
-                        var template = templates.FirstOrDefault(t => 
-                            t.Name.Equals(templateConfig.TemplateName, StringComparison.OrdinalIgnoreCase));
-                        
+
+                        // First try to match by ID (extracted from TemplateFile)
+                        Database.TemplateData template = null;
+                        if (!string.IsNullOrEmpty(templateConfig.TemplateFile) &&
+                            templateConfig.TemplateFile.StartsWith("template_"))
+                        {
+                            // Extract ID from filename like "template_5.json"
+                            var idStr = templateConfig.TemplateFile.Replace("template_", "").Replace(".json", "");
+                            if (int.TryParse(idStr, out int templateId))
+                            {
+                                template = templates.FirstOrDefault(t => t.Id == templateId);
+                            }
+                        }
+
+                        // If not found by ID, try to match by name
+                        if (template == null)
+                        {
+                            template = templates.FirstOrDefault(t =>
+                                t.Name.Equals(templateConfig.TemplateName, StringComparison.OrdinalIgnoreCase));
+                        }
+
                         if (template != null)
                         {
                             eventService.AssignTemplateToEvent(eventId, template.Id, templateConfig.IsDefault);
+                            Debug.WriteLine($"PhotoBoothSyncService: Attached template '{template.Name}' (ID: {template.Id}) to event");
+                        }
+                        else
+                        {
+                            Debug.WriteLine($"PhotoBoothSyncService: Could not find template '{templateConfig.TemplateName}' for event");
                         }
                     }
                     
@@ -1238,12 +2255,35 @@ namespace Photobooth.Services
                     {
                         var templateService = new TemplateService();
                         var templates = templateService.GetAllTemplates();
-                        var template = templates.FirstOrDefault(t => 
-                            t.Name.Equals(templateConfig.TemplateName, StringComparison.OrdinalIgnoreCase));
-                        
+
+                        // First try to match by ID (extracted from TemplateFile)
+                        Database.TemplateData template = null;
+                        if (!string.IsNullOrEmpty(templateConfig.TemplateFile) &&
+                            templateConfig.TemplateFile.StartsWith("template_"))
+                        {
+                            // Extract ID from filename like "template_5.json"
+                            var idStr = templateConfig.TemplateFile.Replace("template_", "").Replace(".json", "");
+                            if (int.TryParse(idStr, out int templateId))
+                            {
+                                template = templates.FirstOrDefault(t => t.Id == templateId);
+                            }
+                        }
+
+                        // If not found by ID, try to match by name
+                        if (template == null)
+                        {
+                            template = templates.FirstOrDefault(t =>
+                                t.Name.Equals(templateConfig.TemplateName, StringComparison.OrdinalIgnoreCase));
+                        }
+
                         if (template != null)
                         {
                             eventService.AssignTemplateToEvent(eventId, template.Id, templateConfig.IsDefault);
+                            Debug.WriteLine($"PhotoBoothSyncService: Updated event template '{template.Name}' (ID: {template.Id})");
+                        }
+                        else
+                        {
+                            Debug.WriteLine($"PhotoBoothSyncService: Could not find template '{templateConfig.TemplateName}' for event update");
                         }
                     }
                     
@@ -1275,6 +2315,17 @@ namespace Photobooth.Services
     }
 
     #region Data Models
+
+    public class SyncStatus
+    {
+        public bool IsEnabled { get; set; }
+        public bool IsAutoSyncEnabled { get; set; }
+        public bool IsSyncing { get; set; }
+        public DateTime LastSyncTime { get; set; }
+        public DateTime? NextSyncTime { get; set; }
+        public int SyncIntervalMinutes { get; set; }
+        public string BoothId { get; set; }
+    }
 
     public class SyncConfiguration
     {
@@ -1415,6 +2466,49 @@ namespace Photobooth.Services
     public class ConflictEventArgs : EventArgs
     {
         public SyncConflict Conflict { get; set; }
+    }
+
+    public class TemplateUpdateEventArgs : EventArgs
+    {
+        public int TemplateId { get; set; }
+        public string TemplateName { get; set; }
+        public TemplateUpdateType UpdateType { get; set; }
+        public string Message { get; set; }
+    }
+
+    public enum TemplateUpdateType
+    {
+        Added,
+        Modified,
+        Deleted
+    }
+
+    public class SettingsUpdateEventArgs : EventArgs
+    {
+        public string Message { get; set; }
+        public SettingsUpdateType UpdateType { get; set; }
+    }
+
+    public enum SettingsUpdateType
+    {
+        Imported,
+        Exported,
+        Modified
+    }
+
+    public class EventUpdateEventArgs : EventArgs
+    {
+        public int EventId { get; set; }
+        public string EventName { get; set; }
+        public EventUpdateType UpdateType { get; set; }
+        public string Message { get; set; }
+    }
+
+    public enum EventUpdateType
+    {
+        Added,
+        Modified,
+        Deleted
     }
 
     #endregion

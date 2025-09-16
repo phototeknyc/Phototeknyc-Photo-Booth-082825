@@ -3,8 +3,9 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-      xmlns:local="clr-namespace:Photobooth.Pages" 
+      xmlns:local="clr-namespace:Photobooth.Pages"
       xmlns:controls="clr-namespace:DesignerCanvas.Controls;assembly=DesignerCanvas"
+      xmlns:overlays="clr-namespace:Photobooth.Controls"
       xmlns:vm="clr-namespace:Photobooth.MVVM.ViewModels.Designer"
       mc:Ignorable="d" 
       MinWidth="1200" MinHeight="700" Background="{StaticResource SurfaceBackgroundBrush}"
@@ -259,5 +260,11 @@
                 </Path>
             </Button>
         </Grid>
+
+        <!-- Template Browser Overlay -->
+        <overlays:TemplateBrowserOverlay x:Name="TemplateBrowserOverlay"
+                                          Grid.ColumnSpan="3"
+                                          Grid.RowSpan="1"
+                                          Visibility="Collapsed"/>
     </Grid>
 </Page>

@@ -381,5 +381,10 @@
                 </ScrollViewer>
             </Grid>
         </Border>
+
+        <!-- Template Browser Overlay -->
+        <local:TemplateBrowserOverlay x:Name="TemplateBrowserOverlay"
+                                       Visibility="Collapsed"
+                                       Grid.RowSpan="3"/>
     </Grid>
 </UserControl>

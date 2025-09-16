@@ -2328,11 +2328,16 @@ namespace Photobooth.Services
                 dynamic request = Activator.CreateInstance(_putObjectRequestType);
                 request.BucketName = _bucketName;
                 request.Key = key;
-                request.ContentBody = Convert.ToBase64String(data);
-                request.ContentType = "application/octet-stream";
-                
-                // Upload
-                await Task.Run(() => _s3Client.PutObject(request));
+
+                // Use InputStream with MemoryStream for binary data instead of Base64
+                using (var stream = new System.IO.MemoryStream(data))
+                {
+                    request.InputStream = stream;
+                    request.ContentType = GetContentType(key);
+
+                    // Upload
+                    await Task.Run(() => _s3Client.PutObject(request));
+                }
                 
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Uploaded {key} ({data.Length} bytes)");
                 return true;
@@ -2345,6 +2350,35 @@ namespace Photobooth.Services
         }
         
         /// <summary>
+        /// Get content type from file extension
+        /// </summary>
+        private string GetContentType(string key)
+        {
+            var extension = System.IO.Path.GetExtension(key).ToLower();
+            switch (extension)
+            {
+                case ".jpg":
+                case ".jpeg":
+                    return "image/jpeg";
+                case ".png":
+                    return "image/png";
+                case ".gif":
+                    return "image/gif";
+                case ".json":
+                    return "application/json";
+                case ".xml":
+                case ".xaml":
+                    return "application/xml";
+                case ".txt":
+                    return "text/plain";
+                case ".pdf":
+                    return "application/pdf";
+                default:
+                    return "application/octet-stream";
+            }
+        }
+
+        /// <summary>
         /// Download data from S3 for sync
         /// </summary>
         public async Task<byte[]> DownloadAsync(string key)
@@ -2356,23 +2390,122 @@ namespace Photobooth.Services
                     System.Diagnostics.Debug.WriteLine("CloudShareServiceRuntime: S3 client not initialized");
                     return null;
                 }
-                
+
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Attempting to download: {key}");
+
                 // Create get object request
                 var getObjectRequestType = _s3ClientType.Assembly.GetType("Amazon.S3.Model.GetObjectRequest");
                 dynamic request = Activator.CreateInstance(getObjectRequestType);
                 request.BucketName = _bucketName;
                 request.Key = key;
                 
-                // Download
-                dynamic response = await Task.Run(() => _s3Client.GetObject(request));
-                
-                using (var stream = response.ResponseStream as Stream)
-                using (var memoryStream = new MemoryStream())
+                // Download with proper async handling
+                try
                 {
-                    await stream.CopyToAsync(memoryStream);
-                    var data = memoryStream.ToArray();
-                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Downloaded {key} ({data.Length} bytes)");
-                    return data;
+                    // Use GetObjectAsync if available, otherwise wrap in Task.Run
+                    var getObjectAsyncMethod = _s3Client.GetType().GetMethod("GetObjectAsync", new[] { getObjectRequestType });
+                    dynamic response = null;
+
+                    try
+                    {
+                        if (getObjectAsyncMethod != null)
+                        {
+                            response = await getObjectAsyncMethod.Invoke(_s3Client, new object[] { request });
+                        }
+                        else
+                        {
+                            // Wrap synchronous call and handle exceptions within Task.Run
+                            response = await Task.Run(() =>
+                            {
+                                try
+                                {
+                                    return _s3Client.GetObject(request);
+                                }
+                                catch (Exception taskEx)
+                                {
+                                    // Check if it's a "not found" error right here
+                                    var exType = taskEx.GetType().Name;
+                                    var exMessage = taskEx.Message ?? "";
+
+                                    if (exType.Contains("AmazonS3Exception") ||
+                                        exMessage.Contains("specified key does not exist") ||
+                                        exMessage.Contains("NoSuchKey") ||
+                                        exMessage.Contains("404"))
+                                    {
+                                        // Return null to indicate not found
+                                        return null;
+                                    }
+                                    throw; // Re-throw other exceptions
+                                }
+                            });
+
+                            // If response is null from Task.Run, it means key not found
+                            if (response == null)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Key not found in S3 (handled in Task.Run): {key}");
+                                return null;
+                            }
+                        }
+                    }
+                    catch (System.Reflection.TargetInvocationException tie)
+                    {
+                        // Unwrap TargetInvocationException from reflection calls
+                        if (tie.InnerException != null)
+                            throw tie.InnerException;
+                        throw;
+                    }
+                    catch (AggregateException ae)
+                    {
+                        // Unwrap AggregateException from Task.Run
+                        if (ae.InnerException != null)
+                            throw ae.InnerException;
+                        throw;
+                    }
+
+                    using (var stream = response.ResponseStream as Stream)
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        await stream.CopyToAsync(memoryStream);
+                        var data = memoryStream.ToArray();
+                        System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Downloaded {key} ({data.Length} bytes)");
+                        return data;
+                    }
+                }
+                catch (Exception innerEx)
+                {
+                    // Check if it's a "key not found" error - check the full exception chain
+                    var currentEx = innerEx;
+                    var exceptionChain = new List<Exception>();
+
+                    // Build the full exception chain
+                    while (currentEx != null)
+                    {
+                        exceptionChain.Add(currentEx);
+                        currentEx = currentEx.InnerException;
+                    }
+
+                    // Check each exception in the chain for "not found" indicators
+                    foreach (var ex in exceptionChain)
+                    {
+                        var exType = ex.GetType().Name;
+                        var exMessage = ex.Message ?? "";
+
+                        if (exType.Contains("AmazonS3Exception") ||
+                            exType.Contains("HttpErrorResponseException") ||
+                            exMessage.Contains("specified key does not exist") ||
+                            exMessage.Contains("NoSuchKey") ||
+                            exMessage.Contains("404") ||
+                            exMessage.Contains("Not Found"))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Key not found in S3 (expected for new installations): {key}");
+                            System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Exception properly handled - returning null");
+                            return null;
+                        }
+                    }
+
+                    // Not a "not found" error - log and re-throw
+                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Download error for {key}: {innerEx.GetType().Name} - {innerEx.Message}");
+                    throw; // Re-throw other exceptions to be caught by outer catch
                 }
             }
             catch (Exception ex)
@@ -2452,7 +2585,59 @@ namespace Photobooth.Services
                 return false;
             }
         }
-        
+
+        /// <summary>
+        /// Test S3 connection
+        /// </summary>
+        public async Task<bool> TestConnectionAsync()
+        {
+            try
+            {
+                if (_s3Client == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("CloudShareServiceRuntime: S3 client not initialized");
+                    return false;
+                }
+
+                // Try to list objects with max 1 result to test connection
+                var listObjectsRequestType = _s3ClientType.Assembly.GetType("Amazon.S3.Model.ListObjectsV2Request");
+                dynamic request = Activator.CreateInstance(listObjectsRequestType);
+                request.BucketName = _bucketName;
+                request.MaxKeys = 1;
+                request.Prefix = "photobooth-sync/";
+
+                // Try to list objects
+                try
+                {
+                    var listObjectsAsyncMethod = _s3Client.GetType().GetMethod("ListObjectsV2Async", new[] { listObjectsRequestType });
+                    dynamic response;
+
+                    if (listObjectsAsyncMethod != null)
+                    {
+                        response = await listObjectsAsyncMethod.Invoke(_s3Client, new object[] { request });
+                    }
+                    else
+                    {
+                        // Fallback to synchronous method
+                        response = await Task.Run(() => _s3Client.ListObjectsV2(request));
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Connection test successful - bucket {_bucketName} is accessible");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Connection test failed: {ex.Message}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Test connection error: {ex.Message}");
+                return false;
+            }
+        }
+
         #endregion
 
         #region Twilio Error Handling

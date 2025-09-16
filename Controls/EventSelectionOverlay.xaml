@@ -7,6 +7,11 @@
              d:DesignHeight="800" d:DesignWidth="1200">
     
     <UserControl.Resources>
+        <!-- Converters -->
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <Converters:BoolToOpacityConverter x:Key="BoolToOpacityConverter"
+                                            xmlns:Converters="clr-namespace:Photobooth.Converters"/>
+
         <!-- Modern Dark Theme Styles -->
         <Style x:Key="ModernTextBoxStyle" TargetType="TextBox">
             <Setter Property="Background" Value="#404040"/>
@@ -153,37 +158,313 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 
-                <!-- Header with Close Button -->
+                <!-- Header with Close Button and Management Buttons -->
                 <Grid Grid.Row="0" Margin="30,30,30,20">
-                    <TextBlock Text="Select Event" 
-                               FontSize="32" 
-                               FontWeight="Bold" 
-                               Foreground="White" 
-                               HorizontalAlignment="Center"/>
-                    
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Event Management Buttons -->
+                    <StackPanel Grid.Column="0"
+                                Orientation="Horizontal">
+
+                        <!-- New Event Button (always visible) -->
+                        <Button x:Name="NewEventButton"
+                                Content="➕ New Event"
+                                Margin="0,0,15,0"
+                                Padding="15,10"
+                                Background="#4CAF50"
+                                Foreground="White"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                MinWidth="120"
+                                Height="44"
+                                Click="NewEventButton_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="8">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"
+                                                          Margin="{TemplateBinding Padding}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#5CBF60"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter Property="Background" Value="#3A9F40"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <!-- Separator -->
+                        <Border Width="1"
+                                Height="30"
+                                Background="#606060"
+                                Margin="0,0,15,0"
+                                VerticalAlignment="Center"/>
+
+                        <!-- Event-specific Management Buttons (visible when event selected) -->
+                        <StackPanel x:Name="EventManagementButtons"
+                                    Orientation="Horizontal"
+                                    Visibility="Collapsed">
+
+                        <Button x:Name="DuplicateEventButton"
+                                Content="📋 Duplicate"
+                                Margin="0,0,10,0"
+                                Padding="15,10"
+                                Background="#5CAF50"
+                                Foreground="White"
+                                FontSize="16"
+                                MinWidth="100"
+                                Height="44"
+                                Click="DuplicateEvent_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="8">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"
+                                                          Margin="{TemplateBinding Padding}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#6CBF60"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <Button x:Name="RenameEventButton"
+                                Content="✏️ Rename"
+                                Margin="0,0,10,0"
+                                Padding="15,10"
+                                Background="#2196F3"
+                                Foreground="White"
+                                FontSize="16"
+                                MinWidth="100"
+                                Height="44"
+                                Click="RenameEvent_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="8">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"
+                                                          Margin="{TemplateBinding Padding}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#42A5F5"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <Button x:Name="DeleteEventButton"
+                                Content="🗑️ Delete"
+                                Padding="15,10"
+                                Background="#F44336"
+                                Foreground="White"
+                                FontSize="16"
+                                MinWidth="100"
+                                Height="44"
+                                Click="DeleteEvent_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="8">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"
+                                                          Margin="{TemplateBinding Padding}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#EF5350"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        </StackPanel>
+
+                        <!-- Select Mode Button -->
+                        <Button x:Name="SelectModeButton"
+                                Content="☐ Select Mode"
+                                Margin="15,0,0,0"
+                                Padding="15,10"
+                                Background="#FF6B4A"
+                                Foreground="White"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                MinWidth="130"
+                                Height="44"
+                                Click="SelectModeButton_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="8">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"
+                                                          Margin="{TemplateBinding Padding}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#FF7B5A"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter Property="Background" Value="#E55B3A"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Title -->
+                    <TextBlock Text="Select Event"
+                               Grid.Column="1"
+                               FontSize="32"
+                               FontWeight="Bold"
+                               Foreground="White"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+
+                    <!-- Close Button -->
                     <Button x:Name="CloseButton"
+                            Grid.Column="2"
                             Content="✕"
                             Style="{StaticResource CloseButtonStyle}"
                             HorizontalAlignment="Right"
                             Click="CloseButton_Click"/>
                 </Grid>
-                
+
+                <!-- Select Mode Panel -->
+                <StackPanel x:Name="SelectModePanel"
+                            Grid.Row="1"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Center"
+                            Margin="30,0,30,15"
+                            Visibility="Collapsed">
+
+                    <Button x:Name="SelectAllButton"
+                            Content="☑ Select All"
+                            Margin="0,0,10,0"
+                            Padding="15,10"
+                            Background="#4CAF50"
+                            Foreground="White"
+                            FontSize="16"
+                            MinWidth="120"
+                            Height="44"
+                            Click="SelectAllButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        CornerRadius="8">
+                                    <ContentPresenter HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      Margin="{TemplateBinding Padding}"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#5CBF60"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+
+                    <Button x:Name="DeselectAllButton"
+                            Content="☐ Deselect All"
+                            Margin="0,0,10,0"
+                            Padding="15,10"
+                            Background="#607D8B"
+                            Foreground="White"
+                            FontSize="16"
+                            MinWidth="120"
+                            Height="44"
+                            Click="DeselectAllButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        CornerRadius="8">
+                                    <ContentPresenter HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      Margin="{TemplateBinding Padding}"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#708D9B"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+
+                    <Button x:Name="DeleteSelectedButton"
+                            Content="🗑️ Delete Selected"
+                            Padding="15,10"
+                            Background="#F44336"
+                            Foreground="White"
+                            FontSize="16"
+                            MinWidth="140"
+                            Height="44"
+                            IsEnabled="False"
+                            Click="DeleteSelectedButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        CornerRadius="8"
+                                        Opacity="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=IsEnabled, Converter={StaticResource BoolToOpacityConverter}}">
+                                    <ContentPresenter HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      Margin="{TemplateBinding Padding}"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <MultiTrigger>
+                                        <MultiTrigger.Conditions>
+                                            <Condition Property="IsMouseOver" Value="True"/>
+                                            <Condition Property="IsEnabled" Value="True"/>
+                                        </MultiTrigger.Conditions>
+                                        <Setter Property="Background" Value="#EF5350"/>
+                                    </MultiTrigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+
+                    <TextBlock x:Name="SelectionStatusText"
+                               Text="0 selected"
+                               Margin="20,0,0,0"
+                               Foreground="#9E9E9E"
+                               FontSize="16"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
                 <!-- Search Bar -->
-                <Grid Grid.Row="1" Margin="30,0,30,20">
+                <Grid Grid.Row="2" Margin="30,0,30,20">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    
+
                     <TextBox x:Name="SearchTextBox"
                              Grid.Column="0"
                              Style="{StaticResource ModernTextBoxStyle}"
                              TextChanged="SearchTextBox_TextChanged"/>
-                    
+
                     <Button x:Name="ClearSearchButton"
                             Grid.Column="1"
                             Content="Clear"
@@ -209,10 +490,11 @@
                             </ControlTemplate>
                         </Button.Template>
                     </Button>
+
                 </Grid>
                 
                 <!-- Main Content Area - Grid Layout -->
-                <ScrollViewer Grid.Row="2" 
+                <ScrollViewer Grid.Row="3" 
                               Margin="30,0,30,20"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
@@ -262,24 +544,28 @@
                             
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Width="180" 
+                                    <Grid Width="180"
                                           Height="240"
                                           Margin="8">
                                         <!-- Card Border -->
-                                        <Border Background="#1A1A1A"
+                                        <Border x:Name="EventCardBorder"
+                                                Background="#1A1A1A"
                                                 CornerRadius="8"
-                                                BorderBrush="#3A3A3A"
-                                                BorderThickness="1"
+                                                BorderThickness="2"
                                                 Cursor="Hand"
                                                 MouseLeftButtonDown="EventItem_MouseDown"
                                                 Tag="{Binding}">
                                             <Border.Style>
                                                 <Style TargetType="Border">
+                                                    <Setter Property="BorderBrush" Value="#3A3A3A"/>
                                                     <Style.Triggers>
                                                         <Trigger Property="IsMouseOver" Value="True">
                                                             <Setter Property="BorderBrush" Value="#00A0FF"/>
-                                                            <Setter Property="BorderThickness" Value="2"/>
                                                         </Trigger>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="#4CAF50"/>
+                                                            <Setter Property="BorderThickness" Value="3"/>
+                                                        </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
@@ -317,34 +603,66 @@
                                                         
                                                         <!-- Event Name -->
                                                         <TextBlock Grid.Row="0"
-                                                                   Text="{Binding Name}"
+                                                                   Text="{Binding EventData.Name}"
                                                                    FontSize="11"
                                                                    FontWeight="SemiBold"
                                                                    Foreground="White"
                                                                    TextTrimming="CharacterEllipsis"/>
-                                                        
+
                                                         <!-- Date/Time info -->
                                                         <TextBlock Grid.Row="1"
                                                                    FontSize="9"
                                                                    Foreground="#A0A0A0">
                                                             <TextBlock.Text>
                                                                 <MultiBinding StringFormat="{}{0:MMM dd} | {1}">
-                                                                    <Binding Path="EventDate" FallbackValue=""/>
-                                                                    <Binding Path="EventType" FallbackValue="Event"/>
+                                                                    <Binding Path="EventData.EventDate" FallbackValue=""/>
+                                                                    <Binding Path="EventData.EventType" FallbackValue="Event"/>
                                                                 </MultiBinding>
                                                             </TextBlock.Text>
                                                         </TextBlock>
                                                     </Grid>
                                                 </Border>
                                                 
-                                                <!-- Selection indicator (top-left circle) -->
-                                                <Ellipse Width="20" Height="20"
-                                                         Fill="#FF4444"
-                                                         HorizontalAlignment="Left"
-                                                         VerticalAlignment="Top"
-                                                         Margin="8"
-                                                         Visibility="Collapsed"
-                                                         x:Name="SelectionIndicator"/>
+                                                <!-- Selection Checkbox (top-left) -->
+                                                <Border Background="#CC000000"
+                                                        CornerRadius="4"
+                                                        HorizontalAlignment="Left"
+                                                        VerticalAlignment="Top"
+                                                        Margin="8"
+                                                        Padding="2"
+                                                        Visibility="{Binding ShowCheckbox, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <CheckBox IsChecked="{Binding IsSelected}"
+                                                              Width="20"
+                                                              Height="20"
+                                                              Background="White"
+                                                              BorderBrush="#4CAF50"
+                                                              Foreground="#4CAF50">
+                                                        <CheckBox.Style>
+                                                            <Style TargetType="CheckBox">
+                                                                <Setter Property="Template">
+                                                                    <Setter.Value>
+                                                                        <ControlTemplate TargetType="CheckBox">
+                                                                            <Border Background="{TemplateBinding Background}"
+                                                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                                                    BorderThickness="2"
+                                                                                    CornerRadius="3">
+                                                                                <Grid>
+                                                                                    <TextBlock Text="✓"
+                                                                                               FontSize="14"
+                                                                                               FontWeight="Bold"
+                                                                                               Foreground="{TemplateBinding Foreground}"
+                                                                                               HorizontalAlignment="Center"
+                                                                                               VerticalAlignment="Center"
+                                                                                               Visibility="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                                                </Grid>
+                                                                            </Border>
+                                                                        </ControlTemplate>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                            </Style>
+                                                        </CheckBox.Style>
+                                                    </CheckBox>
+                                                </Border>
                                             </Grid>
                                         </Border>
                                     </Grid>
@@ -365,7 +683,7 @@
                 </ScrollViewer>
                 
                 <!-- Footer with Select Button -->
-                <Grid Grid.Row="3" Margin="30,0,30,30">
+                <Grid Grid.Row="4" Margin="30,0,30,30">
                     <StackPanel Orientation="Horizontal" 
                                 HorizontalAlignment="Right">
                         <Button x:Name="CancelButton"

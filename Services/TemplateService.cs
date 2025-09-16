@@ -69,27 +69,42 @@ namespace Photobooth.Services
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine($"TemplateService.LoadTemplate: Loading template ID {templateId}");
+
                 var template = database.GetTemplate(templateId);
                 if (template == null)
                 {
+                    System.Diagnostics.Debug.WriteLine($"TemplateService.LoadTemplate: Template {templateId} not found in database");
                     MessageBox.Show("Template not found.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
-                
+
+                System.Diagnostics.Debug.WriteLine($"TemplateService.LoadTemplate: Found template '{template.Name}' with size {template.CanvasWidth}x{template.CanvasHeight}");
+
                 var canvasItemsData = database.GetCanvasItems(templateId);
+                System.Diagnostics.Debug.WriteLine($"TemplateService.LoadTemplate: Found {canvasItemsData.Count} items in database");
+
                 var canvasItems = new List<ICanvasItem>();
-                
+
                 // Load items in their native dimensions - no scaling
                 // The canvas view will handle display scaling
                 foreach (var itemData in canvasItemsData)
                 {
+                    System.Diagnostics.Debug.WriteLine($"TemplateService.LoadTemplate: Converting item {itemData.Id} of type {itemData.ItemType} at position ({itemData.X},{itemData.Y}) size {itemData.Width}x{itemData.Height}");
+
                     var canvasItem = ConvertToCanvasItem(itemData);
                     if (canvasItem != null)
                     {
                         canvasItems.Add(canvasItem);
+                        System.Diagnostics.Debug.WriteLine($"TemplateService.LoadTemplate: Successfully converted item to {canvasItem.GetType().Name}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"TemplateService.LoadTemplate: Failed to convert item {itemData.Id}");
                     }
                 }
-                
+
+                System.Diagnostics.Debug.WriteLine($"TemplateService.LoadTemplate: Calling onLoaded with {canvasItems.Count} canvas items");
                 onLoaded(template, canvasItems);
                 return true;
             }
@@ -328,10 +343,49 @@ namespace Photobooth.Services
                     break;
                     
                 case "Placeholder":
+                    // Create placeholder using default constructor
                     var placeholderItem = new PlaceholderCanvasItem();
+
+                    // Set placeholder number first - this affects the default color
                     if (data.PlaceholderNumber.HasValue)
+                    {
                         placeholderItem.PlaceholderNo = data.PlaceholderNumber.Value;
-                    placeholderItem.Background = ColorStringToBrush(data.PlaceholderColor);
+                        System.Diagnostics.Debug.WriteLine($"TemplateService: Set PlaceholderNo to {data.PlaceholderNumber.Value}");
+                    }
+
+                    // Now set position and size
+                    placeholderItem.Left = data.X;
+                    placeholderItem.Top = data.Y;
+                    placeholderItem.Width = data.Width;
+                    placeholderItem.Height = data.Height;
+
+                    // Set background from saved color or use color based on placeholder number
+                    if (!string.IsNullOrEmpty(data.PlaceholderColor))
+                    {
+                        var bgBrush = ColorStringToBrush(data.PlaceholderColor);
+                        if (bgBrush != null)
+                        {
+                            placeholderItem.Background = bgBrush;
+                            System.Diagnostics.Debug.WriteLine($"TemplateService: Set custom background color: {data.PlaceholderColor}");
+                        }
+                    }
+                    else if (data.PlaceholderNumber.HasValue)
+                    {
+                        // Force refresh the background color based on placeholder number
+                        // Since the constructor sets it to PlaceholderNo=1 color by default
+                        var correctColor = GetPlaceholderColor(data.PlaceholderNumber.Value);
+                        placeholderItem.Background = new System.Windows.Media.SolidColorBrush(correctColor);
+                        System.Diagnostics.Debug.WriteLine($"TemplateService: Set default color for placeholder #{data.PlaceholderNumber.Value}");
+                    }
+
+                    // Ensure the item has proper sizing
+                    placeholderItem.Resizeable = true;
+
+                    System.Diagnostics.Debug.WriteLine($"TemplateService.ConvertToCanvasItem: Created placeholder #{placeholderItem.PlaceholderNo}");
+                    System.Diagnostics.Debug.WriteLine($"  Position: ({placeholderItem.Left}, {placeholderItem.Top})");
+                    System.Diagnostics.Debug.WriteLine($"  Size: {placeholderItem.Width} x {placeholderItem.Height}");
+                    System.Diagnostics.Debug.WriteLine($"  Background: {placeholderItem.Background}");
+
                     item = placeholderItem;
                     break;
                     
@@ -411,13 +465,19 @@ namespace Photobooth.Services
             }
             
             // Set common properties - load in the same coordinate system as saved
-            if (item is IBoxCanvasItem boxItem)
+            // Skip for PlaceholderCanvasItem since we already set these in the constructor
+            if (item is IBoxCanvasItem boxItem && !(item is PlaceholderCanvasItem))
             {
                 boxItem.Left = data.X;
                 boxItem.Top = data.Y;
                 boxItem.Width = data.Width;
                 boxItem.Height = data.Height;
                 boxItem.LockedPosition = data.LockedPosition;
+            }
+            else if (item is PlaceholderCanvasItem placeholder)
+            {
+                // Just set the locked position for placeholders
+                placeholder.LockedPosition = data.LockedPosition;
             }
             
             // Set rotation and aspect ratio based on item type
@@ -483,6 +543,30 @@ namespace Photobooth.Services
             }
         }
         
+        private System.Windows.Media.Color GetPlaceholderColor(int placeholderNumber)
+        {
+            // Predefined color palette matching PlaceholderCanvasItem
+            var colorPalette = new System.Windows.Media.Color[]
+            {
+                System.Windows.Media.Color.FromRgb(255, 182, 193), // Light Pink
+                System.Windows.Media.Color.FromRgb(173, 216, 230), // Light Blue
+                System.Windows.Media.Color.FromRgb(144, 238, 144), // Light Green
+                System.Windows.Media.Color.FromRgb(255, 218, 185), // Peach
+                System.Windows.Media.Color.FromRgb(221, 160, 221), // Plum
+                System.Windows.Media.Color.FromRgb(255, 255, 224), // Light Yellow
+                System.Windows.Media.Color.FromRgb(176, 224, 230), // Powder Blue
+                System.Windows.Media.Color.FromRgb(255, 228, 196), // Bisque
+                System.Windows.Media.Color.FromRgb(216, 191, 216), // Thistle
+                System.Windows.Media.Color.FromRgb(240, 230, 140), // Khaki
+                System.Windows.Media.Color.FromRgb(255, 192, 203), // Pink
+                System.Windows.Media.Color.FromRgb(230, 230, 250), // Lavender
+            };
+
+            // Use modulo to cycle through the palette if we have more placeholders than colors
+            int colorIndex = (placeholderNumber - 1) % colorPalette.Length;
+            return colorPalette[colorIndex];
+        }
+
         private string GenerateImageHash(string imagePath)
         {
             if (string.IsNullOrEmpty(imagePath) || !File.Exists(imagePath))

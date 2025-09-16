@@ -597,6 +597,90 @@ namespace Photobooth.Database
             }
         }
         
+        public int SaveTemplateWithId(TemplateData template)
+        {
+            // This method preserves the template ID for sync purposes
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+
+                // IMPORTANT: Don't delete the template here because it will CASCADE DELETE the canvas items
+                // Instead, we'll use INSERT OR REPLACE which updates if exists, inserts if not
+
+                // Reset the autoincrement counter if needed to allow reuse of the ID
+                string resetAutoIncrement = $"UPDATE sqlite_sequence SET seq = {template.Id - 1} WHERE name = 'Templates' AND seq < {template.Id}";
+                using (var resetCommand = new SQLiteCommand(resetAutoIncrement, connection))
+                {
+                    try
+                    {
+                        resetCommand.ExecuteNonQuery();
+                    }
+                    catch
+                    {
+                        // Ignore if sqlite_sequence doesn't exist or update fails
+                    }
+                }
+
+                // Check if new columns exist before using them
+                string checkColumns = "PRAGMA table_info(Templates)";
+                bool hasPathColumns = false;
+                using (var checkCommand = new SQLiteCommand(checkColumns, connection))
+                using (var reader = checkCommand.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        if (reader.GetString(1) == "BackgroundImagePath")
+                        {
+                            hasPathColumns = true;
+                            break;
+                        }
+                    }
+                }
+
+                string insertTemplate;
+                if (hasPathColumns)
+                {
+                    // Use INSERT OR REPLACE to update if exists, insert if not
+                    insertTemplate = @"
+                        INSERT OR REPLACE INTO Templates (Id, Name, Description, CanvasWidth, CanvasHeight,
+                                             BackgroundColor, BackgroundImagePath, ThumbnailImagePath,
+                                             CreatedDate, ModifiedDate, IsActive)
+                        VALUES (@id, @name, @description, @width, @height, @bgColor, @bgImagePath, @thumbnailPath,
+                                @createdDate, @modifiedDate, @isActive);";
+                }
+                else
+                {
+                    // Fallback for old schema
+                    insertTemplate = @"
+                        INSERT OR REPLACE INTO Templates (Id, Name, Description, CanvasWidth, CanvasHeight, BackgroundColor)
+                        VALUES (@id, @name, @description, @width, @height, @bgColor);";
+                }
+
+                using (var command = new SQLiteCommand(insertTemplate, connection))
+                {
+                    command.Parameters.AddWithValue("@id", template.Id);
+                    command.Parameters.AddWithValue("@name", template.Name);
+                    command.Parameters.AddWithValue("@description", template.Description ?? "");
+                    command.Parameters.AddWithValue("@width", template.CanvasWidth);
+                    command.Parameters.AddWithValue("@height", template.CanvasHeight);
+                    command.Parameters.AddWithValue("@bgColor", template.BackgroundColor);
+
+                    if (hasPathColumns)
+                    {
+                        command.Parameters.AddWithValue("@bgImagePath", template.BackgroundImagePath ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@thumbnailPath", template.ThumbnailImagePath ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@createdDate", template.CreatedDate);
+                        command.Parameters.AddWithValue("@modifiedDate", template.ModifiedDate);
+                        command.Parameters.AddWithValue("@isActive", template.IsActive);
+                    }
+
+                    command.ExecuteNonQuery();
+                }
+
+                return template.Id;
+            }
+        }
+
         public int SaveTemplate(TemplateData template)
         {
             using (var connection = new SQLiteConnection(connectionString))

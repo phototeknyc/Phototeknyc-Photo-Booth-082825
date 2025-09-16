@@ -13,6 +13,8 @@ using DesignerCanvas;
 using Microsoft.Win32;
 using Photobooth.Services;
 using Photobooth.MVVM.ViewModels.Designer;
+using Photobooth.Database;
+using CameraControl.Devices;
 
 namespace Photobooth.Controls
 {
@@ -25,6 +27,7 @@ namespace Photobooth.Controls
         private TouchTemplateDesignerViewModel _viewModel;
         private double _currentZoom = 1.0;
         private int _placeholderCount = 0;
+        private int _currentTemplateId = -1;
 
         public TouchTemplateDesigner()
         {
@@ -108,9 +111,75 @@ namespace Photobooth.Controls
 
         private void LoadTemplate_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Implement template loading
-            MessageBox.Show("Template loading will be implemented soon.", "Info", 
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            try
+            {
+                Log.Debug("TouchTemplateDesigner: Opening Template Browser Overlay");
+
+                // Show the template browser overlay
+                TemplateBrowserOverlay.Visibility = Visibility.Visible;
+                TemplateBrowserOverlay.ShowOverlay(_currentTemplateId);
+
+                // Handle template selection
+                TemplateBrowserOverlay.TemplateSelected -= OnTemplateSelected;
+                TemplateBrowserOverlay.TemplateSelected += OnTemplateSelected;
+
+                // Handle cancellation
+                TemplateBrowserOverlay.SelectionCancelled -= OnTemplateSelectionCancelled;
+                TemplateBrowserOverlay.SelectionCancelled += OnTemplateSelectionCancelled;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner: Failed to open template browser: {ex.Message}");
+                MessageBox.Show($"Failed to open template browser: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void OnTemplateSelected(object sender, TemplateData template)
+        {
+            try
+            {
+                Log.Debug($"TouchTemplateDesigner: Loading template {template.Name}");
+
+                // Update template name display
+                TemplateNameText.Text = template.Name ?? "Untitled";
+
+                // Load template data into the canvas
+                // TODO: Load the template's canvas items into DesignerCanvas
+                // For now, just update the canvas size
+                if (template.CanvasWidth > 0 && template.CanvasHeight > 0)
+                {
+                    ((FrameworkElement)DesignerCanvas).Width = template.CanvasWidth;
+                    ((FrameworkElement)DesignerCanvas).Height = template.CanvasHeight;
+                    UpdateCanvasSizeDisplay();
+                }
+
+                // Store current template ID for future reference
+                _currentTemplateId = template.Id;
+
+                Log.Debug($"TouchTemplateDesigner: Template {template.Name} loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner: Failed to load template: {ex.Message}");
+                MessageBox.Show($"Failed to load template: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void OnTemplateSelectionCancelled(object sender, EventArgs e)
+        {
+            Log.Debug("TouchTemplateDesigner: Template selection cancelled");
+        }
+
+        private void UpdateCanvasSizeDisplay()
+        {
+            if (CanvasSizeText != null && DesignerCanvas != null)
+            {
+                var width = ((FrameworkElement)DesignerCanvas).Width;
+                var height = ((FrameworkElement)DesignerCanvas).Height;
+                CanvasSizeText.Text = $"{width} x {height}";
+            }
         }
 
         private void ImportTemplate_Click(object sender, RoutedEventArgs e)

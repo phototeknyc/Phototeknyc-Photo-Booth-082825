@@ -259,6 +259,8 @@ namespace Photobooth.Pages
             if (delayBetweenPhotosSlider != null && delayBetweenPhotosValueText != null)
                 delayBetweenPhotosValueText.Text = $"{(int)delayBetweenPhotosSlider.Value} seconds";
             frameRateValueText.Text = $"{(int)frameRateSlider.Value} FPS";
+            if (autoFocusDelayValueText != null && autoFocusDelaySlider != null)
+                autoFocusDelayValueText.Text = $"{(int)autoFocusDelaySlider.Value} ms";
             buttonSizeValueText.Text = $"{(int)(buttonSizeSlider.Value * 100)}%";
             if (retakeTimeoutValueText != null)
                 retakeTimeoutValueText.Text = $"{(int)retakeTimeoutSlider.Value} seconds";
@@ -312,6 +314,16 @@ namespace Photobooth.Pages
             {
                 frameRateValueText.Text = $"{(int)e.NewValue} FPS";
                 Properties.Settings.Default.LiveViewFrameRate = (int)e.NewValue;
+                Properties.Settings.Default.Save();
+            }
+        }
+
+        private void AutoFocusDelaySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (autoFocusDelayValueText != null)
+            {
+                autoFocusDelayValueText.Text = $"{(int)e.NewValue} ms";
+                Properties.Settings.Default.AutoFocusDelay = (int)e.NewValue;
                 Properties.Settings.Default.Save();
             }
         }
@@ -3573,10 +3585,33 @@ namespace Photobooth.Pages
         {
             try
             {
-                // Load cloud settings from environment variables
+                // Load cloud settings from Properties.Settings.Default first, fallback to environment variables
                 var cloudEnabled = Environment.GetEnvironmentVariable("CLOUD_SHARING_ENABLED", EnvironmentVariableTarget.User);
                 enableCloudSharingCheckBox.IsChecked = cloudEnabled == "True";
-                
+
+                // Load Cloud Sync S3 credentials from Settings
+                if (S3AccessKeyBox != null)
+                    S3AccessKeyBox.Password = Properties.Settings.Default.S3AccessKey ?? "";
+                if (S3SecretKeyBox != null)
+                    S3SecretKeyBox.Password = Properties.Settings.Default.S3SecretKey ?? "";
+                if (S3BucketNameTextBox != null)
+                    S3BucketNameTextBox.Text = Properties.Settings.Default.S3BucketName ?? "";
+
+                // Load S3 region for Cloud Sync
+                if (S3RegionCombo != null)
+                {
+                    string region = Properties.Settings.Default.S3Region ?? "us-east-1";
+                    foreach (ComboBoxItem item in S3RegionCombo.Items)
+                    {
+                        if (item.Content.ToString() == region)
+                        {
+                            S3RegionCombo.SelectedItem = item;
+                            break;
+                        }
+                    }
+                }
+
+                // Load Cloud Sharing credentials from environment variables (kept separate)
                 awsAccessKeyBox.Text = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID", EnvironmentVariableTarget.User) ?? "";
                 awsSecretKeyBox.Password = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", EnvironmentVariableTarget.User) ?? "";
                 s3BucketNameBox.Text = Environment.GetEnvironmentVariable("S3_BUCKET_NAME", EnvironmentVariableTarget.User) ?? "photobooth-shares";

@@ -315,12 +315,38 @@ namespace Photobooth.Services
 
                 // Trigger device events for photo capture
                 _ = DeviceTriggerService.Instance.FireTriggerEvent(TriggerEvent.PhotoCapture);
-                
+
+                // Auto focus before capture for better photo quality (if enabled)
+                if (Properties.Settings.Default.EnableAutoFocus)
+                {
+                    try
+                    {
+                        Log.Debug("PhotoboothWorkflowService: Triggering auto focus before capture");
+                        camera.AutoFocus();
+
+                        // Use configurable delay to let auto focus complete
+                        int afDelay = Properties.Settings.Default.AutoFocusDelay;
+                        if (afDelay > 0)
+                        {
+                            await Task.Delay(afDelay);
+                        }
+                    }
+                    catch (Exception afEx)
+                    {
+                        // Log but don't fail - some cameras may not support auto focus or it may fail
+                        Log.Debug($"PhotoboothWorkflowService: Auto focus failed (non-critical): {afEx.Message}");
+                    }
+                }
+                else
+                {
+                    Log.Debug("PhotoboothWorkflowService: Auto focus is disabled in settings");
+                }
+
                 // Capture the photo - the camera's PhotoCaptured event will handle the result
                 // The event subscription is already ensured in StartPhotoCaptureWorkflowAsync
                 Log.Debug($"PhotoboothWorkflowService: About to call camera.CapturePhoto()");
                 Log.Debug($"PhotoboothWorkflowService: Camera event handler is: {(_cameraCaptureHandler != null ? "SET" : "NULL")}");
-                
+
                 camera.CapturePhoto();
 
                 Log.Debug($"PhotoboothWorkflowService: Photo capture initiated for photo {_sessionService.CurrentPhotoIndex + 1}");

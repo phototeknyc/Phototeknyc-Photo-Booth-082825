@@ -1750,5 +1750,40 @@ namespace Photobooth.Properties {
                 this["DeviceTriggers"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        public global::System.DateTime EventSelectionTime {
+            get {
+                return ((global::System.DateTime)(this["EventSelectionTime"]));
+            }
+            set {
+                this["EventSelectionTime"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnableAutoFocus {
+            get {
+                return ((bool)(this["EnableAutoFocus"]));
+            }
+            set {
+                this["EnableAutoFocus"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("100")]
+        public int AutoFocusDelay {
+            get {
+                return ((int)(this["AutoFocusDelay"]));
+            }
+            set {
+                this["AutoFocusDelay"] = value;
+            }
+        }
     }
 }

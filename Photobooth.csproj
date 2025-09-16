@@ -194,6 +194,9 @@
     <Compile Include="Controls\EventSelectionOverlay.xaml.cs">
       <DependentUpon>EventSelectionOverlay.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\TemplateBrowserOverlay.xaml.cs">
+      <DependentUpon>TemplateBrowserOverlay.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\SettingsOverlay.xaml.cs">
       <DependentUpon>SettingsOverlay.xaml</DependentUpon>
     </Compile>
@@ -238,6 +241,8 @@
     <Compile Include="Models\EventConfiguration.cs" />
     <Compile Include="Database\UILayoutDatabase.cs" />
     <Compile Include="Converters\BoolToBrushConverter.cs" />
+    <Compile Include="Converters\InverseBoolToVisibilityConverter.cs" />
+    <Compile Include="Converters\BoolToOpacityConverter.cs" />
     <Compile Include="PrintCopyDialog.xaml.cs">
       <DependentUpon>PrintCopyDialog.xaml</DependentUpon>
     </Compile>
@@ -282,6 +287,7 @@
     <Compile Include="Services\VideoRecordingCoordinatorService.cs" />
     <Compile Include="Services\VideoCompressionService.cs" />
     <Compile Include="Services\PhotoBoothSyncService.cs" />
+    <Compile Include="Services\SyncNotificationService.cs" />
     <Compile Include="Services\TemplateSyncService.cs" />
     <Compile Include="Services\SettingsSyncService.cs" />
     <Compile Include="Services\BoomerangService.cs" />
@@ -436,6 +442,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\EventSelectionOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\TemplateBrowserOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

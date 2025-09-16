@@ -31,12 +31,15 @@ namespace Photobooth
 		{
 			// Set shutdown mode to close when main window closes
 			this.ShutdownMode = ShutdownMode.OnMainWindowClose;
-			
+
 			// Enable DPI awareness for crisp rendering on high-DPI displays
 			if (Environment.OSVersion.Version.Major >= 6)
 			{
 				SetProcessDPIAware();
 			}
+
+			// Initialize sync notification service
+			SyncNotificationService.Instance.Initialize();
 			
 			// Always use software rendering by default for better compatibility
 			// Can be overridden with /hardware command line argument

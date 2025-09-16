@@ -1,4 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -17,7 +22,10 @@ namespace Photobooth.Controls
     public partial class EventSelectionOverlay : UserControl
     {
         private readonly EventSelectionService _eventSelectionService;
-        
+        private bool _isSelectMode = false;
+        private List<EventItemViewModel> _allEvents;
+        private ObservableCollection<EventItemViewModel> _eventItems;
+
         public event EventHandler<EventData> EventSelected;
         public event EventHandler SelectionCancelled;
         
@@ -25,7 +33,9 @@ namespace Photobooth.Controls
         {
             InitializeComponent();
             _eventSelectionService = EventSelectionService.Instance;
-            
+            _allEvents = new List<EventItemViewModel>();
+            _eventItems = new ObservableCollection<EventItemViewModel>();
+
             // Subscribe to service events
             _eventSelectionService.PropertyChanged += OnServicePropertyChanged;
             _eventSelectionService.EventSelected += OnServiceEventSelected;
@@ -46,9 +56,12 @@ namespace Photobooth.Controls
                 
                 // Load events
                 _eventSelectionService.LoadEvents();
-                
+
+                // Convert to EventItemViewModel
+                LoadEventItems();
+
                 // Bind data to ItemsControl
-                EventsListBox.ItemsSource = _eventSelectionService.FilteredEvents;
+                EventsListBox.ItemsSource = _eventItems;
                 
                 // Update UI
                 UpdateNoEventsVisibility();
@@ -83,19 +96,22 @@ namespace Photobooth.Controls
             try
             {
                 Log.Debug("EventSelectionOverlay: Hiding overlay");
-                
+
+                // Hide management buttons
+                HideEventManagementButtons();
+
                 // Animate out
                 var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200));
                 fadeOut.Completed += (s, e) =>
                 {
                     MainOverlay.Visibility = Visibility.Collapsed;
-                    
+
                     // Hide the control itself
                     this.Visibility = Visibility.Collapsed;
-                    
+
                     // Reset service
                     _eventSelectionService.Reset();
-                    
+
                     // Clear UI
                     SearchTextBox.Clear();
                 };
@@ -117,10 +133,12 @@ namespace Photobooth.Controls
                 switch (e.PropertyName)
                 {
                     case nameof(EventSelectionService.FilteredEvents):
-                        EventsListBox.ItemsSource = _eventSelectionService.FilteredEvents;
+                        // Refresh the view model collection when events change
+                        LoadEventItems();
+                        EventsListBox.ItemsSource = _eventItems;
                         UpdateNoEventsVisibility();
                         break;
-                        
+
                     case nameof(EventSelectionService.SelectedEvent):
                         UpdateSelectedEvent();
                         break;
@@ -180,28 +198,42 @@ namespace Photobooth.Controls
                     if (container != null)
                     {
                         var border = FindVisualChild<Border>(container);
-                        if (border != null && border.DataContext is EventData eventData)
+                        if (border != null)
                         {
-                            // Find the Image control within the template
-                            var imageControl = FindVisualChild<Image>(border, "EventTemplatePreview");
-                            var fallbackGrid = FindVisualChild<Grid>(border, "NoPreviewFallback");
-                            
-                            if (imageControl != null)
+                            // Handle both EventItemViewModel and EventData for compatibility
+                            EventData eventData = null;
+                            if (border.DataContext is EventItemViewModel viewModel)
                             {
-                                // Get the preview image from the service
-                                var previewImage = _eventSelectionService.GetEventTemplatePreview(eventData.Id);
-                                
-                                if (previewImage != null)
+                                eventData = viewModel.EventData;
+                            }
+                            else if (border.DataContext is EventData directEventData)
+                            {
+                                eventData = directEventData;
+                            }
+
+                            if (eventData != null)
+                            {
+                                // Find the Image control within the template
+                                var imageControl = FindVisualChild<Image>(border, "EventTemplatePreview");
+                                var fallbackGrid = FindVisualChild<Grid>(border, "NoPreviewFallback");
+
+                                if (imageControl != null)
                                 {
-                                    imageControl.Source = previewImage;
-                                    if (fallbackGrid != null)
-                                        fallbackGrid.Visibility = Visibility.Collapsed;
-                                }
-                                else
-                                {
-                                    // Show fallback
-                                    if (fallbackGrid != null)
-                                        fallbackGrid.Visibility = Visibility.Visible;
+                                    // Get the preview image from the service
+                                    var previewImage = _eventSelectionService.GetEventTemplatePreview(eventData.Id);
+
+                                    if (previewImage != null)
+                                    {
+                                        imageControl.Source = previewImage;
+                                        if (fallbackGrid != null)
+                                            fallbackGrid.Visibility = Visibility.Collapsed;
+                                    }
+                                    else
+                                    {
+                                        // Show fallback
+                                        if (fallbackGrid != null)
+                                            fallbackGrid.Visibility = Visibility.Visible;
+                                    }
                                 }
                             }
                         }
@@ -307,14 +339,483 @@ namespace Photobooth.Controls
         
         private void EventItem_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (sender is Border border && border.DataContext is EventData eventData)
+            if (sender is Border border)
             {
-                // Select the event directly
-                _eventSelectionService.SelectedEvent = eventData;
-                _eventSelectionService.SelectEvent(eventData);
+                var eventItem = border.DataContext as EventItemViewModel;
+                if (eventItem == null)
+                {
+                    // Legacy support for direct EventData binding
+                    if (border.DataContext is EventData eventData)
+                    {
+                        // Convert to view model if needed
+                        eventItem = _eventItems.FirstOrDefault(vm => vm.EventData == eventData);
+                    }
+                    if (eventItem == null) return;
+                }
+
+                if (_isSelectMode)
+                {
+                    // In select mode, toggle selection
+                    eventItem.IsSelected = !eventItem.IsSelected;
+                    UpdateSelectionStatus();
+                }
+                else
+                {
+                    // Not in select mode - original behavior
+                    if (e.ClickCount == 2)
+                    {
+                        // Double click/tap selects the event
+                        _eventSelectionService.SelectedEvent = eventItem.EventData;
+                        _eventSelectionService.SelectEvent(eventItem.EventData);
+                    }
+                    else
+                    {
+                        // Single click/tap shows management buttons
+                        _eventSelectionService.SelectedEvent = eventItem.EventData;
+                        ShowEventManagementButtons(eventItem.EventData);
+
+                        // Update visual selection
+                        UpdateEventSelection(border);
+                    }
+                }
             }
         }
-        
+
+        private void ShowEventManagementButtons(EventData selectedEvent)
+        {
+            // Show the management buttons
+            EventManagementButtons.Visibility = Visibility.Visible;
+
+            // Store the selected event for the button handlers
+            DuplicateEventButton.Tag = selectedEvent;
+            RenameEventButton.Tag = selectedEvent;
+            DeleteEventButton.Tag = selectedEvent;
+        }
+
+        private void HideEventManagementButtons()
+        {
+            EventManagementButtons.Visibility = Visibility.Collapsed;
+        }
+
+        private void UpdateEventSelection(Border selectedBorder)
+        {
+            // Find all event items and update their selection state
+            var itemsControl = EventsListBox;
+            if (itemsControl != null)
+            {
+                for (int i = 0; i < itemsControl.Items.Count; i++)
+                {
+                    var container = itemsControl.ItemContainerGenerator.ContainerFromIndex(i) as ContentPresenter;
+                    if (container != null)
+                    {
+                        var border = FindVisualChild<Border>(container, "EventBorder");
+                        if (border != null)
+                        {
+                            if (border == selectedBorder)
+                            {
+                                // Highlight selected
+                                border.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4CAF50"));
+                                border.BorderThickness = new Thickness(3);
+                            }
+                            else
+                            {
+                                // Reset others
+                                border.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#3A3A3A"));
+                                border.BorderThickness = new Thickness(1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private void DuplicateEvent_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var sourceEvent = (sender as Button)?.Tag as EventData ?? _eventSelectionService.SelectedEvent;
+                if (sourceEvent != null)
+                {
+                    var newEventName = ShowInputDialog("Duplicate Event",
+                                                       "Enter name for the duplicated event:",
+                                                       sourceEvent.Name + " (Copy)");
+
+                    if (!string.IsNullOrWhiteSpace(newEventName))
+                    {
+                        _eventSelectionService.DuplicateEvent(sourceEvent, newEventName);
+                        _eventSelectionService.LoadEvents(); // Refresh the list
+                        HideEventManagementButtons(); // Hide buttons after action
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionOverlay: Failed to duplicate event: {ex.Message}");
+                MessageBox.Show($"Failed to duplicate event: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void RenameEvent_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var eventToRename = (sender as Button)?.Tag as EventData ?? _eventSelectionService.SelectedEvent;
+                if (eventToRename != null)
+                {
+                    var newName = ShowInputDialog("Rename Event",
+                                                  "Enter new name for the event:",
+                                                  eventToRename.Name);
+
+                    if (!string.IsNullOrWhiteSpace(newName) && newName != eventToRename.Name)
+                    {
+                        _eventSelectionService.RenameEvent(eventToRename, newName);
+                        _eventSelectionService.LoadEvents(); // Refresh the list
+                        HideEventManagementButtons(); // Hide buttons after action
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionOverlay: Failed to rename event: {ex.Message}");
+                MessageBox.Show($"Failed to rename event: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void DeleteEvent_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var eventToDelete = (sender as Button)?.Tag as EventData ?? _eventSelectionService.SelectedEvent;
+                if (eventToDelete != null)
+                {
+                    var result = MessageBox.Show(
+                        $"Are you sure you want to delete the event '{eventToDelete.Name}'?\n\nThis will remove all associated templates from this event.",
+                        "Delete Event",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        _eventSelectionService.DeleteEvent(eventToDelete);
+                        _eventSelectionService.LoadEvents(); // Refresh the list
+                        HideEventManagementButtons(); // Hide buttons after action
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionOverlay: Failed to delete event: {ex.Message}");
+                MessageBox.Show($"Failed to delete event: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void NewEventButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var eventName = ShowInputDialog("Create New Event",
+                                               "Enter name for the new event:",
+                                               "New Event " + DateTime.Now.ToString("yyyy-MM-dd"));
+
+                if (!string.IsNullOrWhiteSpace(eventName))
+                {
+                    _eventSelectionService.CreateNewEventFromLast(eventName);
+                    _eventSelectionService.LoadEvents(); // Refresh the list
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionOverlay: Failed to create new event: {ex.Message}");
+                MessageBox.Show($"Failed to create new event: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         #endregion
+
+        #region Helper Methods
+
+        /// <summary>
+        /// Simple input prompt dialog
+        /// </summary>
+        private string ShowInputDialog(string title, string message, string defaultValue = "")
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Width = 400,
+                Height = 200,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = Window.GetWindow(this),
+                WindowStyle = WindowStyle.ToolWindow,
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var grid = new Grid();
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.Margin = new Thickness(20);
+
+            var label = new TextBlock
+            {
+                Text = message,
+                Margin = new Thickness(0, 0, 0, 10),
+                TextWrapping = TextWrapping.Wrap
+            };
+            Grid.SetRow(label, 0);
+            grid.Children.Add(label);
+
+            var textBox = new TextBox
+            {
+                Text = defaultValue,
+                Margin = new Thickness(0, 0, 0, 20),
+                Padding = new Thickness(5),
+                FontSize = 14
+            };
+            Grid.SetRow(textBox, 1);
+            grid.Children.Add(textBox);
+
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            Grid.SetRow(buttonPanel, 2);
+            grid.Children.Add(buttonPanel);
+
+            var okButton = new Button
+            {
+                Content = "OK",
+                Width = 80,
+                Height = 30,
+                Margin = new Thickness(0, 0, 10, 0),
+                IsDefault = true
+            };
+            okButton.Click += (s, e) => { dialog.DialogResult = true; dialog.Close(); };
+            buttonPanel.Children.Add(okButton);
+
+            var cancelButton = new Button
+            {
+                Content = "Cancel",
+                Width = 80,
+                Height = 30,
+                IsCancel = true
+            };
+            cancelButton.Click += (s, e) => { dialog.DialogResult = false; dialog.Close(); };
+            buttonPanel.Children.Add(cancelButton);
+
+            dialog.Content = grid;
+            textBox.Focus();
+            textBox.SelectAll();
+
+            if (dialog.ShowDialog() == true)
+            {
+                return textBox.Text;
+            }
+
+            return null;
+        }
+
+        #endregion
+
+        #region Multi-Select Methods
+
+        private void LoadEventItems()
+        {
+            _allEvents.Clear();
+            _eventItems.Clear();
+
+            if (_eventSelectionService.FilteredEvents != null)
+            {
+                foreach (var eventData in _eventSelectionService.FilteredEvents)
+                {
+                    var viewModel = new EventItemViewModel(eventData);
+                    _allEvents.Add(viewModel);
+                    _eventItems.Add(viewModel);
+                }
+            }
+        }
+
+        private void EnterSelectMode()
+        {
+            _isSelectMode = true;
+
+            // Show select mode UI
+            SelectModePanel.Visibility = Visibility.Visible;
+            EventManagementButtons.Visibility = Visibility.Collapsed;
+
+            // Update button text
+            SelectModeButton.Content = "✓ Exit Select Mode";
+
+            // Clear any previous selections and make checkboxes visible
+            foreach (var eventItem in _allEvents)
+            {
+                eventItem.IsSelected = false;
+                eventItem.ShowCheckbox = true;
+            }
+
+            UpdateSelectionStatus();
+        }
+
+        private void ExitSelectMode()
+        {
+            _isSelectMode = false;
+
+            // Hide select mode UI
+            SelectModePanel.Visibility = Visibility.Collapsed;
+
+            // Update button text
+            SelectModeButton.Content = "☐ Select Mode";
+
+            // Clear selections and hide checkboxes
+            foreach (var eventItem in _allEvents)
+            {
+                eventItem.IsSelected = false;
+                eventItem.ShowCheckbox = false;
+            }
+        }
+
+        private void SelectAll()
+        {
+            foreach (var eventItem in _eventItems)
+            {
+                eventItem.IsSelected = true;
+            }
+            UpdateSelectionStatus();
+        }
+
+        private void DeselectAll()
+        {
+            foreach (var eventItem in _eventItems)
+            {
+                eventItem.IsSelected = false;
+            }
+            UpdateSelectionStatus();
+        }
+
+        private void UpdateSelectionStatus()
+        {
+            var selectedCount = _eventItems.Count(e => e.IsSelected);
+            SelectionStatusText.Text = $"{selectedCount} selected";
+            DeleteSelectedButton.IsEnabled = selectedCount > 0;
+        }
+
+        private void DeleteSelectedEvents()
+        {
+            var selectedEvents = _eventItems.Where(e => e.IsSelected).ToList();
+
+            if (selectedEvents.Count == 0) return;
+
+            var message = selectedEvents.Count == 1
+                ? $"Are you sure you want to delete '{selectedEvents[0].EventData.Name}'?"
+                : $"Are you sure you want to delete {selectedEvents.Count} events?";
+
+            var result = MessageBox.Show(
+                message + "\n\nThis will remove all associated templates from these events.",
+                "Delete Events",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                try
+                {
+                    foreach (var eventItem in selectedEvents)
+                    {
+                        _eventSelectionService.DeleteEvent(eventItem.EventData);
+                    }
+
+                    // Reload events
+                    _eventSelectionService.LoadEvents();
+                    LoadEventItems();
+
+                    // Exit select mode
+                    ExitSelectMode();
+
+                    // Show success message
+                    var successMessage = selectedEvents.Count == 1
+                        ? "Event deleted successfully"
+                        : $"{selectedEvents.Count} events deleted successfully";
+
+                    Log.Debug($"EventSelectionOverlay: {successMessage}");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"EventSelectionOverlay: Failed to delete events: {ex.Message}");
+                    MessageBox.Show($"Failed to delete events: {ex.Message}", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void SelectModeButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isSelectMode)
+            {
+                ExitSelectMode();
+            }
+            else
+            {
+                EnterSelectMode();
+            }
+        }
+
+        private void SelectAllButton_Click(object sender, RoutedEventArgs e)
+        {
+            SelectAll();
+        }
+
+        private void DeselectAllButton_Click(object sender, RoutedEventArgs e)
+        {
+            DeselectAll();
+        }
+
+        private void DeleteSelectedButton_Click(object sender, RoutedEventArgs e)
+        {
+            DeleteSelectedEvents();
+        }
+
+        #endregion
+    }
+
+    /// <summary>
+    /// ViewModel for event items with selection support
+    /// </summary>
+    public class EventItemViewModel : INotifyPropertyChanged
+    {
+        public EventData EventData { get; }
+
+        private bool _isSelected;
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                _isSelected = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private bool _showCheckbox;
+        public bool ShowCheckbox
+        {
+            get => _showCheckbox;
+            set
+            {
+                _showCheckbox = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public EventItemViewModel(EventData eventData)
+        {
+            EventData = eventData;
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 }

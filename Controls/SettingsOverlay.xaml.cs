@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -150,8 +151,8 @@ namespace Photobooth.Controls
                 {
                     Name = "Camera",
                     Icon = "📷",
-                    Summary = $"Live View: {(_settingsService.Camera.EnableIdleLiveView ? "On" : "Off")}, {_settingsService.Camera.LiveViewFrameRate} FPS",
-                    SettingsCount = 4
+                    Summary = $"Live View: {(_settingsService.Camera.EnableIdleLiveView ? "On" : "Off")}, Auto Focus: {(Properties.Settings.Default.EnableAutoFocus ? "On" : "Off")}",
+                    SettingsCount = 6
                 });
                 
                 // Print Settings
@@ -246,7 +247,32 @@ namespace Photobooth.Controls
                     Summary = $"Camera Controls: {(liveViewService.IsEnabled ? "Active" : "Inactive")}, ISO: {liveViewService.CurrentISO}",
                     SettingsCount = 6
                 });
-                
+
+                // Cloud Share Settings
+                var cloudShareEnabled = Environment.GetEnvironmentVariable("CLOUD_SHARING_ENABLED", EnvironmentVariableTarget.User) == "True";
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "Cloud Share",
+                    Icon = "☁️",
+                    Summary = $"Cloud Sharing: {(cloudShareEnabled ? "Enabled" : "Disabled")}",
+                    SettingsCount = 8
+                });
+
+                // Cloud Sync Settings
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "Cloud Sync",
+                    Icon = "🔄☁️",
+                    Summary = $"Sync: {(Properties.Settings.Default.EnableCloudSync ? "Enabled" : "Disabled")}, S3: {(!string.IsNullOrEmpty(Properties.Settings.Default.S3AccessKey) ? "Configured" : "Not Set")}",
+                    SettingsCount = 7
+                });
+
+                Log.Debug($"SettingsOverlay: Loading {categories.Count} categories");
+                foreach (var cat in categories)
+                {
+                    Log.Debug($"  - {cat.Name}: {cat.Summary}");
+                }
+
                 CategoriesGrid.ItemsSource = categories;
             }
             catch (Exception ex)
@@ -331,7 +357,21 @@ namespace Photobooth.Controls
                 LoadCaptureModesSettings();
                 return;
             }
-            
+
+            // Special handling for Cloud Share category
+            if (categoryName == "Cloud Share")
+            {
+                LoadCloudShareSettings();
+                return;
+            }
+
+            // Special handling for Cloud Sync category
+            if (categoryName == "Cloud Sync")
+            {
+                LoadCloudSyncSettings();
+                return;
+            }
+
             var settings = _settingsService.GetCategorizedSettings();
             if (!settings.ContainsKey(categoryName)) return;
             
@@ -1470,7 +1510,963 @@ namespace Photobooth.Controls
         }
         
         #endregion
-        
+
+        #region Cloud Share Settings
+
+        /// <summary>
+        /// Create a toggle control for cloud share settings
+        /// </summary>
+        private UIElement CreateCloudShareToggle(string displayName, bool value, string description, Action<bool> onChanged)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var stackPanel = new StackPanel();
+
+            var nameText = new TextBlock
+            {
+                Text = displayName,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            stackPanel.Children.Add(nameText);
+
+            var toggle = new CheckBox
+            {
+                IsChecked = value,
+                Style = FindResource("SettingToggleStyle") as Style
+            };
+            toggle.Checked += (s, e) => onChanged?.Invoke(true);
+            toggle.Unchecked += (s, e) => onChanged?.Invoke(false);
+            stackPanel.Children.Add(toggle);
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                var descText = new TextBlock
+                {
+                    Text = description,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    Margin = new Thickness(0, 5, 0, 0),
+                    TextWrapping = TextWrapping.Wrap
+                };
+                stackPanel.Children.Add(descText);
+            }
+
+            container.Child = stackPanel;
+            return container;
+        }
+
+        /// <summary>
+        /// Create a text input control for cloud settings
+        /// </summary>
+        private UIElement CreateCloudTextInput(string displayName, string value, string description, bool isPassword, Action<string> onChanged)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var stackPanel = new StackPanel();
+
+            var nameText = new TextBlock
+            {
+                Text = displayName,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            stackPanel.Children.Add(nameText);
+
+            if (isPassword)
+            {
+                var passwordBox = new PasswordBox
+                {
+                    Width = 300,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Background = new SolidColorBrush(Color.FromRgb(0x20, 0x20, 0x20)),
+                    Foreground = Brushes.White,
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
+                    Padding = new Thickness(5)
+                };
+
+                // Set password after creating control to avoid triggering change event
+                passwordBox.Password = value ?? "";
+
+                // Use a flag to prevent saving during initial load
+                bool isInitializing = true;
+                passwordBox.Loaded += (s, e) => isInitializing = false;
+
+                passwordBox.PasswordChanged += (s, e) =>
+                {
+                    if (!isInitializing && onChanged != null)
+                    {
+                        string newPassword = passwordBox.Password;
+                        // Only save if the password actually has content or was explicitly cleared
+                        if (!string.IsNullOrEmpty(newPassword) || passwordBox.IsFocused)
+                        {
+                            onChanged.Invoke(newPassword);
+                        }
+                    }
+                };
+
+                // Also handle lost focus to ensure password is saved
+                passwordBox.LostFocus += (s, e) =>
+                {
+                    if (!isInitializing && onChanged != null)
+                    {
+                        onChanged.Invoke(passwordBox.Password);
+                    }
+                };
+
+                stackPanel.Children.Add(passwordBox);
+            }
+            else
+            {
+                var textBox = new TextBox
+                {
+                    Text = value ?? "",
+                    Width = 300,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Background = new SolidColorBrush(Color.FromRgb(0x20, 0x20, 0x20)),
+                    Foreground = Brushes.White,
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
+                    Padding = new Thickness(5)
+                };
+                textBox.TextChanged += (s, e) => onChanged?.Invoke(textBox.Text);
+                stackPanel.Children.Add(textBox);
+            }
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                var descText = new TextBlock
+                {
+                    Text = description,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    Margin = new Thickness(0, 5, 0, 0),
+                    TextWrapping = TextWrapping.Wrap
+                };
+                stackPanel.Children.Add(descText);
+            }
+
+            container.Child = stackPanel;
+            return container;
+        }
+
+        /// <summary>
+        /// Create a toggle control for cloud sync settings
+        /// </summary>
+        private UIElement CreateCloudNumberInput(string displayName, double value, string description, double min, double max, Action<double> onChanged)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var stackPanel = new StackPanel();
+
+            var nameText = new TextBlock
+            {
+                Text = displayName,
+                Foreground = Brushes.White,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            stackPanel.Children.Add(nameText);
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                var descText = new TextBlock
+                {
+                    Text = description,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xB0, 0xB0, 0xB0)),
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 5)
+                };
+                stackPanel.Children.Add(descText);
+            }
+
+            Grid.SetColumn(stackPanel, 0);
+            grid.Children.Add(stackPanel);
+
+            // Create number input with up/down buttons
+            var inputPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var textBox = new TextBox
+            {
+                Text = value.ToString(),
+                Width = 80,
+                Height = 35,
+                FontSize = 14,
+                Foreground = Brushes.White,
+                Background = new SolidColorBrush(Color.FromRgb(0x25, 0x25, 0x25)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(10, 8, 10, 8),
+                VerticalContentAlignment = VerticalAlignment.Center,
+                HorizontalContentAlignment = HorizontalAlignment.Center
+            };
+
+            // Up button
+            var upButton = new Button
+            {
+                Content = "▲",
+                Width = 30,
+                Height = 35,
+                Margin = new Thickness(5, 0, 0, 0),
+                Background = new SolidColorBrush(Color.FromRgb(0x45, 0x45, 0x45)),
+                Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55))
+            };
+
+            // Down button
+            var downButton = new Button
+            {
+                Content = "▼",
+                Width = 30,
+                Height = 35,
+                Margin = new Thickness(2, 0, 0, 0),
+                Background = new SolidColorBrush(Color.FromRgb(0x45, 0x45, 0x45)),
+                Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55))
+            };
+
+            // Event handlers
+            Action updateValue = () =>
+            {
+                if (double.TryParse(textBox.Text, out double newValue))
+                {
+                    newValue = Math.Max(min, Math.Min(max, newValue));
+                    textBox.Text = newValue.ToString();
+                    onChanged?.Invoke(newValue);
+                }
+            };
+
+            textBox.LostFocus += (s, e) => updateValue();
+            textBox.KeyDown += (s, e) =>
+            {
+                if (e.Key == System.Windows.Input.Key.Enter)
+                {
+                    updateValue();
+                }
+            };
+
+            upButton.Click += (s, e) =>
+            {
+                if (double.TryParse(textBox.Text, out double currentValue))
+                {
+                    currentValue = Math.Min(max, currentValue + 1);
+                    textBox.Text = currentValue.ToString();
+                    onChanged?.Invoke(currentValue);
+                }
+            };
+
+            downButton.Click += (s, e) =>
+            {
+                if (double.TryParse(textBox.Text, out double currentValue))
+                {
+                    currentValue = Math.Max(min, currentValue - 1);
+                    textBox.Text = currentValue.ToString();
+                    onChanged?.Invoke(currentValue);
+                }
+            };
+
+            inputPanel.Children.Add(textBox);
+            inputPanel.Children.Add(upButton);
+            inputPanel.Children.Add(downButton);
+
+            Grid.SetColumn(inputPanel, 1);
+            grid.Children.Add(inputPanel);
+
+            container.Child = grid;
+            return container;
+        }
+
+        private UIElement CreateCloudSyncToggle(string displayName, bool value, string description, string settingName)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var stackPanel = new StackPanel();
+
+            var nameText = new TextBlock
+            {
+                Text = displayName,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            stackPanel.Children.Add(nameText);
+
+            var toggle = new CheckBox
+            {
+                IsChecked = value,
+                Style = FindResource("SettingToggleStyle") as Style
+            };
+
+            toggle.Checked += (s, e) => {
+                var property = Properties.Settings.Default.GetType().GetProperty(settingName);
+                if (property != null)
+                {
+                    property.SetValue(Properties.Settings.Default, true);
+                    Properties.Settings.Default.Save();
+                }
+            };
+
+            toggle.Unchecked += (s, e) => {
+                var property = Properties.Settings.Default.GetType().GetProperty(settingName);
+                if (property != null)
+                {
+                    property.SetValue(Properties.Settings.Default, false);
+                    Properties.Settings.Default.Save();
+                }
+            };
+
+            stackPanel.Children.Add(toggle);
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                var descText = new TextBlock
+                {
+                    Text = description,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    Margin = new Thickness(0, 5, 0, 0),
+                    TextWrapping = TextWrapping.Wrap
+                };
+                stackPanel.Children.Add(descText);
+            }
+
+            container.Child = stackPanel;
+            return container;
+        }
+
+        /// <summary>
+        /// Load cloud share settings
+        /// </summary>
+        private void LoadCloudShareSettings()
+        {
+            try
+            {
+                // Cloud Sharing Enabled
+                var cloudEnabled = Environment.GetEnvironmentVariable("CLOUD_SHARING_ENABLED", EnvironmentVariableTarget.User) == "True";
+                var enableCloudControl = CreateCloudShareToggle("Enable Cloud Sharing",
+                    cloudEnabled,
+                    "Enable cloud sharing for photos",
+                    (value) => {
+                        Environment.SetEnvironmentVariable("CLOUD_SHARING_ENABLED", value.ToString(), EnvironmentVariableTarget.User);
+                        Environment.SetEnvironmentVariable("CLOUD_SHARING_ENABLED", value.ToString(), EnvironmentVariableTarget.Process);
+                    });
+                SettingsListPanel.Children.Add(enableCloudControl);
+
+                // AWS Access Key
+                var awsAccessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID", EnvironmentVariableTarget.User) ?? "";
+                var accessKeyControl = CreateCloudTextInput("AWS Access Key ID",
+                    awsAccessKey,
+                    "AWS Access Key for S3",
+                    false,
+                    (value) => {
+                        Environment.SetEnvironmentVariable("AWS_ACCESS_KEY_ID", value, EnvironmentVariableTarget.User);
+                        Environment.SetEnvironmentVariable("AWS_ACCESS_KEY_ID", value, EnvironmentVariableTarget.Process);
+                    });
+                SettingsListPanel.Children.Add(accessKeyControl);
+
+                // AWS Secret Key
+                var awsSecretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", EnvironmentVariableTarget.User) ?? "";
+                var secretKeyControl = CreateCloudTextInput("AWS Secret Access Key",
+                    awsSecretKey,
+                    "AWS Secret Key for S3",
+                    true,
+                    (value) => {
+                        Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", value, EnvironmentVariableTarget.User);
+                        Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", value, EnvironmentVariableTarget.Process);
+                    });
+                SettingsListPanel.Children.Add(secretKeyControl);
+
+                // S3 Bucket Name
+                var bucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME", EnvironmentVariableTarget.User) ?? "photobooth-shares";
+                var bucketControl = CreateCloudTextInput("S3 Bucket Name",
+                    bucketName,
+                    "S3 bucket for storing shared photos",
+                    false,
+                    (value) => {
+                        Environment.SetEnvironmentVariable("S3_BUCKET_NAME", value, EnvironmentVariableTarget.User);
+                        Environment.SetEnvironmentVariable("S3_BUCKET_NAME", value, EnvironmentVariableTarget.Process);
+                    });
+                SettingsListPanel.Children.Add(bucketControl);
+
+                // Gallery Base URL
+                var galleryUrl = Environment.GetEnvironmentVariable("GALLERY_BASE_URL", EnvironmentVariableTarget.User) ?? "https://photos.yourapp.com";
+                var galleryUrlControl = CreateCloudTextInput("Gallery Base URL",
+                    galleryUrl,
+                    "Base URL for the online gallery",
+                    false,
+                    (value) => {
+                        Environment.SetEnvironmentVariable("GALLERY_BASE_URL", value, EnvironmentVariableTarget.User);
+                        Environment.SetEnvironmentVariable("GALLERY_BASE_URL", value, EnvironmentVariableTarget.Process);
+                    });
+                SettingsListPanel.Children.Add(galleryUrlControl);
+
+                // Auto Share
+                var autoShare = Environment.GetEnvironmentVariable("CLOUD_AUTO_SHARE", EnvironmentVariableTarget.User) == "True";
+                var autoShareControl = CreateCloudShareToggle("Auto Share Photos",
+                    autoShare,
+                    "Automatically share photos after capture",
+                    (value) => {
+                        Environment.SetEnvironmentVariable("CLOUD_AUTO_SHARE", value.ToString(), EnvironmentVariableTarget.User);
+                        Environment.SetEnvironmentVariable("CLOUD_AUTO_SHARE", value.ToString(), EnvironmentVariableTarget.Process);
+                    });
+                SettingsListPanel.Children.Add(autoShareControl);
+
+                // Optimize Photos
+                var optimizePhotos = Environment.GetEnvironmentVariable("CLOUD_OPTIMIZE_PHOTOS", EnvironmentVariableTarget.User) != "False";
+                var optimizeControl = CreateCloudShareToggle("Optimize Photos for Upload",
+                    optimizePhotos,
+                    "Compress photos before uploading to save bandwidth",
+                    (value) => {
+                        Environment.SetEnvironmentVariable("CLOUD_OPTIMIZE_PHOTOS", value.ToString(), EnvironmentVariableTarget.User);
+                        Environment.SetEnvironmentVariable("CLOUD_OPTIMIZE_PHOTOS", value.ToString(), EnvironmentVariableTarget.Process);
+                    });
+                SettingsListPanel.Children.Add(optimizeControl);
+
+                // SMS Settings (if Twilio configured)
+                var twilioSid = Environment.GetEnvironmentVariable("TWILIO_ACCOUNT_SID", EnvironmentVariableTarget.User) ?? "";
+                if (!string.IsNullOrEmpty(twilioSid))
+                {
+                    var enableSms = !string.IsNullOrEmpty(twilioSid);
+                    var smsControl = CreateCloudShareToggle("Enable SMS Sharing",
+                        enableSms,
+                        "Allow sharing photos via SMS",
+                        (value) => {
+                            // SMS is enabled based on Twilio credentials presence
+                            // This is just a display toggle
+                        });
+                    SettingsListPanel.Children.Add(smsControl);
+                }
+
+                // Add info section
+                var infoSection = CreateDebugInfoSection("Cloud Share Info",
+                    "Cloud sharing allows photos to be uploaded to AWS S3 and shared via QR codes, email, or SMS.\n\n" +
+                    "Required: AWS credentials with S3 permissions\n" +
+                    "Optional: Twilio credentials for SMS sharing");
+                SettingsListPanel.Children.Add(infoSection);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Failed to load cloud share settings: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Cloud Sync Settings
+
+        /// <summary>
+        /// Load cloud sync settings
+        /// </summary>
+        private void LoadCloudSyncSettings()
+        {
+            try
+            {
+                var settings = Properties.Settings.Default;
+
+                // Debug log to verify credentials are loaded
+                Log.Debug($"LoadCloudSyncSettings: S3AccessKey present: {!string.IsNullOrEmpty(settings.S3AccessKey)}");
+                Log.Debug($"LoadCloudSyncSettings: S3SecretKey length: {settings.S3SecretKey?.Length ?? 0}");
+                Log.Debug($"LoadCloudSyncSettings: S3BucketName: {settings.S3BucketName ?? "null"}");
+
+                // Enable Cloud Sync
+                var enableSyncControl = CreateCloudSyncToggle("Enable Cloud Sync",
+                    settings.EnableCloudSync,
+                    "Enable synchronization with cloud storage",
+                    "EnableCloudSync");
+                SettingsListPanel.Children.Add(enableSyncControl);
+
+                // Auto Sync on Startup
+                var autoSyncControl = CreateCloudSyncToggle("Auto Sync on Startup",
+                    settings.AutoSyncOnStartup,
+                    "Automatically sync when application starts",
+                    "AutoSyncOnStartup");
+                SettingsListPanel.Children.Add(autoSyncControl);
+
+                // Sync Interval
+                var syncIntervalControl = CreateCloudNumberInput("Sync Interval (minutes)",
+                    settings.SyncIntervalMinutes,
+                    "How often to sync with cloud (minimum 1 minute)",
+                    1, 1440, // Min 1 minute, max 24 hours
+                    (value) => {
+                        Properties.Settings.Default.SyncIntervalMinutes = (int)value;
+                        Properties.Settings.Default.Save();
+                        // Update the sync timer
+                        Photobooth.Services.PhotoBoothSyncService.Instance.SetSyncInterval((int)value);
+                    });
+                SettingsListPanel.Children.Add(syncIntervalControl);
+
+                // Sync Templates
+                var syncTemplatesControl = CreateCloudSyncToggle("Sync Templates",
+                    settings.SyncTemplates,
+                    "Synchronize template designs across devices",
+                    "SyncTemplates");
+                SettingsListPanel.Children.Add(syncTemplatesControl);
+
+                // Sync Settings
+                var syncSettingsControl = CreateCloudSyncToggle("Sync Settings",
+                    settings.SyncSettings,
+                    "Synchronize application settings across devices",
+                    "SyncSettings");
+                SettingsListPanel.Children.Add(syncSettingsControl);
+
+                // Sync Events
+                var syncEventsControl = CreateCloudSyncToggle("Sync Events",
+                    settings.SyncEvents,
+                    "Synchronize event configurations across devices",
+                    "SyncEvents");
+                SettingsListPanel.Children.Add(syncEventsControl);
+
+                // S3 Access Key
+                var s3AccessKeyControl = CreateCloudTextInput("S3 Access Key",
+                    settings.S3AccessKey ?? "",
+                    "AWS S3 Access Key for sync",
+                    false,
+                    (value) => {
+                        Properties.Settings.Default.S3AccessKey = value;
+                        Properties.Settings.Default.Save();
+                        // Also update environment variables for PhotoBoothSyncService
+                        Environment.SetEnvironmentVariable("AWS_ACCESS_KEY_ID", value, EnvironmentVariableTarget.Process);
+                        // Reinitialize cloud service with new credentials
+                        Photobooth.Services.PhotoBoothSyncService.Instance.ReinitializeCloudService();
+                    });
+                SettingsListPanel.Children.Add(s3AccessKeyControl);
+
+                // S3 Secret Key
+                var s3SecretKeyControl = CreateCloudTextInput("S3 Secret Key",
+                    settings.S3SecretKey ?? "",
+                    "AWS S3 Secret Key for sync",
+                    true,
+                    (value) => {
+                        Log.Debug($"SettingsOverlay: S3SecretKey changed, new length: {value?.Length ?? 0}");
+
+                        // Only save if value is not null (even empty string is valid if user explicitly cleared it)
+                        if (value != null)
+                        {
+                            Properties.Settings.Default.S3SecretKey = value;
+                            Properties.Settings.Default.Save();
+
+                            // Also update environment variables for PhotoBoothSyncService
+                            Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", value, EnvironmentVariableTarget.Process);
+
+                            // Reinitialize cloud service with new credentials
+                            Photobooth.Services.PhotoBoothSyncService.Instance.ReinitializeCloudService();
+
+                            Log.Debug($"SettingsOverlay: S3SecretKey saved successfully");
+                        }
+                        else
+                        {
+                            Log.Debug("SettingsOverlay: Attempted to set S3SecretKey to null, ignoring");
+                        }
+                    });
+                SettingsListPanel.Children.Add(s3SecretKeyControl);
+
+                // S3 Bucket Name
+                var s3BucketControl = CreateCloudTextInput("S3 Bucket Name",
+                    settings.S3BucketName ?? "",
+                    "S3 bucket for sync storage",
+                    false,
+                    (value) => {
+                        Properties.Settings.Default.S3BucketName = value;
+                        Properties.Settings.Default.Save();
+                        // Also update environment variables for PhotoBoothSyncService
+                        Environment.SetEnvironmentVariable("S3_BUCKET_NAME", value, EnvironmentVariableTarget.Process);
+                        // Reinitialize cloud service with new credentials
+                        Photobooth.Services.PhotoBoothSyncService.Instance.ReinitializeCloudService();
+                    });
+                SettingsListPanel.Children.Add(s3BucketControl);
+
+                // S3 Region
+                var s3RegionControl = CreateCloudTextInput("S3 Region",
+                    settings.S3Region ?? "us-east-1",
+                    "AWS region for S3 bucket (e.g., us-east-1, us-west-2)",
+                    false,
+                    (value) => {
+                        Properties.Settings.Default.S3Region = value;
+                        Properties.Settings.Default.Save();
+                        // Also update environment variables for PhotoBoothSyncService
+                        Environment.SetEnvironmentVariable("S3_REGION", value, EnvironmentVariableTarget.Process);
+                        // Reinitialize cloud service with new credentials
+                        Photobooth.Services.PhotoBoothSyncService.Instance.ReinitializeCloudService();
+                    });
+                SettingsListPanel.Children.Add(s3RegionControl);
+
+                // Add sync status info with test button
+                var syncService = Photobooth.Services.PhotoBoothSyncService.Instance;
+                var statusText = "Not Connected";
+                var statusColor = "#FF5722";
+
+                bool hasValidCredentials = !string.IsNullOrEmpty(settings.S3AccessKey) &&
+                                          !string.IsNullOrEmpty(settings.S3SecretKey) &&
+                                          !string.IsNullOrEmpty(settings.S3BucketName);
+
+                if (hasValidCredentials)
+                {
+                    statusText = "Ready to Sync";
+                    statusColor = "#4CAF50";
+                }
+
+                var statusInfo = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                    CornerRadius = new CornerRadius(8),
+                    Padding = new Thickness(15),
+                    Margin = new Thickness(0, 10, 0, 10)
+                };
+
+                var statusPanel = new StackPanel();
+
+                // Status header and text
+                var statusHeaderPanel = new DockPanel();
+                statusHeaderPanel.Children.Add(new TextBlock
+                {
+                    Text = "Sync Status",
+                    FontSize = 14,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Brushes.White,
+                    Margin = new Thickness(0, 0, 0, 5)
+                });
+
+                // Add test and sync buttons if credentials are valid
+                if (hasValidCredentials)
+                {
+                    // Create a stack panel for buttons
+                    var buttonPanel = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = HorizontalAlignment.Right
+                    };
+
+                    // Test Connection button
+                    var testButton = new Button
+                    {
+                        Content = "Test Connection",
+                        Width = 120,
+                        Height = 28,
+                        Margin = new Thickness(5, 0, 0, 5),
+                        Background = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                        Foreground = Brushes.White,
+                        BorderThickness = new Thickness(0),
+                        Cursor = Cursors.Hand,
+                        FontSize = 12
+                    };
+                    testButton.Template = CreateButtonTemplate();
+                    testButton.Click += async (s, e) => await TestCloudSyncConnection(testButton);
+                    buttonPanel.Children.Add(testButton);
+
+                    // Sync Now button
+                    var syncButton = new Button
+                    {
+                        Content = "Sync Now",
+                        Width = 100,
+                        Height = 28,
+                        Margin = new Thickness(5, 0, 0, 5),
+                        Background = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
+                        Foreground = Brushes.White,
+                        BorderThickness = new Thickness(0),
+                        Cursor = Cursors.Hand,
+                        FontSize = 12
+                    };
+                    syncButton.Template = CreateButtonTemplate();
+                    syncButton.Click += async (s, e) => await PerformCloudSync(syncButton);
+                    buttonPanel.Children.Add(syncButton);
+
+                    DockPanel.SetDock(buttonPanel, Dock.Right);
+                    statusHeaderPanel.Children.Add(buttonPanel);
+                }
+
+                statusPanel.Children.Add(statusHeaderPanel);
+
+                var statusTextBlock = new TextBlock
+                {
+                    Name = "CloudSyncStatusText",
+                    Text = statusText,
+                    FontSize = 12,
+                    Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString(statusColor)
+                };
+                statusPanel.Children.Add(statusTextBlock);
+
+                // Add last sync info if available
+                var lastSyncInfo = new TextBlock
+                {
+                    Name = "CloudSyncLastSyncText",
+                    Text = "",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    Margin = new Thickness(0, 5, 0, 0),
+                    Visibility = Visibility.Collapsed
+                };
+                statusPanel.Children.Add(lastSyncInfo);
+
+                statusInfo.Child = statusPanel;
+                SettingsListPanel.Children.Add(statusInfo);
+
+                // Add info section
+                var infoSection = CreateDebugInfoSection("Cloud Sync Info",
+                    "Cloud Sync keeps your photobooth data synchronized across multiple devices.\n\n" +
+                    "Synced data includes:\n" +
+                    "• Photo templates and layouts\n" +
+                    "• Application settings\n" +
+                    "• Event configurations\n\n" +
+                    "Requires AWS S3 credentials with read/write permissions.");
+                SettingsListPanel.Children.Add(infoSection);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Failed to load cloud sync settings: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Cloud Sync Test Methods
+
+        /// <summary>
+        /// Test Cloud Sync connection
+        /// </summary>
+        private async Task TestCloudSyncConnection(Button testButton)
+        {
+            try
+            {
+                // Disable button and show testing status
+                testButton.IsEnabled = false;
+                var originalContent = testButton.Content;
+                testButton.Content = "Testing...";
+
+                // Find status text block in the same container
+                var statusPanel = testButton.Parent as DockPanel;
+                var parentStackPanel = statusPanel?.Parent as StackPanel;
+                var statusTextBlock = parentStackPanel?.Children.OfType<TextBlock>()
+                    .FirstOrDefault(tb => tb.Name == "CloudSyncStatusText");
+                var lastSyncTextBlock = parentStackPanel?.Children.OfType<TextBlock>()
+                    .FirstOrDefault(tb => tb.Name == "CloudSyncLastSyncText");
+
+                if (statusTextBlock != null)
+                {
+                    statusTextBlock.Text = "Testing connection...";
+                    statusTextBlock.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07)); // Amber
+                }
+
+                // Test the connection
+                var syncService = Photobooth.Services.PhotoBoothSyncService.Instance;
+                bool testResult = false;
+                string resultMessage = "";
+
+                try
+                {
+                    // Try to perform a basic S3 operation like checking if bucket exists
+                    var cloudService = syncService.GetCloudService();
+                    if (cloudService != null)
+                    {
+                        // Try to list objects in the bucket (limited to 1) to test connection
+                        testResult = await cloudService.TestConnectionAsync();
+
+                        if (testResult)
+                        {
+                            resultMessage = "Connection successful!";
+
+                            // Try to get last sync time
+                            var manifest = await syncService.GetRemoteManifestAsync();
+                            if (manifest != null && manifest.LastModified != DateTime.MinValue)
+                            {
+                                if (lastSyncTextBlock != null)
+                                {
+                                    lastSyncTextBlock.Text = $"Last sync: {manifest.LastModified:g}";
+                                    lastSyncTextBlock.Visibility = Visibility.Visible;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            resultMessage = "Connection failed - check credentials";
+                        }
+                    }
+                    else
+                    {
+                        resultMessage = "Cloud service not initialized";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    resultMessage = $"Error: {ex.Message}";
+                    Log.Error($"SettingsOverlay: Cloud Sync test failed: {ex.Message}");
+                }
+
+                // Update status based on result
+                if (statusTextBlock != null)
+                {
+                    statusTextBlock.Text = resultMessage;
+                    statusTextBlock.Foreground = testResult
+                        ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)) // Green
+                        : new SolidColorBrush(Color.FromRgb(0xFF, 0x57, 0x22)); // Red
+                }
+
+                // Show result in button temporarily
+                testButton.Content = testResult ? "✓ Success" : "✗ Failed";
+                testButton.Background = testResult
+                    ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
+                    : new SolidColorBrush(Color.FromRgb(0xFF, 0x57, 0x22));
+
+                // Reset button after 3 seconds
+                await Task.Delay(3000);
+                testButton.Content = originalContent;
+                testButton.Background = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
+                testButton.IsEnabled = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Error testing Cloud Sync: {ex.Message}");
+                testButton.Content = "Test Connection";
+                testButton.IsEnabled = true;
+
+                MessageBox.Show($"Error testing connection: {ex.Message}", "Cloud Sync Test",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Perform a cloud sync operation
+        /// </summary>
+        private async Task PerformCloudSync(Button syncButton)
+        {
+            try
+            {
+                // Disable button and show syncing status
+                syncButton.IsEnabled = false;
+                var originalContent = syncButton.Content;
+                syncButton.Content = "Syncing...";
+
+                // Find status text blocks in the same container
+                var buttonPanel = syncButton.Parent as StackPanel;
+                var statusHeaderPanel = buttonPanel?.Parent as DockPanel;
+                var statusPanel = statusHeaderPanel?.Parent as StackPanel;
+                var statusTextBlock = statusPanel?.Children.OfType<TextBlock>()
+                    .FirstOrDefault(tb => tb.Name == "CloudSyncStatusText");
+                var lastSyncTextBlock = statusPanel?.Children.OfType<TextBlock>()
+                    .FirstOrDefault(tb => tb.Name == "CloudSyncLastSyncText");
+
+                if (statusTextBlock != null)
+                {
+                    statusTextBlock.Text = "Synchronizing...";
+                    statusTextBlock.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07)); // Amber
+                }
+
+                // Perform the sync
+                var syncService = Photobooth.Services.PhotoBoothSyncService.Instance;
+                bool syncSuccess = false;
+                string resultMessage = "";
+                int itemsSynced = 0;
+
+                try
+                {
+                    // Initialize sync options
+                    var syncOptions = new Photobooth.Services.SyncOptions
+                    {
+                        SyncTemplates = Properties.Settings.Default.SyncTemplates,
+                        SyncSettings = Properties.Settings.Default.SyncSettings,
+                        SyncEvents = Properties.Settings.Default.SyncEvents,
+                        ForceSync = true // Force sync even if no changes detected
+                    };
+
+                    // Perform sync
+                    var result = await syncService.SyncAsync(syncOptions);
+
+                    if (result != null && result.Success)
+                    {
+                        syncSuccess = true;
+                        itemsSynced = result.TemplatesSynced + result.SettingsSynced +
+                                     result.EventsSynced + result.DatabaseItemsSynced;
+                        resultMessage = $"Sync completed! {itemsSynced} items synchronized";
+
+                        // Update last sync time
+                        if (lastSyncTextBlock != null)
+                        {
+                            lastSyncTextBlock.Text = $"Last sync: {DateTime.Now:g}";
+                            lastSyncTextBlock.Visibility = Visibility.Visible;
+                        }
+                    }
+                    else
+                    {
+                        resultMessage = result?.Message ?? "Sync failed - unknown error";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    resultMessage = $"Sync error: {ex.Message}";
+                    Log.Error($"SettingsOverlay: Cloud Sync failed: {ex.Message}");
+                }
+
+                // Update status based on result
+                if (statusTextBlock != null)
+                {
+                    statusTextBlock.Text = resultMessage;
+                    statusTextBlock.Foreground = syncSuccess
+                        ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)) // Green
+                        : new SolidColorBrush(Color.FromRgb(0xFF, 0x57, 0x22)); // Red
+                }
+
+                // Show result in button temporarily
+                syncButton.Content = syncSuccess ? $"✓ {itemsSynced} items" : "✗ Failed";
+                syncButton.Background = syncSuccess
+                    ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
+                    : new SolidColorBrush(Color.FromRgb(0xFF, 0x57, 0x22));
+
+                // Reset button after 3 seconds
+                await Task.Delay(3000);
+                syncButton.Content = originalContent;
+                syncButton.Background = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3));
+                syncButton.IsEnabled = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Error performing sync: {ex.Message}");
+                syncButton.Content = "Sync Now";
+                syncButton.IsEnabled = true;
+
+                MessageBox.Show($"Error performing sync: {ex.Message}", "Cloud Sync",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        #endregion
+
         #region Helper Methods
         
         private string GetLockMessage()

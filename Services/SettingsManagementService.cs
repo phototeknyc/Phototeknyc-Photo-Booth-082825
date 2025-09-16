@@ -414,7 +414,34 @@ namespace Photobooth.Services
             try
             {
                 Log.Debug($"SettingsManagementService: Updating {category}.{settingName} to {value} (Type: {value?.GetType()?.Name})");
-                
+
+                // Special handling for auto focus settings which are in Properties.Settings.Default
+                if (category == "Camera" && (settingName == "EnableAutoFocus" || settingName == "AutoFocusDelay"))
+                {
+                    if (settingName == "EnableAutoFocus")
+                    {
+                        Properties.Settings.Default.EnableAutoFocus = Convert.ToBoolean(value);
+                    }
+                    else if (settingName == "AutoFocusDelay")
+                    {
+                        Properties.Settings.Default.AutoFocusDelay = Convert.ToInt32(value);
+                    }
+
+                    Properties.Settings.Default.Save();
+
+                    // Notify
+                    SettingChanged?.Invoke(this, new SettingChangedEventArgs
+                    {
+                        Category = category,
+                        SettingName = settingName,
+                        OldValue = null,
+                        NewValue = value
+                    });
+
+                    Log.Debug($"SettingsManagementService: Successfully updated {settingName} to {value}");
+                    return;
+                }
+
                 // Use reflection to update the property
                 var categoryProperty = GetType().GetProperty(category);
                 if (categoryProperty != null)
@@ -425,7 +452,7 @@ namespace Photobooth.Services
                         Log.Error($"SettingsManagementService: Category object is null for {category}");
                         return;
                     }
-                    
+
                     Log.Debug($"SettingsManagementService: Found category object for {category}, looking for property {settingName}");
                     var settingProperty = categoryObject.GetType().GetProperty(settingName);
                     if (settingProperty != null)
@@ -622,7 +649,9 @@ namespace Photobooth.Services
                 new SettingItem { Name = "PhotographerMode", DisplayName = "Photographer Mode", Value = Camera.PhotographerMode, Type = SettingType.Toggle },
                 new SettingItem { Name = "MirrorLiveView", DisplayName = "Mirror Live View", Value = Camera.MirrorLiveView, Type = SettingType.Toggle },
                 new SettingItem { Name = "EnableIdleLiveView", DisplayName = "Idle Live View", Value = Camera.EnableIdleLiveView, Type = SettingType.Toggle },
-                new SettingItem { Name = "LiveViewFrameRate", DisplayName = "Frame Rate", Value = Camera.LiveViewFrameRate, Type = SettingType.Slider, Min = 10, Max = 60, Unit = "FPS" }
+                new SettingItem { Name = "LiveViewFrameRate", DisplayName = "Frame Rate", Value = Camera.LiveViewFrameRate, Type = SettingType.Slider, Min = 10, Max = 60, Unit = "FPS" },
+                new SettingItem { Name = "EnableAutoFocus", DisplayName = "Auto Focus", Value = Properties.Settings.Default.EnableAutoFocus, Type = SettingType.Toggle },
+                new SettingItem { Name = "AutoFocusDelay", DisplayName = "Auto Focus Delay", Value = Properties.Settings.Default.AutoFocusDelay, Type = SettingType.Slider, Min = 0, Max = 500, Unit = "ms" }
             };
             
             // Print Settings - Name must match property names for reflection to work

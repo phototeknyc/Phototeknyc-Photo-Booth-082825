@@ -1109,11 +1109,45 @@
                                    FontWeight="Bold"
                                    FontSize="18"/>
                     </StackPanel>
+
+                    <!-- Auto Focus Settings -->
+                    <Separator Margin="0,10,0,20" Background="#555"/>
+
+                    <CheckBox x:Name="enableAutoFocusCheckBox"
+                              Content="Enable Auto Focus before capture"
+                              IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=EnableAutoFocus, Mode=TwoWay}"
+                              Style="{StaticResource SettingsCheckBoxStyle}"
+                              ToolTip="Automatically focus the camera before taking a photo"/>
+
+                    <TextBlock Text="Auto Focus delay (milliseconds)"
+                               Style="{StaticResource SettingsTextStyle}"
+                               IsEnabled="{Binding IsChecked, ElementName=enableAutoFocusCheckBox}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
+                        <Slider x:Name="autoFocusDelaySlider"
+                                Minimum="0"
+                                Maximum="500"
+                                Value="{Binding Source={x:Static properties:Settings.Default}, Path=AutoFocusDelay, Mode=TwoWay}"
+                                TickPlacement="BottomRight"
+                                TickFrequency="50"
+                                IsSnapToTickEnabled="True"
+                                Width="300"
+                                IsEnabled="{Binding IsChecked, ElementName=enableAutoFocusCheckBox}"
+                                ValueChanged="AutoFocusDelaySlider_ValueChanged"
+                                Style="{StaticResource SettingsSliderStyle}"/>
+                        <TextBlock x:Name="autoFocusDelayValueText"
+                                   Text="100 ms"
+                                   VerticalAlignment="Center"
+                                   Margin="20,0,0,0"
+                                   Foreground="White"
+                                   FontWeight="Bold"
+                                   FontSize="18"
+                                   IsEnabled="{Binding IsChecked, ElementName=enableAutoFocusCheckBox}"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
                 </StackPanel>
             </Expander>
-            
+
             <!-- Video & Boomerang Modules -->
             <Expander Header="Video &amp; Boomerang Modules" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
                 <Expander.HeaderTemplate>

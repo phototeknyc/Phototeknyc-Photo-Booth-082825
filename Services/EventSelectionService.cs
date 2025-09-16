@@ -49,6 +49,8 @@ namespace Photobooth.Services
         private EventData _selectedEvent;
         private TemplateData _previewTemplate;
         private BitmapImage _templatePreviewImage;
+        private System.Timers.Timer _eventExpirationTimer;
+        private DateTime _eventSelectionTime;
         
         public ObservableCollection<EventData> FilteredEvents
         {
@@ -108,6 +110,7 @@ namespace Photobooth.Services
         
         #region Events
         public event EventHandler<EventData> EventSelected;
+        public event EventHandler EventExpired;
         public event EventHandler SearchCleared;
         public event PropertyChangedEventHandler PropertyChanged;
         #endregion
@@ -118,6 +121,11 @@ namespace Photobooth.Services
             _templateDatabase = new TemplateDatabase();
             _allEvents = new ObservableCollection<EventData>();
             _filteredEvents = new ObservableCollection<EventData>();
+
+            // Initialize event expiration timer (5 hours = 18000000 milliseconds)
+            _eventExpirationTimer = new System.Timers.Timer(5 * 60 * 60 * 1000);
+            _eventExpirationTimer.Elapsed += OnEventExpired;
+            _eventExpirationTimer.AutoReset = false;
         }
         
         /// <summary>
@@ -394,10 +402,130 @@ namespace Photobooth.Services
         public void SelectEvent(EventData eventData)
         {
             if (eventData == null) return;
-            
+
             Log.Debug($"EventSelectionService: Selecting event '{eventData.Name}'");
             SelectedEvent = eventData;
+
+            // Start the 5-hour expiration timer
+            StartEventExpirationTimer();
+
             EventSelected?.Invoke(this, eventData);
+        }
+
+        /// <summary>
+        /// Start timer for already selected event (used by UI)
+        /// </summary>
+        public void StartTimerForCurrentEvent()
+        {
+            if (SelectedEvent != null)
+            {
+                Log.Debug($"EventSelectionService: Starting timer for current event '{SelectedEvent.Name}'");
+                StartEventExpirationTimer();
+
+                // Save the selection time to settings for persistence
+                SaveEventSelectionTime();
+            }
+        }
+
+        /// <summary>
+        /// Save event selection time to settings
+        /// </summary>
+        private void SaveEventSelectionTime()
+        {
+            try
+            {
+                Properties.Settings.Default.EventSelectionTime = _eventSelectionTime;
+                Properties.Settings.Default.Save();
+                Log.Debug($"EventSelectionService: Saved event selection time: {_eventSelectionTime}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to save event selection time: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Check if saved event has expired and restore if still valid
+        /// </summary>
+        public void CheckAndRestoreSavedEvent()
+        {
+            try
+            {
+                var savedEventId = Properties.Settings.Default.SelectedEventId;
+                var savedTime = Properties.Settings.Default.EventSelectionTime;
+
+                if (savedEventId > 0 && savedTime != DateTime.MinValue)
+                {
+                    var elapsed = DateTime.Now - savedTime;
+                    var expirationTime = TimeSpan.FromHours(5);
+
+                    if (elapsed < expirationTime)
+                    {
+                        // Event is still valid, restore it
+                        Log.Debug($"EventSelectionService: Restoring saved event {savedEventId}, selected {elapsed.TotalHours:F1} hours ago");
+
+                        // Load the event from database
+                        var eventData = _eventService.GetEvent(savedEventId);
+                        if (eventData != null)
+                        {
+                            SelectedEvent = eventData;
+                            _eventSelectionTime = savedTime;
+
+                            // Restart timer with remaining time
+                            var remainingTime = expirationTime - elapsed;
+                            RestartTimerWithRemainingTime(remainingTime);
+
+                            Log.Debug($"EventSelectionService: Event restored successfully, {remainingTime.TotalHours:F1} hours remaining");
+                        }
+                        else
+                        {
+                            Log.Debug($"EventSelectionService: Saved event {savedEventId} not found in database");
+                            ClearSavedEventSelection();
+                        }
+                    }
+                    else
+                    {
+                        // Event has expired
+                        Log.Debug($"EventSelectionService: Saved event has expired (selected {elapsed.TotalHours:F1} hours ago)");
+                        ClearSavedEventSelection();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to restore saved event: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Clear saved event selection from settings
+        /// </summary>
+        private void ClearSavedEventSelection()
+        {
+            Properties.Settings.Default.SelectedEventId = 0;
+            Properties.Settings.Default.EventSelectionTime = DateTime.MinValue;
+            Properties.Settings.Default.Save();
+        }
+
+        /// <summary>
+        /// Restart timer with specific remaining time
+        /// </summary>
+        private void RestartTimerWithRemainingTime(TimeSpan remainingTime)
+        {
+            try
+            {
+                StopEventExpirationTimer();
+
+                // Set timer interval to remaining time
+                _eventExpirationTimer.Interval = remainingTime.TotalMilliseconds;
+                _eventExpirationTimer.Start();
+
+                Log.Debug($"EventSelectionService: Timer restarted with {remainingTime.TotalMinutes:F0} minutes remaining");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to restart timer: {ex.Message}");
+            }
         }
         
         /// <summary>
@@ -419,8 +547,218 @@ namespace Photobooth.Services
             TemplatePreviewImage = null;
             _allEvents.Clear();
             FilteredEvents.Clear();
+            StopEventExpirationTimer();
+        }
+
+        /// <summary>
+        /// Start the 5-hour event expiration timer
+        /// </summary>
+        private void StartEventExpirationTimer()
+        {
+            try
+            {
+                StopEventExpirationTimer();
+                _eventSelectionTime = DateTime.Now;
+                _eventExpirationTimer.Start();
+                Log.Debug($"EventSelectionService: Started 5-hour expiration timer at {_eventSelectionTime}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to start expiration timer: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Stop the event expiration timer
+        /// </summary>
+        private void StopEventExpirationTimer()
+        {
+            if (_eventExpirationTimer != null)
+            {
+                _eventExpirationTimer.Stop();
+                Log.Debug("EventSelectionService: Stopped expiration timer");
+            }
+        }
+
+        /// <summary>
+        /// Handle event expiration after 5 hours
+        /// </summary>
+        private void OnEventExpired(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            try
+            {
+                Log.Debug($"EventSelectionService: Event expired after 5 hours. Event was '{SelectedEvent?.Name}', selected at {_eventSelectionTime}");
+
+                // Stop the timer first to prevent any re-triggering
+                StopEventExpirationTimer();
+
+                // Clear the current event
+                SelectedEvent = null;
+                PreviewTemplate = null;
+                TemplatePreviewImage = null;
+
+                // Clear PhotoboothService static event
+                PhotoboothService.CurrentEvent = null;
+                PhotoboothService.CurrentTemplate = null;
+
+                // Clear saved settings
+                ClearSavedEventSelection();
+
+                // Notify subscribers that the event has expired
+                EventExpired?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Error handling event expiration: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Get remaining time for current event (if any)
+        /// </summary>
+        public TimeSpan? GetRemainingEventTime()
+        {
+            if (SelectedEvent == null || !_eventExpirationTimer.Enabled)
+                return null;
+
+            var elapsed = DateTime.Now - _eventSelectionTime;
+            var remaining = TimeSpan.FromHours(5) - elapsed;
+
+            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
         }
         
+        /// <summary>
+        /// Duplicate an event with all its templates
+        /// </summary>
+        public void DuplicateEvent(EventData sourceEvent, string newEventName)
+        {
+            try
+            {
+                Log.Debug($"EventSelectionService: Duplicating event '{sourceEvent.Name}' as '{newEventName}'");
+
+                // Create new event
+                int newEventId = _eventService.CreateEvent(newEventName, sourceEvent.Description ?? "");
+
+                if (newEventId > 0)
+                {
+                    // Get templates associated with source event
+                    var sourceTemplates = _templateDatabase.GetEventTemplates(sourceEvent.Id);
+
+                    // Associate same templates with new event
+                    foreach (var template in sourceTemplates)
+                    {
+                        _templateDatabase.AssignTemplateToEvent(newEventId, template.Id, false);
+                        Log.Debug($"EventSelectionService: Associated template {template.Id} with new event {newEventId}");
+                    }
+
+                    Log.Debug($"EventSelectionService: Successfully duplicated event with {sourceTemplates.Count} templates");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to duplicate event: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Rename an existing event
+        /// </summary>
+        public void RenameEvent(EventData eventToRename, string newName)
+        {
+            try
+            {
+                Log.Debug($"EventSelectionService: Renaming event '{eventToRename.Name}' to '{newName}'");
+
+                eventToRename.Name = newName;
+                _eventService.UpdateEvent(eventToRename);
+
+                Log.Debug($"EventSelectionService: Successfully renamed event");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to rename event: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Delete an event
+        /// </summary>
+        public void DeleteEvent(EventData eventToDelete)
+        {
+            try
+            {
+                Log.Debug($"EventSelectionService: Deleting event '{eventToDelete.Name}' (ID: {eventToDelete.Id})");
+
+                // Delete the event (cascade delete will handle EventTemplates associations)
+                _eventService.DeleteEvent(eventToDelete.Id);
+
+                Log.Debug($"EventSelectionService: Successfully deleted event");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to delete event: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Create a new event based on the last opened event
+        /// </summary>
+        public void CreateNewEventFromLast(string eventName)
+        {
+            try
+            {
+                Log.Debug($"EventSelectionService: Creating new event '{eventName}'");
+
+                // Create the new event
+                int newEventId = _eventService.CreateEvent(eventName, "Created on " + DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+
+                if (newEventId > 0)
+                {
+                    // Get the last opened event
+                    EventData lastEvent = null;
+
+                    // Try to get from saved settings first (check for SelectedEventId)
+                    var lastSelectedEventId = Properties.Settings.Default.SelectedEventId;
+                    if (lastSelectedEventId > 0)
+                    {
+                        lastEvent = _eventService.GetEvent(lastSelectedEventId);
+                    }
+
+                    // If not found, get the most recent event
+                    if (lastEvent == null && _allEvents != null && _allEvents.Count > 0)
+                    {
+                        lastEvent = _allEvents.OrderByDescending(e => e.Id).FirstOrDefault();
+                    }
+
+                    // Copy templates from last event if exists
+                    if (lastEvent != null)
+                    {
+                        var lastEventTemplates = _templateDatabase.GetEventTemplates(lastEvent.Id);
+
+                        foreach (var template in lastEventTemplates)
+                        {
+                            _templateDatabase.AssignTemplateToEvent(newEventId, template.Id, false);
+                            Log.Debug($"EventSelectionService: Associated template {template.Id} with new event {newEventId}");
+                        }
+
+                        Log.Debug($"EventSelectionService: Created event with {lastEventTemplates.Count} templates from last event '{lastEvent.Name}'");
+                    }
+                    else
+                    {
+                        Log.Debug($"EventSelectionService: Created empty event (no last event found)");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to create new event: {ex.Message}");
+                throw;
+            }
+        }
+
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

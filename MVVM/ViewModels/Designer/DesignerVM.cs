@@ -27,6 +27,7 @@ namespace Photobooth.MVVM.ViewModels.Designer
 		
 		// Event for canvas size changes
 		public event EventHandler CanvasSizeChanged;
+		public event EventHandler BrowseTemplatesRequested;
 		private const string ImgLockPath = "/images/lock.png";
 		private const string ImgUnLockPath = "/images/Padlock.png";
 		public List<string> ListOfRatios { get; } = new List<string> { "2x6", "4x6", "5x7", "8x10" };
@@ -46,6 +47,7 @@ namespace Photobooth.MVVM.ViewModels.Designer
 		
 		// Services
 		private int _lastTemplateId = -1;
+		public int LastTemplateId => _lastTemplateId;
 		
 		// Undo/Redo System
 		private readonly Stack<CanvasState> undoStack = new Stack<CanvasState>();
@@ -1430,6 +1432,8 @@ namespace Photobooth.MVVM.ViewModels.Designer
 
 		private void RefreshLayersList()
 		{
+			System.Diagnostics.Debug.WriteLine($"RefreshLayersList: Starting with {CustomDesignerCanvas.Items.Count} canvas items");
+
 			// Store current visibility and lock states before clearing
 			var visibilityStates = new Dictionary<ICanvasItem, bool>();
 			var lockStates = new Dictionary<ICanvasItem, bool>();
@@ -1439,15 +1443,17 @@ namespace Photobooth.MVVM.ViewModels.Designer
 				lockStates[layer.CanvasItem] = layer.IsLocked;
 				layer.PropertyChanged -= Layer_PropertyChanged;
 			}
-			
+
 			CanvasLayers.Clear();
 			// Since GraphicalObjectCollection doesn't support indexing, we'll use the canvas UI layer order
 			// Higher z-index (later in canvas.Children) should appear first in layers list
 			var itemsWithZIndex = new List<(ICanvasItem item, int zIndex)>();
-			
+
 			foreach (var item in CustomDesignerCanvas.Items)
 			{
 				var container = CustomDesignerCanvas.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
+				System.Diagnostics.Debug.WriteLine($"RefreshLayersList: Item {item.GetType().Name}, Container: {container?.GetType().Name ?? "null"}");
+
 				int zIndex = 0;
 				if (container?.Parent is Canvas canvas)
 				{
@@ -3506,28 +3512,18 @@ namespace Photobooth.MVVM.ViewModels.Designer
 		{
 			try
 			{
-				var browserWindow = new Windows.TemplateBrowserWindow(_lastTemplateId);
-				browserWindow.Owner = Application.Current.MainWindow;
-				
-				if (browserWindow.ShowDialog() == true && browserWindow.SelectedTemplate != null)
-				{
-					// Load the selected template
-					await LoadTemplateFromData(browserWindow.SelectedTemplate);
-					// Store the selected template in our saved templates
-					SelectedTemplate = browserWindow.SelectedTemplate;
-					// Save as the last template
-					SaveLastTemplateId(browserWindow.SelectedTemplate.Id);
-				}
+				// Raise event to show the overlay (handled by MainPage)
+				BrowseTemplatesRequested?.Invoke(this, EventArgs.Empty);
 			}
 			catch (Exception ex)
 			{
-				MessageBox.Show($"Failed to browse templates: {ex.Message}", "Error", 
+				MessageBox.Show($"Failed to browse templates: {ex.Message}", "Error",
 					MessageBoxButton.OK, MessageBoxImage.Error);
 			}
 		}
 		
 		// Load template from TemplateData object
-		private async Task LoadTemplateFromData(TemplateData templateData)
+		public async Task LoadTemplateFromData(TemplateData templateData)
 		{
 			try
 			{
@@ -3584,13 +3580,34 @@ namespace Photobooth.MVVM.ViewModels.Designer
 							}
 							
 							// Load actual canvas items
+							System.Diagnostics.Debug.WriteLine($"DesignerVM.LoadTemplateFromData: Adding {canvasItems.Count} items to canvas");
 							foreach (var item in canvasItems)
 							{
+								System.Diagnostics.Debug.WriteLine($"DesignerVM.LoadTemplateFromData: Adding item type {item.GetType().Name} to canvas");
+
+								if (item is IBoxCanvasItem boxItem)
+								{
+									System.Diagnostics.Debug.WriteLine($"  Position: ({boxItem.Left}, {boxItem.Top}), Size: {boxItem.Width}x{boxItem.Height}");
+								}
+
 								CustomDesignerCanvas.Items.Add(item);
+								System.Diagnostics.Debug.WriteLine($"  Canvas now has {CustomDesignerCanvas.Items.Count} items");
 							}
-							
-							// Refresh the UI
+
+							System.Diagnostics.Debug.WriteLine($"DesignerVM.LoadTemplateFromData: Final canvas item count: {CustomDesignerCanvas.Items.Count}");
+
+							// Force container generation before refreshing layers
+							System.Diagnostics.Debug.WriteLine($"DesignerVM.LoadTemplateFromData: Before UpdateLayout, canvas has {CustomDesignerCanvas.Items.Count} items");
+							CustomDesignerCanvas.UpdateLayout();
+
+							// Give WPF time to generate containers
+							Application.Current.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+
+							// Now refresh the UI
+							System.Diagnostics.Debug.WriteLine($"DesignerVM.LoadTemplateFromData: Before RefreshLayersList, canvas has {CustomDesignerCanvas.Items.Count} items");
 							RefreshLayersList();
+							System.Diagnostics.Debug.WriteLine($"DesignerVM.LoadTemplateFromData: After RefreshLayersList, canvas has {CustomDesignerCanvas.Items.Count} items");
+							System.Diagnostics.Debug.WriteLine($"DesignerVM.LoadTemplateFromData: Layers count: {CanvasLayers.Count}");
 							SaveCurrentState();
 							
 							// Track the currently loaded template
@@ -3696,7 +3713,7 @@ namespace Photobooth.MVVM.ViewModels.Designer
 			return Path.Combine(appDataPath, "last_template.txt");
 		}
 		
-		private void SaveLastTemplateId(int templateId)
+		public void SaveLastTemplateId(int templateId)
 		{
 			try
 			{
