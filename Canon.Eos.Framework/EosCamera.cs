@@ -291,6 +291,23 @@ namespace Canon.Eos.Framework
             base.DisposeUnmanaged();
         }
 
+        public void CloseSession()
+        {
+            try
+            {
+                if (this.IsSessionOpen)
+                {
+                    Edsdk.EdsCloseSession(this.Handle);
+                    this.IsSessionOpen = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log but don't throw - we're trying to clean up
+                System.Diagnostics.Debug.WriteLine($"EosCamera: Error closing session: {ex.Message}");
+            }
+        }
+
         public void EnsureOpenSession()
         {
             this.CheckDisposed();
@@ -299,18 +316,32 @@ namespace Canon.Eos.Framework
                 // Try to open session with retries for Canon R100 compatibility
                 int retries = 3;
                 Exception lastException = null;
-                
+
                 for (int i = 0; i < retries; i++)
                 {
                     try
                     {
+                        // On retry, try to close any stuck session first
+                        if (i > 0)
+                        {
+                            try
+                            {
+                                Edsdk.EdsCloseSession(this.Handle);
+                                System.Threading.Thread.Sleep(200);
+                            }
+                            catch
+                            {
+                                // Ignore close errors, we're trying to recover
+                            }
+                        }
+
                         var result = Edsdk.EdsOpenSession(this.Handle);
                         if (result == 0) // Success
                         {
                             this.IsSessionOpen = true;
                             return;
                         }
-                        
+
                         // If not successful, wait a bit before retry
                         if (i < retries - 1)
                         {
@@ -326,7 +357,7 @@ namespace Canon.Eos.Framework
                         }
                     }
                 }
-                
+
                 // If we get here, all retries failed
                 if (lastException != null)
                 {

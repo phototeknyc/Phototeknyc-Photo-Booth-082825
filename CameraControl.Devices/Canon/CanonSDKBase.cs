@@ -54,7 +54,7 @@ namespace CameraControl.Devices.Canon
         private bool _recording = false;
 
         public EosCamera Camera = null;
-        private System.Timers.Timer _shutdownTimer = new System.Timers.Timer(1000*60);
+        private System.Timers.Timer _shutdownTimer = new System.Timers.Timer(1000*30); // 30 seconds instead of 60
 
         protected Dictionary<uint, string> _shutterTable = new Dictionary<uint, string>
                                                                {
@@ -396,7 +396,26 @@ namespace CameraControl.Devices.Canon
                     OnCameraInitDone();
                 });
                 thread.Start();
+
+                // Configure and start shutdown prevention timer
+                if (_shutdownTimer == null)
+                {
+                    _shutdownTimer = new System.Timers.Timer(1000 * 30);
+                }
                 _shutdownTimer.Elapsed += _shutdownTimer_Elapsed;
+                _shutdownTimer.Start();
+
+                // Send initial keep-alive immediately
+                try
+                {
+                    Camera.SendCommand(Edsdk.CameraCommand_ExtendShutDownTimer);
+                    Log.Debug("Canon: Initial keep-alive sent");
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"Canon: Initial keep-alive failed: {ex.Message}");
+                }
+
                 return true;
             }
             catch (Exception exception)
@@ -408,18 +427,21 @@ namespace CameraControl.Devices.Canon
 
         private void _shutdownTimer_Elapsed(object sender, ElapsedEventArgs e)
         {
-            if (IsBusy)
-                return;
-            if (Monitor.TryEnter(Locker, 10))
+            // Always try to prevent shutdown, even if busy
+            try
             {
-                try
+                Log.Debug("Canon: Sending keep-alive to prevent shutdown");
+                if (Camera != null && Camera.IsSessionOpen)
                 {
-                    Camera_WillShutdown(null, null);
+                    // Send the extend shutdown timer command directly
+                    Camera.SendCommand(Edsdk.CameraCommand_ExtendShutDownTimer);
+                    Log.Debug("Canon: Keep-alive sent successfully");
                 }
-                finally
-                {
-                    Monitor.Exit(Locker);
-                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Canon: Keep-alive failed (non-critical): {ex.Message}");
+                // Don't throw - this is a preventive measure
             }
         }
 
@@ -448,14 +470,27 @@ namespace CameraControl.Devices.Canon
         {
             try
             {
-                if (PreventShutDown)
+                Log.Debug("Canon: Camera signaled shutdown warning");
+                if (PreventShutDown && Camera != null)
                 {
                     Camera.SendCommand(Edsdk.CameraCommand_ExtendShutDownTimer);
+                    Log.Debug("Canon: Shutdown prevented with ExtendShutDownTimer command");
+
+                    // Reset the timer to be more aggressive after a shutdown warning
+                    _shutdownTimer.Stop();
+                    _shutdownTimer.Interval = 1000 * 15; // 15 seconds after warning
+                    _shutdownTimer.Start();
                 }
             }
             catch (Exception exception)
             {
-                Log.Debug("PreventShutDown", exception);
+                Log.Error("Canon: Failed to prevent shutdown", exception);
+                // Signal disconnection if shutdown prevention fails
+                try
+                {
+                    OnCameraDisconnected(this, new DisconnectCameraEventArgs { StillImageDevice = null, EosCamera = Camera });
+                }
+                catch { }
             }
         }
 
@@ -845,7 +880,17 @@ namespace CameraControl.Devices.Canon
         public override void Close()
         {
             HaveLiveView = false;
-            
+
+            // Stop and dispose the shutdown prevention timer
+            if (_shutdownTimer != null)
+            {
+                _shutdownTimer.Stop();
+                _shutdownTimer.Elapsed -= _shutdownTimer_Elapsed;
+                _shutdownTimer.Dispose();
+                _shutdownTimer = null;
+                Log.Debug("Canon: Shutdown prevention timer stopped");
+            }
+
             // Check if Camera is null before unsubscribing from events
             if (Camera != null)
             {
@@ -855,6 +900,22 @@ namespace CameraControl.Devices.Canon
                 Camera.LiveViewUpdate -= Camera_LiveViewUpdate;
                 Camera.PictureTaken -= Camera_PictureTaken;
                 Camera.PropertyChanged -= Camera_PropertyChanged;
+                Camera.WillShutdown -= Camera_WillShutdown;
+
+                // Ensure the camera session is closed
+                try
+                {
+                    if (Camera.IsSessionOpen)
+                    {
+                        Camera.CloseSession();
+                        Log.Debug("Canon: Camera session closed");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"Canon: Error closing session: {ex.Message}");
+                }
+
                 // this block the application
                 //Camera.Dispose();
                 Camera = null;

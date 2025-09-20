@@ -138,7 +138,10 @@ namespace Photobooth.Services
             {
                 if (_isSessionActive)
                 {
-                    throw new InvalidOperationException("Session already active");
+                    Log.Error("PhotoboothSessionService: Session already active, forcing clear of stuck session");
+                    // Force clear the stuck session
+                    ClearSession();
+                    System.Threading.Thread.Sleep(100); // Brief pause to ensure cleanup
                 }
 
                 // Initialize session
