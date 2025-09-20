@@ -164,6 +164,7 @@ namespace Photobooth.Pages
 
         // Track if session is being cleared (to prevent QR code auto-show)
         private bool _isSessionBeingCleared = false;
+        private CancellationTokenSource _autoUploadCancellationTokenSource;
         
         // Gallery auto-clear timer
         private DispatcherTimer _galleryTimer;
@@ -1728,13 +1729,34 @@ namespace Photobooth.Pages
                     }
                     
                     // Handle auto-upload - always enabled
+                    // Cancel any existing upload task
+                    _autoUploadCancellationTokenSource?.Cancel();
+                    _autoUploadCancellationTokenSource = new CancellationTokenSource();
+                    var cancellationToken = _autoUploadCancellationTokenSource.Token;
+
                     _ = Task.Run(async () =>
                     {
-                        // Longer delay for video sessions to ensure file is fully downloaded and released
-                        int delay = !string.IsNullOrEmpty(e.CompletedSession.VideoPath) ? 5000 : 1000;
-                        await Task.Delay(delay); // Wait for video to be fully available
-                        await AutoUploadSessionPhotos(e.CompletedSession);
-                    });
+                        try
+                        {
+                            // Longer delay for video sessions to ensure file is fully downloaded and released
+                            int delay = !string.IsNullOrEmpty(e.CompletedSession.VideoPath) ? 5000 : 1000;
+                            await Task.Delay(delay, cancellationToken); // Wait for video to be fully available
+
+                            // Check if cancelled before proceeding
+                            if (!cancellationToken.IsCancellationRequested)
+                            {
+                                await AutoUploadSessionPhotos(e.CompletedSession);
+                            }
+                            else
+                            {
+                                Log.Debug("Auto-upload cancelled - session was cleared");
+                            }
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            Log.Debug("Auto-upload task was cancelled");
+                        }
+                    }, cancellationToken);
                 }
             });
         }
@@ -2767,9 +2789,13 @@ namespace Photobooth.Pages
             {
                 Log.Debug("=== SESSION CLEARED - RESETTING FOR NEW SESSION ===");
 
+                // Cancel any pending auto-upload
+                _autoUploadCancellationTokenSource?.Cancel();
+                _autoUploadCancellationTokenSource = null;
+
                 // Clean up any video elements first (MP4 playback)
                 CleanupVideoElements();
-                Log.Debug("Session cleared: Cleaned up video elements");
+                Log.Debug("Session cleared: Cleaned up video elements and cancelled uploads");
 
                 // Clear display flags
                 SetDisplayingSessionResult(false);
@@ -2963,6 +2989,11 @@ namespace Photobooth.Pages
             Dispatcher.Invoke(() =>
             {
                 Log.Debug("Auto-clear timer expired - FORCE clearing session and resetting UI");
+
+                // Cancel any pending auto-upload
+                _autoUploadCancellationTokenSource?.Cancel();
+                _autoUploadCancellationTokenSource = null;
+                Log.Debug("Cancelled auto-upload task due to timeout");
 
                 // Set flag to prevent QR code from showing
                 _isSessionBeingCleared = true;
@@ -4885,8 +4916,8 @@ namespace Photobooth.Pages
                         Log.Error($"Error processing SMS queue after upload: {queueEx.Message}");
                     }
                     
-                    // Automatically show QR code ONLY if session wasn't cleared/timed out
-                    if (!_isSessionBeingCleared && _sharingUIService != null && uploadResult.QRCodeImage != null)
+                    // Automatically show QR code (we'll only get here if not cancelled)
+                    if (_sharingUIService != null && uploadResult.QRCodeImage != null)
                     {
                         Log.Debug($"Auto-displaying QR code after successful upload for session {completedSession.SessionId}");
 
@@ -4905,14 +4936,7 @@ namespace Photobooth.Pages
                     }
                     else
                     {
-                        if (_isSessionBeingCleared)
-                        {
-                            Log.Debug("QR auto-display skipped - session is being cleared/timed out");
-                        }
-                        else
-                        {
-                            Log.Debug($"QR auto-display skipped - SharingUIService: {_sharingUIService != null}, QRCodeImage: {uploadResult.QRCodeImage != null}");
-                        }
+                        Log.Debug($"QR auto-display skipped - SharingUIService: {_sharingUIService != null}, QRCodeImage: {uploadResult.QRCodeImage != null}");
                     }
                 }
                 else
@@ -4963,6 +4987,11 @@ namespace Photobooth.Pages
         {
             try
             {
+                // Cancel any pending auto-upload
+                _autoUploadCancellationTokenSource?.Cancel();
+                _autoUploadCancellationTokenSource = null;
+                Log.Debug("Done button: Cancelled auto-upload task");
+
                 // Set flag to prevent QR code from showing
                 _isSessionBeingCleared = true;
 
@@ -5590,6 +5619,11 @@ namespace Photobooth.Pages
             try
             {
                 Log.Debug("=== CANCELING ENTIRE SESSION ===");
+
+                // Cancel any pending auto-upload
+                _autoUploadCancellationTokenSource?.Cancel();
+                _autoUploadCancellationTokenSource = null;
+                Log.Debug("Cancel session: Cancelled auto-upload task");
 
                 // Set flag to prevent QR code from showing
                 _isSessionBeingCleared = true;
