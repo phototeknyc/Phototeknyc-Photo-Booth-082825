@@ -429,47 +429,18 @@ namespace Photobooth.Pages
         
         private void GalleryTimer_Tick(object sender, EventArgs e)
         {
-            _galleryTimerElapsed++;
-            
-            // Use the same timeout setting as session timeout
-            int timeoutSeconds = Properties.Settings.Default.AutoClearTimeout;
-            
-            if (_galleryTimerElapsed >= timeoutSeconds)
-            {
-                Log.Debug($"Gallery auto-clearing after {timeoutSeconds} seconds");
-                StopGalleryTimer();
-                
-                // Exit gallery mode
-                ExitGalleryMode();
-            }
+            // Gallery timer is no longer used - we use the service's auto-clear timer instead
+            // This method is kept for backwards compatibility but does nothing
         }
         
-        private void StartGalleryTimer()
-        {
-            if (Properties.Settings.Default.AutoClearSession)
-            {
-                Log.Debug($"Starting gallery timer for {Properties.Settings.Default.AutoClearTimeout} seconds");
-                _galleryTimerElapsed = 0;
-                _galleryTimer?.Start();
-            }
-        }
-        
-        private void StopGalleryTimer()
-        {
-            if (_galleryTimer != null && _galleryTimer.IsEnabled)
-            {
-                Log.Debug("Stopping gallery timer");
-                _galleryTimer.Stop();
-                _galleryTimerElapsed = 0;
-            }
-        }
+        // Gallery timer methods removed - now using service's auto-clear timer for consistency
         
         private void ExitGalleryMode()
         {
             Dispatcher.Invoke(() =>
             {
-                // Stop gallery timer
-                StopGalleryTimer();
+                // Stop auto-clear timer through service
+                _sessionService?.StopAutoClearTimer();
                 
                 // Clear gallery state
                 _isInGalleryMode = false;
@@ -1192,8 +1163,12 @@ namespace Photobooth.Pages
                     _isInGalleryMode = true;
                     Log.Debug($"★★★ ShowGalleryNavigationButtons: Showing action buttons panel for gallery session (Visibility: {actionButtonsPanel.Visibility})");
                     
-                    // Start gallery auto-clear timer
-                    StartGalleryTimer();
+                    // Start auto-clear timer through service (applies to gallery sessions too)
+                    if (Properties.Settings.Default.AutoClearSession)
+                    {
+                        _sessionService?.StartAutoClearTimer();
+                        Log.Debug("Started auto-clear timer for gallery session");
+                    }
                     
                     // Trigger queue service to update button status indicators for gallery mode
                     // The status will be updated via QueueStatusUpdated event when buttons are clicked
@@ -3065,15 +3040,11 @@ namespace Photobooth.Pages
                 // Exit gallery mode if we're in it
                 if (_isInGalleryMode)
                 {
-                    _isInGalleryMode = false;
-                    _currentGallerySession = null;
-                    _currentGallerySessionIndex = 0;
-                    _gallerySessions = null;
-                    Log.Debug("Force exited gallery mode due to auto-clear");
+                    ExitGalleryMode();
+                    Log.Debug("Force exited gallery mode due to auto-clear timeout");
                 }
 
-                // Stop all timers
-                _galleryTimer?.Stop();
+                // Stop countdown timer
                 _countdownTimer?.Stop();
 
                 // Hide ALL overlays and panels
@@ -5474,10 +5445,10 @@ namespace Photobooth.Pages
                 System.Diagnostics.Debug.WriteLine($"OnGalleryPrintCopiesSelected: User selected {copies} copies");
                 
                 // Resume gallery timer after print modal closed
-                if (_isInGalleryMode)
+                if (_isInGalleryMode && Properties.Settings.Default.AutoClearSession)
                 {
-                    StartGalleryTimer();
-                    Log.Debug("Resumed gallery timer after print modal closed");
+                    _sessionService?.StartAutoClearTimer();
+                    Log.Debug("Resumed auto-clear timer after print modal closed");
                 }
                 
                 // Unsubscribe from events
@@ -5525,10 +5496,10 @@ namespace Photobooth.Pages
                 System.Diagnostics.Debug.WriteLine("OnGalleryPrintSelectionCancelled: User cancelled gallery print");
                 
                 // Resume gallery timer after print modal cancelled
-                if (_isInGalleryMode)
+                if (_isInGalleryMode && Properties.Settings.Default.AutoClearSession)
                 {
-                    StartGalleryTimer();
-                    Log.Debug("Resumed gallery timer after print modal cancelled");
+                    _sessionService?.StartAutoClearTimer();
+                    Log.Debug("Resumed auto-clear timer after print modal cancelled");
                 }
                 
                 // Unsubscribe from events
