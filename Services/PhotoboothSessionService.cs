@@ -24,6 +24,7 @@ namespace Photobooth.Services
         public event EventHandler<EventArgs> SessionCleared;
         public event EventHandler<EventArgs> AutoClearTimerExpired;
         public event EventHandler<AnimationReadyEventArgs> AnimationReady;
+        public event EventHandler<AutoClearProgressEventArgs> AutoClearProgress;
         #endregion
 
         #region Services
@@ -727,6 +728,15 @@ namespace Photobooth.Services
                 Log.Debug("Stopping auto-clear timer");
                 _autoClearTimer.Stop();
                 _autoClearElapsedSeconds = 0;
+
+                // Fire progress event to hide progress bar
+                AutoClearProgress?.Invoke(this, new AutoClearProgressEventArgs
+                {
+                    ElapsedSeconds = 0,
+                    TotalSeconds = Properties.Settings.Default.AutoClearTimeout,
+                    ProgressPercentage = 0,
+                    IsActive = false
+                });
             }
         }
         
@@ -737,17 +747,29 @@ namespace Photobooth.Services
         {
             _autoClearElapsedSeconds++;
             int timeoutSeconds = Properties.Settings.Default.AutoClearTimeout;
-            
-            Log.Debug($"Auto-clear timer: {_autoClearElapsedSeconds}/{timeoutSeconds} seconds");
-            
+
+            // Calculate progress
+            double progressPercentage = (_autoClearElapsedSeconds / (double)timeoutSeconds) * 100.0;
+
+            // Fire progress event
+            AutoClearProgress?.Invoke(this, new AutoClearProgressEventArgs
+            {
+                ElapsedSeconds = _autoClearElapsedSeconds,
+                TotalSeconds = timeoutSeconds,
+                ProgressPercentage = progressPercentage,
+                IsActive = true
+            });
+
+            Log.Debug($"Auto-clear timer: {_autoClearElapsedSeconds}/{timeoutSeconds} seconds ({progressPercentage:F0}%)");
+
             if (_autoClearElapsedSeconds >= timeoutSeconds)
             {
                 Log.Debug($"Auto-clearing session after {timeoutSeconds} seconds");
                 StopAutoClearTimer();
-                
+
                 // Notify listeners that timer expired
                 AutoClearTimerExpired?.Invoke(this, EventArgs.Empty);
-                
+
                 // Clear the session
                 ClearSession();
             }
@@ -997,6 +1019,14 @@ namespace Photobooth.Services
     {
         public string AnimationPath { get; set; }
         public string SessionId { get; set; }
+    }
+
+    public class AutoClearProgressEventArgs : EventArgs
+    {
+        public int ElapsedSeconds { get; set; }
+        public int TotalSeconds { get; set; }
+        public double ProgressPercentage { get; set; }
+        public bool IsActive { get; set; }
     }
 
     public class CompletedSessionData

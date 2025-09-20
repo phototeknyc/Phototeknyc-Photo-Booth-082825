@@ -104,6 +104,34 @@
                                       Grid.RowSpan="3"
                                       Panel.ZIndex="998"/>
         
+        <!-- Session Timeout Progress Bar -->
+        <Border x:Name="SessionTimeoutProgressBar"
+                Grid.Row="0"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Stretch"
+                Height="4"
+                Background="Transparent"
+                Panel.ZIndex="996"
+                Visibility="Collapsed">
+            <Grid>
+                <!-- Background track -->
+                <Rectangle Fill="#33FFFFFF" />
+                <!-- Progress fill -->
+                <Rectangle x:Name="SessionTimeoutProgressFill"
+                          Fill="#FFB71C1C"
+                          HorizontalAlignment="Left"
+                          Width="0">
+                    <Rectangle.OpacityMask>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#FFB71C1C" Offset="0.0"/>
+                            <GradientStop Color="#FFE53935" Offset="0.5"/>
+                            <GradientStop Color="#FFB71C1C" Offset="1.0"/>
+                        </LinearGradientBrush>
+                    </Rectangle.OpacityMask>
+                </Rectangle>
+            </Grid>
+        </Border>
+
         <!-- Video Recording Indicator -->
         <Grid x:Name="VideoRecordingGrid"
               Grid.RowSpan="3"

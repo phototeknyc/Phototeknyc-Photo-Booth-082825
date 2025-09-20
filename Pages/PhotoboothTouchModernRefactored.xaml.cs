@@ -769,6 +769,7 @@ namespace Photobooth.Pages
                 _sessionService.SessionError += OnServiceSessionError;
                 _sessionService.SessionCleared += OnServiceSessionCleared;
                 _sessionService.AutoClearTimerExpired += OnServiceAutoClearTimerExpired;
+                _sessionService.AutoClearProgress += OnServiceAutoClearProgress;
                 _sessionService.AnimationReady += OnServiceAnimationReady;
             }
             
@@ -927,6 +928,7 @@ namespace Photobooth.Pages
                 _sessionService.SessionError -= OnServiceSessionError;
                 _sessionService.SessionCleared -= OnServiceSessionCleared;
                 _sessionService.AutoClearTimerExpired -= OnServiceAutoClearTimerExpired;
+                _sessionService.AutoClearProgress -= OnServiceAutoClearProgress;
                 _sessionService.AnimationReady -= OnServiceAnimationReady;
             }
             
@@ -2980,6 +2982,61 @@ namespace Photobooth.Pages
             {
                 Log.Error($"Error hiding overlays: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Handle auto-clear timer progress event from service
+        /// </summary>
+        private void OnServiceAutoClearProgress(object sender, Services.AutoClearProgressEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (e.IsActive)
+                {
+                    // Show and update progress bar
+                    if (SessionTimeoutProgressBar != null)
+                    {
+                        SessionTimeoutProgressBar.Visibility = Visibility.Visible;
+
+                        if (SessionTimeoutProgressFill != null)
+                        {
+                            // Calculate width based on progress percentage
+                            double totalWidth = SessionTimeoutProgressBar.ActualWidth;
+                            double progressWidth = (e.ProgressPercentage / 100.0) * totalWidth;
+                            SessionTimeoutProgressFill.Width = progressWidth;
+
+                            // Optional: Change color based on urgency (red as it gets closer)
+                            if (e.ProgressPercentage > 80)
+                            {
+                                SessionTimeoutProgressFill.Fill = new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)); // Bright red
+                            }
+                            else if (e.ProgressPercentage > 60)
+                            {
+                                SessionTimeoutProgressFill.Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x98, 0x00)); // Orange
+                            }
+                            else
+                            {
+                                SessionTimeoutProgressFill.Fill = new SolidColorBrush(Color.FromRgb(0xB7, 0x1C, 0x1C)); // Dark red
+                            }
+                        }
+                    }
+
+                    Log.Debug($"Auto-clear progress: {e.ElapsedSeconds}/{e.TotalSeconds} ({e.ProgressPercentage:F0}%)");
+                }
+                else
+                {
+                    // Hide progress bar
+                    if (SessionTimeoutProgressBar != null)
+                    {
+                        SessionTimeoutProgressBar.Visibility = Visibility.Collapsed;
+                        if (SessionTimeoutProgressFill != null)
+                        {
+                            SessionTimeoutProgressFill.Width = 0;
+                        }
+                    }
+                    Log.Debug("Auto-clear progress stopped");
+                }
+            });
         }
 
         /// <summary>
