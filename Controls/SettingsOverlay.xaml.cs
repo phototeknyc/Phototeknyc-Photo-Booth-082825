@@ -24,6 +24,8 @@ namespace Photobooth.Controls
         private string _currentCategory;
         private Dictionary<string, object> _pendingChanges;
         private readonly Dictionary<Control, DispatcherTimer> _debounceTimers = new Dictionary<Control, DispatcherTimer>();
+        private List<CategoryViewModel> _allCategories;
+        private string _searchText = string.Empty;
         
         public event EventHandler SettingsClosed;
         public event EventHandler SettingsApplied;
@@ -85,10 +87,17 @@ namespace Photobooth.Controls
         private void ShowOverlayInternal()
         {
             Log.Debug("SettingsOverlay: Showing overlay");
-            
+
             // Make sure the control itself is visible
             this.Visibility = Visibility.Visible;
-            
+
+            // Clear search when showing
+            if (SearchTextBox != null)
+            {
+                SearchTextBox.Text = string.Empty;
+                _searchText = string.Empty;
+            }
+
             // Load categories
             LoadCategories();
             
@@ -137,7 +146,26 @@ namespace Photobooth.Controls
         {
             try
             {
-                var categories = new List<CategoryViewModel>();
+                if (_allCategories == null)
+                {
+                    _allCategories = GetAllCategories();
+                }
+
+                var categories = FilterCategories(_allCategories);
+                DisplayCategories(categories);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Failed to load categories: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Get all available categories
+        /// </summary>
+        private List<CategoryViewModel> GetAllCategories()
+        {
+            var categories = new List<CategoryViewModel>();
                 
                 // Session Settings
                 categories.Add(new CategoryViewModel
@@ -153,8 +181,8 @@ namespace Photobooth.Controls
                 {
                     Name = "Camera",
                     Icon = "📷",
-                    Summary = $"Live View: {(_settingsService.Camera.EnableIdleLiveView ? "On" : "Off")}, Auto Focus: {(Properties.Settings.Default.EnableAutoFocus ? "On" : "Off")}",
-                    SettingsCount = 6
+                    Summary = $"Rotation: {GetRotationText(_settingsService.Camera.CameraRotation)}, Live View: {(_settingsService.Camera.EnableIdleLiveView ? "On" : "Off")}",
+                    SettingsCount = 7
                 });
                 
                 // Print Settings
@@ -305,19 +333,122 @@ namespace Photobooth.Controls
                     SettingsCount = 7
                 });
 
-                Log.Debug($"SettingsOverlay: Loading {categories.Count} categories");
-                foreach (var cat in categories)
+                return categories;
+            }
+
+            /// <summary>
+            /// Filter categories based on search text
+            /// </summary>
+            private List<CategoryViewModel> FilterCategories(List<CategoryViewModel> categories)
+            {
+                if (string.IsNullOrWhiteSpace(_searchText))
                 {
-                    Log.Debug($"  - {cat.Name}: {cat.Summary}");
+                    return categories;
                 }
 
-                CategoriesGrid.ItemsSource = categories;
+                var searchLower = _searchText.ToLower();
+                var filtered = new List<CategoryViewModel>();
+
+                foreach (var category in categories)
+                {
+                    // Check if category name or summary contains search text
+                    bool matches = category.Name.ToLower().Contains(searchLower) ||
+                                  category.Summary.ToLower().Contains(searchLower);
+
+                    // Also check common keywords for each category
+                    if (!matches)
+                    {
+                        matches = CheckCategoryKeywords(category.Name, searchLower);
+                    }
+
+                    if (matches)
+                    {
+                        filtered.Add(category);
+                    }
+                }
+
+                return filtered;
             }
-            catch (Exception ex)
+
+            /// <summary>
+            /// Check if search matches category-specific keywords
+            /// </summary>
+            private bool CheckCategoryKeywords(string categoryName, string searchText)
             {
-                Log.Error($"SettingsOverlay: Failed to load categories: {ex.Message}");
+                var keywords = new Dictionary<string, string[]>
+                {
+                    ["Session"] = new[] { "countdown", "timer", "photos", "duration", "delay", "beauty", "mode" },
+                    ["Camera"] = new[] { "live", "view", "focus", "auto", "lens", "capture", "shot" },
+                    ["Printing"] = new[] { "print", "printer", "copies", "paper", "maximum", "enable" },
+                    ["Filters"] = new[] { "filter", "effect", "beauty", "enhance", "color", "style" },
+                    ["Display"] = new[] { "fullscreen", "screen", "button", "size", "scale", "ui" },
+                    ["Retake"] = new[] { "retry", "redo", "timeout", "allow", "enable" },
+                    ["Storage"] = new[] { "save", "folder", "location", "path", "organize", "directory" },
+                    ["Capture Modes"] = new[] { "gif", "video", "boomerang", "burst", "flipbook", "mode" },
+                    ["GIF/Animation"] = new[] { "animate", "speed", "frame", "delay", "loop" },
+                    ["Video Recording"] = new[] { "record", "duration", "quality", "resolution", "fps" },
+                    ["Boomerang"] = new[] { "loop", "forward", "backward", "reverse" },
+                    ["Flipbook"] = new[] { "pages", "flip", "book", "animation" },
+                    ["Sharing"] = new[] { "email", "sms", "text", "qr", "code", "upload" },
+                    ["Advanced"] = new[] { "debug", "log", "admin", "developer", "system" },
+                    ["Sync/Cloud"] = new[] { "cloud", "sync", "upload", "s3", "aws", "backup" }
+                };
+
+                if (keywords.TryGetValue(categoryName, out var categoryKeywords))
+                {
+                    return categoryKeywords.Any(keyword => keyword.Contains(searchText));
+                }
+
+                return false;
             }
-        }
+
+            /// <summary>
+            /// Get display text for rotation angle
+            /// </summary>
+            private string GetRotationText(int degrees)
+            {
+                switch (degrees)
+                {
+                    case 90: return "90°";
+                    case 180: return "180°";
+                    case 270: return "270°";
+                    default: return "None";
+                }
+            }
+
+            /// <summary>
+            /// Display filtered categories
+            /// </summary>
+            private void DisplayCategories(List<CategoryViewModel> categories)
+            {
+                Log.Debug($"SettingsOverlay: Displaying {categories.Count} categories (search: '{_searchText}')");
+
+                CategoriesGrid.ItemsSource = categories;
+
+                // Show "no results" message if search returned nothing
+                if (categories.Count == 0 && !string.IsNullOrWhiteSpace(_searchText))
+                {
+                    ShowNoResultsMessage();
+                }
+            }
+
+            /// <summary>
+            /// Show message when no search results found
+            /// </summary>
+            private void ShowNoResultsMessage()
+            {
+                var noResultsMessage = new TextBlock
+                {
+                    Text = $"No settings found for '{_searchText}'",
+                    Foreground = new SolidColorBrush(Colors.Gray),
+                    FontSize = 16,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(20)
+                };
+
+                CategoriesGrid.ItemsSource = new[] { noResultsMessage };
+            }
         
         /// <summary>
         /// Show category detail panel
@@ -499,7 +630,7 @@ namespace Photobooth.Controls
                     
                 case SettingType.Slider:
                     var sliderPanel = new StackPanel();
-                    
+
                     var valueText = new TextBlock
                     {
                         Text = $"{setting.Value} {setting.Unit ?? ""}",
@@ -507,7 +638,7 @@ namespace Photobooth.Controls
                         Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
                         HorizontalAlignment = HorizontalAlignment.Right
                     };
-                    
+
                     var slider = new Slider
                     {
                         Minimum = setting.Min,
@@ -516,7 +647,7 @@ namespace Photobooth.Controls
                         Style = FindResource("ModernSliderStyle") as Style,
                         Tag = $"{category}.{setting.Name}"
                     };
-                    
+
                     slider.ValueChanged += (s, e) =>
                     {
                         valueText.Text = $"{(int)e.NewValue} {setting.Unit ?? ""}";
@@ -524,10 +655,60 @@ namespace Photobooth.Controls
                         var value = setting.Name == "ButtonSizeScale" ? e.NewValue / 100.0 : e.NewValue;
                         OnSettingValueChanged(category, setting.Name, value);
                     };
-                    
+
                     sliderPanel.Children.Add(valueText);
                     sliderPanel.Children.Add(slider);
                     control = sliderPanel;
+                    break;
+
+                case SettingType.Dropdown:
+                    var dropdown = new ComboBox
+                    {
+                        Width = 200,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Tag = $"{category}.{setting.Name}"
+                    };
+
+                    // Add options based on whether we have DropdownOptions or simple Options
+                    if (setting.DropdownOptions != null && setting.DropdownOptions.Count > 0)
+                    {
+                        foreach (var option in setting.DropdownOptions)
+                        {
+                            var item = new ComboBoxItem { Content = option.Display, Tag = option.Value };
+                            dropdown.Items.Add(item);
+
+                            // Select current value
+                            if (option.Value?.Equals(setting.Value) == true)
+                            {
+                                dropdown.SelectedItem = item;
+                            }
+                        }
+                    }
+                    else if (setting.Options != null && setting.Options.Count > 0)
+                    {
+                        foreach (var option in setting.Options)
+                        {
+                            var item = new ComboBoxItem { Content = option };
+                            dropdown.Items.Add(item);
+
+                            // Select current value
+                            if (option?.Equals(setting.Value?.ToString()) == true)
+                            {
+                                dropdown.SelectedItem = item;
+                            }
+                        }
+                    }
+
+                    dropdown.SelectionChanged += (s, e) =>
+                    {
+                        if (dropdown.SelectedItem is ComboBoxItem selectedItem)
+                        {
+                            var value = selectedItem.Tag ?? selectedItem.Content?.ToString();
+                            OnSettingValueChanged(category, setting.Name, value);
+                        }
+                    };
+
+                    control = dropdown;
                     break;
             }
             
@@ -575,7 +756,60 @@ namespace Photobooth.Controls
         }
         
         #region Event Handlers
-        
+
+        /// <summary>
+        /// Handle search text changes
+        /// </summary>
+        private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            try
+            {
+                _searchText = SearchTextBox.Text ?? string.Empty;
+
+                // Show/hide clear button
+                if (ClearSearchButton != null)
+                {
+                    ClearSearchButton.Visibility = string.IsNullOrWhiteSpace(_searchText)
+                        ? Visibility.Collapsed
+                        : Visibility.Visible;
+                }
+
+                // Apply filter with slight delay to improve performance while typing
+                if (_debounceTimers.ContainsKey(SearchTextBox))
+                {
+                    _debounceTimers[SearchTextBox].Stop();
+                }
+                else
+                {
+                    var timer = new DispatcherTimer
+                    {
+                        Interval = TimeSpan.FromMilliseconds(300)
+                    };
+                    timer.Tick += (s, args) =>
+                    {
+                        timer.Stop();
+                        LoadCategories();
+                    };
+                    _debounceTimers[SearchTextBox] = timer;
+                }
+
+                _debounceTimers[SearchTextBox].Start();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Search error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Clear search text
+        /// </summary>
+        private void ClearSearchButton_Click(object sender, RoutedEventArgs e)
+        {
+            SearchTextBox.Text = string.Empty;
+            SearchTextBox.Focus();
+        }
+
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             HideOverlay();

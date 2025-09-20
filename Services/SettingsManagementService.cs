@@ -62,6 +62,7 @@ namespace Photobooth.Services
         {
             public bool PhotographerMode { get; set; }
             public bool MirrorLiveView { get; set; }
+            public int CameraRotation { get; set; }
             public bool EnableIdleLiveView { get; set; }
             public int LiveViewFrameRate { get; set; }
             public string CameraModel { get; set; }
@@ -247,6 +248,7 @@ namespace Photobooth.Services
                 {
                     PhotographerMode = Properties.Settings.Default.PhotographerMode,
                     MirrorLiveView = Properties.Settings.Default.MirrorLiveView,
+                    CameraRotation = Properties.Settings.Default.CameraRotation,
                     EnableIdleLiveView = Properties.Settings.Default.EnableIdleLiveView,
                     LiveViewFrameRate = Properties.Settings.Default.LiveViewFrameRate
                 };
@@ -348,6 +350,7 @@ namespace Photobooth.Services
                 // Camera Settings
                 Properties.Settings.Default.PhotographerMode = _cameraSettings.PhotographerMode;
                 Properties.Settings.Default.MirrorLiveView = _cameraSettings.MirrorLiveView;
+                Properties.Settings.Default.CameraRotation = _cameraSettings.CameraRotation;
                 Properties.Settings.Default.EnableIdleLiveView = _cameraSettings.EnableIdleLiveView;
                 Properties.Settings.Default.LiveViewFrameRate = _cameraSettings.LiveViewFrameRate;
                 
@@ -563,6 +566,7 @@ namespace Photobooth.Services
             {
                 PhotographerMode = false,
                 MirrorLiveView = true,
+                CameraRotation = 0,
                 EnableIdleLiveView = true,
                 LiveViewFrameRate = 30
             };
@@ -648,6 +652,15 @@ namespace Photobooth.Services
             {
                 new SettingItem { Name = "PhotographerMode", DisplayName = "Photographer Mode", Value = Camera.PhotographerMode, Type = SettingType.Toggle },
                 new SettingItem { Name = "MirrorLiveView", DisplayName = "Mirror Live View", Value = Camera.MirrorLiveView, Type = SettingType.Toggle },
+                new SettingItem { Name = "CameraRotation", DisplayName = "Camera Rotation", Value = Camera.CameraRotation, Type = SettingType.Dropdown,
+                    DropdownOptions = new List<DropdownOption>
+                    {
+                        new DropdownOption { Display = "No Rotation", Value = 0 },
+                        new DropdownOption { Display = "90° Clockwise", Value = 90 },
+                        new DropdownOption { Display = "180° (Upside Down)", Value = 180 },
+                        new DropdownOption { Display = "90° Counter-Clockwise", Value = 270 }
+                    }
+                },
                 new SettingItem { Name = "EnableIdleLiveView", DisplayName = "Idle Live View", Value = Camera.EnableIdleLiveView, Type = SettingType.Toggle },
                 new SettingItem { Name = "LiveViewFrameRate", DisplayName = "Frame Rate", Value = Camera.LiveViewFrameRate, Type = SettingType.Slider, Min = 10, Max = 60, Unit = "FPS" },
                 new SettingItem { Name = "EnableAutoFocus", DisplayName = "Auto Focus", Value = Properties.Settings.Default.EnableAutoFocus, Type = SettingType.Toggle },
@@ -747,10 +760,17 @@ namespace Photobooth.Services
         public double Max { get; set; }
         public string Unit { get; set; }
         public List<string> Options { get; set; }
+        public List<DropdownOption> DropdownOptions { get; set; }  // For dropdown with display/value pairs
         public string Category { get; set; }
         public string Icon { get; set; }
     }
-    
+
+    public class DropdownOption
+    {
+        public string Display { get; set; }
+        public object Value { get; set; }
+    }
+
     public enum SettingType
     {
         Toggle,

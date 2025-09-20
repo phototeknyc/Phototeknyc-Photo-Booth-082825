@@ -584,12 +584,38 @@ namespace Photobooth.Pages
                 Log.Debug("Template overlay is disabled");
             }
 
+            // Apply camera rotation setting
+            ApplyCameraRotation();
+
+            // Subscribe to settings changes
+            var settingsService = Services.SettingsManagementService.Instance;
+            if (settingsService != null)
+            {
+                settingsService.SettingChanged += OnSettingChanged;
+            }
+
             // Load gallery preview
             LoadGalleryPreview();
         }
 
+        private void OnSettingChanged(object sender, Services.SettingChangedEventArgs e)
+        {
+            // Check if camera rotation changed
+            if (e.SettingName == "CameraRotation")
+            {
+                Dispatcher.Invoke(() => ApplyCameraRotation());
+            }
+        }
+
         private void Page_Unloaded(object sender, RoutedEventArgs e)
         {
+            // Unsubscribe from settings changes
+            var settingsService = Services.SettingsManagementService.Instance;
+            if (settingsService != null)
+            {
+                settingsService.SettingChanged -= OnSettingChanged;
+            }
+
             // Remove window event handlers
             var parentWindow = Window.GetWindow(this);
             if (parentWindow != null)
@@ -3611,6 +3637,38 @@ namespace Photobooth.Pages
                 Log.Error($"DisplayLiveView error: {ex.Message}");
             }
         }
+
+        #region Camera Rotation
+
+        /// <summary>
+        /// Apply camera rotation to live view
+        /// </summary>
+        private void ApplyCameraRotation()
+        {
+            try
+            {
+                if (liveViewRotateTransform == null)
+                    return;
+
+                var rotation = Properties.Settings.Default.CameraRotation;
+                liveViewRotateTransform.Angle = rotation;
+
+                Log.Debug($"Applied camera rotation: {rotation}°");
+
+                // Also rotate the template overlay if it's visible
+                if (_showTemplateOverlay && templateOverlayCanvas != null)
+                {
+                    templateOverlayCanvas.RenderTransformOrigin = new Point(0.5, 0.5);
+                    templateOverlayCanvas.RenderTransform = new RotateTransform(rotation);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to apply camera rotation: {ex.Message}");
+            }
+        }
+
+        #endregion
 
         #region Template Overlay Methods
 

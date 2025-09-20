@@ -145,20 +145,104 @@
                 
                 <!-- Header -->
                 <Grid Grid.Row="0" Margin="30,25,30,20">
-                    <StackPanel HorizontalAlignment="Center">
-                        <TextBlock Text="Settings" 
-                                   FontSize="28" 
-                                   FontWeight="Bold" 
-                                   Foreground="White" 
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" HorizontalAlignment="Left">
+                        <TextBlock Text="Settings"
+                                   FontSize="28"
+                                   FontWeight="Bold"
+                                   Foreground="White"
                                    HorizontalAlignment="Center"/>
-                        <TextBlock Text="Auto-Save Enabled ✓" 
-                                   FontSize="12" 
-                                   Foreground="#4CAF50" 
+                        <TextBlock Text="Auto-Save Enabled ✓"
+                                   FontSize="12"
+                                   Foreground="#4CAF50"
                                    HorizontalAlignment="Center"
                                    Margin="0,5,0,0"/>
                     </StackPanel>
-                    
+
+                    <!-- Search Box -->
+                    <Border Grid.Column="1"
+                            Background="#404040"
+                            CornerRadius="20"
+                            Margin="40,0,40,0"
+                            MaxWidth="400"
+                            VerticalAlignment="Center">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Search Icon -->
+                            <TextBlock Grid.Column="0"
+                                       Text="🔍"
+                                       FontSize="16"
+                                       Foreground="#808080"
+                                       VerticalAlignment="Center"
+                                       Margin="12,0,8,0"/>
+
+                            <!-- Search TextBox -->
+                            <TextBox x:Name="SearchTextBox"
+                                     Grid.Column="1"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Foreground="White"
+                                     FontSize="14"
+                                     VerticalAlignment="Center"
+                                     VerticalContentAlignment="Center"
+                                     Margin="0,8,0,8"
+                                     TextChanged="SearchTextBox_TextChanged">
+                                <TextBox.Resources>
+                                    <Style TargetType="TextBox">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="TextBox">
+                                                    <Grid>
+                                                        <TextBlock x:Name="Placeholder"
+                                                                   Text="Search settings..."
+                                                                   Foreground="#808080"
+                                                                   VerticalAlignment="Center"
+                                                                   Visibility="Collapsed"/>
+                                                        <ScrollViewer x:Name="PART_ContentHost"
+                                                                      VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="Text" Value="">
+                                                            <Setter TargetName="Placeholder" Property="Visibility" Value="Visible"/>
+                                                        </Trigger>
+                                                        <Trigger Property="Text" Value="{x:Null}">
+                                                            <Setter TargetName="Placeholder" Property="Visibility" Value="Visible"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </TextBox.Resources>
+                            </TextBox>
+
+                            <!-- Clear Button -->
+                            <Button x:Name="ClearSearchButton"
+                                    Grid.Column="2"
+                                    Content="✕"
+                                    Background="Transparent"
+                                    Foreground="#808080"
+                                    BorderThickness="0"
+                                    FontSize="14"
+                                    Padding="8,0"
+                                    Visibility="Collapsed"
+                                    Cursor="Hand"
+                                    Click="ClearSearchButton_Click"/>
+                        </Grid>
+                    </Border>
+
                     <Button x:Name="CloseButton"
+                            Grid.Column="2"
                             Content="✕"
                             Style="{StaticResource CloseButtonStyle}"
                             HorizontalAlignment="Right"

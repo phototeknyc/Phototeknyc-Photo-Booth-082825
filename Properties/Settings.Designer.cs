@@ -154,7 +154,19 @@ namespace Photobooth.Properties {
                 this["MirrorLiveView"] = value;
             }
         }
-        
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int CameraRotation {
+            get {
+                return ((int)(this["CameraRotation"]));
+            }
+            set {
+                this["CameraRotation"] = value;
+            }
+        }
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("30")]

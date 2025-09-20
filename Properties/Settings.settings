@@ -35,6 +35,9 @@
     <Setting Name="MirrorLiveView" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
+    <Setting Name="CameraRotation" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">0</Value>
+    </Setting>
     <Setting Name="LiveViewFrameRate" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">30</Value>
     </Setting>
