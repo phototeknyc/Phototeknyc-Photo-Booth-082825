@@ -2763,7 +2763,11 @@ namespace Photobooth.Pages
             Dispatcher.Invoke(() =>
             {
                 Log.Debug("=== SESSION CLEARED - RESETTING FOR NEW SESSION ===");
-                
+
+                // Clean up any video elements first (MP4 playback)
+                CleanupVideoElements();
+                Log.Debug("Session cleared: Cleaned up video elements");
+
                 // Clear display flags
                 SetDisplayingSessionResult(false);
                 _isDisplayingCapturedPhoto = false;
@@ -2993,6 +2997,16 @@ namespace Photobooth.Pages
                 {
                     liveViewImage.Source = null;
                     Log.Debug("Cleared live view image");
+                }
+
+                // Clean up any video elements (MP4 playback)
+                CleanupVideoElements();
+                Log.Debug("Cleaned up video elements");
+
+                // Make sure live view image is visible again
+                if (liveViewImage != null)
+                {
+                    liveViewImage.Visibility = Visibility.Visible;
                 }
 
                 // Clear photo strip
@@ -4936,7 +4950,18 @@ namespace Photobooth.Pages
                 // Clear display flags when done
                 SetDisplayingSessionResult(false);
                 _isDisplayingCapturedPhoto = false;
-                
+
+                // Clean up any video elements (MP4 playback)
+                CleanupVideoElements();
+                Log.Debug("Done button: Cleaned up video elements");
+
+                // Make sure live view image is visible again
+                if (liveViewImage != null)
+                {
+                    liveViewImage.Visibility = Visibility.Visible;
+                    liveViewImage.Source = null; // Clear any stuck image
+                }
+
                 if (_isInGalleryMode)
                 {
                     // Done with gallery session - use ExitGalleryMode to keep gallery browser visible
@@ -6291,19 +6316,30 @@ namespace Photobooth.Pages
         {
             // Clear current session and prepare for new one
             Log.Debug("Gallery done button clicked - clearing session for new capture");
-            
+
+            // Clean up any video elements (MP4 playback)
+            CleanupVideoElements();
+            Log.Debug("Gallery done: Cleaned up video elements");
+
+            // Make sure live view image is visible and clear
+            if (liveViewImage != null)
+            {
+                liveViewImage.Visibility = Visibility.Visible;
+                liveViewImage.Source = null;
+            }
+
             // Clear session and return to start
             _sessionService?.ClearSession();
             _isInGalleryMode = false;
             _currentGallerySession = null;
-            
+
             // Hide unified action buttons panel
             if (actionButtonsPanel != null)
                 actionButtonsPanel.Visibility = Visibility.Collapsed;
-            
+
             // Show start action button if available
             // TODO: Implement ShowStartActionButton method or show the actual start button
-            
+
             // Clear photo strip
             if (photosContainer != null)
                 photosContainer.Children.Clear();
