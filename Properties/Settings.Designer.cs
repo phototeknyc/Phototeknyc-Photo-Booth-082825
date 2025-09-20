@@ -130,7 +130,19 @@ namespace Photobooth.Properties {
                 this["AutoClearTimeout"] = value;
             }
         }
-        
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool AutoShowQRCode {
+            get {
+                return ((bool)(this["AutoShowQRCode"]));
+            }
+            set {
+                this["AutoShowQRCode"] = value;
+            }
+        }
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]

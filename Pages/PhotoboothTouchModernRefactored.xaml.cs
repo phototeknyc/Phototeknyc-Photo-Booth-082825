@@ -4938,10 +4938,10 @@ namespace Photobooth.Pages
                         return;
                     }
 
-                    // Automatically show QR code (we'll only get here if not cancelled)
-                    if (_sharingUIService != null && uploadResult.QRCodeImage != null)
+                    // Check setting to see if we should automatically show QR code
+                    if (Properties.Settings.Default.AutoShowQRCode && _sharingUIService != null && uploadResult.QRCodeImage != null)
                     {
-                        Log.Debug($"Auto-displaying QR code after successful upload for session {completedSession.SessionId}");
+                        Log.Debug($"Auto-displaying QR code after successful upload for session {completedSession.SessionId} (AutoShowQRCode setting is enabled)");
 
                         // Use Dispatcher to ensure UI operations happen on the main thread
                         Dispatcher.Invoke(() =>
@@ -4965,7 +4965,16 @@ namespace Photobooth.Pages
                     }
                     else
                     {
-                        Log.Debug($"QR auto-display skipped - SharingUIService: {_sharingUIService != null}, QRCodeImage: {uploadResult.QRCodeImage != null}");
+                        if (!Properties.Settings.Default.AutoShowQRCode)
+                        {
+                            Log.Debug($"QR auto-display skipped - AutoShowQRCode setting is disabled. QR code will only show when user clicks share button.");
+                            // Store the QR code for manual display via share button
+                            _currentShareResult = uploadResult;
+                        }
+                        else
+                        {
+                            Log.Debug($"QR auto-display skipped - SharingUIService: {_sharingUIService != null}, QRCodeImage: {uploadResult.QRCodeImage != null}");
+                        }
                     }
                 }
                 else
