@@ -292,6 +292,7 @@
     <Compile Include="Services\FilterSelectionService.cs" />
     <Compile Include="Services\BeautyModeService.cs" />
     <Compile Include="Services\RetakeSelectionService.cs" />
+    <Compile Include="Services\TemplateOverlayService.cs" />
     <Compile Include="Services\MagickGifService.cs" />
     <Compile Include="Services\VideoGenerationService.cs" />
     <Compile Include="Services\PrintService.cs" />

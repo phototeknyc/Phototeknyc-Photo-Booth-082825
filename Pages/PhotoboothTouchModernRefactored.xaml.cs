@@ -139,6 +139,11 @@ namespace Photobooth.Pages
         // Event/Template state for UI display only
         private EventData _currentEvent;
         private TemplateData _currentTemplate;
+
+        // Template overlay for live view (enabled by default)
+        private bool _showTemplateOverlay = true;
+        private int _currentPhotoIndex = 0; // Track which photo we're taking
+        private Services.TemplateOverlayService _templateOverlayService;
         
         // Current module
         private IPhotoboothModule _activeModule;
@@ -212,6 +217,7 @@ namespace Photobooth.Pages
             // Initialize existing services from Services folder
             _eventTemplateService = new EventTemplateService();
             _printingService = new PrintingService();
+            _templateOverlayService = new Services.TemplateOverlayService();
             _shareService = CloudShareProvider.GetShareService();
             _sessionManager = new SessionManager();
             
@@ -556,8 +562,28 @@ namespace Photobooth.Pages
             
             // Show the START button
             _uiService?.ShowStartButton();
-            
-            
+
+            // Initialize template overlay (enabled by default)
+            if (_showTemplateOverlay)
+            {
+                if (templateOverlayContainer != null)
+                {
+                    templateOverlayContainer.Visibility = Visibility.Visible;
+                    Log.Debug($"Template overlay container visibility set to Visible");
+                }
+                else
+                {
+                    Log.Debug("Template overlay container is null - cannot show overlay");
+                }
+
+                // Log current template state
+                Log.Debug($"Current template: {_currentTemplate?.Name ?? "null"}");
+            }
+            else
+            {
+                Log.Debug("Template overlay is disabled");
+            }
+
             // Load gallery preview
             LoadGalleryPreview();
         }
@@ -1267,7 +1293,13 @@ namespace Photobooth.Pages
                 Log.Debug($"Service session started: {e.SessionId}");
                 _uiService.UpdateStatus($"Session started for {e.Event?.Name}");
                 _uiService.ShowSessionControls();
-                
+
+                // Load template for overlay if enabled and we have a template from session service
+                if (_showTemplateOverlay && _sessionService?.CurrentTemplate != null)
+                {
+                    LoadTemplateForOverlay(_sessionService.CurrentTemplate);
+                }
+
                 // Hide the start button when session starts
                 _uiService.HideStartButton();
                 Log.Debug("Start button hidden - session in progress");
@@ -1550,6 +1582,13 @@ namespace Photobooth.Pages
                     SetDisplayingSessionResult(true); // Set flag to prevent live view from restarting
                     Log.Debug("Stopped live view timer - session complete, set _isDisplayingSessionResult = true");
 
+                    // Clear template overlay when displaying session results
+                    if (templateOverlayCanvas != null)
+                    {
+                        templateOverlayCanvas.Children.Clear();
+                        Log.Debug("Cleared template overlay for session results display");
+                    }
+
                     // Display composed image in live view if available
                     if (FileValidationService.Instance.ValidateFilePath(e.CompletedSession.ComposedImagePath))
                     {
@@ -1769,14 +1808,21 @@ namespace Photobooth.Pages
                         
                         // Set flag to prevent live view from overwriting the photo
                         _isDisplayingCapturedPhoto = true;
-                        
+
+                        // Clear template overlay when displaying captured photo
+                        if (templateOverlayCanvas != null)
+                        {
+                            templateOverlayCanvas.Children.Clear();
+                            Log.Debug("Cleared template overlay for photo display");
+                        }
+
                         // Ensure live view timer is stopped
                         if (_liveViewTimer?.IsEnabled == true)
                         {
                             _liveViewTimer.Stop();
                             Log.Debug("Stopped live view timer for photo display");
                         }
-                        
+
                         // Display the captured photo
                         var bitmap = new BitmapImage();
                         bitmap.BeginInit();
@@ -2906,6 +2952,12 @@ namespace Photobooth.Pages
                 PhotoboothService.CurrentTemplate = _currentTemplate;
                 if (_currentEvent != null)
                     PhotoboothService.CurrentEvent = _currentEvent;
+
+                // Load template for overlay if enabled
+                if (_showTemplateOverlay && _currentTemplate != null)
+                {
+                    LoadTemplateForOverlay(_currentTemplate);
+                }
                 
                 // UI updates through service
                 _templateSelectionUIService?.HideTemplateSelection();
@@ -3524,11 +3576,25 @@ namespace Photobooth.Pages
                     if (liveViewImage != null)
                     {
                         liveViewImage.Source = bitmap;
-                        
+
+                        // Update template overlay if needed (only during live view, not when displaying captured photos)
+                        if (_showTemplateOverlay && !_isDisplayingCapturedPhoto && !_isDisplayingSessionResult)
+                        {
+                            UpdateTemplateOverlay(bitmap.PixelWidth, bitmap.PixelHeight);
+                        }
+                        else if (_isDisplayingCapturedPhoto || _isDisplayingSessionResult)
+                        {
+                            // Hide overlay when showing captured photos or session results
+                            if (templateOverlayCanvas != null)
+                            {
+                                templateOverlayCanvas.Children.Clear();
+                            }
+                        }
+
                         if (isVideoRecording && _recordingFrameCounter % 60 == 0)
                         {
                             Log.Debug($"[RECORDING] DisplayLiveView: Set liveViewImage.Source to new bitmap - UI should be showing live camera feed");
-                            
+
                             // Force UI update
                             liveViewImage.InvalidateVisual();
                             Log.Debug($"[RECORDING] DisplayLiveView: Called InvalidateVisual() to force UI update");
@@ -3545,6 +3611,234 @@ namespace Photobooth.Pages
                 Log.Error($"DisplayLiveView error: {ex.Message}");
             }
         }
+
+        #region Template Overlay Methods
+
+        /// <summary>
+        /// Toggles the template overlay on/off for live view
+        /// </summary>
+        public void ToggleTemplateOverlay()
+        {
+            _showTemplateOverlay = !_showTemplateOverlay;
+
+            if (templateOverlayContainer != null)
+            {
+                templateOverlayContainer.Visibility = _showTemplateOverlay ? Visibility.Visible : Visibility.Collapsed;
+
+                if (_showTemplateOverlay)
+                {
+                    // Get current template from session service
+                    var sessionTemplate = _sessionService?.CurrentTemplate;
+                    if (sessionTemplate != null)
+                    {
+                        LoadTemplateForOverlay(sessionTemplate);
+                    }
+                    else if (_currentTemplate != null)
+                    {
+                        LoadTemplateForOverlay(_currentTemplate);
+                    }
+                }
+                else
+                {
+                    // Clear overlay when hiding
+                    ClearTemplateOverlay();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Loads a template for overlay display from TemplateData
+        /// </summary>
+        private void LoadTemplateForOverlay(TemplateData templateData)
+        {
+            if (_templateOverlayService == null)
+            {
+                Log.Debug("Template overlay service not initialized");
+                return;
+            }
+
+            var loaded = _templateOverlayService.LoadTemplateForOverlay(templateData);
+            if (loaded)
+            {
+                Log.Debug($"Template overlay loaded successfully for: {templateData?.Name}");
+            }
+            else
+            {
+                Log.Debug($"Failed to load template overlay for: {templateData?.Name}");
+            }
+        }
+
+
+        /// <summary>
+        /// Updates the template overlay based on live view dimensions
+        /// </summary>
+        private void UpdateTemplateOverlay(int liveViewWidth, int liveViewHeight)
+        {
+            if (templateOverlayCanvas == null)
+            {
+                Log.Debug("UpdateTemplateOverlay: templateOverlayCanvas is null");
+                return;
+            }
+
+            // Always use the service-based approach
+            if (_currentTemplate != null)
+            {
+                UpdateTemplateOverlayFromTemplateData(liveViewWidth, liveViewHeight);
+            }
+            else
+            {
+                Log.Debug("UpdateTemplateOverlay: No current template to display");
+            }
+        }
+
+        /// <summary>
+        /// Clears the template overlay
+        /// </summary>
+        private void ClearTemplateOverlay()
+        {
+            if (templateOverlayCanvas != null)
+            {
+                templateOverlayCanvas.Children.Clear();
+            }
+
+            _templateOverlayService?.Clear();
+        }
+
+        /// <summary>
+        /// Updates the template overlay from database TemplateData (when no XML exists)
+        /// </summary>
+        private void UpdateTemplateOverlayFromTemplateData(int liveViewWidth, int liveViewHeight)
+        {
+            if (templateOverlayCanvas == null || _currentTemplate == null || _templateOverlayService == null)
+                return;
+
+            try
+            {
+                // Clear existing overlays
+                templateOverlayCanvas.Children.Clear();
+
+                // Get the actual display size of the live view image
+                var displayWidth = liveViewImage.ActualWidth;
+                var displayHeight = liveViewImage.ActualHeight;
+
+                if (displayWidth <= 0 || displayHeight <= 0)
+                    return;
+
+                // Get current photo index
+                var currentPhotoCount = _sessionService?.CapturedPhotoPaths?.Count ?? 0;
+                _currentPhotoIndex = currentPhotoCount; // Next photo to be taken
+
+                // Get placeholder data from service
+                var placeholderData = _templateOverlayService.GetPlaceholderForPhoto(_currentPhotoIndex, _currentTemplate);
+
+                if (placeholderData != null)
+                {
+                    // Set canvas size to match display
+                    templateOverlayCanvas.Width = displayWidth;
+                    templateOverlayCanvas.Height = displayHeight;
+
+                    // Calculate the aspect ratio of the placeholder
+                    var placeholderAspect = placeholderData.Width / placeholderData.Height;
+
+                    double overlayWidth, overlayHeight;
+                    double overlayX, overlayY;
+
+                    // Always scale to fit the height
+                    overlayHeight = displayHeight * 0.95; // Use 95% of display height
+                    overlayWidth = overlayHeight * placeholderAspect;
+
+                    // Center horizontally
+                    overlayX = (displayWidth - overlayWidth) / 2;
+                    overlayY = (displayHeight - overlayHeight) / 2;
+
+                    Log.Debug($"Placeholder overlay: Display({displayWidth:F0}x{displayHeight:F0}) Placeholder({placeholderData.Width:F0}x{placeholderData.Height:F0}) Overlay({overlayWidth:F0}x{overlayHeight:F0}) at ({overlayX:F0},{overlayY:F0})");
+
+                    // Create a darkened area outside the placeholder
+                    // First, add a semi-transparent black rectangle covering the entire canvas
+                    var darkenRect = new System.Windows.Shapes.Rectangle
+                    {
+                        Width = displayWidth,
+                        Height = displayHeight,
+                        Fill = new SolidColorBrush(Color.FromArgb(204, 0, 0, 0)) // 80% black overlay
+                    };
+                    Canvas.SetLeft(darkenRect, 0);
+                    Canvas.SetTop(darkenRect, 0);
+                    templateOverlayCanvas.Children.Add(darkenRect);
+
+                    // Now create a clear "hole" for the placeholder area using a Path with CombinedGeometry
+                    var outerRect = new RectangleGeometry(new Rect(0, 0, displayWidth, displayHeight));
+                    var innerRect = new RectangleGeometry(new Rect(overlayX, overlayY, overlayWidth, overlayHeight));
+
+                    var combinedGeometry = new CombinedGeometry(
+                        GeometryCombineMode.Exclude,
+                        outerRect,
+                        innerRect);
+
+                    var path = new System.Windows.Shapes.Path
+                    {
+                        Fill = new SolidColorBrush(Color.FromArgb(204, 0, 0, 0)), // 80% black
+                        Data = combinedGeometry
+                    };
+
+                    // Clear the canvas first
+                    templateOverlayCanvas.Children.Clear();
+                    templateOverlayCanvas.Children.Add(path);
+
+                    // Add white border around the placeholder area
+                    var placeholderBorder = new System.Windows.Shapes.Rectangle
+                    {
+                        Width = overlayWidth,
+                        Height = overlayHeight,
+                        Fill = Brushes.Transparent, // No fill, just border
+                        Stroke = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)), // White border
+                        StrokeThickness = 2
+                    };
+
+                    Canvas.SetLeft(placeholderBorder, overlayX);
+                    Canvas.SetTop(placeholderBorder, overlayY);
+                    templateOverlayCanvas.Children.Add(placeholderBorder);
+
+                    // Add a subtle label at the center of the placeholder
+                    var label = new TextBlock
+                    {
+                        Text = $"Photo {placeholderData.PhotoNumber}",
+                        Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
+                        FontSize = 14,
+                        FontWeight = FontWeights.Normal,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+
+                    // Center the label in the placeholder
+                    var labelBorder = new Border
+                    {
+                        Background = new SolidColorBrush(Color.FromArgb(100, 0, 0, 0)),
+                        CornerRadius = new CornerRadius(3),
+                        Padding = new Thickness(6, 3, 6, 3),
+                        Child = label
+                    };
+
+                    // Measure the label to center it properly
+                    labelBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    var labelWidth = labelBorder.DesiredSize.Width;
+                    var labelHeight = labelBorder.DesiredSize.Height;
+
+                    Canvas.SetLeft(labelBorder, overlayX + (overlayWidth - labelWidth) / 2);
+                    Canvas.SetTop(labelBorder, overlayY + (overlayHeight - labelHeight) / 2);
+                    templateOverlayCanvas.Children.Add(labelBorder);
+                }
+                else
+                {
+                    Log.Debug($"No placeholder data for photo index {_currentPhotoIndex}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error updating template overlay from TemplateData: {ex.Message}");
+            }
+        }
+
+        #endregion
 
         private string FindLatestCapturedPhoto()
         {
@@ -3623,6 +3917,13 @@ namespace Photobooth.Pages
                     // We have both event and template
                     _eventTemplateService.SelectTemplate(_currentTemplate);
                     Log.Debug($"LoadInitialEventTemplate: Template selected: {_currentTemplate.Name}");
+
+                    // Load template for overlay if enabled
+                    if (_showTemplateOverlay && _currentTemplate != null)
+                    {
+                        LoadTemplateForOverlay(_currentTemplate);
+                    }
+
                     // Don't show start button here - let the template selection logic decide
                     // Single template events will auto-select and show the button
                     // Multi-template events will show template selection instead
@@ -3633,6 +3934,13 @@ namespace Photobooth.Pages
                 // Have template but no event - just use the template
                 _eventTemplateService.SelectTemplate(_currentTemplate);
                 Log.Debug($"LoadInitialEventTemplate: Template selected (no event): {_currentTemplate.Name}");
+
+                // Load template for overlay if enabled
+                if (_showTemplateOverlay && _currentTemplate != null)
+                {
+                    LoadTemplateForOverlay(_currentTemplate);
+                }
+
                 startButtonOverlay.Visibility = Visibility.Visible;
             }
             else
@@ -5210,9 +5518,18 @@ namespace Photobooth.Pages
         
         private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            // Toggle template overlay with G key (Ctrl+G for Guide/Grid)
+            if (e.Key == Key.G && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                ToggleTemplateOverlay();
+                e.Handled = true;
+                Log.Debug($"Template overlay toggled: {_showTemplateOverlay}");
+                return;
+            }
+
             // Check if interface is locked
             bool isLocked = PinLockService.Instance.IsInterfaceLocked;
-            
+
             // Block system keys when locked
             if (isLocked)
             {
@@ -5223,7 +5540,7 @@ namespace Photobooth.Pages
                     Log.Debug("Blocked Alt+F4 - interface is locked");
                     return;
                 }
-                
+
                 // Block Windows key combinations
                 if (e.Key == Key.LWin || e.Key == Key.RWin)
                 {
@@ -5231,7 +5548,7 @@ namespace Photobooth.Pages
                     Log.Debug("Blocked Windows key - interface is locked");
                     return;
                 }
-                
+
                 // Block Alt+Tab
                 if (e.Key == Key.Tab && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
                 {
