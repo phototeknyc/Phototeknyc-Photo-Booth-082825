@@ -5414,9 +5414,9 @@ namespace Photobooth.Pages
                 System.Diagnostics.Debug.WriteLine($"🔍 Session ID: {sessionId}");
                 System.Diagnostics.Debug.WriteLine($"🔍 Is 2x6 Template: {is2x6Template}");
                 
-                // Stop gallery timer when showing print modal
-                StopGalleryTimer();
-                Log.Debug("Stopped gallery timer for print modal");
+                // Stop auto-clear timer when showing print modal
+                _sessionService?.StopAutoClearTimer();
+                Log.Debug("Stopped auto-clear timer for print modal");
 
                 // Store print parameters for use when user selects copies
                 _pendingPrintPath = imagePath;
