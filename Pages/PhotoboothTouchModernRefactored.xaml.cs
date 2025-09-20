@@ -3654,13 +3654,6 @@ namespace Photobooth.Pages
                 liveViewRotateTransform.Angle = rotation;
 
                 Log.Debug($"Applied camera rotation: {rotation}°");
-
-                // Also rotate the template overlay if it's visible
-                if (_showTemplateOverlay && templateOverlayCanvas != null)
-                {
-                    templateOverlayCanvas.RenderTransformOrigin = new Point(0.5, 0.5);
-                    templateOverlayCanvas.RenderTransform = new RotateTransform(rotation);
-                }
             }
             catch (Exception ex)
             {
