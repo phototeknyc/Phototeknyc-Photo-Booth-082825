@@ -3005,18 +3005,18 @@ namespace Photobooth.Pages
                             double progressWidth = (e.ProgressPercentage / 100.0) * totalWidth;
                             SessionTimeoutProgressFill.Width = progressWidth;
 
-                            // Optional: Change color based on urgency (red as it gets closer)
+                            // Change color based on urgency (green to red as time runs out)
                             if (e.ProgressPercentage > 80)
                             {
-                                SessionTimeoutProgressFill.Fill = new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)); // Bright red
+                                SessionTimeoutProgressFill.Fill = new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)); // Bright red (urgent)
                             }
                             else if (e.ProgressPercentage > 60)
                             {
-                                SessionTimeoutProgressFill.Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x98, 0x00)); // Orange
+                                SessionTimeoutProgressFill.Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x98, 0x00)); // Orange (warning)
                             }
                             else
                             {
-                                SessionTimeoutProgressFill.Fill = new SolidColorBrush(Color.FromRgb(0xB7, 0x1C, 0x1C)); // Dark red
+                                SessionTimeoutProgressFill.Fill = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)); // Green (safe)
                             }
                         }
                     }

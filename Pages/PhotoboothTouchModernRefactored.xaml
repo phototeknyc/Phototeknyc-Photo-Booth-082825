@@ -118,14 +118,14 @@
                 <Rectangle Fill="#33FFFFFF" />
                 <!-- Progress fill -->
                 <Rectangle x:Name="SessionTimeoutProgressFill"
-                          Fill="#FFB71C1C"
+                          Fill="#4CAF50"
                           HorizontalAlignment="Left"
                           Width="0">
                     <Rectangle.OpacityMask>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                            <GradientStop Color="#FFB71C1C" Offset="0.0"/>
-                            <GradientStop Color="#FFE53935" Offset="0.5"/>
-                            <GradientStop Color="#FFB71C1C" Offset="1.0"/>
+                            <GradientStop Color="#FF4CAF50" Offset="0.0"/>
+                            <GradientStop Color="#FF66BB6A" Offset="0.5"/>
+                            <GradientStop Color="#FF4CAF50" Offset="1.0"/>
                         </LinearGradientBrush>
                     </Rectangle.OpacityMask>
                 </Rectangle>
