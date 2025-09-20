@@ -132,6 +132,12 @@ namespace Photobooth.Pages
             {
                 _isDisplayingSessionResult = value;
                 Log.Debug($"★★★ FLAG CHANGED: _isDisplayingSessionResult = {value}");
+
+                // Re-apply camera rotation when going back to live view
+                if (!value)
+                {
+                    ApplyCameraRotation();
+                }
             }
         }
         private ShareResult _currentShareResult;
@@ -2068,6 +2074,17 @@ namespace Photobooth.Pages
 
                     if (liveViewImage != null)
                     {
+                        // Reset rotation when displaying composed template or session result
+                        // The composed template should not be rotated, only the live camera feed
+                        if (_isDisplayingSessionResult || e.ImagePath.Contains("composed") || e.ImagePath.Contains("template"))
+                        {
+                            if (liveViewRotateTransform != null)
+                            {
+                                liveViewRotateTransform.Angle = 0;
+                                Log.Debug("Reset rotation for composed template display");
+                            }
+                        }
+
                         liveViewImage.Source = bitmap;
                         Log.Debug($"★★★ Image SET in live view: {e.ImagePath}");
                         Log.Debug($"★★★ liveViewImage.Source is now: {liveViewImage.Source?.ToString() ?? "null"}");
