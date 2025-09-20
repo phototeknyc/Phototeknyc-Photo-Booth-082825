@@ -53,6 +53,7 @@ namespace Photobooth.Services
             public int DelayBetweenPhotos { get; set; }
             public bool AutoClearSession { get; set; }
             public int AutoClearTimeout { get; set; }
+            public bool AutoShowQRCode { get; set; }
             public bool ShowSessionPrompts { get; set; }
             public int NumberOfPhotos { get; set; }
             public bool RequireEventSelection { get; set; }
@@ -238,6 +239,7 @@ namespace Photobooth.Services
                     DelayBetweenPhotos = Properties.Settings.Default.DelayBetweenPhotos,
                     AutoClearSession = Properties.Settings.Default.AutoClearSession,
                     AutoClearTimeout = Properties.Settings.Default.AutoClearTimeout,
+                    AutoShowQRCode = Properties.Settings.Default.AutoShowQRCode,
                     ShowSessionPrompts = Properties.Settings.Default.ShowSessionPrompts,
                     NumberOfPhotos = 3,
                     RequireEventSelection = false
@@ -344,6 +346,7 @@ namespace Photobooth.Services
                 Properties.Settings.Default.DelayBetweenPhotos = _sessionSettings.DelayBetweenPhotos;
                 Properties.Settings.Default.AutoClearSession = _sessionSettings.AutoClearSession;
                 Properties.Settings.Default.AutoClearTimeout = _sessionSettings.AutoClearTimeout;
+                Properties.Settings.Default.AutoShowQRCode = _sessionSettings.AutoShowQRCode;
                 Properties.Settings.Default.ShowSessionPrompts = _sessionSettings.ShowSessionPrompts;
                 // NumberOfPhotos and RequireEventSelection might be stored elsewhere or calculated
                 
