@@ -545,8 +545,15 @@ namespace Photobooth.Services
                 
                 if (qrResult.IsVisible && qrResult.QRCodeImage != null)
                 {
+                    // CRITICAL: Check if session is being cleared before showing QR code
+                    if (_sessionService.IsSessionBeingCleared)
+                    {
+                        Log.Debug($"GalleryActionService: Session being cleared, NOT showing QR code for URL: {qrResult.GalleryUrl}");
+                        return false;
+                    }
+
                     _uiService.UpdateStatus("QR Code ready");
-                    
+
                     // Display QR code using SharingUIService
                     if (_sharingUIService != null)
                     {
@@ -604,8 +611,15 @@ namespace Photobooth.Services
                 
                 if (qrResult.IsVisible && qrResult.QRCodeImage != null)
                 {
+                    // CRITICAL: Check if session is being cleared before showing QR code
+                    if (_sessionService.IsSessionBeingCleared)
+                    {
+                        Log.Debug($"GalleryActionService: Session being cleared, NOT showing Gallery QR code for URL: {qrResult.GalleryUrl}");
+                        return false;
+                    }
+
                     _uiService.UpdateStatus("Gallery QR Code ready");
-                    
+
                     // Display QR code using SharingUIService
                     if (_sharingUIService != null)
                     {

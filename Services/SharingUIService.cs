@@ -53,7 +53,14 @@ namespace Photobooth.Services
             try
             {
                 Log.Debug($"SharingUIService.ShowQrCodeOverlay: Showing QR overlay for URL: {galleryUrl}");
-                
+
+                // CRITICAL: Final safety check - don't show QR if session is being cleared
+                if (_sessionService != null && _sessionService.IsSessionBeingCleared)
+                {
+                    Log.Debug($"SharingUIService.ShowQrCodeOverlay: Session is being cleared, NOT showing QR overlay for URL: {galleryUrl}");
+                    return;
+                }
+
                 // Stop auto-clear timer when showing overlay
                 if (_sessionService != null)
                 {

@@ -39,16 +39,17 @@ namespace Photobooth.Services
         private int _currentPhotoIndex;
         private int _totalPhotosRequired;
         private bool _isSessionActive;
+        private bool _isSessionBeingCleared = false; // Track when session is in the process of being cleared
         private EventData _currentEvent;
         private TemplateData _currentTemplate;
         private string _composedImagePath;
         private string _composedImagePrintPath; // Separate path for printing (e.g., 4x6 duplicate of 2x6)
         private string _gifPath;
-        
+
         // Template format tracking for proper printer routing
         private bool _isCurrentTemplate2x6;
         private bool _animationGenerationStarted = false; // Track if MP4/GIF generation already started
-        
+
         // Filter selection
         private FilterType _selectedFilter = FilterType.None;
         
@@ -85,6 +86,7 @@ namespace Photobooth.Services
         public int CurrentPhotoIndex => _currentPhotoIndex;
         public int TotalPhotosRequired => _totalPhotosRequired;
         public bool IsSessionActive => _isSessionActive;
+        public bool IsSessionBeingCleared => _isSessionBeingCleared;
         public string LastRetakePhotoPath => _lastRetakePhotoPath;
         public int LastRetakeIndex => _lastRetakeIndex;
         public EventData CurrentEvent => _currentEvent;
@@ -150,6 +152,7 @@ namespace Photobooth.Services
                 _totalPhotosRequired = totalPhotos;
                 _currentPhotoIndex = 0;
                 _capturedPhotoPaths.Clear();
+                _isSessionBeingCleared = false; // Ensure flag is reset for new session
                 
                 // Determine if this is a 2x6 template based on aspect ratio
                 _isCurrentTemplate2x6 = false;
@@ -667,7 +670,11 @@ namespace Photobooth.Services
         {
             Log.Debug($"★★★ PhotoboothSessionService: ClearSession called - Current SessionId: {_currentSessionId}, _isSessionActive: {_isSessionActive}");
             Log.Debug("PhotoboothSessionService: Clearing session");
-            
+
+            // Set flag to indicate session is being cleared - this prevents QR codes from showing
+            _isSessionBeingCleared = true;
+            Log.Debug("PhotoboothSessionService: Set _isSessionBeingCleared = true to prevent QR overlay");
+
             // Stop auto-clear timer
             StopAutoClearTimer();
             
@@ -685,14 +692,16 @@ namespace Photobooth.Services
             _isCurrentTemplate2x6 = false;
             _selectedFilter = FilterType.None;
             _animationGenerationStarted = false;
-            
+
             // Reset photo capture service
             _photoCaptureService?.ResetSession();
-            
+
             // Notify listeners
             SessionCleared?.Invoke(this, EventArgs.Empty);
-            
-            Log.Debug("PhotoboothSessionService: Session cleared");
+
+            // Clear the being-cleared flag after all cleanup is done
+            _isSessionBeingCleared = false;
+            Log.Debug("PhotoboothSessionService: Session cleared and _isSessionBeingCleared reset to false");
         }
         
         /// <summary>

@@ -4828,6 +4828,13 @@ namespace Photobooth.Pages
         {
             try
             {
+                // CRITICAL: Check if session is being cleared before starting
+                if (_isSessionBeingCleared || _sessionService.IsSessionBeingCleared)
+                {
+                    Log.Debug($"AutoUploadSessionPhotos: Session is being cleared, skipping upload for {completedSession.SessionId}");
+                    return;
+                }
+
                 Log.Debug($"AutoUploadSessionPhotos: Starting auto-upload for session GUID: {completedSession.SessionId}");
                 System.Diagnostics.Debug.WriteLine($"AutoUploadSessionPhotos: Session GUID = {completedSession.SessionId}");
                 _uiService.UpdateStatus("Uploading...");
@@ -4871,6 +4878,13 @@ namespace Photobooth.Pages
                 {
                     Log.Debug("AutoUploadSessionPhotos: No files to upload, skipping cloud upload");
                     _uiService.UpdateStatus("Session complete");
+                    return;
+                }
+
+                // CRITICAL: Check again if session is being cleared before proceeding with upload
+                if (_isSessionBeingCleared || _sessionService.IsSessionBeingCleared)
+                {
+                    Log.Debug($"AutoUploadSessionPhotos: Session being cleared during file preparation, aborting upload for {completedSession.SessionId}");
                     return;
                 }
                 
@@ -4917,6 +4931,13 @@ namespace Photobooth.Pages
                         Log.Error($"Error processing SMS queue after upload: {queueEx.Message}");
                     }
                     
+                    // CRITICAL: Check one final time before showing QR code - this is where the race condition occurs
+                    if (_isSessionBeingCleared || _sessionService.IsSessionBeingCleared)
+                    {
+                        Log.Debug($"AutoUploadSessionPhotos: Session was cleared after upload completed, NOT showing QR code for {completedSession.SessionId}");
+                        return;
+                    }
+
                     // Automatically show QR code (we'll only get here if not cancelled)
                     if (_sharingUIService != null && uploadResult.QRCodeImage != null)
                     {
@@ -4927,6 +4948,13 @@ namespace Photobooth.Pages
                         {
                             try
                             {
+                                // CRITICAL: Double-check on UI thread before showing QR overlay
+                                if (_isSessionBeingCleared || _sessionService.IsSessionBeingCleared)
+                                {
+                                    Log.Debug($"Session was cleared during QR display dispatch for {completedSession.SessionId}, NOT showing QR");
+                                    return;
+                                }
+
                                 _sharingUIService.ShowQrCodeOverlay(uploadResult.GalleryUrl, uploadResult.QRCodeImage);
                             }
                             catch (Exception uiEx)
@@ -4972,8 +5000,15 @@ namespace Photobooth.Pages
                 
                 if (success && !_isInGalleryMode)
                 {
-                    // Show QR code for current session sharing
-                    ShowQRCode();
+                    // Show QR code for current session sharing (only if session not being cleared)
+                    if (!_isSessionBeingCleared && !_sessionService.IsSessionBeingCleared)
+                    {
+                        ShowQRCode();
+                    }
+                    else
+                    {
+                        Log.Debug("Share button: Session being cleared, not showing QR code");
+                    }
                 }
             }
             catch (Exception ex)
