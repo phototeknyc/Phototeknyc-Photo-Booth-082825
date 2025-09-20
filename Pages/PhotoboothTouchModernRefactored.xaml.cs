@@ -161,6 +161,9 @@ namespace Photobooth.Pages
         private int _currentGallerySessionIndex;
         private Services.SessionGalleryData _currentGallerySession;
         private bool _isInGalleryMode;
+
+        // Track if session is being cleared (to prevent QR code auto-show)
+        private bool _isSessionBeingCleared = false;
         
         // Gallery auto-clear timer
         private DispatcherTimer _galleryTimer;
@@ -2772,6 +2775,9 @@ namespace Photobooth.Pages
                 SetDisplayingSessionResult(false);
                 _isDisplayingCapturedPhoto = false;
                 Log.Debug("Display flags cleared - live view can resume");
+
+                // Reset the session cleared flag for next session
+                _isSessionBeingCleared = false;
                 
                 // Check if we need to resume video mode after session
                 var videoModeService = Services.VideoModeLiveViewService.Instance;
@@ -2957,6 +2963,9 @@ namespace Photobooth.Pages
             Dispatcher.Invoke(() =>
             {
                 Log.Debug("Auto-clear timer expired - FORCE clearing session and resetting UI");
+
+                // Set flag to prevent QR code from showing
+                _isSessionBeingCleared = true;
 
                 // Force clear all display states immediately
                 SetDisplayingSessionResult(false);
@@ -4876,11 +4885,11 @@ namespace Photobooth.Pages
                         Log.Error($"Error processing SMS queue after upload: {queueEx.Message}");
                     }
                     
-                    // Automatically show QR code after successful upload (must be on UI thread)
-                    if (_sharingUIService != null && uploadResult.QRCodeImage != null)
+                    // Automatically show QR code ONLY if session wasn't cleared/timed out
+                    if (!_isSessionBeingCleared && _sharingUIService != null && uploadResult.QRCodeImage != null)
                     {
                         Log.Debug($"Auto-displaying QR code after successful upload for session {completedSession.SessionId}");
-                        
+
                         // Use Dispatcher to ensure UI operations happen on the main thread
                         Dispatcher.Invoke(() =>
                         {
@@ -4896,7 +4905,14 @@ namespace Photobooth.Pages
                     }
                     else
                     {
-                        Log.Debug($"QR auto-display skipped - SharingUIService: {_sharingUIService != null}, QRCodeImage: {uploadResult.QRCodeImage != null}");
+                        if (_isSessionBeingCleared)
+                        {
+                            Log.Debug("QR auto-display skipped - session is being cleared/timed out");
+                        }
+                        else
+                        {
+                            Log.Debug($"QR auto-display skipped - SharingUIService: {_sharingUIService != null}, QRCodeImage: {uploadResult.QRCodeImage != null}");
+                        }
                     }
                 }
                 else
@@ -4947,6 +4963,9 @@ namespace Photobooth.Pages
         {
             try
             {
+                // Set flag to prevent QR code from showing
+                _isSessionBeingCleared = true;
+
                 // Clear display flags when done
                 SetDisplayingSessionResult(false);
                 _isDisplayingCapturedPhoto = false;
@@ -5571,7 +5590,10 @@ namespace Photobooth.Pages
             try
             {
                 Log.Debug("=== CANCELING ENTIRE SESSION ===");
-                
+
+                // Set flag to prevent QR code from showing
+                _isSessionBeingCleared = true;
+
                 // Stop any active captures
                 _workflowService?.CancelCurrentPhotoCapture();
                 
