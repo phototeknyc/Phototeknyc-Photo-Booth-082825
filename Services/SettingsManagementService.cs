@@ -646,7 +646,7 @@ namespace Photobooth.Services
                 new SettingItem { Name = "PhotoDisplayDuration", DisplayName = "Photo Display", Value = Session.PhotoDisplayDuration, Type = SettingType.Slider, Min = 1, Max = 10, Unit = "seconds" },
                 new SettingItem { Name = "DelayBetweenPhotos", DisplayName = "Delay Between", Value = Session.DelayBetweenPhotos, Type = SettingType.Slider, Min = 0, Max = 10, Unit = "seconds" },
                 new SettingItem { Name = "AutoClearSession", DisplayName = "Auto Clear", Value = Session.AutoClearSession, Type = SettingType.Toggle },
-                new SettingItem { Name = "AutoClearTimeout", DisplayName = "Clear Timeout", Value = Session.AutoClearTimeout, Type = SettingType.Slider, Min = 30, Max = 300, Unit = "seconds" },
+                new SettingItem { Name = "AutoClearTimeout", DisplayName = "Clear Timeout", Value = Session.AutoClearTimeout, Type = SettingType.Slider, Min = 5, Max = 300, Unit = "seconds" },
                 new SettingItem { Name = "AutoShowQRCode", DisplayName = "Auto Show QR Code", Value = Session.AutoShowQRCode, Type = SettingType.Toggle },
                 new SettingItem { Name = "NumberOfPhotos", DisplayName = "Number of Photos", Value = Session.NumberOfPhotos, Type = SettingType.Slider, Min = 1, Max = 10 }
             };
