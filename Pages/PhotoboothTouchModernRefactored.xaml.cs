@@ -2891,66 +2891,158 @@ namespace Photobooth.Pages
         }
         
         /// <summary>
+        /// Hide all overlays to reset UI
+        /// </summary>
+        private void HideAllOverlays()
+        {
+            try
+            {
+                // Hide selection overlays
+                if (eventSelectionOverlay != null)
+                    eventSelectionOverlay.Visibility = Visibility.Collapsed;
+                if (templateSelectionOverlay != null)
+                    templateSelectionOverlay.Visibility = Visibility.Collapsed;
+                if (templateSelectionOverlayNew != null)
+                    templateSelectionOverlayNew.Visibility = Visibility.Collapsed;
+                if (filterSelectionOverlay != null)
+                    filterSelectionOverlay.Visibility = Visibility.Collapsed;
+                if (retakeSelectionOverlay != null)
+                    retakeSelectionOverlay.Visibility = Visibility.Collapsed;
+
+                // Hide control overlays
+                if (CameraSettingsOverlayControl != null)
+                    CameraSettingsOverlayControl.Visibility = Visibility.Collapsed;
+                if (TimerSettingsOverlayControl != null)
+                    TimerSettingsOverlayControl.Visibility = Visibility.Collapsed;
+                if (PrintSettingsOverlayControl != null)
+                    PrintSettingsOverlayControl.Visibility = Visibility.Collapsed;
+                if (EventSelectionOverlayControl != null)
+                    EventSelectionOverlayControl.Visibility = Visibility.Collapsed;
+                if (SettingsOverlayControl != null)
+                    SettingsOverlayControl.Visibility = Visibility.Collapsed;
+                if (SharingStatusOverlayControl != null)
+                    SharingStatusOverlayControl.Visibility = Visibility.Collapsed;
+                if (TemplateDesignerOverlayControl != null)
+                    TemplateDesignerOverlayControl.Visibility = Visibility.Collapsed;
+                if (PinEntryOverlayControl != null)
+                    PinEntryOverlayControl.Visibility = Visibility.Collapsed;
+                if (galleryOverlay != null)
+                    galleryOverlay.Visibility = Visibility.Collapsed;
+                if (CaptureModesOverlay != null)
+                    CaptureModesOverlay.Visibility = Visibility.Collapsed;
+
+                // Hide countdown overlay
+                if (countdownOverlay != null)
+                    countdownOverlay.Visibility = Visibility.Collapsed;
+
+                // Hide template overlay
+                if (templateOverlayContainer != null)
+                    templateOverlayContainer.Visibility = Visibility.Collapsed;
+
+                Log.Debug("All overlays hidden");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error hiding overlays: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Handle auto-clear timer expired event from service
         /// </summary>
         private void OnServiceAutoClearTimerExpired(object sender, EventArgs e)
         {
             Dispatcher.Invoke(() =>
             {
-                Log.Debug("Auto-clear timer expired - clearing session and resetting UI");
+                Log.Debug("Auto-clear timer expired - FORCE clearing session and resetting UI");
 
-                // If we're displaying any session content, we need to clear it
-                if (_isDisplayingSessionResult || _isDisplayingCapturedPhoto || _isInGalleryMode)
+                // Force clear all display states immediately
+                SetDisplayingSessionResult(false);
+                _isDisplayingCapturedPhoto = false;
+                _isProcessingRetakes = false;
+                _isRetaking = false;
+
+                // Exit gallery mode if we're in it
+                if (_isInGalleryMode)
                 {
-                    Log.Debug($"Clearing displayed content due to auto-clear timeout (Result: {_isDisplayingSessionResult}, Photo: {_isDisplayingCapturedPhoto}, Gallery: {_isInGalleryMode})");
-
-                    // Clear display flags
-                    SetDisplayingSessionResult(false);
-                    _isDisplayingCapturedPhoto = false;
-
-                    // Exit gallery mode if we're in it
-                    if (_isInGalleryMode)
-                    {
-                        _isInGalleryMode = false;
-                        _currentGallerySession = null;
-                        _currentGallerySessionIndex = 0;
-                        Log.Debug("Exited gallery mode due to auto-clear");
-                    }
-
-                    // Clear the live view image if it's showing a captured photo
-                    if (liveViewImage != null)
-                    {
-                        liveViewImage.Source = null;
-                    }
-
-                    // Hide action buttons
-                    if (actionButtonsPanel != null)
-                    {
-                        actionButtonsPanel.Visibility = Visibility.Collapsed;
-                    }
-
-                    // Clear photo strip
-                    if (photosContainer != null)
-                    {
-                        photosContainer.Children.Clear();
-                    }
-
-                    // Show the start button again
-                    if (startButtonOverlay != null)
-                    {
-                        startButtonOverlay.Visibility = Visibility.Visible;
-                    }
-
-                    // Resume live view
-                    if (_liveViewTimer != null && !_liveViewTimer.IsEnabled)
-                    {
-                        Log.Debug("Resuming live view after auto-clear");
-                        _liveViewTimer.Start();
-                    }
+                    _isInGalleryMode = false;
+                    _currentGallerySession = null;
+                    _currentGallerySessionIndex = 0;
+                    _gallerySessions = null;
+                    Log.Debug("Force exited gallery mode due to auto-clear");
                 }
 
-                // Service will automatically clear the session after this event
-                // OnServiceSessionCleared will be called to complete the cleanup
+                // Stop all timers
+                _galleryTimer?.Stop();
+                _countdownTimer?.Stop();
+
+                // Hide ALL overlays and panels
+                if (actionButtonsPanel != null)
+                {
+                    actionButtonsPanel.Visibility = Visibility.Collapsed;
+                }
+
+                if (galleryActionPanel != null)
+                {
+                    galleryActionPanel.Visibility = Visibility.Collapsed;
+                }
+
+                if (photosPanel != null)
+                {
+                    photosPanel.Visibility = Visibility.Collapsed;
+                }
+
+                if (cancelSessionButton != null)
+                {
+                    cancelSessionButton.Visibility = Visibility.Collapsed;
+                }
+
+                // Clear the live view image completely
+                if (liveViewImage != null)
+                {
+                    liveViewImage.Source = null;
+                    Log.Debug("Cleared live view image");
+                }
+
+                // Clear photo strip
+                if (photosContainer != null)
+                {
+                    photosContainer.Children.Clear();
+                    Log.Debug("Cleared photo strip");
+                }
+
+                // Hide any visible overlays
+                HideAllOverlays();
+
+                // Force clear the session immediately
+                try
+                {
+                    Log.Debug("Force calling ClearSession due to timeout");
+                    _sessionService?.ClearSession();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"Error force clearing session: {ex.Message}");
+                }
+
+                // Show the start button
+                if (startButtonOverlay != null)
+                {
+                    startButtonOverlay.Visibility = Visibility.Visible;
+                    Log.Debug("Showed start button");
+                }
+
+                // Resume live view
+                if (_liveViewTimer != null && !_liveViewTimer.IsEnabled)
+                {
+                    Log.Debug("Resuming live view after force clear");
+                    _liveViewTimer.Start();
+                }
+
+                // Reset UI to initial state
+                _uiService?.UpdateStatus("Touch to start");
+
+                Log.Debug("Force session clear completed - UI reset to initial state");
             });
         }
         
