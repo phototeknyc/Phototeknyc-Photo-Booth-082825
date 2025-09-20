@@ -72,5 +72,14 @@ namespace Photobooth.Controls
                 }
             }
         }
+
+        public void LoadTemplate(int templateId)
+        {
+            // Pass the template ID to the TouchTemplateDesigner
+            if (TouchDesigner != null)
+            {
+                TouchDesigner.LoadTemplate(templateId);
+            }
+        }
     }
 }

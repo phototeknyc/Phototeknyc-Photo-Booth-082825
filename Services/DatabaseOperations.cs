@@ -76,25 +76,25 @@ namespace Photobooth.Services
                 if (currentDatabaseSessionId.HasValue && File.Exists(filePath))
                 {
                     string fileName = Path.GetFileName(filePath);
-                    
-                    // Generate thumbnail
-                    string thumbnailPath = GenerateThumbnailPath(filePath);
-                    
+
+                    // Generate thumbnail - now actually creates the file
+                    string thumbnailPath = GenerateThumbnailForRegularPhoto(filePath);
+
                     // Save to database
                     var photoData = new PhotoData
                     {
                         SessionId = currentDatabaseSessionId.Value,
                         FileName = fileName,
                         FilePath = filePath,
-                        ThumbnailPath = thumbnailPath,
+                        ThumbnailPath = thumbnailPath ?? filePath, // Fallback to original if thumbnail creation fails
                         SequenceNumber = sequenceNumber,
                         PhotoType = photoType,
                         CreatedDate = DateTime.Now
                     };
-                    
+
                     Log.Debug($"★★★ Calling database.SavePhoto with SessionId={currentDatabaseSessionId.Value}, PhotoType={photoType}");
                     int photoId = database.SavePhoto(photoData);
-                    
+
                     // Track photo ID for this session
                     currentSessionPhotoIds.Add(photoId);
                     
@@ -276,7 +276,51 @@ namespace Photobooth.Services
             string extension = Path.GetExtension(originalPath);
             return Path.Combine(directory, $"{fileName}_thumb{extension}");
         }
-        
+
+        private string GenerateThumbnailForRegularPhoto(string photoPath)
+        {
+            try
+            {
+                // Skip if photo doesn't exist
+                if (!File.Exists(photoPath))
+                {
+                    Log.Error($"DatabaseOperations: Photo file not found for thumbnail generation: {photoPath}");
+                    return null;
+                }
+
+                // Generate thumbnail path
+                string thumbnailPath = GenerateThumbnailPath(photoPath);
+
+                // Check if thumbnail already exists
+                if (File.Exists(thumbnailPath))
+                {
+                    Log.Debug($"DatabaseOperations: Thumbnail already exists: {thumbnailPath}");
+                    return thumbnailPath;
+                }
+
+                // Load the original image
+                var originalImage = new BitmapImage();
+                originalImage.BeginInit();
+                originalImage.CacheOption = BitmapCacheOption.OnLoad;
+                originalImage.UriSource = new Uri(photoPath);
+                originalImage.EndInit();
+
+                // Create thumbnail (300x300 max)
+                var thumbnail = CreateThumbnail(originalImage, 300, 300);
+
+                // Save thumbnail
+                SaveThumbnail(thumbnail, thumbnailPath);
+
+                Log.Debug($"DatabaseOperations: Generated thumbnail: {thumbnailPath}");
+                return thumbnailPath;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"DatabaseOperations: Failed to generate thumbnail for {photoPath}: {ex.Message}");
+                return null;
+            }
+        }
+
         private string GenerateThumbnailForComposedImage(string composedImagePath)
         {
             try

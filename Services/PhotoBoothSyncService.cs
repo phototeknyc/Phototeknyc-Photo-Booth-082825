@@ -1389,7 +1389,8 @@ namespace Photobooth.Services
                         item.StrokeColor,
                         item.StrokeThickness,
                         item.HasNoFill,
-                        item.HasNoStroke
+                        item.HasNoStroke,
+                        item.CustomProperties
                     };
 
                     exportItems.Add(exportItem);
@@ -1467,7 +1468,8 @@ namespace Photobooth.Services
                     StrokeColor = item.StrokeColor,
                     StrokeThickness = item.StrokeThickness ?? 0,
                     HasNoFill = item.HasNoFill ?? false,
-                    HasNoStroke = item.HasNoStroke ?? false
+                    HasNoStroke = item.HasNoStroke ?? false,
+                    CustomProperties = item.CustomProperties
                 };
 
                 // Save to database

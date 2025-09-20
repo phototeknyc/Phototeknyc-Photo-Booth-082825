@@ -10,6 +10,12 @@ namespace CameraControl.Devices.Sony
         
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern bool SetDllDirectory(string lpPathName);
+
+        // Safe public wrapper for setting DLL directory when needed
+        public static bool TrySetDllDirectory(string path)
+        {
+            try { return SetDllDirectory(path); } catch { return false; }
+        }
         
         [DllImport(SONY_SDK_DLL, CallingConvention = CallingConvention.Cdecl, EntryPoint = "Init")]
         public static extern bool Init(uint logtype = 0);

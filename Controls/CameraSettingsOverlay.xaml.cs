@@ -211,7 +211,8 @@ namespace Photobooth.Controls
                     }
                     else
                     {
-                        DebugService.LogDebug($"Live view: Using original image (enhancement enabled: {_liveViewControlsEnabled && _liveViewEnhancementService?.IsEnabled == true})");
+                        // Commented out to reduce debug spam
+                        // DebugService.LogDebug($"Live view: Using original image (enhancement enabled: {_liveViewControlsEnabled && _liveViewEnhancementService?.IsEnabled == true})");
                     }
 
                     // Convert processed image to BitmapImage with proper disposal

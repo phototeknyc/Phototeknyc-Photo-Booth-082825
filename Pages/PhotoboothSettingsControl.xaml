@@ -622,7 +622,7 @@
                                               Margin="16,0,40,0"
                                               VerticalAlignment="Center"
                                               HorizontalAlignment="Left"/>
-                            <Popup x:Name="Popup"
+                            <Popup x:Name="PART_Popup"
                                    Placement="Bottom"
                                    IsOpen="{TemplateBinding IsDropDownOpen}"
                                    AllowsTransparency="True"
@@ -1698,9 +1698,9 @@
                     <Border Style="{StaticResource GlassSectionStyle}">
                         <StackPanel>
                     
-                    <CheckBox x:Name="enableGifGenerationCheckBox" 
-                              Content="Enable GIF generation for multi-photo sessions" 
-                              IsChecked="True"
+                    <CheckBox x:Name="enableGifGenerationCheckBox"
+                              Content="Enable GIF generation for multi-photo sessions"
+                              IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=EnableGifGeneration, Mode=TwoWay}"
                               Style="{StaticResource SettingsCheckBoxStyle}"
                               Checked="EnableGifGeneration_Changed"
                               Unchecked="EnableGifGeneration_Changed"
@@ -1710,12 +1710,12 @@
                                Style="{StaticResource SettingsTextStyle}"
                                IsEnabled="{Binding IsChecked, ElementName=enableGifGenerationCheckBox}"/>
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,20">
-                        <Slider x:Name="gifFrameDelaySlider" 
-                                Minimum="0.5" 
-                                Maximum="5" 
-                                Value="{Binding Source={x:Static properties:Settings.Default}, Path=GifFrameDelay, Mode=TwoWay}" 
-                                TickPlacement="BottomRight" 
-                                TickFrequency="0.5" 
+                        <Slider x:Name="gifFrameDelaySlider"
+                                Minimum="0.5"
+                                Maximum="5"
+                                Value="1.5"
+                                TickPlacement="BottomRight"
+                                TickFrequency="0.5"
                                 IsSnapToTickEnabled="True"
                                 Width="300"
                                 ValueChanged="GifFrameDelaySlider_ValueChanged"
@@ -2375,6 +2375,14 @@
                                  Background="#0F1320" Foreground="White" BorderBrush="#3A4060"
                                  Text="https://photos.yourapp.com"
                                  Margin="0,5,0,15"/>
+
+                        <!-- Signed URL Toggle -->
+                        <CheckBox x:Name="usePresignedUrlsCheckBox"
+                                  Content="Use Pre‑Signed URLs (private bucket)"
+                                  ToolTip="When enabled, links embed time‑limited signatures. Disable for clean public URLs (requires public read on events/*)."
+                                  FontSize="14" Foreground="#BBB"
+                                  IsChecked="False"
+                                  Margin="0,0,0,10"/>
                         
                         <!-- Twilio SMS Settings -->
                         <TextBlock Text="Twilio SMS Configuration" FontWeight="Bold" FontSize="14" Foreground="#DDD" Margin="0,10,0,10"/>

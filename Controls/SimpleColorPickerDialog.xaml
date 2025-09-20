@@ -1,0 +1,152 @@
+﻿<Window x:Class="Photobooth.Controls.SimpleColorPickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select Color" Height="500" Width="600"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#FF2D2D30">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Color Selection Area -->
+        <Grid Grid.Row="0" Margin="20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Main Color Canvas -->
+            <Border Grid.Column="0" BorderBrush="#FF505050" BorderThickness="1" Margin="0,0,10,0">
+                <Canvas x:Name="ColorCanvas" Background="White"
+                        Width="400" Height="300"
+                        MouseLeftButtonDown="ColorCanvas_MouseLeftButtonDown"
+                        MouseMove="ColorCanvas_MouseMove"
+                        Cursor="Cross">
+                    <!-- Color gradient will be drawn here -->
+                </Canvas>
+            </Border>
+
+            <!-- Hue Bar -->
+            <Border Grid.Column="1" BorderBrush="#FF505050" BorderThickness="1">
+                <Canvas x:Name="HueCanvas" Background="Red"
+                        Width="30" Height="300"
+                        MouseLeftButtonDown="HueCanvas_MouseLeftButtonDown"
+                        MouseMove="HueCanvas_MouseMove"
+                        Cursor="Cross">
+                    <!-- Hue selector will be drawn here -->
+                </Canvas>
+            </Border>
+        </Grid>
+
+        <!-- Color Preview and Values -->
+        <Grid Grid.Row="1" Margin="20,0,20,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Current Color Preview -->
+            <Border Grid.Column="0" BorderBrush="#FF505050" BorderThickness="2" Width="80" Height="40" Margin="0,0,10,0">
+                <Rectangle x:Name="ColorPreview" Fill="Red"/>
+            </Border>
+
+            <!-- Color Values -->
+            <StackPanel Grid.Column="1" Orientation="Vertical">
+                <Grid Margin="0,0,0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="60"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="60"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="60"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="R:" Foreground="White" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <TextBox x:Name="RedTextBox" Grid.Column="1" Text="255" Background="#FF404040" Foreground="White" BorderBrush="#FF505050" TextChanged="RGBTextBox_TextChanged"/>
+
+                    <TextBlock Grid.Column="2" Text="G:" Foreground="White" VerticalAlignment="Center" Margin="10,0,5,0"/>
+                    <TextBox x:Name="GreenTextBox" Grid.Column="3" Text="0" Background="#FF404040" Foreground="White" BorderBrush="#FF505050" TextChanged="RGBTextBox_TextChanged"/>
+
+                    <TextBlock Grid.Column="4" Text="B:" Foreground="White" VerticalAlignment="Center" Margin="10,0,5,0"/>
+                    <TextBox x:Name="BlueTextBox" Grid.Column="5" Text="0" Background="#FF404040" Foreground="White" BorderBrush="#FF505050" TextChanged="RGBTextBox_TextChanged"/>
+                </Grid>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="Hex:" Foreground="White" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <TextBox x:Name="HexTextBox" Grid.Column="1" Text="#FF0000" Background="#FF404040" Foreground="White" BorderBrush="#FF505050" TextChanged="HexTextBox_TextChanged"/>
+                </Grid>
+            </StackPanel>
+
+            <!-- Preset Colors -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <UniformGrid Columns="6" Rows="2" Width="120" Height="40">
+                    <!-- Common preset colors -->
+                    <Rectangle Fill="Red" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#FF0000"/>
+                    <Rectangle Fill="Green" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#00FF00"/>
+                    <Rectangle Fill="Blue" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#0000FF"/>
+                    <Rectangle Fill="Yellow" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#FFFF00"/>
+                    <Rectangle Fill="Cyan" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#00FFFF"/>
+                    <Rectangle Fill="Magenta" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#FF00FF"/>
+                    <Rectangle Fill="Black" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#000000"/>
+                    <Rectangle Fill="White" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#FFFFFF"/>
+                    <Rectangle Fill="Gray" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#808080"/>
+                    <Rectangle Fill="Orange" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#FFA500"/>
+                    <Rectangle Fill="Purple" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#800080"/>
+                    <Rectangle Fill="Brown" Margin="1" MouseLeftButtonDown="PresetColor_Click" Cursor="Hand" Tag="#A52A2A"/>
+                </UniformGrid>
+            </StackPanel>
+        </Grid>
+
+        <!-- Buttons -->
+        <Grid Grid.Row="2" Margin="20,10,20,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Eyedropper Button -->
+            <Button x:Name="EyedropperButton" Grid.Column="0" Width="120" Height="35"
+                    Background="#FF404040" BorderBrush="#FF404040" Foreground="White"
+                    Click="EyedropperButton_Click"
+                    ToolTip="Pick color from screen">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xEF3C;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="Eyedropper" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
+            <!-- OK and Cancel Buttons -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="OKButton" Width="100" Height="35" Margin="5"
+                        Background="#FF007ACC" BorderBrush="#FF007ACC" Foreground="White"
+                        Click="OKButton_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="✓" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="OK" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="CancelButton" Width="100" Height="35" Margin="5"
+                        Background="#FF383838" BorderBrush="#FF383838" Foreground="White"
+                        Click="CancelButton_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="✗" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="Cancel" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

@@ -89,5 +89,20 @@
                 </FlowDocument>
             </RichTextBox>
         </Border>
+
+        <!-- Diagnostics badge + panel -->
+        <ToggleButton x:Name="DiagToggle" Content="Diagnostics" Width="130" Height="32" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10" Grid.Row="0" Grid.Column="0"/>
+        <Border x:Name="DiagPanel" Grid.Row="0" Grid.Column="0" CornerRadius="8" Background="#CC1E1E1E" BorderBrush="#444" BorderThickness="1" Padding="12" Margin="10,50,10,10" Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock Text="Sony SDK Diagnostics" FontWeight="Bold" Foreground="White"/>
+                <TextBlock x:Name="DiagSdkVersion" Foreground="#DDD"/>
+                <TextBlock x:Name="DiagConnection" Foreground="#DDD"/>
+                <TextBlock x:Name="DiagPcRemote" Foreground="#DDD"/>
+                <TextBlock x:Name="DiagLiveView" Foreground="#DDD"/>
+                <TextBlock x:Name="DiagRecording" Foreground="#DDD"/>
+                <TextBlock x:Name="DiagBattery" Foreground="#DDD"/>
+                <TextBlock x:Name="DiagLastError" Foreground="#F88"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Page>

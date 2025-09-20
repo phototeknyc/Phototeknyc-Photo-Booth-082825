@@ -22,23 +22,43 @@
                                          HexRepresentation="RGBA"/>
         
         <!-- Buttons with FontAwesome Icons -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="20,10,20,20">
-            <Button x:Name="OKButton" Width="100" Height="35" Margin="5" 
-                    Background="#FF007ACC" BorderBrush="#FF007ACC" Foreground="White"
-                    Click="OKButton_Click">
+        <Grid Grid.Row="1" Margin="20,10,20,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Eyedropper Button -->
+            <Button x:Name="EyedropperButton" Grid.Column="0" Width="100" Height="35"
+                    Background="#FF404040" BorderBrush="#FF404040" Foreground="White"
+                    Click="EyedropperButton_Click"
+                    ToolTip="Pick color from screen">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock FontFamily="/fonts/#FontAwesome" Text="&#xf00c;" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBlock Text="OK" VerticalAlignment="Center"/>
+                    <TextBlock Text="&#xEF3C;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="Eyedropper" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <Button x:Name="CancelButton" Width="100" Height="35" Margin="5"
-                    Background="#FF383838" BorderBrush="#FF383838" Foreground="White"
-                    Click="CancelButton_Click">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock FontFamily="/fonts/#FontAwesome" Text="&#xf00d;" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBlock Text="Cancel" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-        </StackPanel>
+
+            <!-- OK and Cancel Buttons -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="OKButton" Width="100" Height="35" Margin="5"
+                        Background="#FF007ACC" BorderBrush="#FF007ACC" Foreground="White"
+                        Click="OKButton_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="/fonts/#FontAwesome" Text="&#xf00c;" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="OK" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="CancelButton" Width="100" Height="35" Margin="5"
+                        Background="#FF383838" BorderBrush="#FF383838" Foreground="White"
+                        Click="CancelButton_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="/fonts/#FontAwesome" Text="&#xf00d;" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="Cancel" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

@@ -70,6 +70,11 @@ namespace Photobooth.Pages
             dispatcherTimer.Tick += dispatcherTimer_Tick;
              int interval = 1000 / 30; // 30 fps
             dispatcherTimer.Interval = new TimeSpan(0, 0, 0, 0, interval);
+
+            // Diagnostics UI wiring
+            DiagToggle.Checked += (s, e) => { DiagPanel.Visibility = Visibility.Visible; UpdateDiagnostics(); };
+            DiagToggle.Unchecked += (s, e) => { DiagPanel.Visibility = Visibility.Collapsed; };
+            Loaded += (s, e) => UpdateDiagnostics();
         }
 
 
@@ -87,6 +92,38 @@ namespace Photobooth.Pages
             if (e.Exception != null)
                 textBoxLogs.AppendText((string)e.Exception.StackTrace);
             textBoxLogs.AppendText(Environment.NewLine);
+
+            // Keep last error text for diagnostics (use exception presence as signal)
+            if (e.Exception != null)
+            {
+                _lastErrorText = e.Message?.ToString();
+                UpdateDiagnostics();
+            }
+        }
+
+        private string _lastErrorText = string.Empty;
+
+        private void UpdateDiagnostics()
+        {
+            if (DiagPanel.Visibility != Visibility.Visible) return;
+            try
+            {
+                uint ver = CameraControl.Devices.Sony.SonySDKWrapper.GetSDKVersion();
+                int major = (int)((ver & 0xFF000000) >> 24);
+                int minor = (int)((ver & 0x00FF0000) >> 16);
+                int patch = (int)((ver & 0x0000FF00) >> 8);
+                DiagSdkVersion.Text = $"SDK: {major}.{minor}.{patch:D2}";
+
+                var cam = DeviceManager?.SelectedCameraDevice;
+                DiagConnection.Text = $"Connected: { (cam != null && cam.IsConnected ? "Yes" : "No") } ({cam?.DeviceName ?? "-"})";
+                DiagLiveView.Text = $"Live View: {(cam != null && cam.GetCapability(CapabilityEnum.LiveView) ? "Yes" : "No")}";
+                // PC Remote / Recording state are Sony-specific; show placeholder if not Sony
+                DiagPcRemote.Text = "PC Remote: n/a";
+                DiagRecording.Text = "Recording: n/a";
+                DiagBattery.Text = (cam != null && cam.Battery > 0) ? $"Battery: {cam.Battery}%" : "Battery: n/a";
+                DiagLastError.Text = string.IsNullOrWhiteSpace(_lastErrorText) ? "Last Error: (none)" : $"Last Error: {_lastErrorText}";
+            }
+            catch { }
         }
 
         private void RefreshDisplay()

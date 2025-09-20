@@ -55,6 +55,8 @@ namespace Photobooth.Services
                 // For now, we'll create PhotoProcessingOperations with the service adapter
                 // TODO: Refactor PhotoProcessingOperations to not require page dependency
                 var adapter = new CompositionServiceAdapter();
+                // Provide the session GUID so tokens can resolve during composition
+                adapter.CurrentSessionGuid = sessionData.SessionId;
                 var photoProcessing = new PhotoProcessingOperations(adapter);
 
                 // Compose the template
@@ -118,6 +120,9 @@ namespace Photobooth.Services
         public string DisplayPath { get; private set; }
         public string PrintPath { get; private set; }
 
+        // Provide session context for token resolution
+        public string CurrentSessionGuid { get; set; }
+
         public void UpdateProcessedImagePaths(string outputPath, string printPath)
         {
             System.Diagnostics.Debug.WriteLine($"CompositionServiceAdapter: UpdateProcessedImagePaths - output={outputPath}, print={printPath}");
@@ -133,6 +138,12 @@ namespace Photobooth.Services
         public void AddComposedImageToPhotoStrip(string outputPath)
         {
             System.Diagnostics.Debug.WriteLine($"CompositionServiceAdapter: AddComposedImageToPhotoStrip - path={outputPath}");
+        }
+
+        // Method used by PhotoProcessingOperations via reflection/call to fetch session id
+        public string GetCurrentSessionGuid()
+        {
+            return CurrentSessionGuid;
         }
     }
 

@@ -140,7 +140,80 @@ namespace Photobooth.Services
                         gallery_url TEXT
                     )", conn);
                 cmd2.ExecuteNonQuery();
+
+                // Add event_name column if it doesn't exist (for migration)
+                try
+                {
+                    var alterCmd2 = new SQLiteCommand(@"
+                        ALTER TABLE upload_queue ADD COLUMN event_name TEXT", conn);
+                    alterCmd2.ExecuteNonQuery();
+                    System.Diagnostics.Debug.WriteLine("OfflineQueueService: Added event_name column to upload_queue table");
+                }
+                catch
+                {
+                    // Column already exists, ignore
+                }
+
+                // Add gallery_url column if it doesn't exist (for migration)
+                try
+                {
+                    var alterCmd3 = new SQLiteCommand(@"
+                        ALTER TABLE upload_queue ADD COLUMN gallery_url TEXT", conn);
+                    alterCmd3.ExecuteNonQuery();
+                    System.Diagnostics.Debug.WriteLine("OfflineQueueService: Added gallery_url column to upload_queue table");
+                }
+                catch
+                {
+                    // Column already exists, ignore
+                }
+
+                // Add uploaded_at column if it doesn't exist (for migration)
+                try
+                {
+                    var alterCmd4 = new SQLiteCommand(@"
+                        ALTER TABLE upload_queue ADD COLUMN uploaded_at DATETIME", conn);
+                    alterCmd4.ExecuteNonQuery();
+                    System.Diagnostics.Debug.WriteLine("OfflineQueueService: Added uploaded_at column to upload_queue table");
+                }
+                catch
+                {
+                    // Column already exists, ignore
+                }
+
+                // Add status column if it doesn't exist (for migration)
+                try
+                {
+                    var alterCmd5 = new SQLiteCommand(@"
+                        ALTER TABLE upload_queue ADD COLUMN status TEXT DEFAULT 'pending'", conn);
+                    alterCmd5.ExecuteNonQuery();
+                    System.Diagnostics.Debug.WriteLine("OfflineQueueService: Added status column to upload_queue table");
+                }
+                catch
+                {
+                    // Column already exists, ignore
+                }
             }
+        }
+
+        private string SanitizeForS3Key(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "general";
+            var sanitized = input.Trim()
+                .Replace(" ", "-")
+                .Replace("/", "-")
+                .Replace("\\", "-")
+                .Replace(":", "-")
+                .Replace("*", "-")
+                .Replace("?", "-")
+                .Replace("\"", "-")
+                .Replace("<", "-")
+                .Replace(">", "-")
+                .Replace("|", "-");
+            while (sanitized.Contains("--")) sanitized = sanitized.Replace("--", "-");
+            sanitized = sanitized.Trim('-');
+            if (string.IsNullOrEmpty(sanitized)) return "general";
+            if (sanitized.Length > 50) sanitized = sanitized.Substring(0, 50).TrimEnd('-');
+            return sanitized.ToLowerInvariant();
         }
 
         /// <summary>
@@ -363,9 +436,22 @@ namespace Photobooth.Services
                     cmd.ExecuteNonQuery();
                 }
                 
-                // Generate local QR code pointing to pending page
-                var pendingUrl = $"https://photos.app/pending/{sessionId}";
-                var qrCode = _shareService.GenerateQRCode(pendingUrl);
+                // Compute stable, final session URL (works offline)
+                string baseUrl = Environment.GetEnvironmentVariable("GALLERY_BASE_URL", EnvironmentVariableTarget.User)
+                                  ?? "https://phototeknyc.s3.amazonaws.com";
+                string eventFolder = SanitizeForS3Key(eventName);
+                var finalUrl = $"{baseUrl}/events/{eventFolder}/sessions/{sessionId}/index.html";
+
+                // Persist to database so the session has a resolvable URL immediately
+                try
+                {
+                    var db = new Photobooth.Database.TemplateDatabase();
+                    db.UpdatePhotoSessionGalleryUrl(sessionId, finalUrl);
+                }
+                catch { }
+
+                // Generate QR for final URL
+                var qrCode = _shareService.GenerateQRCode(finalUrl);
                 
                 // Trigger immediate processing if we're online
                 if (_isOnline)
@@ -378,7 +464,7 @@ namespace Photobooth.Services
                     Success = true,
                     Immediate = false,
                     IsPending = true,
-                    GalleryUrl = pendingUrl,
+                    GalleryUrl = finalUrl,
                     QRCodeImage = qrCode,
                     Message = "Photos will upload when online"
                 };

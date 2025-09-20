@@ -21,6 +21,9 @@
         FontFamily="Segoe UI">
 
     <Window.Resources>
+        <!-- Converters -->
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+
         <!-- Surface Pro Optimized Colors -->
         <Color x:Key="PrimaryColor">#0A0E27</Color>
         <Color x:Key="SecondaryColor">#1A1E37</Color>
@@ -308,22 +311,45 @@
                             </TextBlock>
                         </StackPanel>
                     </Grid>
-                    
+
                     <!-- Event Info -->
                     <StackPanel Grid.Row="1" Margin="15,5">
-                        <TextBlock Text="{Binding Name}" 
-                                 FontSize="20" FontWeight="Bold" 
+                        <TextBlock Text="{Binding Name}"
+                                 FontSize="20" FontWeight="Bold"
                                  Foreground="White"
                                  TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text="{Binding FormattedDate}" 
-                                 FontSize="14" 
+                        <TextBlock Text="{Binding FormattedDate}"
+                                 FontSize="14"
                                  Foreground="{StaticResource TextSecondaryBrush}"
                                  Margin="0,5,0,0"/>
-                        <TextBlock Text="{Binding Location}" 
-                                 FontSize="13" 
+                        <TextBlock Text="{Binding Location}"
+                                 FontSize="13"
                                  Foreground="{StaticResource TextSecondaryBrush}"
                                  TextTrimming="CharacterEllipsis"
                                  Margin="0,2,0,0"/>
+
+                        <!-- Template Info -->
+                        <Border Background="#1A5F7A" CornerRadius="8" Padding="6,3" Margin="0,5,0,0"
+                                Visibility="{Binding HasAssignedTemplate, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="🎨" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                <TextBlock Grid.Column="1" Text="{Binding AssignedTemplateName}"
+                                         FontSize="11" Foreground="White"
+                                         TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                <Button Grid.Column="2" Content="✏️" FontSize="10"
+                                        Background="Transparent" BorderThickness="0"
+                                        Foreground="White" Cursor="Hand"
+                                        Padding="4,2" Margin="5,0,0,0"
+                                        Click="EditTemplate_Click" Tag="{Binding}"
+                                        ToolTip="Edit Template"/>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                     
                     <!-- Action buttons -->

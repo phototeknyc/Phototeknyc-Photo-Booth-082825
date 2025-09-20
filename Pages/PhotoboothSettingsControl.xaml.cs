@@ -99,17 +99,110 @@ namespace Photobooth.Pages
         public PhotoboothSettingsControl()
         {
             InitializeComponent();
-            
+
             // Initialize settings service and subscribe to changes
             _settingsService = SettingsManagementService.Instance;
             _settingsService.SettingChanged += OnSettingChangedFromService;
             _settingsService.SettingsReset += OnSettingsResetFromService;
-            
+
             LoadSettings();
-            
+
             // Initialize Device Triggers
             LoadTriggers();
             RefreshPorts_Click(null, null);
+
+            // Enable paste for PasswordBox controls
+            EnablePasswordBoxPaste();
+        }
+
+        private void EnablePasswordBoxPaste()
+        {
+            // Enable paste for S3 Secret Key boxes
+            if (S3SecretKeyBox != null)
+            {
+                S3SecretKeyBox.PreviewKeyDown += PasswordBox_PreviewKeyDown;
+                AddPasswordBoxContextMenu(S3SecretKeyBox);
+            }
+
+            if (awsSecretKeyBox != null)
+            {
+                awsSecretKeyBox.PreviewKeyDown += PasswordBox_PreviewKeyDown;
+                AddPasswordBoxContextMenu(awsSecretKeyBox);
+            }
+
+            // Enable paste for Twilio auth token
+            if (twilioAuthTokenBox != null)
+            {
+                twilioAuthTokenBox.PreviewKeyDown += PasswordBox_PreviewKeyDown;
+                AddPasswordBoxContextMenu(twilioAuthTokenBox);
+            }
+        }
+
+        private void AddPasswordBoxContextMenu(PasswordBox passwordBox)
+        {
+            var contextMenu = new ContextMenu();
+
+            var pasteMenuItem = new MenuItem { Header = "Paste" };
+            pasteMenuItem.Click += (s, e) =>
+            {
+                if (Clipboard.ContainsText())
+                {
+                    passwordBox.Password = Clipboard.GetText();
+
+                    // Trigger the password changed event to save the value
+                    if (passwordBox == S3SecretKeyBox)
+                    {
+                        S3SecretKey_Changed(passwordBox, null);
+                    }
+                }
+            };
+            contextMenu.Items.Add(pasteMenuItem);
+
+            var clearMenuItem = new MenuItem { Header = "Clear" };
+            clearMenuItem.Click += (s, e) =>
+            {
+                passwordBox.Clear();
+
+                // Trigger the password changed event to save the value
+                if (passwordBox == S3SecretKeyBox)
+                {
+                    S3SecretKey_Changed(passwordBox, null);
+                }
+            };
+            contextMenu.Items.Add(clearMenuItem);
+
+            passwordBox.ContextMenu = contextMenu;
+        }
+
+        private void PasswordBox_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            // Handle Ctrl+V for paste
+            if (e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                if (sender is PasswordBox passwordBox)
+                {
+                    if (Clipboard.ContainsText())
+                    {
+                        passwordBox.Password = Clipboard.GetText();
+                        e.Handled = true;
+
+                        // Trigger the password changed event to save the value
+                        if (passwordBox == S3SecretKeyBox)
+                        {
+                            S3SecretKey_Changed(passwordBox, null);
+                        }
+                    }
+                }
+            }
+            // Handle Ctrl+C for copy (optional - uncomment if you want to allow copying)
+            // else if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            // {
+            //     if (sender is PasswordBox passwordBox)
+            //     {
+            //         Clipboard.SetText(passwordBox.Password);
+            //         e.Handled = true;
+            //     }
+            // }
         }
 
         private void LoadSettings()
@@ -223,6 +316,7 @@ namespace Photobooth.Pages
                 // Load GIF animation settings
                 enableGifGenerationCheckBox.IsChecked = Properties.Settings.Default.EnableGifGeneration;
                 gifFrameDelaySlider.Value = Properties.Settings.Default.GifFrameDelay / 1000.0; // Convert from ms to seconds
+                gifFrameDelayValueText.Text = $"{Properties.Settings.Default.GifFrameDelay / 1000.0:F1} seconds";
                 enableGifOverlayCheckBox.IsChecked = Properties.Settings.Default.EnableGifOverlay;
                 gifOverlayPathTextBox.Text = Properties.Settings.Default.GifOverlayPath;
                 gifQualitySlider.Value = Properties.Settings.Default.GifQuality;
@@ -3499,6 +3593,7 @@ namespace Photobooth.Pages
                 Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", awsSecretKeyBox.Password);
                 Environment.SetEnvironmentVariable("S3_BUCKET_NAME", s3BucketNameBox.Text);
                 Environment.SetEnvironmentVariable("GALLERY_BASE_URL", galleryBaseUrlBox.Text);
+                Environment.SetEnvironmentVariable("USE_PRESIGNED_URLS", (usePresignedUrlsCheckBox?.IsChecked == true).ToString());
                 
                 if (enableSmsCheckBox.IsChecked == true)
                 {
@@ -3556,6 +3651,7 @@ namespace Photobooth.Pages
                     Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", awsSecretKeyBox.Password, EnvironmentVariableTarget.User);
                     Environment.SetEnvironmentVariable("S3_BUCKET_NAME", s3BucketNameBox.Text, EnvironmentVariableTarget.User);
                     Environment.SetEnvironmentVariable("GALLERY_BASE_URL", galleryBaseUrlBox.Text, EnvironmentVariableTarget.User);
+                    Environment.SetEnvironmentVariable("USE_PRESIGNED_URLS", (usePresignedUrlsCheckBox?.IsChecked == true).ToString(), EnvironmentVariableTarget.User);
                     
                     if (enableSmsCheckBox.IsChecked == true)
                     {
@@ -3616,6 +3712,9 @@ namespace Photobooth.Pages
                 awsSecretKeyBox.Password = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", EnvironmentVariableTarget.User) ?? "";
                 s3BucketNameBox.Text = Environment.GetEnvironmentVariable("S3_BUCKET_NAME", EnvironmentVariableTarget.User) ?? "photobooth-shares";
                 galleryBaseUrlBox.Text = Environment.GetEnvironmentVariable("GALLERY_BASE_URL", EnvironmentVariableTarget.User) ?? "https://photos.yourapp.com";
+                var usePresigned = Environment.GetEnvironmentVariable("USE_PRESIGNED_URLS", EnvironmentVariableTarget.User);
+                if (usePresignedUrlsCheckBox != null)
+                    usePresignedUrlsCheckBox.IsChecked = string.Equals(usePresigned, "True", StringComparison.OrdinalIgnoreCase);
                 
                 twilioSidBox.Text = Environment.GetEnvironmentVariable("TWILIO_ACCOUNT_SID", EnvironmentVariableTarget.User) ?? "";
                 twilioAuthTokenBox.Password = Environment.GetEnvironmentVariable("TWILIO_AUTH_TOKEN", EnvironmentVariableTarget.User) ?? "";

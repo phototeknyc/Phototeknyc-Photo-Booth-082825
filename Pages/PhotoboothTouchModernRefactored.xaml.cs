@@ -338,21 +338,30 @@ namespace Photobooth.Pages
             try
             {
                 Log.Debug("CameraReconnectTimer_Tick: Attempting to reconnect camera...");
-                
+
                 // Check if camera is now connected
                 if (DeviceManager?.SelectedCameraDevice != null && DeviceManager.SelectedCameraDevice.IsConnected)
                 {
                     // Camera reconnected successfully
                     _cameraReconnectTimer.Stop();
                     _isReconnecting = false;
-                    
+
                     UpdateCameraStatus($"Camera reconnected: {DeviceManager.SelectedCameraDevice.DeviceName}");
                     Log.Debug($"Camera successfully reconnected: {DeviceManager.SelectedCameraDevice.DeviceName}");
-                    
-                    // Restart live view if in session
-                    if (_sessionService?.IsSessionActive == true)
+
+                    // Only restart live view if we have an active session that is NOT complete
+                    // and we're not currently displaying session results or in gallery mode
+                    if (_sessionService?.IsSessionActive == true &&
+                        !_isDisplayingSessionResult &&
+                        !_isInGalleryMode)
                     {
+                        Log.Debug("Restarting live view - session is active and not displaying results");
                         _liveViewTimer.Start();
+                    }
+                    else
+                    {
+                        Log.Debug($"NOT restarting live view - Session active: {_sessionService?.IsSessionActive}, " +
+                                $"Displaying result: {_isDisplayingSessionResult}, Gallery mode: {_isInGalleryMode}");
                     }
                 }
                 else
@@ -360,23 +369,32 @@ namespace Photobooth.Pages
                     // Try to force reconnect using CameraSessionManager
                     Log.Debug("Camera still disconnected, attempting force reconnect...");
                     UpdateCameraStatus("Reconnecting camera...");
-                    
+
                     // Use the singleton's ForceReconnect method
                     CameraSessionManager.Instance.ForceReconnect();
-                    
+
                     // Check again after reconnect attempt
                     if (DeviceManager?.SelectedCameraDevice != null && DeviceManager.SelectedCameraDevice.IsConnected)
                     {
                         _cameraReconnectTimer.Stop();
                         _isReconnecting = false;
-                        
+
                         UpdateCameraStatus($"Camera reconnected: {DeviceManager.SelectedCameraDevice.DeviceName}");
                         Log.Debug($"Camera successfully reconnected after force reconnect: {DeviceManager.SelectedCameraDevice.DeviceName}");
-                        
-                        // Restart live view if in session
-                        if (_sessionService?.IsSessionActive == true)
+
+                        // Only restart live view if we have an active session that is NOT complete
+                        // and we're not currently displaying session results or in gallery mode
+                        if (_sessionService?.IsSessionActive == true &&
+                            !_isDisplayingSessionResult &&
+                            !_isInGalleryMode)
                         {
+                            Log.Debug("Restarting live view after force reconnect - session is active and not displaying results");
                             _liveViewTimer.Start();
+                        }
+                        else
+                        {
+                            Log.Debug($"NOT restarting live view after force reconnect - Session active: {_sessionService?.IsSessionActive}, " +
+                                    $"Displaying result: {_isDisplayingSessionResult}, Gallery mode: {_isInGalleryMode}");
                         }
                     }
                     else

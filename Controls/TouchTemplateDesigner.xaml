@@ -1,12 +1,15 @@
 <UserControl x:Class="Photobooth.Controls.TouchTemplateDesigner"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:Photobooth.Controls"
-             xmlns:dc="clr-namespace:DesignerCanvas;assembly=DesignerCanvas"
-             mc:Ignorable="d" 
-             d:DesignHeight="1080" d:DesignWidth="1920">
+             xmlns:dc="clr-namespace:DesignerCanvas.Controls;assembly=DesignerCanvas"
+             mc:Ignorable="d"
+             d:DesignHeight="1080" d:DesignWidth="1920"
+             Background="#FF0F0F0F"
+             UseLayoutRounding="True"
+             SnapsToDevicePixels="True">
     
     <UserControl.Resources>
         <!-- Modern color scheme -->
@@ -36,6 +39,7 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontSize" Value="18"/>
             <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -43,6 +47,7 @@
                         <Border x:Name="border" 
                                 Background="{TemplateBinding Background}"
                                 CornerRadius="15"
+                                Padding="10,6"
                                 RenderTransformOrigin="0.5,0.5">
                             <Border.RenderTransform>
                                 <ScaleTransform x:Name="scaleTransform" ScaleX="1" ScaleY="1"/>
@@ -99,30 +104,151 @@
             </Setter>
         </Style>
 
+        <!-- Adaptive touch-friendly toggle button style -->
+        <Style x:Key="TouchToggleButton" TargetType="ToggleButton">
+            <Setter Property="MinWidth" Value="44"/>
+            <Setter Property="MinHeight" Value="44"/>
+            <Setter Property="Width" Value="Auto"/>
+            <Setter Property="Height" Value="Auto"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Background" Value="{StaticResource MediumBgBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="15"
+                                Padding="10,6"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform x:Name="scaleTransform" ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
+                            <Border.Effect>
+                                <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="2" Opacity="0.3"/>
+                            </Border.Effect>
+                            <Grid>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="tooltipText"
+                                          Text="{TemplateBinding ToolTip}"
+                                          FontSize="10"
+                                          FontFamily="Segoe UI"
+                                          VerticalAlignment="Bottom"
+                                          HorizontalAlignment="Center"
+                                          Margin="0,0,0,5"
+                                          Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="scaleTransform"
+                                                           Storyboard.TargetProperty="ScaleX"
+                                                           To="1.1" Duration="0:0:0.2"/>
+                                            <DoubleAnimation Storyboard.TargetName="scaleTransform"
+                                                           Storyboard.TargetProperty="ScaleY"
+                                                           To="1.1" Duration="0:0:0.2"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="scaleTransform"
+                                                           Storyboard.TargetProperty="ScaleX"
+                                                           To="1" Duration="0:0:0.2"/>
+                                            <DoubleAnimation Storyboard.TargetName="scaleTransform"
+                                                           Storyboard.TargetProperty="ScaleY"
+                                                           To="1" Duration="0:0:0.2"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource SecondaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Panel Style -->
         <Style x:Key="ToolPanel" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource DarkBgBrush}"/>
             <Setter Property="CornerRadius" Value="15"/>
-            <Setter Property="Margin" Value="10"/>
+            <Setter Property="Margin" Value="5,10,10,10"/>
             <Setter Property="Effect">
                 <Setter.Value>
                     <DropShadowEffect Color="Black" BlurRadius="15" ShadowDepth="5" Opacity="0.4"/>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Panel Slide Animations -->
+        <Storyboard x:Key="SlideInLayers">
+            <DoubleAnimation Storyboard.TargetName="LayersPanelTransform"
+                            Storyboard.TargetProperty="X"
+                            To="0" Duration="0:0:0.3">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Key="SlideOutLayers">
+            <DoubleAnimation Storyboard.TargetName="LayersPanelTransform"
+                            Storyboard.TargetProperty="X"
+                            To="-320" Duration="0:0:0.3">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseIn"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Key="SlideInFont">
+            <DoubleAnimation Storyboard.TargetName="FontControlsPanelTransform"
+                            Storyboard.TargetProperty="X"
+                            To="0" Duration="0:0:0.3">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Key="SlideOutFont">
+            <DoubleAnimation Storyboard.TargetName="FontControlsPanelTransform"
+                            Storyboard.TargetProperty="X"
+                            To="-320" Duration="0:0:0.3">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseIn"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
     </UserControl.Resources>
 
-    <Grid x:Name="MainGrid" Background="#0F0F0F">
+    <Grid x:Name="MainGrid" Background="#FF0F0F0F">
         <!-- Responsive layout that adapts to orientation -->
         <Grid x:Name="LayoutGrid">
             <Grid.RowDefinitions>
-                <RowDefinition x:Name="TopToolbarRow" Height="Auto" MinHeight="60"/>
+                <RowDefinition x:Name="TopToolbarRow" Height="Auto" MinHeight="140"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition x:Name="BottomToolbarRow" Height="Auto" MinHeight="80"/>
+                <RowDefinition x:Name="BottomToolbarRow" Height="Auto" MinHeight="140"/>
             </Grid.RowDefinitions>
 
             <!-- Top Toolbar - Responsive -->
-            <Border Grid.Row="0" Style="{StaticResource ToolPanel}" x:Name="TopToolbar">
+            <Border Grid.Row="0" Style="{StaticResource ToolPanel}" x:Name="TopToolbar" Padding="6,4" Height="140">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -131,7 +257,7 @@
                     </Grid.ColumnDefinitions>
 
                     <!-- File Operations - Wrappable -->
-                    <WrapPanel Grid.Column="0" Orientation="Horizontal" Margin="5">
+                    <WrapPanel Grid.Column="0" Orientation="Horizontal" Margin="10" VerticalAlignment="Center">
                         <Button Style="{StaticResource TouchToolButton}" 
                                 Click="NewTemplate_Click" 
                                 ToolTip="New" Content="&#xE7C3;"/>
@@ -141,7 +267,15 @@
                         <Button Style="{StaticResource TouchToolButton}" 
                                 Click="LoadTemplate_Click" 
                                 ToolTip="Load" Content="&#xE8E5;"/>
-                        <Rectangle Width="2" Fill="Gray" Margin="10,15"/>
+                        <Border Width="8" Margin="10,5" CornerRadius="3">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#404040" Offset="0"/>
+                                    <GradientStop Color="#808080" Offset="0.5"/>
+                                    <GradientStop Color="#404040" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
                         <Button Style="{StaticResource TouchToolButton}" 
                                 Click="ImportTemplate_Click" 
                                 ToolTip="Import" Content="&#xE8B5;"/>
@@ -151,123 +285,765 @@
                     </WrapPanel>
 
                     <!-- Template Info -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" 
+                    <StackPanel Grid.Column="1" Orientation="Vertical"
                                HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock Text="Template: " Foreground="Gray" FontSize="16" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="TemplateNameText" Text="Untitled" 
-                                  Foreground="White" FontSize="18" FontWeight="Bold" 
-                                  VerticalAlignment="Center" Margin="5,0"/>
-                        <Button Content="&#xE70F;" FontFamily="Segoe MDL2 Assets"
-                               Background="Transparent" BorderThickness="0"
-                               Foreground="Gray" FontSize="16"
-                               Click="RenameTemplate_Click"
-                               VerticalAlignment="Center" Margin="5,0"/>
+                        <!-- Event Selection Row -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,5">
+                            <TextBlock Text="📅" FontSize="16" FontFamily="Segoe UI Emoji" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBlock Text="Event: " Foreground="Gray" FontSize="14" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="EventComboBox"
+                                     Width="200"
+                                     Height="28"
+                                     Background="#2D2D30"
+                                     Foreground="White"
+                                     BorderBrush="Gray"
+                                     SelectionChanged="EventComboBox_SelectionChanged">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" Foreground="White"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button Style="{StaticResource TouchToolButton}"
+                                   Width="30" Height="28"
+                                   Margin="5,0,0,0"
+                                   Click="CreateEvent_Click"
+                                   ToolTip="Create New Event">
+                                <TextBlock Text="➕" FontSize="14" FontFamily="Segoe UI Emoji"/>
+                            </Button>
+                            <Button Style="{StaticResource TouchToolButton}"
+                                   Width="30" Height="28"
+                                   Margin="5,0,0,0"
+                                   Click="RefreshEvents_Click"
+                                   ToolTip="Refresh Events">
+                                <TextBlock Text="🔄" FontSize="14" FontFamily="Segoe UI Emoji"/>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Template Name Row -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Text="📄" FontSize="16" FontFamily="Segoe UI Emoji" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBlock Text="Template: " Foreground="Gray" FontSize="16" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TemplateNameText" Text="Untitled"
+                                      Foreground="White" FontSize="18" FontWeight="Bold"
+                                      VerticalAlignment="Center" Margin="5,0"/>
+                            <Button Background="Transparent" BorderThickness="0"
+                                   Foreground="Gray" FontSize="16"
+                                   Click="RenameTemplate_Click"
+                                   VerticalAlignment="Center" Margin="5,0"
+                                   ToolTip="Rename Template">
+                                <TextBlock Text="✏️" FontSize="14" FontFamily="Segoe UI Emoji"/>
+                            </Button>
+                            <CheckBox x:Name="AssignToEventCheckBox"
+                                     VerticalAlignment="Center"
+                                     Margin="15,0,0,0"
+                                     IsEnabled="True"
+                                     Foreground="White"
+                                     Checked="AssignToEventCheckBox_Changed"
+                                     Unchecked="AssignToEventCheckBox_Changed">
+                                <CheckBox.Content>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🔗" FontSize="14" FontFamily="Segoe UI Emoji" Margin="0,0,5,0"/>
+                                        <TextBlock Text="Assign to Event" FontSize="14"/>
+                                    </StackPanel>
+                                </CheckBox.Content>
+                            </CheckBox>
+                        </StackPanel>
                     </StackPanel>
 
                     <!-- Canvas Size Display - Responsive -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="5" VerticalAlignment="Center" x:Name="CanvasSizePanel">
                         <TextBlock Text="Size: " Foreground="Gray" FontSize="14"/>
-                        <TextBlock x:Name="CanvasSizeText" Text="600 x 1800" 
+                        <TextBlock x:Name="CanvasSizeText" Text="600 x 1800"
                                   Foreground="White" FontSize="14" Margin="5,0"/>
-                        <Button Style="{StaticResource TouchToolButton}" 
-                                Click="ChangeCanvasSize_Click" 
-                                ToolTip="Resize" Content="&#xE740;" Margin="10,0"/>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="ChangeCanvasSize_Click"
+                                ToolTip="Resize" Content="&#xE740;" Margin="5,0"/>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                x:Name="OrientationButton"
+                                Click="ChangeOrientation_Click"
+                                ToolTip="Change Orientation"
+                                Content="&#xE739;"
+                                Margin="5,0"
+                                FontFamily="Segoe MDL2 Assets"/>
                     </StackPanel>
                 </Grid>
             </Border>
 
             <!-- Canvas Container - Adaptive -->
-            <Border Grid.Row="1" Margin="5" CornerRadius="10" Background="#1E1E1E" x:Name="CanvasContainerBorder">
+            <Border Grid.Row="1" Margin="0" CornerRadius="0" Background="#FF3A3A3C" x:Name="CanvasContainerBorder">
                 <Grid>
-                    <!-- Zoom Controls - Adaptive positioning -->
-                    <StackPanel x:Name="ZoomControlsPanel" Orientation="Vertical" HorizontalAlignment="Right" 
-                               VerticalAlignment="Top" Margin="10">
-                        <Border Style="{StaticResource ToolPanel}" Padding="5">
-                            <StackPanel>
-                                <Button Style="{StaticResource TouchToolButton}" 
-                                        Click="ZoomIn_Click" Content="&#xE8A3;"/>
-                                <TextBlock x:Name="ZoomLevelText" Text="100%" 
-                                          Foreground="White" FontSize="12" 
-                                          HorizontalAlignment="Center" Margin="0,5"/>
-                                <Button Style="{StaticResource TouchToolButton}" 
-                                        Click="ZoomOut_Click" Content="&#xE71F;"/>
-                                <Rectangle Height="2" Fill="Gray" Margin="10,10"/>
-                                <Button Style="{StaticResource TouchToolButton}" 
-                                        Click="ZoomFit_Click" Content="&#xE9A6;" ToolTip="Fit"/>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Side Tools Panel with Tab Controls -->
+                    <Grid x:Name="SideToolsContainer" Grid.Column="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Tool Icons - Always Visible -->
+                        <Border Grid.Column="0" Style="{StaticResource ToolPanel}"
+                               VerticalAlignment="Center">
+                            <StackPanel Margin="5">
+                                <!-- Panel Toggle Buttons -->
+                                <ToggleButton x:Name="LayersToggle"
+                                             Style="{StaticResource TouchToggleButton}"
+                                             Width="44" Height="44"
+                                             ToolTip="Layers"
+                                             Click="LayersToggle_Click">
+                                    <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets"/>
+                                </ToggleButton>
+
+                                <!-- Typography toggle hidden; replaced by Change Background button -->
+                                <ToggleButton x:Name="FontToggle" Visibility="Collapsed"/>
+
+                                <Button x:Name="BackgroundButton"
+                                        Style="{StaticResource TouchToolButton}"
+                                        Width="44" Height="44"
+                                        ToolTip="Change Background"
+                                        Click="BackgroundButton_Click">
+                                    <TextBlock Text="&#xE790;" FontFamily="Segoe MDL2 Assets"/>
+                                </Button>
+                                <Popup x:Name="BackgroundPopup"
+                                       PlacementTarget="{Binding ElementName=BackgroundButton}"
+                                       Placement="Right"
+                                       StaysOpen="False">
+                                    <Border Background="#2D2D30" Padding="12" CornerRadius="8">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="Background" Foreground="#CCC" Margin="0,0,8,0"/>
+                                                <local:InlineColorPicker x:Name="ToolbarCanvasBgColorPicker" ColorChanged="ToolbarCanvasBgColorPicker_ColorChanged"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Popup>
+
+                                <!-- Removed global color picker; Font panel's Text Color picker remains -->
+
+                                <!-- Appearance Tools: Stroke &amp; Shadow -->
+                                <Border Height="8" Margin="8,10" CornerRadius="3">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#404040" Offset="0"/>
+                                            <GradientStop Color="#808080" Offset="0.5"/>
+                                            <GradientStop Color="#404040" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+                                <Button x:Name="AppearanceButton"
+                                        Style="{StaticResource TouchToolButton}"
+                                        ToolTip="Stroke &amp; Shadow"
+                                        Click="AppearanceButton_Click">
+                                    <Grid>
+                                        <Rectangle Width="20" Height="20"
+                                                  Stroke="White"
+                                                  StrokeThickness="2"
+                                                  Fill="Transparent">
+                                            <Rectangle.Effect>
+                                                <DropShadowEffect Color="Gray" BlurRadius="3" ShadowDepth="2" Opacity="0.8"/>
+                                            </Rectangle.Effect>
+                                        </Rectangle>
+                                    </Grid>
+                                </Button>
+                                <Popup x:Name="AppearancePopup"
+                                       PlacementTarget="{Binding ElementName=AppearanceButton}"
+                                       Placement="Custom"
+                                       CustomPopupPlacementCallback="AppearancePopup_PlacementCallback"
+                                       StaysOpen="False">
+                                    <Border Background="{StaticResource DarkBgBrush}"
+                                            Padding="20"
+                                            CornerRadius="15"
+                                            MinWidth="480"
+                                            MaxHeight="750">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="5" Opacity="0.5"/>
+                                        </Border.Effect>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <StackPanel>
+                                                <!-- Border/Outline Section -->
+                                                <Grid Margin="0,0,0,20">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <!-- Section Header -->
+                                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
+                                                        <Border Width="40" Height="40" CornerRadius="10"
+                                                                Background="{StaticResource PrimaryBrush}"
+                                                                Margin="0,0,10,0">
+                                                            <Rectangle Width="20" Height="20"
+                                                                      Stroke="White"
+                                                                      StrokeThickness="2.5"
+                                                                      Fill="Transparent"/>
+                                                        </Border>
+                                                        <TextBlock Text="Border &amp; Outline"
+                                                                  Foreground="White"
+                                                                  FontSize="18"
+                                                                  FontWeight="Bold"
+                                                                  VerticalAlignment="Center"/>
+                                                    </StackPanel>
+
+                                                    <!-- Border Color -->
+                                                    <Grid Grid.Row="1" Margin="0,0,0,12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                  Text="Color"
+                                                                  Foreground="#CCCCCC"
+                                                                  FontSize="14"
+                                                                  VerticalAlignment="Center"/>
+                                                        <local:InlineColorPicker Grid.Column="1"
+                                                                                x:Name="ToolbarStrokeColorPicker"
+                                                                                ColorChanged="ToolbarStrokeColorPicker_ColorChanged"
+                                                                                HorizontalAlignment="Left"/>
+                                                    </Grid>
+
+                                                    <!-- Border Width with Visual Preview -->
+                                                    <Grid Grid.Row="2">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="80"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                  Text="Width"
+                                                                  Foreground="#CCCCCC"
+                                                                  FontSize="14"
+                                                                  VerticalAlignment="Center"/>
+                                                        <Slider Grid.Column="1"
+                                                                x:Name="ToolbarStrokeWidthSlider"
+                                                                Minimum="0" Maximum="30"
+                                                                Value="2"
+                                                                Height="30"
+                                                                VerticalAlignment="Center"
+                                                                ValueChanged="ToolbarStrokeWidthSlider_ValueChanged"/>
+                                                        <Border Grid.Column="2"
+                                                                Background="{StaticResource MediumBgBrush}"
+                                                                CornerRadius="8"
+                                                                Padding="10,5"
+                                                                Margin="10,0,0,0">
+                                                            <TextBlock x:Name="ToolbarStrokeWidthText"
+                                                                      Foreground="White"
+                                                                      FontSize="14"
+                                                                      FontWeight="SemiBold"
+                                                                      HorizontalAlignment="Center"
+                                                                      Text="2 px"/>
+                                                        </Border>
+                                                    </Grid>
+                                                </Grid>
+
+                                                <!-- Divider -->
+                                                <Border Height="1"
+                                                        Background="#3A3A3C"
+                                                        Margin="-20,0,-20,20"/>
+
+                                                <!-- Drop Shadow Section -->
+                                                <Grid Margin="0,0,0,20">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <!-- Section Header -->
+                                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
+                                                        <Border Width="40" Height="40" CornerRadius="10"
+                                                                Background="{StaticResource AccentBrush}"
+                                                                Margin="0,0,10,0">
+                                                            <Rectangle Width="18" Height="18"
+                                                                      Fill="White"
+                                                                      Opacity="0.9">
+                                                                <Rectangle.Effect>
+                                                                    <DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="3"/>
+                                                                </Rectangle.Effect>
+                                                            </Rectangle>
+                                                        </Border>
+                                                        <TextBlock Text="Drop Shadow"
+                                                                  Foreground="White"
+                                                                  FontSize="18"
+                                                                  FontWeight="Bold"
+                                                                  VerticalAlignment="Center"/>
+                                                    </StackPanel>
+
+                                                    <!-- Enable Shadow Toggle -->
+                                                    <CheckBox Grid.Row="1"
+                                                              x:Name="ToolbarShadowEnable"
+                                                              Content="Enable Shadow"
+                                                              Foreground="White"
+                                                              FontSize="14"
+                                                              Margin="0,0,0,12"
+                                                              Checked="ToolbarShadowEnable_Checked"
+                                                              Unchecked="ToolbarShadowEnable_Unchecked"/>
+
+                                                    <!-- Shadow Color -->
+                                                    <Grid Grid.Row="2" Margin="0,0,0,12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                  Text="Color"
+                                                                  Foreground="#CCCCCC"
+                                                                  FontSize="14"
+                                                                  VerticalAlignment="Center"/>
+                                                        <local:InlineColorPicker Grid.Column="1"
+                                                                                x:Name="ToolbarShadowColorPicker"
+                                                                                ColorChanged="ToolbarShadowColorPicker_ColorChanged"
+                                                                                HorizontalAlignment="Left"/>
+                                                    </Grid>
+
+                                                    <!-- Shadow Blur with Preview -->
+                                                    <Grid Grid.Row="3" Margin="0,0,0,12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="80"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                  Text="Blur"
+                                                                  Foreground="#CCCCCC"
+                                                                  FontSize="14"
+                                                                  VerticalAlignment="Center"/>
+                                                        <Slider Grid.Column="1"
+                                                                x:Name="ToolbarShadowBlurSlider"
+                                                                Minimum="0" Maximum="50"
+                                                                Value="10"
+                                                                Height="30"
+                                                                VerticalAlignment="Center"
+                                                                ValueChanged="ToolbarShadowBlurSlider_ValueChanged"/>
+                                                        <Border Grid.Column="2"
+                                                                Background="{StaticResource MediumBgBrush}"
+                                                                CornerRadius="8"
+                                                                Padding="10,5"
+                                                                Margin="10,0,0,0">
+                                                            <TextBlock x:Name="ToolbarShadowBlurText"
+                                                                      Foreground="White"
+                                                                      FontSize="14"
+                                                                      FontWeight="SemiBold"
+                                                                      HorizontalAlignment="Center"
+                                                                      Text="10 px"/>
+                                                        </Border>
+                                                    </Grid>
+
+                                                    <!-- Shadow Offset X -->
+                                                    <Grid Grid.Row="4" Margin="0,0,0,12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="80"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                  Text="Offset X"
+                                                                  Foreground="#CCCCCC"
+                                                                  FontSize="14"
+                                                                  VerticalAlignment="Center"/>
+                                                        <Slider Grid.Column="1"
+                                                                x:Name="ToolbarShadowOffsetXSlider"
+                                                                Minimum="-50" Maximum="50"
+                                                                Value="5"
+                                                                Height="30"
+                                                                VerticalAlignment="Center"
+                                                                ValueChanged="ToolbarShadowOffsetXSlider_ValueChanged"/>
+                                                        <Border Grid.Column="2"
+                                                                Background="{StaticResource MediumBgBrush}"
+                                                                CornerRadius="8"
+                                                                Padding="10,5"
+                                                                Margin="10,0,0,0">
+                                                            <TextBlock x:Name="ToolbarShadowOffsetXText"
+                                                                      Foreground="White"
+                                                                      FontSize="14"
+                                                                      FontWeight="SemiBold"
+                                                                      HorizontalAlignment="Center"
+                                                                      Text="5 px"/>
+                                                        </Border>
+                                                    </Grid>
+
+                                                    <!-- Shadow Offset Y -->
+                                                    <Grid Grid.Row="5">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="80"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                  Text="Offset Y"
+                                                                  Foreground="#CCCCCC"
+                                                                  FontSize="14"
+                                                                  VerticalAlignment="Center"/>
+                                                        <Slider Grid.Column="1"
+                                                                x:Name="ToolbarShadowOffsetYSlider"
+                                                                Minimum="-50" Maximum="50"
+                                                                Value="5"
+                                                                Height="30"
+                                                                VerticalAlignment="Center"
+                                                                ValueChanged="ToolbarShadowOffsetYSlider_ValueChanged"/>
+                                                        <Border Grid.Column="2"
+                                                                Background="{StaticResource MediumBgBrush}"
+                                                                CornerRadius="8"
+                                                                Padding="10,5"
+                                                                Margin="10,0,0,0">
+                                                            <TextBlock x:Name="ToolbarShadowOffsetYText"
+                                                                      Foreground="White"
+                                                                      FontSize="14"
+                                                                      FontWeight="SemiBold"
+                                                                      HorizontalAlignment="Center"
+                                                                      Text="5 px"/>
+                                                        </Border>
+                                                    </Grid>
+                                                </Grid>
+
+                                                <!-- Divider -->
+                                                <Border Height="1"
+                                                        Background="#3A3A3C"
+                                                        Margin="-20,0,-20,20"/>
+
+                                                <!-- Placeholder Section -->
+                                                <Grid Margin="0,0,0,20">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
+                                                        <Border Width="40" Height="40" CornerRadius="10"
+                                                                Background="{StaticResource SecondaryBrush}"
+                                                                Margin="0,0,10,0">
+                                                            <TextBlock Text="📷" FontSize="20" FontFamily="Segoe UI Emoji"
+                                                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <TextBlock Text="Placeholder"
+                                                                  Foreground="White"
+                                                                  FontSize="18"
+                                                                  FontWeight="Bold"
+                                                                  VerticalAlignment="Center"/>
+                                                    </StackPanel>
+
+                                                    <Grid Grid.Row="1" Margin="0,0,0,12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                  Text="Name"
+                                                                  Foreground="#CCCCCC"
+                                                                  FontSize="14"
+                                                                  VerticalAlignment="Center"/>
+                                                        <TextBox Grid.Column="1"
+                                                                x:Name="ToolbarPlaceholderNameBox"
+                                                                Background="#2A2A2C"
+                                                                Foreground="White"
+                                                                BorderBrush="#404040"
+                                                                FontSize="14"
+                                                                Padding="8,5"
+                                                                TextChanged="ToolbarPlaceholderNameBox_TextChanged"/>
+                                                    </Grid>
+
+                                                    <Grid Grid.Row="2">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                  Text="Fill"
+                                                                  Foreground="#CCCCCC"
+                                                                  FontSize="14"
+                                                                  VerticalAlignment="Center"/>
+                                                        <local:InlineColorPicker Grid.Column="1"
+                                                                                x:Name="ToolbarPlaceholderFillColorPicker"
+                                                                                ColorChanged="ToolbarPlaceholderFillColorPicker_ColorChanged"
+                                                                                HorizontalAlignment="Left"/>
+                                                    </Grid>
+                                                </Grid>
+
+                                                <!-- Divider -->
+                                                <Border Height="1"
+                                                        Background="#3A3A3C"
+                                                        Margin="-20,0,-20,20"/>
+
+                                                <!-- Shape Section -->
+                                                <Grid Margin="0,0,0,20">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
+                                                        <Border Width="40" Height="40" CornerRadius="10"
+                                                                Background="#FF8B52"
+                                                                Margin="0,0,10,0">
+                                                            <Rectangle Width="20" Height="16"
+                                                                      Fill="White"/>
+                                                        </Border>
+                                                        <TextBlock Text="Shape"
+                                                                  Foreground="White"
+                                                                  FontSize="18"
+                                                                  FontWeight="Bold"
+                                                                  VerticalAlignment="Center"/>
+                                                    </StackPanel>
+
+                                                    <Grid Grid.Row="1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                  Text="Fill"
+                                                                  Foreground="#CCCCCC"
+                                                                  FontSize="14"
+                                                                  VerticalAlignment="Center"/>
+                                                        <local:InlineColorPicker Grid.Column="1"
+                                                                                x:Name="ToolbarShapeFillColorPicker"
+                                                                                ColorChanged="ToolbarShapeFillColorPicker_ColorChanged"
+                                                                                HorizontalAlignment="Left"/>
+                                                    </Grid>
+                                                </Grid>
+
+                                                <!-- Visual Preview Box -->
+                                                <Border Padding="15"
+                                                        Background="#2A2A2C"
+                                                        CornerRadius="10">
+                                                    <Grid>
+                                                        <TextBlock Text="Preview"
+                                                                  Foreground="#808080"
+                                                                  FontSize="12"
+                                                                  VerticalAlignment="Top"
+                                                                  HorizontalAlignment="Left"/>
+                                                        <Rectangle x:Name="PreviewRectangle"
+                                                                  Width="120"
+                                                                  Height="80"
+                                                                  Fill="{StaticResource PrimaryBrush}"
+                                                                  Stroke="White"
+                                                                  StrokeThickness="2"
+                                                                  HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center"
+                                                                  Margin="0,25,0,0">
+                                                            <Rectangle.Effect>
+                                                                <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="5" Opacity="0.6"/>
+                                                            </Rectangle.Effect>
+                                                        </Rectangle>
+                                                    </Grid>
+                                                </Border>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Popup>
+
+                                <!-- Add Elements -->
+                                <Button Style="{StaticResource TouchToolButton}"
+                                        Click="AddPlaceholder_Click"
+                                        ToolTip="Photo">
+                                    <TextBlock Text="📷" FontSize="18" FontFamily="Segoe UI Emoji"/>
+                                </Button>
+                                <Button Style="{StaticResource TouchToolButton}"
+                                        Click="AddText_Click"
+                                        ToolTip="Text">
+                                    <TextBlock Text="T" FontSize="20" FontWeight="Bold" FontFamily="Segoe UI"/>
+                                </Button>
+                                <Button Style="{StaticResource TouchToolButton}"
+                                        Click="AddImage_Click"
+                                        ToolTip="Image">
+                                    <TextBlock Text="🖼" FontSize="18" FontFamily="Segoe UI Emoji"/>
+                                </Button>
+                                <Button Style="{StaticResource TouchToolButton}"
+                                        Click="AddBarcode_Click"
+                                        ToolTip="Barcode">
+                                    <TextBlock Text="#" FontSize="18" FontFamily="Segoe UI"/>
+                                </Button>
+                                <Button Style="{StaticResource TouchToolButton}"
+                                        Click="AddQRCode_Click"
+                                        ToolTip="QR Code">
+                                    <TextBlock Text="QR" FontSize="14" FontWeight="Bold" FontFamily="Segoe UI"/>
+                                </Button>
+                                <Button x:Name="AddShapeButton" Style="{StaticResource TouchToolButton}"
+                                        Click="AddShape_Click"
+                                        ToolTip="Shape">
+                                    <TextBlock Text="□" FontSize="20" FontFamily="Segoe UI Symbol"/>
+                                </Button>
+                                <Popup x:Name="ShapePopup"
+                                       PlacementTarget="{Binding ElementName=AddShapeButton}"
+                                       Placement="Right"
+                                       StaysOpen="False">
+                                    <Border Background="#2D2D30" Padding="10" CornerRadius="8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Style="{StaticResource TouchToolButton}" Width="60" Height="60"
+                                                    ToolTip="Rectangle" Click="ShapePicker_Click" Tag="Rectangle">
+                                                <Rectangle Width="25" Height="20" Stroke="White" StrokeThickness="2" Fill="Transparent"/>
+                                            </Button>
+                                            <Button Style="{StaticResource TouchToolButton}" Width="60" Height="60"
+                                                    ToolTip="Circle" Click="ShapePicker_Click" Tag="Circle">
+                                                <Ellipse Width="25" Height="25" Stroke="White" StrokeThickness="2" Fill="Transparent"/>
+                                            </Button>
+                                            <Button Style="{StaticResource TouchToolButton}" Width="60" Height="60"
+                                                    ToolTip="Line" Click="ShapePicker_Click" Tag="Line">
+                                                <Line X1="5" Y1="25" X2="35" Y2="5" Stroke="White" StrokeThickness="2"/>
+                                            </Button>
+                                        </StackPanel>
+                                    </Border>
+                                </Popup>
+
+                                <Border Height="8" Margin="8,10" CornerRadius="3">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#404040" Offset="0"/>
+                                            <GradientStop Color="#808080" Offset="0.5"/>
+                                            <GradientStop Color="#404040" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+
+                                <!-- Arrange Tools -->
+                                <Button Style="{StaticResource TouchToolButton}"
+                                        Click="BringToFront_Click"
+                                        ToolTip="Bring to front">
+                                    <TextBlock Text="⬆" FontSize="20" FontFamily="Segoe UI Symbol"/>
+                                </Button>
+                                <Button Style="{StaticResource TouchToolButton}"
+                                        Click="SendToBack_Click"
+                                        ToolTip="Send to back">
+                                    <TextBlock Text="⬇" FontSize="20" FontFamily="Segoe UI Symbol"/>
+                                </Button>
+                                <Button Style="{StaticResource TouchToolButton}"
+                                        Click="AlignItems_Click"
+                                        ToolTip="Align">
+                                    <TextBlock Text="☰" FontSize="20" FontFamily="Segoe UI Symbol"/>
+                                </Button>
+                                <ToggleButton x:Name="AspectRatioLockToggle"
+                                             Style="{StaticResource TouchToggleButton}"
+                                             Width="44" Height="44"
+                                             ToolTip="Lock Aspect Ratio"
+                                             Click="AspectRatioLock_Click">
+                                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets"/>
+                                </ToggleButton>
+
+                                <Border Height="8" Margin="8,10" CornerRadius="3">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#404040" Offset="0"/>
+                                            <GradientStop Color="#808080" Offset="0.5"/>
+                                            <GradientStop Color="#404040" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+
+                                <!-- Edit Tools -->
+                                <Button Style="{StaticResource TouchToolButton}"
+                                        Click="DeleteSelected_Click"
+                                        ToolTip="Delete"
+                                        Foreground="#FF6B6B">
+                                    <TextBlock Text="🗑" FontSize="18" FontFamily="Segoe UI Emoji"/>
+                                </Button>
                             </StackPanel>
                         </Border>
-                    </StackPanel>
 
-                    <!-- Canvas Scroll Viewer - Responsive margins -->
-                    <ScrollViewer x:Name="CanvasScrollViewer" 
-                                 HorizontalScrollBarVisibility="Auto"
-                                 VerticalScrollBarVisibility="Auto"
-                                 PanningMode="Both"
-                                 Margin="10">
-                        <Grid x:Name="CanvasContainer">
-                            <Grid.LayoutTransform>
-                                <ScaleTransform x:Name="CanvasScaleTransform" ScaleX="1" ScaleY="1"/>
-                            </Grid.LayoutTransform>
-                            
-                            <!-- The actual designer canvas using ModernUICustomizationCanvas -->
-                            <local:ModernUICustomizationCanvas x:Name="DesignerCanvas"
-                                                               Width="600" Height="1800"
-                                                               Background="White"/>
+                        <!-- Expandable Panels Container -->
+                        <Grid Grid.Column="1" MaxWidth="320">
+                            <!-- Layers Panel -->
+                            <Border x:Name="LayersPanelContainer"
+                                   Visibility="Collapsed"
+                                   Width="320"
+                                   Margin="0,0,5,0">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="LayersPanelTransform" X="-320"/>
+                                </Border.RenderTransform>
+                                <local:LayersPanel x:Name="LayersPanel"/>
+                            </Border>
+
+                            <!-- Font Controls Panel -->
+                            <Border x:Name="FontControlsPanelContainer"
+                                   Visibility="Collapsed"
+                                   Width="320"
+                                   Margin="0,0,5,0">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="FontControlsPanelTransform" X="-320"/>
+                                </Border.RenderTransform>
+                                <local:FontControlsPanel x:Name="FontControlsPanel"/>
+                            </Border>
                         </Grid>
-                    </ScrollViewer>
+                    </Grid>
 
-                    <!-- Side Tools - Adaptive to orientation -->
-                    <Border x:Name="SideToolsPanel" Style="{StaticResource ToolPanel}" 
-                           HorizontalAlignment="Left" 
-                           VerticalAlignment="Center"
-                           MinWidth="60"
-                           MaxWidth="100">
-                        <StackPanel Margin="10">
-                            <!-- Add Elements -->
-                            <TextBlock Text="Add" Foreground="Gray" FontSize="12" 
-                                      HorizontalAlignment="Center" Margin="0,5"/>
-                            <Button Style="{StaticResource TouchToolButton}" 
-                                    Click="AddPlaceholder_Click" 
-                                    ToolTip="Photo" Content="&#xE722;"/>
-                            <Button Style="{StaticResource TouchToolButton}" 
-                                    Click="AddText_Click" 
-                                    ToolTip="Text" Content="&#xE8D2;"/>
-                            <Button Style="{StaticResource TouchToolButton}" 
-                                    Click="AddImage_Click" 
-                                    ToolTip="Image" Content="&#xEB9F;"/>
-                            <Button Style="{StaticResource TouchToolButton}" 
-                                    Click="AddShape_Click" 
-                                    ToolTip="Shape" Content="&#xF156;"/>
-                            
-                            <Rectangle Height="2" Fill="Gray" Margin="10,15"/>
-                            
-                            <!-- Arrange Tools -->
-                            <TextBlock Text="Arrange" Foreground="Gray" FontSize="12" 
-                                      HorizontalAlignment="Center" Margin="0,5"/>
-                            <Button Style="{StaticResource TouchToolButton}" 
-                                    Click="BringToFront_Click" 
-                                    ToolTip="Front" Content="&#xE898;"/>
-                            <Button Style="{StaticResource TouchToolButton}" 
-                                    Click="SendToBack_Click" 
-                                    ToolTip="Back" Content="&#xE899;"/>
-                            <Button Style="{StaticResource TouchToolButton}" 
-                                    Click="AlignItems_Click" 
-                                    ToolTip="Align" Content="&#xE8E4;"/>
-                            
-                            <Rectangle Height="2" Fill="Gray" Margin="10,15"/>
-                            
-                            <!-- Edit Tools -->
-                            <Button Style="{StaticResource TouchToolButton}" 
-                                    Click="DeleteSelected_Click" 
-                                    ToolTip="Delete" Content="&#xE74D;" 
-                                    Foreground="#FF6B6B"/>
+                    <!-- Canvas and Zoom Controls Area -->
+                    <Grid Grid.Column="1">
+                        <!-- Zoom Controls - Adaptive positioning -->
+                        <StackPanel x:Name="ZoomControlsPanel" Orientation="Vertical" HorizontalAlignment="Right"
+                                   VerticalAlignment="Top" Margin="10">
+                            <Border Style="{StaticResource ToolPanel}" Padding="5">
+                                <StackPanel>
+                                    <Button Style="{StaticResource TouchToolButton}"
+                                            Click="ZoomIn_Click" Content="&#xE8A3;"/>
+                                    <Button x:Name="ZoomLevelButton"
+                                            Style="{StaticResource TouchToolButton}"
+                                            Click="ZoomReset_Click"
+                                            ToolTip="Reset to 100%"
+                                            Background="Transparent">
+                                        <TextBlock x:Name="ZoomLevelText" Text="100%"
+                                                  Foreground="White" FontSize="12"/>
+                                    </Button>
+                                    <Button Style="{StaticResource TouchToolButton}"
+                                            Click="ZoomOut_Click" Content="&#xE71F;"/>
+                                    <Border Height="8" Margin="8,10" CornerRadius="3">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#404040" Offset="0"/>
+                                            <GradientStop Color="#808080" Offset="0.5"/>
+                                            <GradientStop Color="#404040" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+                                    <Button Style="{StaticResource TouchToolButton}"
+                                            Click="ZoomFit_Click" Content="&#xE9A6;" ToolTip="Fit to Window"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
-                    </Border>
+
+                        <!-- Canvas Scroll Viewer - Optimized for auto-fit -->
+                        <ScrollViewer x:Name="CanvasScrollViewer"
+                                     HorizontalScrollBarVisibility="Hidden"
+                                     VerticalScrollBarVisibility="Hidden"
+                                     PanningMode="Both"
+                                     Background="#FF3A3A3C"
+                                     Margin="0"
+                                     HorizontalAlignment="Stretch"
+                                     VerticalAlignment="Stretch">
+                            <Grid x:Name="CanvasContainer" Background="#FF3A3A3C"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.LayoutTransform>
+                                    <ScaleTransform x:Name="CanvasScaleTransform" ScaleX="1" ScaleY="1"/>
+                                </Grid.LayoutTransform>
+
+                                <!-- Canvas wrapper with strong visual boundaries and centered positioning -->
+                                <Border BorderBrush="#FF606060" BorderThickness="2" CornerRadius="2"
+                                        Background="White"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Margin="50">
+                                    <Border.Effect>
+                                        <DropShadowEffect ShadowDepth="3" Color="Black" Opacity="0.7" BlurRadius="8"/>
+                                    </Border.Effect>
+                                    <!-- The actual designer canvas using new SimpleDesignerCanvas -->
+                                    <local:SimpleDesignerCanvas x:Name="DesignerCanvas"
+                                                               Background="Transparent"
+                                                               ShowGrid="True"
+                                                               ClipToBounds="True"/>
+                                </Border>
+                            </Grid>
+                        </ScrollViewer>
+                    </Grid>
                 </Grid>
             </Border>
 
             <!-- Bottom Toolbar - Responsive -->
-            <Border Grid.Row="2" Style="{StaticResource ToolPanel}" x:Name="BottomToolbar">
+            <Border Grid.Row="2" Style="{StaticResource ToolPanel}" x:Name="BottomToolbar" Height="140">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -283,7 +1059,15 @@
                         <Button Style="{StaticResource TouchToolButton}" 
                                 Click="Redo_Click" 
                                 ToolTip="Redo" Content="&#xE7A6;"/>
-                        <Rectangle Width="2" Fill="Gray" Margin="10,20"/>
+                        <Border Width="8" Margin="10,12" CornerRadius="3">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#404040" Offset="0"/>
+                                    <GradientStop Color="#808080" Offset="0.5"/>
+                                    <GradientStop Color="#404040" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
                         <Button Style="{StaticResource TouchToolButton}" 
                                 Click="Copy_Click" 
                                 ToolTip="Copy" Content="&#xE8C8;"/>
@@ -310,24 +1094,30 @@
                         </ToggleButton>
                     </StackPanel>
 
-                    <!-- Exit Button -->
-                    <Button Grid.Column="2" 
-                           Width="120" Height="50"
-                           Margin="20,0"
+                    <!-- Close Button -->
+                    <Button Grid.Column="2"
+                           Width="100" Height="50"
+                           Margin="10,0,20,0"
                            Background="#FF6B6B"
                            Foreground="White"
                            BorderThickness="0"
-                           FontSize="18"
+                           FontSize="16"
                            Click="Close_Click">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" 
-                                      VerticalAlignment="Center" Margin="5,0"/>
+                            <TextBlock Text="❌" FontSize="20" Margin="5,0"/>
                             <TextBlock Text="Close" VerticalAlignment="Center" Margin="5,0"/>
                         </StackPanel>
                     </Button>
                 </Grid>
             </Border>
         </Grid>
+
+        <!-- Click-outside backdrop to quickly close the Properties panel -->
+        <Border x:Name="PropertiesBackdrop"
+               Background="#00000000"
+               Visibility="Collapsed"
+               MouseDown="PropertiesBackdrop_MouseDown"
+               Panel.ZIndex="1000"/>
 
         <!-- Properties Panel - Responsive width -->
         <Border x:Name="PropertiesPanel" 
@@ -336,14 +1126,15 @@
                Width="Auto"
                HorizontalAlignment="Right"
                Background="{StaticResource DarkBgBrush}"
-               Visibility="Collapsed">
+               Visibility="Collapsed"
+               Panel.ZIndex="1001">
             <Border.RenderTransform>
                 <TranslateTransform x:Name="PropertiesPanelTransform" X="400"/>
             </Border.RenderTransform>
             
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="60"/>
+                    <RowDefinition Height="120"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -386,5 +1177,496 @@
         <local:TemplateBrowserOverlay x:Name="TemplateBrowserOverlay"
                                        Visibility="Collapsed"
                                        Grid.RowSpan="3"/>
+
+        <!-- Touch-Friendly Paper Size Popup -->
+        <Border x:Name="PaperSizePopup"
+                Visibility="Collapsed"
+                Grid.RowSpan="3"
+                Background="#AA000000"
+                MouseDown="PaperSizePopup_BackgroundClick">
+            <Border Background="{StaticResource DarkBgBrush}"
+                    CornerRadius="20"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MinWidth="500"
+                    Padding="20">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="5" Opacity="0.5"/>
+                </Border.Effect>
+
+                <StackPanel>
+                    <!-- Header with Title and Orientation Toggle -->
+                    <Grid Margin="0,0,0,20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                  Text="Paper Size"
+                                  Foreground="White"
+                                  FontSize="24"
+                                  FontWeight="Bold"
+                                  VerticalAlignment="Center"/>
+
+                        <ToggleButton Grid.Column="1"
+                                     x:Name="OrientationToggle"
+                                     Width="100" Height="50"
+                                     Content="Portrait"
+                                     Click="OrientationToggle_Click"
+                                     Background="#4CAF50"
+                                     Foreground="White"
+                                     BorderThickness="0"
+                                     FontSize="16"
+                                     Margin="10,0,0,0"/>
+                    </Grid>
+
+                    <!-- Standard Photo Sizes -->
+                    <TextBlock Text="Photo Sizes"
+                              Foreground="Gray"
+                              FontSize="16"
+                              Margin="0,0,0,15"/>
+                    <UniformGrid Columns="2" Margin="0,0,0,20">
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="150" Height="80"
+                                Click="Size4x6_Click"
+                                Margin="8">
+                            <StackPanel>
+                                <TextBlock Text="4×6" FontSize="20" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                                <TextBlock Text="1200×1800" FontSize="12" Foreground="LightGray" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="150" Height="80"
+                                Click="Size5x7_Click"
+                                Margin="8">
+                            <StackPanel>
+                                <TextBlock Text="5×7" FontSize="20" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                                <TextBlock Text="1500×2100" FontSize="12" Foreground="LightGray" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="150" Height="80"
+                                Click="Size8x10_Click"
+                                Margin="8">
+                            <StackPanel>
+                                <TextBlock Text="8×10" FontSize="20" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                                <TextBlock Text="2400×3000" FontSize="12" Foreground="LightGray" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="150" Height="80"
+                                Click="Size2x6_Click"
+                                Margin="8">
+                            <StackPanel>
+                                <TextBlock Text="2×6 Strip" FontSize="18" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                                <TextBlock Text="600×1800" FontSize="12" Foreground="LightGray" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+
+                    <!-- Social Media Sizes -->
+                    <TextBlock Text="Social Media"
+                              Foreground="Gray"
+                              FontSize="16"
+                              Margin="0,0,0,15"/>
+                    <UniformGrid Columns="2" Margin="0,0,0,20">
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="150" Height="80"
+                                Click="SizeInstagram_Click"
+                                Margin="8">
+                            <StackPanel>
+                                <TextBlock Text="Instagram" FontSize="18" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                                <TextBlock Text="1080×1080" FontSize="12" Foreground="LightGray" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="150" Height="80"
+                                Click="SizeFacebook_Click"
+                                Margin="8">
+                            <StackPanel>
+                                <TextBlock Text="Facebook" FontSize="18" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                                <TextBlock Text="1200×630" FontSize="12" Foreground="LightGray" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+
+                    <!-- Custom Size and Close -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="180" Height="60"
+                                Click="CustomSize_Click"
+                                Margin="0,0,20,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📐" FontSize="24" Margin="0,0,10,0" Foreground="White" FontFamily="Segoe UI"/>
+                                <TextBlock Text="Custom Size..." FontSize="16" Foreground="White" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Width="120" Height="60"
+                                Background="#FF6B6B"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="18"
+                                Click="ClosePaperSizePopup_Click">
+                            <TextBlock Text="Close" FontFamily="Segoe UI"/>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- Touch-Friendly Alignment Popup -->
+        <Border x:Name="AlignmentPopup"
+                Visibility="Collapsed"
+                Grid.RowSpan="3"
+                Background="#AA000000"
+                MouseDown="AlignmentPopup_BackgroundClick">
+            <Border Background="{StaticResource DarkBgBrush}"
+                    CornerRadius="20"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MinWidth="400"
+                    Padding="20">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="5" Opacity="0.5"/>
+                </Border.Effect>
+
+                <StackPanel>
+                    <TextBlock Text="Align Item"
+                              Foreground="White"
+                              FontSize="24"
+                              FontWeight="Bold"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,20"/>
+
+                    <!-- Horizontal Alignment -->
+                    <TextBlock Text="Horizontal"
+                              Foreground="Gray"
+                              FontSize="16"
+                              Margin="0,0,0,10"/>
+                    <UniformGrid Columns="3" Margin="0,0,0,15">
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="AlignLeft_Click"
+                                ToolTip="Align Left">
+                            <StackPanel>
+                                <TextBlock FontSize="20" Foreground="White" FontFamily="Segoe UI">
+                                    <TextBlock.Text>⬛
+◻◻</TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Text="Left" FontSize="12" Margin="0,5,0,0" FontFamily="Segoe UI" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="AlignCenterH_Click"
+                                ToolTip="Center Horizontally">
+                            <StackPanel>
+                                <TextBlock FontSize="20" Foreground="White" FontFamily="Segoe UI">
+                                    <TextBlock.Text>◻
+⬛
+◻</TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Text="Center" FontSize="12" Margin="0,5,0,0" FontFamily="Segoe UI" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="AlignRight_Click"
+                                ToolTip="Align Right">
+                            <StackPanel>
+                                <TextBlock FontSize="20" Foreground="White" FontFamily="Segoe UI">
+                                    <TextBlock.Text>◻◻
+⬛</TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Text="Right" FontSize="12" Margin="0,5,0,0" FontFamily="Segoe UI" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+
+                    <!-- Vertical Alignment -->
+                    <TextBlock Text="Vertical"
+                              Foreground="Gray"
+                              FontSize="16"
+                              Margin="0,10,0,10"/>
+                    <UniformGrid Columns="3" Margin="0,0,0,15">
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="AlignTop_Click"
+                                ToolTip="Align Top">
+                            <StackPanel>
+                                <TextBlock FontSize="20" Foreground="White" FontFamily="Segoe UI" HorizontalAlignment="Center">
+                                    <TextBlock.Text>⬛
+—
+—</TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Text="Top" FontSize="12" Margin="0,5,0,0" FontFamily="Segoe UI" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="AlignCenterV_Click"
+                                ToolTip="Center Vertically">
+                            <StackPanel>
+                                <TextBlock FontSize="20" Foreground="White" FontFamily="Segoe UI" HorizontalAlignment="Center">
+                                    <TextBlock.Text>—
+⬛
+—</TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Text="Middle" FontSize="12" Margin="0,5,0,0" FontFamily="Segoe UI" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="AlignBottom_Click"
+                                ToolTip="Align Bottom">
+                            <StackPanel>
+                                <TextBlock FontSize="20" Foreground="White" FontFamily="Segoe UI" HorizontalAlignment="Center">
+                                    <TextBlock.Text>—
+—
+⬛</TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Text="Bottom" FontSize="12" Margin="0,5,0,0" FontFamily="Segoe UI" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+
+                    <!-- Center in Canvas -->
+                    <Button Style="{StaticResource TouchToolButton}"
+                            Width="260" Height="60"
+                            Click="AlignCenter_Click"
+                            Margin="0,10,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⊞" FontSize="24" Margin="0,0,10,0" Foreground="White" FontFamily="Segoe UI Symbol"/>
+                            <TextBlock Text="Center in Canvas" FontSize="16" FontFamily="Segoe UI" Foreground="White"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Stack/Distribute Options -->
+                    <TextBlock Text="Stack &amp; Distribute"
+                              Foreground="Gray"
+                              FontSize="16"
+                              Margin="0,15,0,10"/>
+                    <UniformGrid Columns="2" Margin="0,0,0,15">
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="120" Height="80"
+                                Click="StackVertical_Click"
+                                ToolTip="Stack Vertically"
+                                Margin="5">
+                            <StackPanel>
+                                <TextBlock Text="≡" FontSize="28" Foreground="White" FontFamily="Segoe UI Symbol"/>
+                                <TextBlock Text="Stack V" FontSize="12" Margin="0,5,0,0" FontFamily="Segoe UI" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="120" Height="80"
+                                Click="StackHorizontal_Click"
+                                ToolTip="Stack Horizontally"
+                                Margin="5">
+                            <StackPanel>
+                                <TextBlock Text="|||" FontSize="24" Foreground="White" FontFamily="Segoe UI"/>
+                                <TextBlock Text="Stack H" FontSize="12" Margin="0,5,0,0" FontFamily="Segoe UI" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+
+                    <UniformGrid Columns="2" Margin="0,0,0,15">
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="120" Height="80"
+                                Click="DistributeVertical_Click"
+                                ToolTip="Distribute Vertically"
+                                Margin="5">
+                            <StackPanel>
+                                <TextBlock Text="⋮" FontSize="32" Foreground="White" FontFamily="Segoe UI Symbol"/>
+                                <TextBlock Text="Distribute V" FontSize="12" Margin="0,5,0,0" FontFamily="Segoe UI" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="120" Height="80"
+                                Click="DistributeHorizontal_Click"
+                                ToolTip="Distribute Horizontally"
+                                Margin="5">
+                            <StackPanel>
+                                <TextBlock Text="⋯" FontSize="32" Foreground="White" FontFamily="Segoe UI Symbol"/>
+                                <TextBlock Text="Distribute H" FontSize="12" Margin="0,5,0,0" FontFamily="Segoe UI" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+
+                    <!-- Close Button -->
+                    <Button Width="120" Height="45"
+                            Background="#FF6B6B"
+                            Foreground="White"
+                            BorderThickness="0"
+                            FontSize="16"
+                            HorizontalAlignment="Center"
+                            Click="CloseAlignmentPopup_Click"
+                            Margin="0,10,0,0">
+                        <TextBlock Text="Close"/>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- Touch-Friendly Photo Number Edit Popup -->
+        <Border x:Name="PhotoNumberEditPopup"
+                Visibility="Collapsed"
+                Grid.RowSpan="3"
+                Background="#AA000000"
+                TouchDown="PhotoNumberEditPopup_BackgroundTouch"
+                MouseDown="PhotoNumberEditPopup_BackgroundClick">
+            <Border Background="{StaticResource DarkBgBrush}"
+                    CornerRadius="20"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MinWidth="400"
+                    MaxWidth="500"
+                    Padding="30">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="5" Opacity="0.5"/>
+                </Border.Effect>
+
+                <StackPanel>
+                    <TextBlock Text="Change Photo Number"
+                              Foreground="White"
+                              FontSize="24"
+                              FontWeight="Bold"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,20"/>
+
+                    <TextBlock Text="Current Number:"
+                              Foreground="Gray"
+                              FontSize="16"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,5"/>
+
+                    <TextBlock x:Name="CurrentPhotoNumberText"
+                              Text="1"
+                              Foreground="White"
+                              FontSize="32"
+                              FontWeight="Bold"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,20"/>
+
+                    <!-- Number Pad -->
+                    <UniformGrid Columns="3" Rows="4" Margin="0,0,0,20">
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPad_Click"
+                                Tag="1">
+                            <TextBlock Text="1" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPad_Click"
+                                Tag="2">
+                            <TextBlock Text="2" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPad_Click"
+                                Tag="3">
+                            <TextBlock Text="3" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPad_Click"
+                                Tag="4">
+                            <TextBlock Text="4" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPad_Click"
+                                Tag="5">
+                            <TextBlock Text="5" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPad_Click"
+                                Tag="6">
+                            <TextBlock Text="6" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPad_Click"
+                                Tag="7">
+                            <TextBlock Text="7" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPad_Click"
+                                Tag="8">
+                            <TextBlock Text="8" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPad_Click"
+                                Tag="9">
+                            <TextBlock Text="9" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPadClear_Click"
+                                Background="#FF6B6B">
+                            <TextBlock Text="Clear" FontSize="18" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPad_Click"
+                                Tag="0">
+                            <TextBlock Text="0" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Width="80" Height="80"
+                                Click="NumberPadBackspace_Click"
+                                Background="#FFA500">
+                            <TextBlock Text="⌫" FontSize="28" Foreground="White" FontFamily="Segoe UI"/>
+                        </Button>
+                    </UniformGrid>
+
+                    <!-- New Number Display -->
+                    <TextBlock Text="New Number:"
+                              Foreground="Gray"
+                              FontSize="16"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,5"/>
+
+                    <Border BorderBrush="White" BorderThickness="2" CornerRadius="5"
+                            Background="#FF2A2A2A" Padding="10" Margin="0,0,0,20">
+                        <TextBlock x:Name="NewPhotoNumberText"
+                                  Text=""
+                                  Foreground="White"
+                                  FontSize="32"
+                                  FontWeight="Bold"
+                                  HorizontalAlignment="Center"
+                                  MinWidth="50"/>
+                    </Border>
+
+                    <!-- Action Buttons -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Width="120" Height="60"
+                                Background="#4CAF50"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="18"
+                                Click="ApplyPhotoNumber_Click"
+                                Margin="0,0,10,0">
+                            <TextBlock Text="Apply" FontFamily="Segoe UI"/>
+                        </Button>
+
+                        <Button Width="120" Height="60"
+                                Background="#FF6B6B"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="18"
+                                Click="ClosePhotoNumberEditPopup_Click">
+                            <TextBlock Text="Cancel" FontFamily="Segoe UI"/>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
     </Grid>
 </UserControl>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Management;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,7 @@ namespace CameraControl.Devices.Sony
     {
         private static bool _sdkInitialized = false;
         private static readonly object _lockObject = new object();
+        public static CrCameraDeviceModel? PreferredDirectModel { get; set; } = null;
         
         /// <summary>
         /// Get Sony USB device serial numbers from system
@@ -105,6 +107,22 @@ namespace CameraControl.Devices.Sony
                     if (!_sdkInitialized)
                     {
                         Log.Debug("Sony USB: Initializing Sony SDK...");
+
+                        // Attempt to set DLL search directory for Sony SDK resiliency
+                        try
+                        {
+                            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                            var crsdkPath = System.IO.Path.Combine(baseDir, "sonysdk", "external", "crsdk");
+                            var adapterPath = System.IO.Path.Combine(baseDir, "sonysdk", "external", "crsdk", "CrAdapter");
+                            // Only call if folders exist
+                            if (Directory.Exists(crsdkPath)) SonySDKWrapper.TrySetDllDirectory(crsdkPath);
+                            if (Directory.Exists(adapterPath)) SonySDKWrapper.TrySetDllDirectory(adapterPath);
+                            Log.Debug($"Sony USB: SetDllDirectory applied for '{crsdkPath}' and '{adapterPath}' if present");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Debug($"Sony USB: SetDllDirectory failed (non-fatal): {ex.Message}");
+                        }
                         
                         // Get SDK version
                         uint version = SonySDKWrapper.GetSDKVersion();
@@ -136,7 +154,7 @@ namespace CameraControl.Devices.Sony
                 }
                 
                 // Try direct FX3 camera creation first (bypasses enumeration)
-                Log.Debug("Sony USB: Attempting direct FX3 camera creation...");
+                Log.Debug("Sony USB: Attempting direct camera creation (preferred model first if set)...");
                 Log.Debug("Sony USB: DEBUG - About to call GetSonyUSBSerialNumbers()");
                 
                 // Get Sony USB device serial numbers from system
@@ -171,10 +189,22 @@ namespace CameraControl.Devices.Sony
                             var task = Task.Run(() =>
                             {
                                 IntPtr ptr;
-                                var createResult = SonySDKWrapper.CreateCameraObjectInfoUSBConnection(
-                                    out ptr, 
-                                    CrCameraDeviceModel.CrCameraDeviceModel_ILME_FX3, 
-                                    serialPtr);
+                                CrError createResult;
+                                // Try preferred model first if configured
+                                if (PreferredDirectModel.HasValue)
+                                {
+                                    createResult = SonySDKWrapper.CreateCameraObjectInfoUSBConnection(
+                                        out ptr,
+                                        PreferredDirectModel.Value,
+                                        serialPtr);
+                                }
+                                else
+                                {
+                                    createResult = SonySDKWrapper.CreateCameraObjectInfoUSBConnection(
+                                        out ptr,
+                                        CrCameraDeviceModel.CrCameraDeviceModel_ILME_FX3,
+                                        serialPtr);
+                                }
                                 return new { Result = createResult, Pointer = ptr };
                             });
                     
@@ -206,7 +236,11 @@ namespace CameraControl.Devices.Sony
                                 // Store camera info for later use
                                 var cameraInfo = new CrCameraObjectInfo(cameraObjectPtr);
                                 descriptor.SetSonyCameraInfo(cameraInfo);
-                                descriptor.SetSonyModelName("Sony FX3");
+                                // Set model name based on preference if available, else generic
+                                if (PreferredDirectModel.HasValue)
+                                    descriptor.SetSonyModelName(PreferredDirectModel.Value.ToString());
+                                else
+                                    descriptor.SetSonyModelName("Sony Camera");
                                 
                                 devices.Add(descriptor);
                                 Log.Debug($"Sony USB: FX3 camera added via direct creation with serial: {serialNumber}");
@@ -214,7 +248,7 @@ namespace CameraControl.Devices.Sony
                             }
                             else
                             {
-                                Log.Debug($"Sony USB: Direct FX3 creation failed for serial {serialNumber}: {SonySDKWrapper.GetErrorMessage(directResult)}");
+                                Log.Debug($"Sony USB: Direct creation failed for serial {serialNumber}: {SonySDKWrapper.GetErrorMessage(directResult)}");
                             }
                         }
                         finally

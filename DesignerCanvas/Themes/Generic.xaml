@@ -75,7 +75,7 @@
         <Setter Property="Content" Value="{Binding}" />
         <Setter Property="RenderTransform">
             <Setter.Value>
-                <RotateTransform Angle="{Binding Angle}" />
+                <RotateTransform Angle="{Binding Angle, FallbackValue=0}" />
             </Setter.Value>
         </Setter>
         <Setter Property="RenderTransformOrigin" Value="0.5, 0.5" />
@@ -286,7 +286,7 @@
                                     <DropShadowEffect Color="Black" 
                                                       Direction="0" 
                                                       ShadowDepth="0" 
-                                                      BlurRadius="{Binding OutlineThickness}"
+                                                      BlurRadius="{Binding OutlineThickness, FallbackValue=0}"
                                                       Opacity="1"/>
                                 </Setter.Value>
                             </Setter>
@@ -318,10 +318,10 @@
                                 <DataTrigger Binding="{Binding HasShadow}" Value="True">
                                     <Setter Property="Effect">
                                         <Setter.Value>
-                                            <DropShadowEffect Color="{Binding ShadowColor}"
+                                            <DropShadowEffect Color="{Binding ShadowColor, FallbackValue=Black}"
                                                               Direction="315"
-                                                              ShadowDepth="{Binding ShadowOffsetX}"
-                                                              BlurRadius="{Binding ShadowBlurRadius}"/>
+                                                              ShadowDepth="{Binding ShadowOffsetX, FallbackValue=0}"
+                                                              BlurRadius="{Binding ShadowBlurRadius, FallbackValue=0}"/>
                                         </Setter.Value>
                                     </Setter>
                                 </DataTrigger>
@@ -400,9 +400,9 @@
                                 <DataTrigger Binding="{Binding HasShadow}" Value="True">
                                     <Setter Property="Effect">
                                         <Setter.Value>
-                                            <DropShadowEffect ShadowDepth="{Binding ShadowOffsetX}"
-                                                              Color="{Binding ShadowColor}" 
-                                                              BlurRadius="{Binding ShadowBlurRadius}"
+                                            <DropShadowEffect ShadowDepth="{Binding ShadowOffsetX, FallbackValue=0}"
+                                                              Color="{Binding ShadowColor, FallbackValue=Black}"
+                                                              BlurRadius="{Binding ShadowBlurRadius, FallbackValue=0}"
                                                               Direction="315"
                                                               Opacity="0.7"/>
                                         </Setter.Value>
@@ -430,9 +430,9 @@
                                 <DataTrigger Binding="{Binding HasShadow}" Value="True">
                                     <Setter Property="Effect">
                                         <Setter.Value>
-                                            <DropShadowEffect ShadowDepth="{Binding ShadowOffsetX}"
-                                                              Color="{Binding ShadowColor}" 
-                                                              BlurRadius="{Binding ShadowBlurRadius}"
+                                            <DropShadowEffect ShadowDepth="{Binding ShadowOffsetX, FallbackValue=0}"
+                                                              Color="{Binding ShadowColor, FallbackValue=Black}"
+                                                              BlurRadius="{Binding ShadowBlurRadius, FallbackValue=0}"
                                                               Direction="315"
                                                               Opacity="0.7"/>
                                         </Setter.Value>
@@ -461,9 +461,9 @@
                                 <DataTrigger Binding="{Binding HasShadow}" Value="True">
                                     <Setter Property="Effect">
                                         <Setter.Value>
-                                            <DropShadowEffect ShadowDepth="{Binding ShadowOffsetX}"
-                                                              Color="{Binding ShadowColor}" 
-                                                              BlurRadius="{Binding ShadowBlurRadius}"
+                                            <DropShadowEffect ShadowDepth="{Binding ShadowOffsetX, FallbackValue=0}"
+                                                              Color="{Binding ShadowColor, FallbackValue=Black}"
+                                                              BlurRadius="{Binding ShadowBlurRadius, FallbackValue=0}"
                                                               Direction="315"
                                                               Opacity="0.7"/>
                                         </Setter.Value>

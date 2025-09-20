@@ -10,6 +10,7 @@
                 <ResourceDictionary Source="Resources/UnifiedTheme.xaml"/>
                 <!-- Existing Styles -->
                 <ResourceDictionary Source="Styles/ComboBoxStyle.xaml"/>
+                <ResourceDictionary Source="Styles/DarkScrollBar.xaml"/>
                 <ResourceDictionary Source="Styles/MenuStyle.xaml"/>
                 <ResourceDictionary Source="Styles/ButtonStyle.xaml"/>
                 <ResourceDictionary Source="Styles/SliderStyle.xaml"/>
@@ -20,4 +21,3 @@
 
     </Application.Resources>
 </Application>
-

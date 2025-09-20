@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using Photobooth.Controls;
+using Photobooth.Properties;
 
 namespace Photobooth.Services
 {
@@ -234,7 +235,7 @@ namespace Photobooth.Services
                 // Show PIN entry dialog with custom message from settings
                 if (_pinEntryOverlay != null)
                 {
-                    string customMessage = "Enter PIN to unlock"; // TODO: Properties.Settings.Default.LockMessage;
+                    string customMessage = GetLockMessageFromSettings();
                     _pinEntryOverlay.ShowOverlay(PinEntryOverlay.PinMode.UIUnlock, (success) =>
                     {
                         if (success)
@@ -355,6 +356,39 @@ namespace Photobooth.Services
             }
         }
         
+        /// <summary>
+        /// Get lock message from settings using reflection
+        /// </summary>
+        private string GetLockMessageFromSettings()
+        {
+            try
+            {
+                // First try LockUIMessage property
+                var lockUIMessageProperty = Properties.Settings.Default.GetType().GetProperty("LockUIMessage");
+                if (lockUIMessageProperty != null)
+                {
+                    var value = lockUIMessageProperty.GetValue(Properties.Settings.Default) as string;
+                    if (!string.IsNullOrEmpty(value))
+                        return value;
+                }
+
+                // Then try LockMessage property
+                var lockMessageProperty = Properties.Settings.Default.GetType().GetProperty("LockMessage");
+                if (lockMessageProperty != null)
+                {
+                    var value = lockMessageProperty.GetValue(Properties.Settings.Default) as string;
+                    if (!string.IsNullOrEmpty(value))
+                        return value;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PinLockService: Error getting lock message: {ex.Message}");
+            }
+
+            return "Interface is locked. Please contact staff for assistance.";
+        }
+
         /// <summary>
         /// Validate a PIN
         /// </summary>

@@ -593,7 +593,65 @@ namespace Photobooth.Services
                         await SendJson(context, new { success = true, message = "Event selection not implemented" });
                     }
                     break;
-                    
+                
+                case "generate":
+                    if (method == "POST")
+                    {
+                        try
+                        {
+                            var data = await GetRequestData(context);
+                            int eventId = 0;
+                            data.TryGetValue("eventId", out var eventIdStr);
+                            int.TryParse(eventIdStr, out eventId);
+                            data.TryGetValue("eventName", out var eventName);
+                            
+                            var evtService = new EventService();
+                            Database.EventData evt = null;
+                            if (eventId > 0)
+                            {
+                                evt = evtService.GetEvent(eventId);
+                            }
+                            if (evt == null && !string.IsNullOrWhiteSpace(eventName))
+                            {
+                                // Try to find by name if ID not provided
+                                var all = evtService.GetAllEvents();
+                                evt = all.FirstOrDefault(e => string.Equals(e.Name, eventName, StringComparison.OrdinalIgnoreCase));
+                            }
+                            if (evt == null)
+                            {
+                                await SendError(context, 404, "Event not found");
+                                return;
+                            }
+                            
+                            var shareService = CloudShareProvider.GetShareService();
+                            if (shareService is CloudShareServiceRuntime runtimeService)
+                            {
+                                var (url, password) = await runtimeService.CreateEventGalleryAsync(evt.Name, evt.Id, usePassword: false);
+                                if (!string.IsNullOrEmpty(url))
+                                {
+                                    await SendJson(context, new { success = true, url, password });
+                                }
+                                else
+                                {
+                                    await SendJson(context, new { success = false, error = "Gallery generation failed" });
+                                }
+                            }
+                            else
+                            {
+                                await SendJson(context, new { success = false, error = "Cloud share service unavailable" });
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            await SendJson(context, new { success = false, error = ex.Message });
+                        }
+                    }
+                    else
+                    {
+                        await SendError(context, 405, "Method not allowed");
+                    }
+                    break;
+
                 default:
                     await SendError(context, 404, "Unknown event endpoint");
                     break;

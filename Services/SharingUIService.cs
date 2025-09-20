@@ -412,23 +412,25 @@ namespace Photobooth.Services
                 Grid.SetRow(urlBorder, 3);
                 contentGrid.Children.Add(urlBorder);
                 
-                // SMS Option button
+                // SMS Option button - Larger for touch screens
                 var smsButton = new Button
                 {
-                    Background = new SolidColorBrush(Color.FromRgb(37, 211, 102)), // WhatsApp green
+                    Background = new SolidColorBrush(Color.FromRgb(25, 145, 70)), // Darker green for better visibility
                     Foreground = Brushes.White,
                     BorderThickness = new Thickness(0),
-                    Padding = new Thickness(30, 15, 30, 15),
-                    FontSize = 16,
-                    FontWeight = FontWeights.SemiBold,
+                    Padding = new Thickness(50, 25, 50, 25),  // Increased padding for larger touch target
+                    FontSize = 22,  // Increased font size for better visibility
+                    FontWeight = FontWeights.Bold,  // Bold for better visibility
                     Cursor = Cursors.Hand,
                     HorizontalAlignment = HorizontalAlignment.Center,
+                    MinHeight = 70,  // Minimum height for touch target
+                    MinWidth = 250,  // Minimum width for comfortable touch
                     Margin = new Thickness(0, 0, 0, 20)
                 };
-                
+
                 var smsButtonPanel = new StackPanel { Orientation = Orientation.Horizontal };
-                smsButtonPanel.Children.Add(new TextBlock { Text = "📱", FontSize = 20, Margin = new Thickness(0, 0, 10, 0) });
-                smsButtonPanel.Children.Add(new TextBlock { Text = "Send via SMS" });
+                smsButtonPanel.Children.Add(new TextBlock { Text = "📱", FontSize = 26, Margin = new Thickness(0, 0, 15, 0) });  // Larger icon
+                smsButtonPanel.Children.Add(new TextBlock { Text = "Send via SMS", FontSize = 22, FontWeight = FontWeights.Bold });  // Larger text
                 smsButton.Content = smsButtonPanel;
                 smsButton.Click += (s, e) => 
                 {
@@ -472,7 +474,7 @@ namespace Photobooth.Services
                 // Main overlay grid
                 _smsPhonePadOverlay = new Grid
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(224, 0, 0, 0)),
+                    Background = new SolidColorBrush(Color.FromArgb(250, 0, 0, 0)),  // Very dark overlay for maximum focus
                     Visibility = Visibility.Collapsed
                 };
                 

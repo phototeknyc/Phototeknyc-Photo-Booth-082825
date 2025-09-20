@@ -154,12 +154,16 @@ namespace DesignerCanvas.Controls.Primitives
             Width = AdornedObject.Width*zoom;
             Height = AdornedObject.Height*zoom;
             rotateTransform.Angle = AdornedObject.Angle;
-            
+
             // Update handle scale based on current canvas scale
             if (ParentCanvas != null)
             {
-                HandleScale = ParentCanvas.CurrentScale;
-                System.Diagnostics.Debug.WriteLine($"ResizeRotateAdorner HandleScale set to: {HandleScale}");
+                var newScale = ParentCanvas.CurrentScale;
+                if (Math.Abs(HandleScale - newScale) > 0.001) // Only update if scale actually changed
+                {
+                    HandleScale = newScale;
+                    System.Diagnostics.Debug.WriteLine($"ResizeRotateAdorner HandleScale updated to: {HandleScale}");
+                }
             }
         }
     }
@@ -205,12 +209,16 @@ namespace DesignerCanvas.Controls.Primitives
             Width = AdornedObject.Width * zoom;
             Height = AdornedObject.Height * zoom;
             rotateTransform.Angle = AdornedObject.Angle;
-            
+
             // Update handle scale for tooltip sizing
             if (ParentCanvas != null)
             {
-                HandleScale = ParentCanvas.CurrentScale;
-                System.Diagnostics.Debug.WriteLine($"SizeAdorner HandleScale set to: {HandleScale}");
+                var newScale = ParentCanvas.CurrentScale;
+                if (Math.Abs(HandleScale - newScale) > 0.001) // Only update if scale actually changed
+                {
+                    HandleScale = newScale;
+                    System.Diagnostics.Debug.WriteLine($"SizeAdorner HandleScale updated to: {HandleScale}");
+                }
             }
         }
 

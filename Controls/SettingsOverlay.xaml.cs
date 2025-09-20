@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Documents;
+using System.Windows.Threading;
 using Photobooth.Services;
 using CameraControl.Devices;
 
@@ -22,6 +23,7 @@ namespace Photobooth.Controls
         private readonly PinLockService _pinLockService;
         private string _currentCategory;
         private Dictionary<string, object> _pendingChanges;
+        private readonly Dictionary<Control, DispatcherTimer> _debounceTimers = new Dictionary<Control, DispatcherTimer>();
         
         public event EventHandler SettingsClosed;
         public event EventHandler SettingsApplied;
@@ -210,7 +212,43 @@ namespace Photobooth.Controls
                     Summary = $"Modes: {(Properties.Settings.Default.CaptureModesEnabled ? "Enabled" : "Disabled")}, Active: {enabledModes}",
                     SettingsCount = 8
                 });
-                
+
+                // GIF/Animation Settings
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "GIF/Animation",
+                    Icon = "🎞️",
+                    Summary = $"GIF: {(Properties.Settings.Default.EnableGifGeneration ? "On" : "Off")}, Speed: {Properties.Settings.Default.GifFrameDelay / 1000.0:F1}s",
+                    SettingsCount = 6
+                });
+
+                // Video Recording Settings
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "Video Recording",
+                    Icon = "📹",
+                    Summary = $"Duration: {Properties.Settings.Default.VideoDuration}s, Quality: {Properties.Settings.Default.VideoQuality ?? "1080p"}",
+                    SettingsCount = 6
+                });
+
+                // Boomerang Settings
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "Boomerang",
+                    Icon = "🔁",
+                    Summary = "Forward-backward looping videos",
+                    SettingsCount = 5
+                });
+
+                // Flipbook Settings
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "Flipbook",
+                    Icon = "📖",
+                    Summary = "Flipbook-style animations",
+                    SettingsCount = 6
+                });
+
                 // Sharing Settings
                 categories.Add(new CategoryViewModel
                 {
@@ -369,6 +407,34 @@ namespace Photobooth.Controls
             if (categoryName == "Cloud Sync")
             {
                 LoadCloudSyncSettings();
+                return;
+            }
+
+            // Special handling for GIF/Animation category
+            if (categoryName == "GIF/Animation")
+            {
+                LoadGifAnimationSettings();
+                return;
+            }
+
+            // Special handling for Video Recording category
+            if (categoryName == "Video Recording")
+            {
+                LoadVideoRecordingSettings();
+                return;
+            }
+
+            // Special handling for Boomerang category
+            if (categoryName == "Boomerang")
+            {
+                LoadBoomerangSettings();
+                return;
+            }
+
+            // Special handling for Flipbook category
+            if (categoryName == "Flipbook")
+            {
+                LoadFlipbookSettings();
                 return;
             }
 
@@ -1610,15 +1676,9 @@ namespace Photobooth.Controls
 
                 passwordBox.PasswordChanged += (s, e) =>
                 {
-                    if (!isInitializing && onChanged != null)
-                    {
-                        string newPassword = passwordBox.Password;
-                        // Only save if the password actually has content or was explicitly cleared
-                        if (!string.IsNullOrEmpty(newPassword) || passwordBox.IsFocused)
-                        {
-                            onChanged.Invoke(newPassword);
-                        }
-                    }
+                    if (isInitializing || onChanged == null) return;
+                    // Debounce to avoid heavy work on every keystroke/paste
+                    DebounceInput(passwordBox, () => onChanged.Invoke(passwordBox.Password), 400);
                 };
 
                 // Also handle lost focus to ensure password is saved
@@ -1644,7 +1704,14 @@ namespace Photobooth.Controls
                     BorderBrush = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
                     Padding = new Thickness(5)
                 };
-                textBox.TextChanged += (s, e) => onChanged?.Invoke(textBox.Text);
+                // Debounce changes to prevent lag when typing/pasting
+                textBox.TextChanged += (s, e) =>
+                {
+                    if (onChanged == null) return;
+                    DebounceInput(textBox, () => onChanged.Invoke(textBox.Text), 300);
+                };
+                // Ensure save on commit
+                textBox.LostFocus += (s, e) => onChanged?.Invoke(textBox.Text);
                 stackPanel.Children.Add(textBox);
             }
 
@@ -1663,6 +1730,31 @@ namespace Photobooth.Controls
 
             container.Child = stackPanel;
             return container;
+        }
+
+        /// <summary>
+        /// Debounce helper to coalesce rapid input changes into a single callback.
+        /// </summary>
+        private void DebounceInput(Control control, Action callback, int milliseconds)
+        {
+            if (!_debounceTimers.TryGetValue(control, out var timer))
+            {
+                timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(milliseconds) };
+                timer.Tick += (s, e) =>
+                {
+                    timer.Stop();
+                    callback?.Invoke();
+                };
+                _debounceTimers[control] = timer;
+            }
+            else
+            {
+                timer.Interval = TimeSpan.FromMilliseconds(milliseconds);
+            }
+
+            // Restart timer
+            timer.Stop();
+            timer.Start();
         }
 
         /// <summary>
@@ -1897,6 +1989,7 @@ namespace Photobooth.Controls
                     "AWS Access Key for S3",
                     false,
                     (value) => {
+                        value = value?.Trim();
                         Environment.SetEnvironmentVariable("AWS_ACCESS_KEY_ID", value, EnvironmentVariableTarget.User);
                         Environment.SetEnvironmentVariable("AWS_ACCESS_KEY_ID", value, EnvironmentVariableTarget.Process);
                     });
@@ -1909,6 +2002,7 @@ namespace Photobooth.Controls
                     "AWS Secret Key for S3",
                     true,
                     (value) => {
+                        value = value?.Trim();
                         Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", value, EnvironmentVariableTarget.User);
                         Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", value, EnvironmentVariableTarget.Process);
                     });
@@ -1921,6 +2015,7 @@ namespace Photobooth.Controls
                     "S3 bucket for storing shared photos",
                     false,
                     (value) => {
+                        value = value?.Trim();
                         Environment.SetEnvironmentVariable("S3_BUCKET_NAME", value, EnvironmentVariableTarget.User);
                         Environment.SetEnvironmentVariable("S3_BUCKET_NAME", value, EnvironmentVariableTarget.Process);
                     });
@@ -1933,10 +2028,25 @@ namespace Photobooth.Controls
                     "Base URL for the online gallery",
                     false,
                     (value) => {
+                        value = value?.Trim();
                         Environment.SetEnvironmentVariable("GALLERY_BASE_URL", value, EnvironmentVariableTarget.User);
                         Environment.SetEnvironmentVariable("GALLERY_BASE_URL", value, EnvironmentVariableTarget.Process);
                     });
                 SettingsListPanel.Children.Add(galleryUrlControl);
+
+                // Use Pre‑Signed URLs toggle
+                var usePresigned = string.Equals(Environment.GetEnvironmentVariable("USE_PRESIGNED_URLS", EnvironmentVariableTarget.User), "True", StringComparison.OrdinalIgnoreCase);
+                var presignedToggle = CreateCloudShareToggle(
+                    "Use Pre‑Signed URLs (private bucket)",
+                    usePresigned,
+                    "When enabled, links embed time‑limited signatures. Disable for clean public URLs (requires public read on events/* or CloudFront).",
+                    (value) => {
+                        Environment.SetEnvironmentVariable("USE_PRESIGNED_URLS", value.ToString(), EnvironmentVariableTarget.User);
+                        Environment.SetEnvironmentVariable("USE_PRESIGNED_URLS", value.ToString(), EnvironmentVariableTarget.Process);
+                        // Reset provider to apply immediately
+                        try { Photobooth.Services.CloudShareProvider.Reset(); } catch {}
+                    });
+                SettingsListPanel.Children.Add(presignedToggle);
 
                 // Auto Share
                 var autoShare = Environment.GetEnvironmentVariable("CLOUD_AUTO_SHARE", EnvironmentVariableTarget.User) == "True";
@@ -2060,6 +2170,7 @@ namespace Photobooth.Controls
                     "AWS S3 Access Key for sync",
                     false,
                     (value) => {
+                        value = value?.Trim();
                         Properties.Settings.Default.S3AccessKey = value;
                         Properties.Settings.Default.Save();
                         // Also update environment variables for PhotoBoothSyncService
@@ -2080,6 +2191,7 @@ namespace Photobooth.Controls
                         // Only save if value is not null (even empty string is valid if user explicitly cleared it)
                         if (value != null)
                         {
+                            value = value?.Trim();
                             Properties.Settings.Default.S3SecretKey = value;
                             Properties.Settings.Default.Save();
 
@@ -2104,6 +2216,7 @@ namespace Photobooth.Controls
                     "S3 bucket for sync storage",
                     false,
                     (value) => {
+                        value = value?.Trim();
                         Properties.Settings.Default.S3BucketName = value;
                         Properties.Settings.Default.Save();
                         // Also update environment variables for PhotoBoothSyncService
@@ -2119,6 +2232,7 @@ namespace Photobooth.Controls
                     "AWS region for S3 bucket (e.g., us-east-1, us-west-2)",
                     false,
                     (value) => {
+                        value = value?.Trim();
                         Properties.Settings.Default.S3Region = value;
                         Properties.Settings.Default.Save();
                         // Also update environment variables for PhotoBoothSyncService
@@ -2501,10 +2615,472 @@ namespace Photobooth.Controls
             }
             catch { }
         }
-        
+
+        #endregion
+
+        #region Video and Animation Settings
+
+        /// <summary>
+        /// Load GIF/Animation settings
+        /// </summary>
+        private void LoadGifAnimationSettings()
+        {
+            try
+            {
+                var settings = Properties.Settings.Default;
+
+                // Enable GIF Generation
+                var enableGifControl = CreateSettingToggle("Enable GIF Generation",
+                    settings.EnableGifGeneration,
+                    "Create animated GIFs from captured photos",
+                    "EnableGifGeneration",
+                    (value) =>
+                    {
+                        Properties.Settings.Default.EnableGifGeneration = value;
+                        Properties.Settings.Default.Save();
+                    });
+                SettingsListPanel.Children.Add(enableGifControl);
+
+                // Frame Delay
+                var frameDelayControl = CreateSliderControl("Frame Delay",
+                    settings.GifFrameDelay / 1000.0, // Convert ms to seconds for display
+                    0.1, 5.0, 0.1,
+                    "seconds",
+                    "Speed of animation playback",
+                    (value) =>
+                    {
+                        Properties.Settings.Default.GifFrameDelay = (int)(value * 1000); // Convert back to ms
+                        Properties.Settings.Default.Save();
+                    });
+                SettingsListPanel.Children.Add(frameDelayControl);
+
+                // Animation Quality
+                var qualityControl = CreateSliderControl("Animation Quality",
+                    settings.GifQuality,
+                    1, 100, 1,
+                    "%",
+                    "Quality of generated animations",
+                    (value) =>
+                    {
+                        Properties.Settings.Default.GifQuality = (int)value;
+                        Properties.Settings.Default.Save();
+                    });
+                SettingsListPanel.Children.Add(qualityControl);
+
+                // Add note about more settings coming soon
+                var noteText = new TextBlock
+                {
+                    Text = "Additional MP4 and looping options coming soon...",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(15, 10, 15, 5)
+                };
+                SettingsListPanel.Children.Add(noteText);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Failed to load GIF/Animation settings: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Load Video Recording settings
+        /// </summary>
+        private void LoadVideoRecordingSettings()
+        {
+            try
+            {
+                var settings = Properties.Settings.Default;
+
+                // Video Duration
+                var durationControl = CreateSliderControl("Video Duration",
+                    settings.VideoDuration,
+                    5, 60, 5,
+                    "seconds",
+                    "Maximum video recording duration",
+                    (value) =>
+                    {
+                        Properties.Settings.Default.VideoDuration = (int)value;
+                        Properties.Settings.Default.Save();
+                    });
+                SettingsListPanel.Children.Add(durationControl);
+
+                // Video Quality
+                var qualityItems = new List<string> { "720p", "1080p", "4K" };
+                var qualityControl = CreateDropdownControl("Video Quality",
+                    settings.VideoQuality ?? "1080p",
+                    qualityItems,
+                    "Resolution of recorded videos",
+                    (value) =>
+                    {
+                        Properties.Settings.Default.VideoQuality = value;
+                        Properties.Settings.Default.Save();
+                    });
+                SettingsListPanel.Children.Add(qualityControl);
+
+                // Video Frame Rate
+                var frameRateControl = CreateSliderControl("Frame Rate",
+                    int.TryParse(settings.VideoFrameRate, out int fr) ? fr : 30,
+                    15, 60, 5,
+                    "fps",
+                    "Frames per second for video recording",
+                    (value) =>
+                    {
+                        Properties.Settings.Default.VideoFrameRate = ((int)value).ToString();
+                        Properties.Settings.Default.Save();
+                    });
+                SettingsListPanel.Children.Add(frameRateControl);
+
+                // Add note about more settings coming soon
+                var noteText = new TextBlock
+                {
+                    Text = "Additional video recording options including audio and compression settings coming soon...",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(15, 10, 15, 5)
+                };
+                SettingsListPanel.Children.Add(noteText);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Failed to load Video Recording settings: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Load Boomerang settings
+        /// </summary>
+        private void LoadBoomerangSettings()
+        {
+            try
+            {
+                // Add placeholder message for now
+                var container = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                    CornerRadius = new CornerRadius(8),
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(15)
+                };
+
+                var infoText = new TextBlock
+                {
+                    Text = "Boomerang settings allow you to create forward-backward looping videos.\n\nSettings for frame count, playback speed, and auto-generation will be available in a future update.",
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    TextWrapping = TextWrapping.Wrap
+                };
+
+                container.Child = infoText;
+                SettingsListPanel.Children.Add(container);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Failed to load Boomerang settings: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Load Flipbook settings
+        /// </summary>
+        private void LoadFlipbookSettings()
+        {
+            try
+            {
+                // Add placeholder message for now
+                var container = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                    CornerRadius = new CornerRadius(8),
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(15)
+                };
+
+                var infoText = new TextBlock
+                {
+                    Text = "Flipbook settings allow you to create animated flipbook-style presentations.\n\nSettings for page count, flip speed, style selection, and PDF generation will be available in a future update.",
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    TextWrapping = TextWrapping.Wrap
+                };
+
+                container.Child = infoText;
+                SettingsListPanel.Children.Add(container);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsOverlay: Failed to load Flipbook settings: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Helper to create a toggle control
+        /// </summary>
+        private UIElement CreateSettingToggle(string title, bool value, string description, string settingName, Action<bool> onChanged)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var stackPanel = new StackPanel();
+
+            var titleBlock = new TextBlock
+            {
+                Text = title,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            stackPanel.Children.Add(titleBlock);
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                var descBlock = new TextBlock
+                {
+                    Text = description,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8)
+                };
+                stackPanel.Children.Add(descBlock);
+            }
+
+            var toggle = new CheckBox
+            {
+                IsChecked = value,
+                Style = FindResource("SettingToggleStyle") as Style
+            };
+            toggle.Checked += (s, e) => onChanged(true);
+            toggle.Unchecked += (s, e) => onChanged(false);
+            stackPanel.Children.Add(toggle);
+
+            container.Child = stackPanel;
+            return container;
+        }
+
+        /// <summary>
+        /// Helper to create a slider control
+        /// </summary>
+        private UIElement CreateSliderControl(string title, double value, double min, double max, double tickFrequency,
+            string unit, string description, Action<double> onChanged)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var stackPanel = new StackPanel();
+
+            var titleBlock = new TextBlock
+            {
+                Text = title,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            stackPanel.Children.Add(titleBlock);
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                var descBlock = new TextBlock
+                {
+                    Text = description,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8)
+                };
+                stackPanel.Children.Add(descBlock);
+            }
+
+            var valueText = new TextBlock
+            {
+                Text = $"{value:F1} {unit}",
+                FontSize = 12,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            stackPanel.Children.Add(valueText);
+
+            var slider = new Slider
+            {
+                Minimum = min,
+                Maximum = max,
+                Value = value,
+                TickFrequency = tickFrequency,
+                IsSnapToTickEnabled = true
+            };
+            slider.ValueChanged += (s, e) =>
+            {
+                valueText.Text = $"{e.NewValue:F1} {unit}";
+                onChanged(e.NewValue);
+            };
+            stackPanel.Children.Add(slider);
+
+            container.Child = stackPanel;
+            return container;
+        }
+
+        /// <summary>
+        /// Helper to create a number input control
+        /// </summary>
+        private UIElement CreateNumberInput(string title, int value, string description, int min, int max, Action<double> onChanged)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var stackPanel = new StackPanel();
+
+            var titleBlock = new TextBlock
+            {
+                Text = title,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            stackPanel.Children.Add(titleBlock);
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                var descBlock = new TextBlock
+                {
+                    Text = description,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8)
+                };
+                stackPanel.Children.Add(descBlock);
+            }
+
+            var inputPanel = new StackPanel { Orientation = Orientation.Horizontal };
+
+            var textBox = new TextBox
+            {
+                Text = value.ToString(),
+                Width = 80,
+                FontSize = 12,
+                Foreground = Brushes.White,
+                Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(5),
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+
+            textBox.TextChanged += (s, e) =>
+            {
+                if (int.TryParse(textBox.Text, out int newValue))
+                {
+                    if (newValue >= min && newValue <= max)
+                    {
+                        onChanged(newValue);
+                    }
+                }
+            };
+            inputPanel.Children.Add(textBox);
+
+            var rangeText = new TextBlock
+            {
+                Text = $"  ({min} - {max})",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            inputPanel.Children.Add(rangeText);
+
+            stackPanel.Children.Add(inputPanel);
+
+            container.Child = stackPanel;
+            return container;
+        }
+
+        /// <summary>
+        /// Helper to create a dropdown control
+        /// </summary>
+        private UIElement CreateDropdownControl(string title, string selectedValue, List<string> items,
+            string description, Action<string> onChanged)
+        {
+            var container = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var stackPanel = new StackPanel();
+
+            var titleBlock = new TextBlock
+            {
+                Text = title,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            stackPanel.Children.Add(titleBlock);
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                var descBlock = new TextBlock
+                {
+                    Text = description,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8)
+                };
+                stackPanel.Children.Add(descBlock);
+            }
+
+            var comboBox = new ComboBox
+            {
+                ItemsSource = items,
+                SelectedValue = selectedValue,
+                FontSize = 12,
+                Foreground = Brushes.White,
+                Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(5)
+            };
+
+            comboBox.SelectionChanged += (s, e) =>
+            {
+                if (comboBox.SelectedItem != null)
+                {
+                    onChanged(comboBox.SelectedItem.ToString());
+                }
+            };
+            stackPanel.Children.Add(comboBox);
+
+            container.Child = stackPanel;
+            return container;
+        }
+
         #endregion
     }
-    
+
     /// <summary>
     /// View model for category cards
     /// </summary>

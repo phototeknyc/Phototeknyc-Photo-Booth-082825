@@ -1498,7 +1498,8 @@ namespace Photobooth.Database
                                 ThumbnailImagePath = SafeGetString(reader, "ThumbnailImagePath"),
                                 CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
                                 ModifiedDate = Convert.ToDateTime(reader["ModifiedDate"]),
-                                IsActive = Convert.ToBoolean(reader["IsActive"])
+                                IsActive = Convert.ToBoolean(reader["IsActive"]),
+                                IsDefault = Convert.ToBoolean(reader["IsDefaultTemplate"])
                             };
                             templates.Add(template);
                         }
@@ -2629,7 +2630,8 @@ namespace Photobooth.Database
         public DateTime CreatedDate { get; set; }
         public DateTime ModifiedDate { get; set; }
         public bool IsActive { get; set; }
-        
+        public bool IsDefault { get; set; } // For event templates
+
         // Asset mappings for import/export (not stored in database)
         public Dictionary<string, string> AssetMappings { get; set; }
         

@@ -11,8 +11,8 @@
         <!-- Full screen opaque background - ensures nothing shows through -->
         <Rectangle Fill="#FF0F0F0F" Opacity="1"/>
         
-        <!-- Touch Template Designer - Full Screen -->
-        <local:TouchTemplateDesigner x:Name="TouchDesigner"/>
+        <!-- Touch Template Designer - Full Screen with Safe Margins -->
+        <local:TouchTemplateDesigner x:Name="TouchDesigner" Margin="60,10,10,10"/>
         
         <!-- Floating close button in top-right corner -->
         <Button x:Name="CloseButton" 

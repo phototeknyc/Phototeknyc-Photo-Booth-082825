@@ -105,7 +105,12 @@ namespace PortableDeviceLib
                     yield break;
 
                 foreach (string id in DeviceIds)
-                    yield return GetPortableDeviceById(id);
+                {
+                    if (!string.IsNullOrEmpty(id))
+                    {
+                        yield return GetPortableDeviceById(id);
+                    }
+                }
             }
         }
 

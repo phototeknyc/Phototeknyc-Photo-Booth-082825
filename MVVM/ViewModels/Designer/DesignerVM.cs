@@ -947,11 +947,142 @@ namespace Photobooth.MVVM.ViewModels.Designer
 							LockedAspectRatio = bool.Parse(i.KeepAspect)
 						});
 					}
+					else if (element is QrCodeElement qr)
+					{
+						// Generate QR code image
+						var qrImage = GenerateQRCodeImage(qr.Value ?? "https://example.com",
+							qr.ECC ?? "Q", qr.PixelsPerModule);
+						if (qrImage != null)
+						{
+							CustomDesignerCanvas.Items.Add(new ImageCanvasItem(qr.Left, qr.Top,
+								qr.Width, qr.Height, qrImage, 1, 1)
+							{
+								LockedAspectRatio = true
+							});
+						}
+					}
+					else if (element is BarcodeElement bc)
+					{
+						// Generate barcode image
+						var barcodeImage = GenerateBarcodeImage(bc.Value ?? "123456789",
+							bc.Symbology ?? "Code39", bc.ModuleWidth, bc.IncludeLabel);
+						if (barcodeImage != null)
+						{
+							CustomDesignerCanvas.Items.Add(new ImageCanvasItem(bc.Left, bc.Top,
+								bc.Width, bc.Height, barcodeImage, 1, 1)
+							{
+								LockedAspectRatio = true
+							});
+						}
+					}
 				}
 			}
 			catch (Exception ex)
 			{
 				MessageBox.Show($"Error applying template: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+			}
+		}
+
+		private BitmapSource GenerateQRCodeImage(string value, string eccLevel, int pixelsPerModule)
+		{
+			try
+			{
+				// Parse ECC level
+				QRCoder.QRCodeGenerator.ECCLevel ecc = QRCoder.QRCodeGenerator.ECCLevel.Q;
+				if (Enum.TryParse<QRCoder.QRCodeGenerator.ECCLevel>(eccLevel, out var parsedEcc))
+				{
+					ecc = parsedEcc;
+				}
+
+				// Generate QR code
+				using (var qrGenerator = new QRCoder.QRCodeGenerator())
+				{
+					var qrCodeData = qrGenerator.CreateQrCode(value, ecc);
+					using (var qrCode = new QRCoder.QRCode(qrCodeData))
+					{
+						var bitmap = qrCode.GetGraphic(pixelsPerModule);
+
+						// Convert System.Drawing.Bitmap to BitmapSource
+						using (var memory = new System.IO.MemoryStream())
+						{
+							bitmap.Save(memory, System.Drawing.Imaging.ImageFormat.Png);
+							memory.Position = 0;
+
+							var bitmapImage = new BitmapImage();
+							bitmapImage.BeginInit();
+							bitmapImage.StreamSource = memory;
+							bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
+							bitmapImage.EndInit();
+							bitmapImage.Freeze();
+
+							return bitmapImage;
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Failed to generate QR code: {ex.Message}");
+				return null;
+			}
+		}
+
+		private BitmapSource GenerateBarcodeImage(string value, string symbology, double moduleWidth, bool includeLabel)
+		{
+			try
+			{
+				// For now, create a simple placeholder image for barcodes
+				// You can replace this with actual barcode generation using a library
+				var width = 240;
+				var height = includeLabel ? 100 : 80;
+
+				var visual = new DrawingVisual();
+				using (var context = visual.RenderOpen())
+				{
+					// Draw white background
+					context.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+
+					// Draw barcode lines (simplified representation)
+					var barWidth = moduleWidth;
+					var x = 10.0;
+					var barPattern = "101010111001101"; // Sample pattern
+
+					foreach (char c in barPattern)
+					{
+						if (c == '1')
+						{
+							context.DrawRectangle(Brushes.Black, null,
+								new Rect(x, 10, barWidth, height - (includeLabel ? 30 : 20)));
+						}
+						x += barWidth;
+					}
+
+					// Draw label if requested
+					if (includeLabel)
+					{
+						var formattedText = new FormattedText(
+							value,
+							System.Globalization.CultureInfo.InvariantCulture,
+							FlowDirection.LeftToRight,
+							new Typeface("Arial"),
+							12,
+							Brushes.Black,
+							1.0);
+
+						context.DrawText(formattedText, new Point((width - formattedText.Width) / 2, height - 20));
+					}
+				}
+
+				var renderTarget = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+				renderTarget.Render(visual);
+				renderTarget.Freeze();
+
+				return renderTarget;
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Failed to generate barcode: {ex.Message}");
+				return null;
 			}
 		}
 
@@ -1021,9 +1152,9 @@ namespace Photobooth.MVVM.ViewModels.Designer
 			var currentColor = (CanvasBackgroundColor as SolidColorBrush)?.Color ?? Colors.White;
 			
 			// Show color picker dialog
-			var newColor = Photobooth.Controls.PixiEditorColorPickerDialog.ShowDialog(
-				Application.Current.MainWindow, 
-				"Canvas Background Color", 
+			var newColor = Photobooth.Controls.SimpleColorPickerDialog.ShowDialog(
+				Application.Current.MainWindow,
+				"Canvas Background Color",
 				currentColor);
 			
 			if (newColor.HasValue)
@@ -1684,25 +1815,35 @@ namespace Photobooth.MVVM.ViewModels.Designer
 			// Add text at center using native paper dimensions
 			var centerX = CustomDesignerCanvas.ActualPixelWidth > 0 ? CustomDesignerCanvas.ActualPixelWidth / 2 - 150 : 300;
 			var centerY = CustomDesignerCanvas.ActualPixelHeight > 0 ? CustomDesignerCanvas.ActualPixelHeight / 2 - 50 : 300;
-			
+
 			// Create text item with reasonable default font size
 			// Don't set Width/Height - let the text auto-size based on content
 			var textItem = new TextCanvasItem(centerX, centerY, "Sample Text")
 			{
 				FontFamily = "Arial",
 				FontSize = 72, // Use a reasonable default font size
-				Foreground = Brushes.Black
+				Foreground = Brushes.Black,
+				// Explicitly set effect properties to prevent binding errors
+				HasShadow = false,
+				HasOutline = false,
+				Angle = 0,
+				ShadowColor = System.Windows.Media.Colors.Black,
+				ShadowOffsetX = 0,
+				ShadowOffsetY = 0,
+				ShadowBlurRadius = 0,
+				OutlineColor = System.Windows.Media.Brushes.Black,
+				OutlineThickness = 0
 			};
-			
+
 			// The TextCanvasItem will automatically size itself to fit the text
 			// through its UpdateSizeToFitText() method
-			
+
 			CustomDesignerCanvas.Items.Add(textItem);
-			
+
 			// Select the newly added text item
 			CustomDesignerCanvas.SelectedItems.Clear();
 			CustomDesignerCanvas.SelectedItems.Add(textItem);
-			
+
 			// Change tracking removed
 		}
 

@@ -277,7 +277,7 @@ namespace Photobooth.Services
                         📋 Copy Customer Link
                     </button>
                     <button onclick='generateEventGallery({evt.Id}, ""{evt.Name}"")' class='view-gallery-btn' style='width: auto; padding: 8px 16px; background: linear-gradient(135deg, #00D9FF 0%, #7928CA 100%);'>
-                        🔄 Generate Customer Gallery
+                        🔄 Regenerate Customer Gallery
                     </button>
                 </div>
             </div>");
@@ -442,17 +442,31 @@ namespace Photobooth.Services
                 const originalText = btn.innerHTML;
                 btn.innerHTML = '⏳ Generating...';
                 btn.disabled = true;
-                
-                // Note: This would need to call back to your application to trigger the gallery generation
-                // For now, we'll show instructions
-                alert(`To generate the customer gallery for ${eventName}:\n\n1. This will create a beautiful gallery page at /events/${eventName.toLowerCase().replace(/ /g, '-')}/index.html\n2. The gallery will show all sessions with photos\n3. Customers can view and download all their photos\n\nNote: This requires the application to upload the gallery HTML to S3.`);
-                
+
+                const resp = await fetch('http://localhost:8080/api/events/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ eventId: String(eventId), eventName })
+                });
+                const data = await resp.json();
+
+                if (data && data.success) {
+                    const url = data.url;
+                    try {
+                        await navigator.clipboard.writeText(url);
+                    } catch {}
+                    alert(`✅ Gallery generated for ${eventName}!\n\nURL:\n${url}`);
+                    window.open(url, '_blank');
+                } else {
+                    alert('⚠️ Gallery generation failed' + (data && data.error ? `: ${data.error}` : ''));
+                }
+
                 btn.innerHTML = originalText;
                 btn.disabled = false;
-                
             } catch (error) {
                 console.error('Generate error:', error);
-                alert('Failed to generate gallery.');
+                alert('Failed to generate gallery. Is the app running with Web API on port 8080?');
+                try { btn.innerHTML = originalText; btn.disabled = false; } catch {}
             }
         }
     </script>

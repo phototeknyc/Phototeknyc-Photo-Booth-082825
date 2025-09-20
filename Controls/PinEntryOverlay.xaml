@@ -9,15 +9,15 @@
     <UserControl.Resources>
         <!-- Modern Dark Theme Styles matching Settings Overlay -->
         <Style x:Key="ModernPinButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#2A2A2A"/>
+            <Setter Property="Background" Value="#20FFFFFF"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="24"/>
-            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Width" Value="85"/>
-            <Setter Property="Height" Value="85"/>
-            <Setter Property="Margin" Value="8"/>
+            <Setter Property="Height" Value="50"/>
+            <Setter Property="Margin" Value="2"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -110,7 +110,7 @@
 
         <!-- Special Button Styles -->
         <Style x:Key="SpecialPinButtonStyle" TargetType="Button" BasedOn="{StaticResource ModernPinButtonStyle}">
-            <Setter Property="Background" Value="#353535"/>
+            <Setter Property="Background" Value="#20FFFFFF"/>
             <Setter Property="FontSize" Value="20"/>
         </Style>
 
@@ -168,8 +168,8 @@
     </UserControl.Resources>
 
     <!-- Main Overlay Grid -->
-    <Grid x:Name="MainOverlay" 
-          Background="#CC000000" 
+    <Grid x:Name="MainOverlay"
+          Background="#FA000000"
           Visibility="Collapsed">
         
         <!-- Animation -->
@@ -186,12 +186,14 @@
         
         <!-- PIN Entry Panel -->
         <Border x:Name="PinPanel"
-                Background="#2D2D30" 
-                CornerRadius="20"
+                Background="#1E1E1E"
+                CornerRadius="25"
                 Width="450"
                 MaxHeight="700"
                 HorizontalAlignment="Center"
-                VerticalAlignment="Center">
+                VerticalAlignment="Center"
+                BorderBrush="#30FFFFFF"
+                BorderThickness="1">
             
             <Border.Effect>
                 <DropShadowEffect Color="Black" BlurRadius="25" ShadowDepth="10" Opacity="0.7"/>
@@ -402,5 +404,98 @@
                           VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
+
+        <!-- Full Screen Lock Message Overlay -->
+        <Grid x:Name="LockMessageOverlay"
+              Background="#FA000000"
+              Visibility="Collapsed">
+
+            <!-- Center Container for Lock Message -->
+            <Border Background="#1E1E1E"
+                    CornerRadius="30"
+                    MaxWidth="600"
+                    MaxHeight="400"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="#30FFFFFF"
+                    BorderThickness="1"
+                    Padding="50">
+
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="30" ShadowDepth="0" Opacity="0.7"/>
+                </Border.Effect>
+
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Lock Icon -->
+                    <TextBlock Grid.Row="0"
+                               Text="🔒"
+                               FontSize="72"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,30"/>
+
+                    <!-- Title -->
+                    <TextBlock Grid.Row="1"
+                               Text="Interface Locked"
+                               FontSize="32"
+                               FontWeight="Light"
+                               Foreground="White"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,20"/>
+
+                    <!-- Custom Lock Message -->
+                    <TextBlock Grid.Row="2"
+                               x:Name="CustomLockMessageText"
+                               Text="Please contact staff for assistance"
+                               FontSize="20"
+                               Foreground="#B0B0B0"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               MaxWidth="500"/>
+
+                    <!-- Unlock Button -->
+                    <Button Grid.Row="3"
+                            x:Name="UnlockInterfaceButton"
+                            Content="Tap to Unlock"
+                            Background="#25914C"
+                            Foreground="White"
+                            FontSize="18"
+                            FontWeight="SemiBold"
+                            Height="60"
+                            Width="200"
+                            BorderThickness="0"
+                            Cursor="Hand"
+                            HorizontalAlignment="Center"
+                            Margin="0,30,0,0"
+                            Click="UnlockInterfaceButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        CornerRadius="30">
+                                    <ContentPresenter HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#2EAF5C"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#1E7A3E"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

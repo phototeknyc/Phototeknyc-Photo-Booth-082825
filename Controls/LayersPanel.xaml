@@ -1,0 +1,272 @@
+<UserControl x:Class="Photobooth.Controls.LayersPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:Photobooth.Controls"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="350">
+
+    <UserControl.Resources>
+        <!-- Converters -->
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+
+        <!-- Modern Dark Theme Colors -->
+        <Color x:Key="PanelBg">#1A1A2E</Color>
+        <Color x:Key="ItemBg">#16213E</Color>
+        <Color x:Key="ItemHover">#0F3460</Color>
+        <Color x:Key="Selected">#6C63FF</Color>
+        <Color x:Key="IconColor">#B0B0B0</Color>
+
+        <SolidColorBrush x:Key="PanelBgBrush" Color="{StaticResource PanelBg}"/>
+        <SolidColorBrush x:Key="ItemBgBrush" Color="{StaticResource ItemBg}"/>
+        <SolidColorBrush x:Key="ItemHoverBrush" Color="{StaticResource ItemHover}"/>
+        <SolidColorBrush x:Key="SelectedBrush" Color="{StaticResource Selected}"/>
+        <SolidColorBrush x:Key="IconBrush" Color="{StaticResource IconColor}"/>
+
+        <!-- Layer Item Style -->
+        <Style x:Key="LayerItemStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource ItemBgBrush}"/>
+            <Setter Property="Height" Value="60"/>
+            <Setter Property="Margin" Value="5,2"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource ItemHoverBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Icon Button Style -->
+        <Style x:Key="LayerIconButton" TargetType="Button">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource IconBrush}"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#333333"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Toggle Button Style for Eye/Lock -->
+        <Style x:Key="LayerToggleButton" TargetType="ToggleButton">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource IconBrush}"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource SelectedBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#333333"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource PanelBgBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#0F0F0F" Padding="10">
+            <Grid>
+                <TextBlock Text="LAYERS"
+                          Foreground="White"
+                          FontSize="16"
+                          FontWeight="Bold"
+                          VerticalAlignment="Center"/>
+
+                <StackPanel Orientation="Horizontal"
+                           HorizontalAlignment="Right">
+                    <!-- Blend Mode Dropdown -->
+                    <ComboBox x:Name="BlendModeCombo"
+                             Width="100"
+                             Height="30"
+                             Margin="5,0"
+                             SelectedIndex="0">
+                        <ComboBoxItem>Normal</ComboBoxItem>
+                        <ComboBoxItem>Multiply</ComboBoxItem>
+                        <ComboBoxItem>Screen</ComboBoxItem>
+                        <ComboBoxItem>Overlay</ComboBoxItem>
+                        <ComboBoxItem>Darken</ComboBoxItem>
+                        <ComboBoxItem>Lighten</ComboBoxItem>
+                    </ComboBox>
+
+                    <!-- Opacity Slider -->
+                    <TextBlock Text="Opacity:"
+                              Foreground="Gray"
+                              VerticalAlignment="Center"
+                              Margin="5,0"/>
+                    <Slider x:Name="OpacitySlider"
+                           Width="80"
+                           Minimum="0"
+                           Maximum="100"
+                           Value="100"
+                           VerticalAlignment="Center"
+                           Margin="5,0"/>
+                    <TextBlock x:Name="OpacityText"
+                              Text="100%"
+                              Foreground="White"
+                              VerticalAlignment="Center"
+                              Width="40"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Layers List -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="LayersList">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource LayerItemStyle}"
+                               PreviewMouseLeftButtonDown="Layer_MouseDown"
+                               PreviewMouseMove="Layer_MouseMove"
+                               PreviewMouseLeftButtonUp="Layer_MouseUp"
+                               AllowDrop="True"
+                               Drop="Layer_Drop"
+                               DragOver="Layer_DragOver"
+                               Tag="{Binding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Visibility Toggle -->
+                                <ToggleButton Grid.Column="0"
+                                            Style="{StaticResource LayerToggleButton}"
+                                            IsChecked="{Binding IsVisible}"
+                                            Click="ToggleVisibility_Click"
+                                            Margin="5,0">
+                                    <TextBlock Text="&#xE7B3;" x:Name="VisibilityIcon"/>
+                                </ToggleButton>
+
+                                <!-- Layer Thumbnail -->
+                                <Border Grid.Column="1"
+                                       Width="40" Height="40"
+                                       Background="White"
+                                       CornerRadius="3"
+                                       Margin="5,0">
+                                    <Image Source="{Binding Thumbnail}"
+                                          Stretch="UniformToFill"/>
+                                </Border>
+
+                                <!-- Layer Info -->
+                                <StackPanel Grid.Column="2"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0">
+                                    <TextBlock Text="{Binding Name}"
+                                              Foreground="White"
+                                              FontSize="14"
+                                              FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding Type}"
+                                              Foreground="Gray"
+                                              FontSize="11"/>
+                                </StackPanel>
+
+                                <!-- Lock Toggle -->
+                                <ToggleButton Grid.Column="3"
+                                            Style="{StaticResource LayerToggleButton}"
+                                            IsChecked="{Binding IsLocked}"
+                                            Click="ToggleLock_Click"
+                                            Margin="5,0">
+                                    <TextBlock Text="&#xE72E;" x:Name="LockIcon"/>
+                                </ToggleButton>
+
+                                <!-- Selection Indicator -->
+                                <Rectangle Grid.Column="4"
+                                          Width="4"
+                                          Fill="{StaticResource SelectedBrush}"
+                                          Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisibilityConverter}}"
+                                          HorizontalAlignment="Right"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Bottom Toolbar -->
+        <Border Grid.Row="2" Background="#0F0F0F" Padding="10">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button Style="{StaticResource LayerIconButton}"
+                       Click="AddLayer_Click"
+                       ToolTip="Add Layer"
+                       Content="&#xE710;" Margin="5,0"/>
+
+                <Button Style="{StaticResource LayerIconButton}"
+                       Click="DuplicateLayer_Click"
+                       ToolTip="Duplicate Layer"
+                       Content="&#xE8C8;" Margin="5,0"/>
+
+                <Button Style="{StaticResource LayerIconButton}"
+                       Click="MergeDown_Click"
+                       ToolTip="Merge Down"
+                       Content="&#xE74A;" Margin="5,0"/>
+
+                <Button Style="{StaticResource LayerIconButton}"
+                       Click="DeleteLayer_Click"
+                       ToolTip="Delete Layer"
+                       Content="&#xE74D;"
+                       Foreground="#FF6B6B" Margin="5,0"/>
+
+                <Rectangle Width="2" Fill="Gray" Margin="10,0"/>
+
+                <Button Style="{StaticResource LayerIconButton}"
+                       Click="MoveLayerUp_Click"
+                       ToolTip="Move Up"
+                       Content="&#xE74A;" Margin="5,0"/>
+
+                <Button Style="{StaticResource LayerIconButton}"
+                       Click="MoveLayerDown_Click"
+                       ToolTip="Move Down"
+                       Content="&#xE74B;" Margin="5,0"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

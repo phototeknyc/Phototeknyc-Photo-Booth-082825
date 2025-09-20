@@ -303,7 +303,7 @@ namespace Photobooth.Pages
 
             // Create PixiEditor color dialog
             var parentWindow = Window.GetWindow(this);
-            var selectedColor = PixiEditorColorPickerDialog.ShowDialog(parentWindow, "Choose Text Color", currentColor);
+            var selectedColor = SimpleColorPickerDialog.ShowDialog(parentWindow, "Choose Text Color", currentColor);
             if (selectedColor.HasValue)
             {
                 ViewModel.SelectedTextItem.Foreground = new SolidColorBrush(selectedColor.Value);
@@ -350,7 +350,7 @@ namespace Photobooth.Pages
 
             // Create PixiEditor color dialog for outline color
             var parentWindow = Window.GetWindow(this);
-            var selectedColor = PixiEditorColorPickerDialog.ShowDialog(parentWindow, "Choose Outline Color", currentColor);
+            var selectedColor = SimpleColorPickerDialog.ShowDialog(parentWindow, "Choose Outline Color", currentColor);
             if (selectedColor.HasValue)
             {
                 ViewModel.SelectedTextItem.OutlineColor = new SolidColorBrush(selectedColor.Value);
@@ -443,7 +443,7 @@ namespace Photobooth.Pages
 
             // Create PixiEditor color dialog for fill color
             var parentWindow = Window.GetWindow(this);
-            var selectedColor = PixiEditorColorPickerDialog.ShowDialog(parentWindow, "Choose Fill Color", currentColor);
+            var selectedColor = SimpleColorPickerDialog.ShowDialog(parentWindow, "Choose Fill Color", currentColor);
             if (selectedColor.HasValue)
             {
                 ViewModel.SelectedShapeItem.Fill = new SolidColorBrush(selectedColor.Value);
@@ -486,7 +486,7 @@ namespace Photobooth.Pages
 
             // Create PixiEditor color dialog for stroke color
             var parentWindow = Window.GetWindow(this);
-            var selectedColor = PixiEditorColorPickerDialog.ShowDialog(parentWindow, "Choose Stroke Color", currentColor);
+            var selectedColor = SimpleColorPickerDialog.ShowDialog(parentWindow, "Choose Stroke Color", currentColor);
             if (selectedColor.HasValue)
             {
                 ViewModel.SelectedShapeItem.Stroke = new SolidColorBrush(selectedColor.Value);
@@ -525,7 +525,7 @@ namespace Photobooth.Pages
 
             // Create PixiEditor color dialog for shadow color
             var parentWindow = Window.GetWindow(this);
-            var selectedColor = PixiEditorColorPickerDialog.ShowDialog(parentWindow, "Choose Shadow Color", currentColor);
+            var selectedColor = SimpleColorPickerDialog.ShowDialog(parentWindow, "Choose Shadow Color", currentColor);
             if (selectedColor.HasValue)
             {
                 ViewModel.SelectedShapeItem.ShadowColor = selectedColor.Value;

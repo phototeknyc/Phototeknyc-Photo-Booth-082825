@@ -56,11 +56,19 @@ namespace Photobooth.Windows
                 foreach (var eventData in events)
                 {
                     var viewModel = new EventItemViewModel(eventData);
-                    
+
                     // Get template count for this event
                     var eventTemplates = eventService.GetEventTemplates(eventData.Id);
                     viewModel.TemplateCount = eventTemplates.Count;
-                    
+
+                    // Get default or first assigned template
+                    if (eventTemplates.Count > 0)
+                    {
+                        var defaultTemplate = eventTemplates.FirstOrDefault(t => t.IsDefault) ?? eventTemplates.First();
+                        viewModel.AssignedTemplateId = defaultTemplate.Id;
+                        viewModel.AssignedTemplateName = defaultTemplate.Name;
+                    }
+
                     allEvents.Add(viewModel);
                 }
                 
@@ -426,6 +434,44 @@ namespace Photobooth.Windows
             }
         }
 
+        private void EditTemplate_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as Button;
+            var eventItem = button?.Tag as EventItemViewModel;
+            if (eventItem != null && eventItem.HasAssignedTemplate)
+            {
+                // Create a window to host the TouchTemplateDesignerOverlay
+                var designerWindow = new Window
+                {
+                    Title = $"Edit Template - {eventItem.AssignedTemplateName}",
+                    WindowState = WindowState.Maximized,
+                    WindowStyle = WindowStyle.None,
+                    Background = System.Windows.Media.Brushes.Black,
+                    AllowsTransparency = false,
+                    Topmost = false
+                };
+
+                // Create and configure the overlay
+                var overlay = new Controls.TouchTemplateDesignerOverlay();
+                overlay.LoadTemplate(eventItem.AssignedTemplateId);
+
+                // Set the overlay as window content
+                designerWindow.Content = overlay;
+
+                // Handle close event
+                overlay.CloseRequested += (s, args) =>
+                {
+                    designerWindow.Close();
+                };
+
+                // Show as modal dialog
+                designerWindow.ShowDialog();
+
+                // Refresh the template info after editing
+                _ = LoadEvents();
+            }
+        }
+
         private void LoadSelectedEvent(EventItemViewModel eventItem)
         {
             SelectedEvent = eventItem.Event;
@@ -656,6 +702,30 @@ namespace Photobooth.Windows
         }
         
         public string TemplateCountText => $"{TemplateCount} template(s) assigned";
+
+        private string _assignedTemplateName;
+        public string AssignedTemplateName
+        {
+            get => _assignedTemplateName;
+            set
+            {
+                _assignedTemplateName = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private int _assignedTemplateId;
+        public int AssignedTemplateId
+        {
+            get => _assignedTemplateId;
+            set
+            {
+                _assignedTemplateId = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool HasAssignedTemplate => AssignedTemplateId > 0;
 
         public EventItemViewModel(EventData eventData)
         {

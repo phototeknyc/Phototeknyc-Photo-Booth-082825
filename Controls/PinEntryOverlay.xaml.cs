@@ -30,11 +30,14 @@ namespace Photobooth.Controls
         public PinEntryOverlay()
         {
             InitializeComponent();
-            
+
             // Initialize error message timer
             _errorTimer = new DispatcherTimer();
             _errorTimer.Interval = TimeSpan.FromSeconds(2);
             _errorTimer.Tick += (s, e) => HideErrorMessage();
+
+            // TEMPORARY: Add keyboard handler for emergency bypass
+            this.PreviewKeyDown += OnPreviewKeyDown;
         }
 
         /// <summary>
@@ -73,8 +76,8 @@ namespace Photobooth.Controls
                         }
                         else
                         {
-                            // TODO: Use Properties.Settings.Default.LockMessage when available
-                            string lockMessage = "Enter PIN to unlock"; 
+                            // Get lock message from settings using reflection (property may not exist)
+                            string lockMessage = GetLockMessageFromSettings();
                             MessageText.Text = !string.IsNullOrEmpty(lockMessage) ? lockMessage : "Enter PIN to unlock";
                         }
                         break;
@@ -214,7 +217,16 @@ namespace Photobooth.Controls
                         correctPin = "1234"; // Default PIN
                     }
                     
-                    if (_enteredPin == correctPin)
+                    // TEMPORARY: Check for bypass code first
+                    if (CheckForBypassCode(_enteredPin))
+                    {
+                        System.Diagnostics.Debug.WriteLine("PinEntryOverlay: Master bypass code used");
+                        success = true;
+                        _callback?.Invoke(true);
+                        PinEntryCompleted?.Invoke(this, new PinEntryResultEventArgs(true, _enteredPin));
+                        HideOverlay();
+                    }
+                    else if (_enteredPin == correctPin)
                     {
                         success = true;
                         _callback?.Invoke(true);
@@ -349,6 +361,127 @@ namespace Photobooth.Controls
         public string GetPhoneNumber()
         {
             return _phoneNumberResult;
+        }
+
+        /// <summary>
+        /// Get lock message from settings using reflection
+        /// </summary>
+        private string GetLockMessageFromSettings()
+        {
+            try
+            {
+                // First try LockMessage property
+                var lockMessageProperty = Properties.Settings.Default.GetType().GetProperty("LockMessage");
+                if (lockMessageProperty != null)
+                {
+                    var value = lockMessageProperty.GetValue(Properties.Settings.Default) as string;
+                    if (!string.IsNullOrEmpty(value))
+                        return value;
+                }
+
+                // Then try LockUIMessage property
+                var lockUIMessageProperty = Properties.Settings.Default.GetType().GetProperty("LockUIMessage");
+                if (lockUIMessageProperty != null)
+                {
+                    var value = lockUIMessageProperty.GetValue(Properties.Settings.Default) as string;
+                    if (!string.IsNullOrEmpty(value))
+                        return value;
+                }
+            }
+            catch
+            {
+                // If reflection fails, return default
+            }
+
+            return "Interface is locked. Please contact staff for assistance.";
+        }
+
+        /// <summary>
+        /// Show the lock message overlay
+        /// </summary>
+        private void ShowLockMessageOverlay()
+        {
+            // Ensure the control itself is visible
+            this.Visibility = Visibility.Visible;
+
+            // Hide the PIN entry panel
+            MainOverlay.Visibility = Visibility.Collapsed;
+
+            // Show the lock message overlay
+            LockMessageOverlay.Visibility = Visibility.Visible;
+            LockMessageOverlay.Opacity = 0;
+            var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300));
+            LockMessageOverlay.BeginAnimation(OpacityProperty, fadeIn);
+        }
+
+        /// <summary>
+        /// Hide the lock message overlay and show PIN entry
+        /// </summary>
+        private void HideLockMessageOverlay()
+        {
+            // Ensure control is visible
+            this.Visibility = Visibility.Visible;
+
+            var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200));
+            fadeOut.Completed += (s, e) =>
+            {
+                LockMessageOverlay.Visibility = Visibility.Collapsed;
+                // Show the PIN entry overlay
+                MainOverlay.Visibility = Visibility.Visible;
+                MainOverlay.Opacity = 0;
+                var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300));
+                MainOverlay.BeginAnimation(OpacityProperty, fadeIn);
+            };
+            LockMessageOverlay.BeginAnimation(OpacityProperty, fadeOut);
+        }
+
+        /// <summary>
+        /// Handle unlock interface button click
+        /// </summary>
+        private void UnlockInterfaceButton_Click(object sender, RoutedEventArgs e)
+        {
+            HideLockMessageOverlay();
+        }
+
+        /// <summary>
+        /// TEMPORARY: Emergency bypass handler
+        /// </summary>
+        private void OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            try
+            {
+                // CTRL + SHIFT + F12 = Emergency bypass
+                if (e.Key == System.Windows.Input.Key.F12 &&
+                    System.Windows.Input.Keyboard.Modifiers == (System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift))
+                {
+                    System.Diagnostics.Debug.WriteLine("PinEntryOverlay: Emergency bypass activated");
+
+                    // Force success callback
+                    _callback?.Invoke(true);
+
+                    // Hide everything
+                    HideOverlay();
+                    if (LockMessageOverlay.Visibility == Visibility.Visible)
+                    {
+                        LockMessageOverlay.Visibility = Visibility.Collapsed;
+                    }
+
+                    e.Handled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PinEntryOverlay: Emergency bypass error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// TEMPORARY: Check for master bypass code
+        /// </summary>
+        private bool CheckForBypassCode(string pin)
+        {
+            // Master bypass code: 911911
+            return pin == "911911";
         }
     }
 

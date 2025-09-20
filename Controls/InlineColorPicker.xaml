@@ -1,0 +1,215 @@
+<UserControl x:Class="Photobooth.Controls.InlineColorPicker"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:Photobooth.Controls"
+             mc:Ignorable="d"
+             d:DesignHeight="350" d:DesignWidth="250">
+
+    <UserControl.Resources>
+        <!-- Popup style -->
+        <Style x:Key="ColorPickerPopupStyle" TargetType="Popup">
+            <Setter Property="AllowsTransparency" Value="True"/>
+            <Setter Property="StaysOpen" Value="False"/>
+            <Setter Property="Placement" Value="Custom"/>
+        </Style>
+
+        <!-- Toggle button style for color preview -->
+        <Style x:Key="ColorPreviewToggleButton" TargetType="ToggleButton">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="#FF888888"
+                                BorderThickness="1"
+                                CornerRadius="2">
+                            <Grid>
+                                <Rectangle Fill="{TemplateBinding Background}"/>
+                                <TextBlock Text="▼"
+                                          HorizontalAlignment="Right"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,4,0"
+                                          FontSize="10"
+                                          Foreground="#FF444444"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Cursor" Value="Hand"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- Main color preview button that opens the picker -->
+        <ToggleButton x:Name="ColorPreviewButton"
+                      Width="60"
+                      Height="30"
+                      Style="{StaticResource ColorPreviewToggleButton}"
+                      Background="Red"/>
+
+        <!-- Popup containing the color picker -->
+        <Popup x:Name="ColorPickerPopup"
+               Style="{StaticResource ColorPickerPopupStyle}"
+               PlacementTarget="{Binding ElementName=ColorPreviewButton}"
+               CustomPopupPlacementCallback="ColorPickerPopup_PlacementCallback"
+               IsOpen="{Binding IsChecked, ElementName=ColorPreviewButton}">
+
+            <Border Background="#FF2D2D30"
+                    BorderBrush="#FF3F3F46"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                <Grid Width="240" Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="200"/>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Title bar with eyedropper -->
+                    <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                   Text="Color Picker"
+                                   Foreground="White"
+                                   FontWeight="Bold"/>
+
+                        <Button Grid.Column="1"
+                                x:Name="EyedropperButton"
+                                Width="40"
+                                Height="30"
+                                ToolTip="Pick color from canvas (supports touch and mouse)"
+                                Background="#FF007ACC"
+                                BorderBrush="#FF007ACC"
+                                Click="EyedropperButton_Click">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="🖋" FontSize="12" Foreground="White" Margin="0,0,2,0"/>
+                                <TextBlock Text="👁" FontSize="10" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <!-- Color Canvas -->
+                    <Border Grid.Row="1" BorderBrush="#FF555555" BorderThickness="1">
+                        <Grid>
+                            <Canvas x:Name="ColorCanvas"
+                                    Background="Red"
+                                    IsManipulationEnabled="True"
+                                    MouseLeftButtonDown="ColorCanvas_MouseLeftButtonDown"
+                                    MouseMove="ColorCanvas_MouseMove"
+                                    TouchDown="ColorCanvas_TouchDown"
+                                    TouchMove="ColorCanvas_TouchMove"
+                                    TouchUp="ColorCanvas_TouchUp"/>
+                            <Ellipse x:Name="ColorSelector"
+                                     Width="12" Height="12"
+                                     Stroke="White"
+                                     StrokeThickness="2"
+                                     Fill="Transparent"
+                                     IsHitTestVisible="False"
+                                     HorizontalAlignment="Left"
+                                     VerticalAlignment="Top">
+                                <Ellipse.RenderTransform>
+                                    <TranslateTransform x:Name="ColorSelectorTransform"/>
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
+                        </Grid>
+                    </Border>
+
+                    <!-- Hue Bar -->
+                    <Border Grid.Row="2"
+                            BorderBrush="#FF555555"
+                            BorderThickness="1"
+                            Margin="0,5,0,0">
+                        <Canvas x:Name="HueCanvas"
+                                Height="20"
+                                IsManipulationEnabled="True"
+                                MouseLeftButtonDown="HueCanvas_MouseLeftButtonDown"
+                                MouseMove="HueCanvas_MouseMove"
+                                TouchDown="HueCanvas_TouchDown"
+                                TouchMove="HueCanvas_TouchMove"
+                                TouchUp="HueCanvas_TouchUp"/>
+                    </Border>
+
+                    <!-- Current Color Display -->
+                    <Border Grid.Row="3"
+                            Margin="0,10,0,5"
+                            Height="40"
+                            BorderBrush="#FF555555"
+                            BorderThickness="1">
+                        <Rectangle x:Name="CurrentColorDisplay" Fill="Red"/>
+                    </Border>
+
+                    <!-- RGB Inputs -->
+                    <Grid Grid.Row="4" Margin="0,5,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="R:" Foreground="White" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBox Grid.Column="1" x:Name="RedTextBox" Width="45" TextChanged="RGBTextBox_TextChanged"/>
+
+                        <TextBlock Grid.Column="2" Text="G:" Foreground="White" VerticalAlignment="Center" Margin="10,0,5,0"/>
+                        <TextBox Grid.Column="3" x:Name="GreenTextBox" Width="45" TextChanged="RGBTextBox_TextChanged"/>
+
+                        <TextBlock Grid.Column="4" Text="B:" Foreground="White" VerticalAlignment="Center" Margin="10,0,5,0"/>
+                        <TextBox Grid.Column="5" x:Name="BlueTextBox" Width="45" TextChanged="RGBTextBox_TextChanged"/>
+                    </Grid>
+
+                    <!-- Hex Input -->
+                    <Grid Grid.Row="5" Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="Hex:" Foreground="White" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBox Grid.Column="1" x:Name="HexTextBox" TextChanged="HexTextBox_TextChanged"/>
+                    </Grid>
+
+                    <!-- Preset Colors -->
+                    <Grid Grid.Row="6" Margin="0,10,0,0">
+                        <ItemsControl x:Name="PresetColorsControl">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="22" Height="22"
+                                            Margin="2"
+                                            BorderBrush="#FF555555"
+                                            BorderThickness="1"
+                                            Cursor="Hand"
+                                            IsManipulationEnabled="True"
+                                            MouseLeftButtonDown="PresetColor_Click"
+                                            TouchDown="PresetColor_TouchDown">
+                                        <Rectangle Fill="{Binding}"/>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

@@ -206,6 +206,26 @@
     <Compile Include="Controls\TouchTemplateDesigner.xaml.cs">
       <DependentUpon>TouchTemplateDesigner.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\LayersPanel.xaml.cs">
+      <DependentUpon>LayersPanel.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\FontControlsPanel.xaml.cs">
+      <DependentUpon>FontControlsPanel.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\SimpleDesignerCanvas.xaml.cs">
+      <DependentUpon>SimpleDesignerCanvas.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\SimpleColorPickerDialog.xaml.cs">
+      <DependentUpon>SimpleColorPickerDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\InlineColorPicker.xaml.cs">
+      <DependentUpon>InlineColorPicker.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\EyedropperAdorner.cs" />
+    <Compile Include="Controls\SimpleCanvasItem.cs" />
+    <Compile Include="Controls\SimpleTextItem.cs" />
+    <Compile Include="Controls\SimpleImageItem.cs" />
+    <Compile Include="Controls\SimpleShapeItem.cs" />
     <Compile Include="Controls\TouchTemplateDesignerOverlay.xaml.cs">
       <DependentUpon>TouchTemplateDesignerOverlay.xaml</DependentUpon>
     </Compile>
@@ -286,6 +306,7 @@
     <Compile Include="Services\VideoRecordingService.cs" />
     <Compile Include="Services\VideoRecordingCoordinatorService.cs" />
     <Compile Include="Services\VideoCompressionService.cs" />
+    <Compile Include="Services\AnimationCompressionService.cs" />
     <Compile Include="Services\PhotoBoothSyncService.cs" />
     <Compile Include="Services\SyncNotificationService.cs" />
     <Compile Include="Services\TemplateSyncService.cs" />
@@ -458,6 +479,26 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\TouchTemplateDesigner.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Controls\LayersPanel.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Controls\FontControlsPanel.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\SimpleDesignerCanvas.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\SimpleColorPickerDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\InlineColorPicker.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -554,6 +595,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Styles\MenuStyle.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Styles\DarkScrollBar.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -708,6 +753,8 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+    <Compile Include="Controls\SimpleQRCodeItem.cs" />
+    <Compile Include="Controls\SimpleBarcodeItem.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -774,11 +821,33 @@
     <Content Include="Content\font-awesome.min.css" />
     <Content Include="fonts\fontawesome-webfont.svg" />
   </ItemGroup>
+  <!-- Ensure ffmpeg.exe ships with the app -->
+  <ItemGroup>
+    <Content Include="ffmpeg.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
   <ItemGroup>
     <Analyzer Include="packages\AWSSDK.S3.4.0.0\analyzers\dotnet\cs\AWSSDK.S3.CodeAnalysis.dll" />
     <Analyzer Include="packages\AWSSDK.S3.4.0.0\analyzers\dotnet\cs\SharedAnalysisCode.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  
+  <!-- Also copy ffmpeg.exe to a subfolder 'ffmpeg' under the output directory -->
+  <Target Name="CopyFFmpegToSubfolder" AfterTargets="Build">
+    <PropertyGroup>
+      <_TargetDir>$(TargetDir)</_TargetDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_FFmpegRoot Include="$(_TargetDir)ffmpeg.exe" />
+    </ItemGroup>
+    <MakeDir Directories="$(_TargetDir)ffmpeg" Condition="Exists('$(_TargetDir)')" />
+    <Copy SourceFiles="@(_FFmpegRoot)"
+          DestinationFolder="$(_TargetDir)ffmpeg\"
+          SkipUnchangedFiles="true"
+          Condition="Exists('%(_FFmpegRoot.Identity)')" />
+    <Message Text="ffmpeg.exe copied to $(_TargetDir)ffmpeg\" Importance="low" />
+  </Target>
   <!-- Copy SQLite native libraries if available -->
   <Target Name="CopySQLiteNativeLibraries" AfterTargets="Build">
     <ItemGroup>

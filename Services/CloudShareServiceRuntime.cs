@@ -26,6 +26,7 @@ namespace Photobooth.Services
         private dynamic _s3Client;
         private readonly string _bucketName;
         private readonly string _baseShareUrl;
+        private readonly bool _usePresignedUrls = false;
         private Type _s3ClientType;
         private Type _putObjectRequestType;
         private Type _putBucketRequestType;
@@ -48,15 +49,21 @@ namespace Photobooth.Services
             
             try
             {
-                _bucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME", EnvironmentVariableTarget.User) ?? "photobooth-shares";
-                _baseShareUrl = Environment.GetEnvironmentVariable("GALLERY_BASE_URL", EnvironmentVariableTarget.User) ?? "https://phototeknyc.s3.amazonaws.com";
+                _bucketName = TrimAndUnquote(Environment.GetEnvironmentVariable("S3_BUCKET_NAME", EnvironmentVariableTarget.User)) ?? "photobooth-shares";
+                _baseShareUrl = TrimAndUnquote(Environment.GetEnvironmentVariable("GALLERY_BASE_URL", EnvironmentVariableTarget.User)) ?? "https://phototeknyc.s3.amazonaws.com";
+                var usePresignedEnv = TrimAndUnquote(Environment.GetEnvironmentVariable("USE_PRESIGNED_URLS", EnvironmentVariableTarget.User));
+                if (!string.IsNullOrEmpty(usePresignedEnv) && bool.TryParse(usePresignedEnv, out var parsed))
+                {
+                    _usePresignedUrls = parsed;
+                }
                 
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Bucket Name: {_bucketName}");
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Base URL: {_baseShareUrl}");
+                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Use presigned URLs: {_usePresignedUrls}");
                 
-                var accessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID", EnvironmentVariableTarget.User);
-                var secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", EnvironmentVariableTarget.User);
-                var region = Environment.GetEnvironmentVariable("S3_REGION", EnvironmentVariableTarget.User) ?? "us-east-1";
+                var accessKey = TrimAndUnquote(Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID", EnvironmentVariableTarget.User));
+                var secretKey = TrimAndUnquote(Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", EnvironmentVariableTarget.User));
+                var region = TrimAndUnquote(Environment.GetEnvironmentVariable("S3_REGION", EnvironmentVariableTarget.User)) ?? "us-east-1";
                 
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Checking credentials - AccessKey: {!string.IsNullOrEmpty(accessKey)}, SecretKey: {!string.IsNullOrEmpty(secretKey)}");
                 
@@ -114,6 +121,10 @@ namespace Photobooth.Services
         {
             try
             {
+                accessKey = TrimAndUnquote(accessKey);
+                secretKey = TrimAndUnquote(secretKey);
+                region = TrimAndUnquote(region);
+
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Starting AWS client initialization...");
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Access Key: {(string.IsNullOrEmpty(accessKey) ? "NOT SET" : "SET (" + accessKey.Length + " chars)")}");
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Secret Key: {(string.IsNullOrEmpty(secretKey) ? "NOT SET" : "SET (" + secretKey.Length + " chars)")}");
@@ -193,6 +204,173 @@ namespace Photobooth.Services
                 _s3Client = null;
             }
         }
+
+        private string BuildAggregatedGridHtml(List<string> urls)
+        {
+            if (urls == null || urls.Count == 0) return string.Empty;
+            var sb = new System.Text.StringBuilder();
+            int idx = 1;
+            foreach (var u in urls)
+            {
+                var safeUrl = (u ?? string.Empty).Replace("'", "&#39;");
+                sb.Append("<div class='photo-item'>");
+                sb.Append($"<div class='photo-number'>{idx}</div>");
+                sb.Append($"<img src='{safeUrl}' loading='lazy' />");
+                sb.Append("</div>\n");
+                idx++;
+            }
+            return sb.ToString();
+        }
+
+        // Read session manifest.json and convert keys to URLs
+        private async Task<List<string>> ReadSessionManifestUrlsAsync(string eventFolder, string sessionGuid)
+        {
+            var urls = new List<string>();
+            try
+            {
+                if (_s3Client == null) return urls;
+                var awsS3Assembly = _s3Client.GetType().Assembly;
+                var getObjectRequestType = awsS3Assembly.GetType("Amazon.S3.Model.GetObjectRequest");
+                var getObjectMethod = _s3Client.GetType().GetMethod("GetObject", new Type[] { getObjectRequestType });
+                if (getObjectMethod == null || getObjectRequestType == null) return urls;
+
+                var key = $"events/{eventFolder}/sessions/{sessionGuid}/manifest.json";
+                dynamic request = Activator.CreateInstance(getObjectRequestType);
+                request.BucketName = _bucketName;
+                request.Key = key;
+
+                dynamic response = null;
+                try
+                {
+                    response = await Task.Run(() => getObjectMethod.Invoke(_s3Client, new object[] { request }));
+                }
+                catch (TargetInvocationException tex)
+                {
+                    // Common when manifest.json doesn't exist yet (404). Suppress and return empty list.
+                    System.Diagnostics.Debug.WriteLine($"ReadSessionManifestUrlsAsync: manifest not found at {key}: {tex.InnerException?.Message ?? tex.Message}");
+                    return urls;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"ReadSessionManifestUrlsAsync: error reading {key}: {ex.Message}");
+                    return urls;
+                }
+                if (response == null) return urls;
+
+                using (var reader = new StreamReader((Stream)response.ResponseStream))
+                {
+                    var text = reader.ReadToEnd();
+                    var keys = Newtonsoft.Json.JsonConvert.DeserializeObject<List<string>>(text);
+                    if (keys != null)
+                    {
+                        foreach (var k in keys)
+                        {
+                            var lower = (k ?? string.Empty).ToLowerInvariant();
+                            if (lower.EndsWith(".jpg") || lower.EndsWith(".jpeg") || lower.EndsWith(".png"))
+                            {
+                                var url = GetAssetUrl(k);
+                                if (!string.IsNullOrEmpty(url)) urls.Add(url);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ReadSessionManifestUrlsAsync error: {ex.Message}");
+            }
+            return urls;
+        }
+
+        // Upload session manifest.json under events/{eventFolder}/sessions/{sessionId}/manifest.json
+        private async Task UploadSessionManifestAsync(string eventFolder, string sessionId, List<string> imageKeys)
+        {
+            if (_putObjectRequestType == null || _s3Client == null) return;
+            try
+            {
+                var manifestKey = $"events/{eventFolder}/sessions/{sessionId}/manifest.json";
+                var json = Newtonsoft.Json.JsonConvert.SerializeObject(imageKeys);
+                var bytes = Encoding.UTF8.GetBytes(json);
+                using (var ms = new MemoryStream(bytes))
+                {
+                    var putRequest = Activator.CreateInstance(_putObjectRequestType);
+                    var putRequestType = putRequest.GetType();
+                    putRequestType.GetProperty("BucketName").SetValue(putRequest, _bucketName);
+                    putRequestType.GetProperty("Key").SetValue(putRequest, manifestKey);
+                    putRequestType.GetProperty("InputStream").SetValue(putRequest, ms);
+                    putRequestType.GetProperty("ContentType").SetValue(putRequest, "application/json");
+                    await UploadToS3Async(putRequest);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"UploadSessionManifestAsync error: {ex.Message}");
+            }
+        }
+
+        // Check if an object exists (HEAD metadata)
+        private async Task<bool> ObjectExistsAsync(string key)
+        {
+            try
+            {
+                if (_s3Client == null) return false;
+                var awsS3Assembly = _s3Client.GetType().Assembly;
+                var metaReqType = awsS3Assembly.GetType("Amazon.S3.Model.GetObjectMetadataRequest");
+                var metaMethod = _s3Client.GetType().GetMethod("GetObjectMetadata", new Type[] { metaReqType });
+                if (metaReqType == null || metaMethod == null) return false;
+
+                dynamic req = Activator.CreateInstance(metaReqType);
+                req.BucketName = _bucketName;
+                req.Key = key;
+                try
+                {
+                    await Task.Run(() => metaMethod.Invoke(_s3Client, new object[] { req }));
+                    return true; // no exception means exists
+                }
+                catch (TargetInvocationException tex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"ObjectExistsAsync: {key} not found: {tex.InnerException?.Message ?? tex.Message}");
+                    return false;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+            catch { return false; }
+        }
+
+        private List<string> BuildImageKeysFromDb(string eventFolder, string sessionGuid, List<Database.PhotoData> photos)
+        {
+            var keys = new List<string>();
+            if (photos == null) return keys;
+            foreach (var p in photos)
+            {
+                try
+                {
+                    string fileName = !string.IsNullOrEmpty(p.FileName)
+                        ? p.FileName
+                        : (!string.IsNullOrEmpty(p.FilePath) ? Path.GetFileName(p.FilePath) : null);
+                    if (string.IsNullOrEmpty(fileName)) continue;
+                    var lower = fileName.ToLowerInvariant();
+                    if (!(lower.EndsWith(".jpg") || lower.EndsWith(".jpeg") || lower.EndsWith(".png"))) continue;
+                    keys.Add($"events/{eventFolder}/sessions/{sessionGuid}/{fileName}");
+                }
+                catch { }
+            }
+            return keys;
+        }
+
+        private string TrimAndUnquote(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
+            var trimmed = input.Trim();
+            if (trimmed.Length >= 2 && ((trimmed.StartsWith("\"") && trimmed.EndsWith("\"")) || (trimmed.StartsWith("'") && trimmed.EndsWith("'"))))
+            {
+                trimmed = trimmed.Substring(1, trimmed.Length - 2);
+            }
+            return trimmed.Trim();
+        }
         
         public async Task<ShareResult> CreateShareableGalleryAsync(string sessionId, List<string> photoPaths, string eventName = null)
         {
@@ -252,6 +430,9 @@ namespace Photobooth.Services
                 // Ensure bucket exists
                 await EnsureBucketExistsAsync();
                 
+                // Track uploaded image keys for manifest
+                var uploadedImageKeys = new List<string>();
+
                 // Upload each photo or video
                 foreach (var photoPath in photoPaths)
                 {
@@ -280,34 +461,97 @@ namespace Photobooth.Services
                         if (isVideo)
                         {
                             System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Processing video file: {Path.GetFileName(photoPath)}");
-                            
+
                             string videoToUpload = photoPath;
                             string compressedPath = null;
-                            
+
                             // Check if compression is enabled
                             bool compressionEnabled = Properties.Settings.Default.EnableVideoCompression;
-                            
+
                             if (compressionEnabled)
                             {
-                                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Compressing video before upload...");
-                                
-                                // Compress the video
-                                var compressionService = VideoCompressionService.Instance;
-                                if (compressionService.IsFFmpegAvailable())
+                                // Determine if this is an animation or regular video recording
+                                bool isAnimation = photoPath.Contains("animation") || Path.GetFileName(photoPath).StartsWith("animated_");
+
+                                if (isAnimation)
                                 {
-                                    try
+                                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Compressing animation before upload...");
+
+                                    // Use AnimationCompressionService for animations
+                                    var animationService = AnimationCompressionService.Instance;
+                                    if (animationService.IsFFmpegAvailable())
                                     {
-                                        // Generate compressed file path
-                                        string tempDir = Path.GetTempPath();
-                                        string compressedFileName = $"compressed_{Guid.NewGuid():N}.mp4";
-                                        compressedPath = Path.Combine(tempDir, compressedFileName);
-                                        
-                                        // Compress the video
-                                        string resultPath = await compressionService.CompressVideoAsync(photoPath, compressedPath);
-                                        
-                                        if (!string.IsNullOrEmpty(resultPath) && File.Exists(resultPath))
+                                        try
                                         {
-                                            videoToUpload = resultPath;
+                                            // Generate compressed file path
+                                            string tempDir = Path.GetTempPath();
+                                            string compressedFileName = $"compressed_{Guid.NewGuid():N}.mp4";
+                                            compressedPath = Path.Combine(tempDir, compressedFileName);
+
+                                            // Compress the animation (or skip if problematic)
+                                            string resultPath = await animationService.CompressAnimationAsync(photoPath, compressedPath);
+
+                                            if (!string.IsNullOrEmpty(resultPath))
+                                            {
+                                                videoToUpload = resultPath;
+
+                                                // Check if compression was actually performed or skipped
+                                                if (resultPath == photoPath)
+                                                {
+                                                    // Compression was skipped, using original file
+                                                    long fileSize = new FileInfo(photoPath).Length;
+                                                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Using original animation file");
+                                                    System.Diagnostics.Debug.WriteLine($"  File size: {fileSize / 1024.0 / 1024.0:F2} MB");
+                                                }
+                                                else if (File.Exists(resultPath))
+                                                {
+                                                    // Compression was performed
+                                                    long originalSize = new FileInfo(photoPath).Length;
+                                                    long compressedSize = new FileInfo(resultPath).Length;
+                                                    double reductionPercent = (1 - (double)compressedSize / originalSize) * 100;
+
+                                                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Animation compressed successfully");
+                                                    System.Diagnostics.Debug.WriteLine($"  Original: {originalSize / 1024.0 / 1024.0:F2} MB");
+                                                    System.Diagnostics.Debug.WriteLine($"  Compressed: {compressedSize / 1024.0 / 1024.0:F2} MB");
+                                                    System.Diagnostics.Debug.WriteLine($"  Reduction: {reductionPercent:F1}%");
+                                                }
+                                            }
+                                            else
+                                            {
+                                                System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Animation compression failed, uploading original");
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Animation compression error: {ex.Message}");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: FFmpeg not available for animation compression");
+                                    }
+                                }
+                                else
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Compressing video before upload...");
+
+                                    // Use VideoCompressionService for regular video recordings
+                                    var compressionService = VideoCompressionService.Instance;
+                                    if (compressionService.IsFFmpegAvailable())
+                                    {
+                                        try
+                                        {
+                                            // Generate compressed file path
+                                            string tempDir = Path.GetTempPath();
+                                            string compressedFileName = $"compressed_{Guid.NewGuid():N}.mp4";
+                                            compressedPath = Path.Combine(tempDir, compressedFileName);
+
+                                            // Compress the video
+                                            string resultPath = await compressionService.CompressVideoAsync(photoPath, compressedPath);
+
+                                            if (!string.IsNullOrEmpty(resultPath) && File.Exists(resultPath))
+                                            {
+                                                videoToUpload = resultPath;
                                             
                                             // Log compression results
                                             long originalSize = new FileInfo(photoPath).Length;
@@ -354,11 +598,12 @@ namespace Photobooth.Services
                                     {
                                         System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Error compressing video: {ex.Message}");
                                         System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Uploading original video");
+                                        }
                                     }
-                                }
-                                else
-                                {
-                                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: FFmpeg not available, uploading original");
+                                    else
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: FFmpeg not available, uploading original");
+                                    }
                                 }
                             }
                             
@@ -395,7 +640,7 @@ namespace Photobooth.Services
                             }
                             
                             // Generate pre-signed URL for video
-                            var videoUrl = GeneratePresignedUrl(key);
+                            var videoUrl = GetAssetUrl(key);
                             System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Generated video URL: {videoUrl}");
                             
                             // Add to result as video
@@ -457,8 +702,8 @@ namespace Photobooth.Services
                         }
                         
                         // Generate pre-signed URLs for both main image and thumbnail
-                        var photoUrl = GeneratePresignedUrl(key);
-                        var thumbnailUrl = GeneratePresignedUrl(thumbnailKey);
+                        var photoUrl = GetAssetUrl(key);
+                        var thumbnailUrl = GetAssetUrl(thumbnailKey);
                         
                         System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Generated URLs - Main: {photoUrl}, Thumbnail: {thumbnailUrl}");
                         
@@ -470,6 +715,9 @@ namespace Photobooth.Services
                             ThumbnailUrl = thumbnailUrl,
                             UploadedAt = DateTime.Now
                         });
+
+                        // Track key for manifest (images only)
+                        uploadedImageKeys.Add(key);
                     }
                     catch (Exception ex)
                     {
@@ -482,6 +730,21 @@ namespace Photobooth.Services
                     }
                 }
                 
+                // Write per-session manifest.json with image keys (no ListBucket needed later)
+                try
+                {
+                    if (uploadedImageKeys.Count > 0)
+                    {
+                        string eventFolder = string.IsNullOrEmpty(eventName) ? "general" : SanitizeForS3Key(eventName);
+                        await UploadSessionManifestAsync(eventFolder, sessionId, uploadedImageKeys);
+                        System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Uploaded manifest.json with {uploadedImageKeys.Count} items for session {sessionId}");
+                    }
+                }
+                catch (Exception mex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Failed to upload manifest.json: {mex.Message}");
+                }
+
                 // Create and upload HTML gallery page if we have photos
                 if (result.UploadedPhotos.Any())
                 {
@@ -492,7 +755,7 @@ namespace Photobooth.Services
                     if (UploadHtmlToS3(galleryHtml, galleryKey))
                     {
                         // Generate pre-signed URL for the gallery page
-                        var longGalleryUrl = GeneratePresignedUrl(galleryKey);
+                        var longGalleryUrl = GetAssetUrl(galleryKey);
                         System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Gallery HTML uploaded, long URL: {longGalleryUrl}");
                         
                         // Shorten the URL for better usability
@@ -1282,7 +1545,7 @@ namespace Photobooth.Services
                 if (_s3Client == null)
                 {
                     System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: S3 client is null, cannot generate presigned URL");
-                    return $"https://{_bucketName}.s3.amazonaws.com/{key}";
+                    return BuildPublicUrl(key);
                 }
                 
                 // Load GetPreSignedURL method
@@ -1292,7 +1555,7 @@ namespace Photobooth.Services
                 if (getPreSignedURLMethod == null)
                 {
                     System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: GetPreSignedURL method not found");
-                    return $"https://{_bucketName}.s3.amazonaws.com/{key}";
+                    return BuildPublicUrl(key);
                 }
                 
                 // Load GetPreSignedUrlRequest type
@@ -1302,7 +1565,7 @@ namespace Photobooth.Services
                 if (getPreSignedUrlRequestType == null)
                 {
                     System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: GetPreSignedUrlRequest type not found");
-                    return $"https://{_bucketName}.s3.amazonaws.com/{key}";
+                    return BuildPublicUrl(key);
                 }
                 
                 // Create request
@@ -1339,8 +1602,26 @@ namespace Photobooth.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"CloudShareServiceRuntime: Failed to generate presigned URL: {ex.Message}");
+                return BuildPublicUrl(key);
+            }
+        }
+
+        private string BuildPublicUrl(string key)
+        {
+            try
+            {
+                var baseUrl = _baseShareUrl?.TrimEnd('/') ?? $"https://{_bucketName}.s3.amazonaws.com";
+                return $"{baseUrl}/{key}";
+            }
+            catch
+            {
                 return $"https://{_bucketName}.s3.amazonaws.com/{key}";
             }
+        }
+
+        private string GetAssetUrl(string key)
+        {
+            return _usePresignedUrls ? GeneratePresignedUrl(key) : BuildPublicUrl(key);
         }
         
         private async Task UploadToS3Async(object putRequest)
@@ -1755,25 +2036,77 @@ namespace Photobooth.Services
                 }
                 
                 string eventFolder = SanitizeForS3Key(eventName);
-                var allPhotos = new List<UploadedPhoto>();
-                
-                // Collect all photos from all sessions
+
+                // Determine a date folder alias (use event date if available, else most common session date)
+                string dateFolder = null;
+                try
+                {
+                    // StartTime is non-nullable DateTime for sessions
+                    List<string> nonNullDates = sessions
+                        .Select(s => s.StartTime.ToString("yyyy-MM-dd"))
+                        .ToList();
+                    if (nonNullDates.Count > 0)
+                    {
+                        dateFolder = nonNullDates
+                            .GroupBy(d => d)
+                            .OrderByDescending(g => g.Count())
+                            .First().Key;
+                    }
+                }
+                catch { }
+
+                // DB-first aggregation: build keys from DB, upload manifests only where images actually exist, then create URLs
+                var aggregatedPhotoUrls = new List<string>();
                 foreach (var session in sessions)
                 {
-                    // Get the session gallery URL
-                    var sessionGalleryKey = $"events/{eventFolder}/sessions/{session.SessionGuid}/index.html";
-                    
-                    // Try to list photos in this session's S3 folder
-                    var sessionPhotosKey = $"events/{eventFolder}/sessions/{session.SessionGuid}/";
-                    
-                    // For now, we'll reference the session galleries
-                    // In production, you'd list S3 objects to get all photos
+                    try
+                    {
+                        var db = new Database.TemplateDatabase();
+                        var photoRecords = db.GetSessionPhotos(session.Id);
+                        if (photoRecords == null || photoRecords.Count == 0) continue;
+
+                        // Name-based path keys
+                        var nameKeys = BuildImageKeysFromDb(eventFolder, session.SessionGuid, photoRecords);
+                        bool namePathHasFiles = nameKeys.Count > 0 && await ObjectExistsAsync(nameKeys[0]);
+
+                        // Date-based alias keys
+                        string thisSessionDate = session.StartTime.ToString("yyyy-MM-dd");
+                        var dateKeys = BuildImageKeysFromDb(thisSessionDate, session.SessionGuid, photoRecords);
+                        bool datePathHasFiles = dateKeys.Count > 0 && await ObjectExistsAsync(dateKeys[0]);
+
+                        if (namePathHasFiles)
+                        {
+                            await UploadSessionManifestAsync(eventFolder, session.SessionGuid, nameKeys);
+                            aggregatedPhotoUrls.AddRange(nameKeys.Select(k => GetAssetUrl(k)));
+                        }
+                        else if (datePathHasFiles)
+                        {
+                            await UploadSessionManifestAsync(thisSessionDate, session.SessionGuid, dateKeys);
+                            aggregatedPhotoUrls.AddRange(dateKeys.Select(k => GetAssetUrl(k)));
+                        }
+                        else
+                        {
+                            // Neither path has the images (maybe different layout) — skip to avoid 404s
+                            System.Diagnostics.Debug.WriteLine($"Aggregation: No existing objects found for session {session.SessionGuid} in name/date paths.");
+                        }
+                    }
+                    catch (Exception aggEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"CreateEventGalleryAsync: Aggregation error for {session.SessionGuid}: {aggEx.Message}");
+                    }
                 }
+
+                // De-duplicate and generate aggregated grid HTML
+                var unique = aggregatedPhotoUrls
+                    .Where(u => !string.IsNullOrWhiteSpace(u))
+                    .Distinct()
+                    .ToList();
+                var aggregatedGridHtml = BuildAggregatedGridHtml(unique);
+
+                // Generate the event gallery HTML (static, no extra JS needed to show photos)
+                var eventHtml = GenerateEventGalleryHtml(eventName, sessions, eventFolder, aggregatedGridHtml, usePassword);
                 
-                // Generate the event gallery HTML
-                var eventHtml = GenerateEventGalleryHtml(eventName, sessions, eventFolder, usePassword);
-                
-                // Upload the event gallery page
+                // Upload the event gallery page to name folder
                 var eventGalleryKey = $"events/{eventFolder}/index.html";
                 System.Diagnostics.Debug.WriteLine($"Uploading event gallery to: {eventGalleryKey}");
                 
@@ -1781,14 +2114,16 @@ namespace Photobooth.Services
                 {
                     System.Diagnostics.Debug.WriteLine($"Successfully uploaded event gallery HTML");
                     
-                    // Generate a pre-signed URL that's valid for 60 days
-                    var eventGalleryUrl = GeneratePresignedUrl(eventGalleryKey, 60 * 24 * 60); // 60 days in minutes
+                    // Build event gallery URL
+                    var eventGalleryUrl = _usePresignedUrls
+                        ? GeneratePresignedUrl(eventGalleryKey, 60 * 24 * 60)
+                        : BuildPublicUrl(eventGalleryKey);
                     System.Diagnostics.Debug.WriteLine($"Generated gallery URL: {eventGalleryUrl}");
                     
-                    // If pre-signed URL failed, try public URL
+                    // If URL creation failed, try public URL
                     if (string.IsNullOrEmpty(eventGalleryUrl))
                     {
-                        eventGalleryUrl = $"https://{_bucketName}.s3.amazonaws.com/{eventGalleryKey}";
+                        eventGalleryUrl = BuildPublicUrl(eventGalleryKey);
                         System.Diagnostics.Debug.WriteLine("Warning: Using public URL - may not work if bucket is private");
                     }
                     
@@ -1813,6 +2148,21 @@ namespace Photobooth.Services
                     System.Diagnostics.Debug.WriteLine($"Event gallery URL: {eventGalleryUrl}");
                     System.Diagnostics.Debug.WriteLine($"Event gallery password: {password}");
                     
+                    // Also upload to date alias if available
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(dateFolder))
+                        {
+                            var dateKey = $"events/{dateFolder}/index.html";
+                            System.Diagnostics.Debug.WriteLine($"Uploading event gallery date alias to: {dateKey}");
+                            UploadHtmlToS3(eventHtml, dateKey);
+                        }
+                    }
+                    catch (Exception aliasEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Event gallery alias upload failed: {aliasEx.Message}");
+                    }
+
                     return (eventGalleryUrl, password);
                 }
                 else
@@ -1832,7 +2182,7 @@ namespace Photobooth.Services
         /// <summary>
         /// Generate HTML for event-level gallery
         /// </summary>
-        private string GenerateEventGalleryHtml(string eventName, List<Database.PhotoSessionData> sessions, string eventFolder, bool usePassword = true)
+        private string GenerateEventGalleryHtml(string eventName, List<Database.PhotoSessionData> sessions, string eventFolder, string aggregatedGridHtml, bool usePassword = true)
         {
             var html = new System.Text.StringBuilder();
             
@@ -2025,7 +2375,19 @@ namespace Photobooth.Services
             </div>
         </div>
         
-        <h2 style='text-align: center; margin-bottom: 20px; color: #333;'>Photo Sessions</h2>
+        " + (!string.IsNullOrEmpty(aggregatedGridHtml) ? $@"
+        <h2 style='text-align: center; margin-bottom: 20px; color: #333;'>All Photos</h2>
+        <div id='all-photos-grid' class='gallery' style='margin-bottom: 30px;'>{aggregatedGridHtml}</div>
+        <script>
+            // Build allPhotos array from the DOM to support Download All
+            function collectAllPhotos() {{
+                try {{ return Array.from(document.querySelectorAll('#all-photos-grid img')).map(i => i.src).filter(Boolean); }} catch (e) {{ return []; }}
+            }}
+            var allPhotos = collectAllPhotos();
+        </script>
+        " : "") + @"
+
+        <h2 style='text-align: center; margin: 10px 0 20px; color: #333;'>Photo Sessions</h2>
         <div class='sessions-grid'>");
             
             foreach (var session in sessions.OrderByDescending(s => s.StartTime))
@@ -2071,6 +2433,7 @@ namespace Photobooth.Services
                 document.getElementById('passwordModal').style.display = 'block';
             }} else {{
                 document.getElementById('mainContent').style.display = 'block';
+                // aggregated photos rendered server-side
             }}
         }}
         
@@ -2079,6 +2442,7 @@ namespace Photobooth.Services
             if (input === galleryPassword || input === 'admin2024') {{ // admin override
                 document.getElementById('passwordModal').style.display = 'none';
                 document.getElementById('mainContent').style.display = 'block';
+                // aggregated photos rendered server-side
             }} else {{
                 document.getElementById('passwordError').style.display = 'block';
             }}
@@ -2104,80 +2468,29 @@ namespace Photobooth.Services
                     btn.disabled = false;
                     return;
                 }}
-                
-                // Get all session cards to extract session IDs
-                const sessionCards = document.querySelectorAll('.session-card');
-                
-                if (sessionCards.length === 0) {{
-                    alert('No photo sessions available yet. Photos will appear here after they are taken.');
+                if (!allPhotos || allPhotos.length === 0) {{
+                    alert('No photos available yet. Photos will appear here after they are taken.');
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                     return;
                 }}
-                
-                // Create ZIP file
                 const zip = new JSZip();
-                let totalPhotos = 0;
                 let loadedPhotos = 0;
                 let photoCounter = 1;
-                
-                btn.innerHTML = '📊 Analyzing sessions...';
-                
-                // Process each session
-                for (let i = 0; i < sessionCards.length; i++) {{
-                    const card = sessionCards[i];
-                    const sessionLink = card.querySelector('.view-btn');
-                    
-                    if (sessionLink && sessionLink.href) {{
-                        // Extract session URL and fetch the HTML
-                        try {{
-                            btn.innerHTML = `📥 Processing session ${{i + 1}} of ${{sessionCards.length}}...`;
-                            
-                            const response = await fetch(sessionLink.href);
-                            const html = await response.text();
-                            
-                            // Parse HTML to find photo URLs
-                            const parser = new DOMParser();
-                            const doc = parser.parseFromString(html, 'text/html');
-                            const photoElements = doc.querySelectorAll('.photo-item img, .photo-card img, [data-photo-url]');
-                            
-                            // Download each photo and add directly to root of zip
-                            for (let j = 0; j < photoElements.length; j++) {{
-                                const photoUrl = photoElements[j].src || photoElements[j].dataset.photoUrl;
-                                if (photoUrl) {{
-                                    totalPhotos++;
-                                    btn.innerHTML = `📥 Downloading photo ${{totalPhotos}}...`;
-                                    
-                                    try {{
-                                        // Extract original filename from URL
-                                        const urlParts = photoUrl.split('/');
-                                        let fileName = urlParts[urlParts.length - 1];
-                                        
-                                        // Remove any query parameters
-                                        if (fileName.includes('?')) {{
-                                            fileName = fileName.split('?')[0];
-                                        }}
-                                        
-                                        // If filename extraction failed, use generic name
-                                        if (!fileName || fileName === '') {{
-                                            fileName = `photo_${{photoCounter.toString().padStart(3, '0')}}.jpg`;
-                                        }}
-                                        
-                                        const photoResponse = await fetch(photoUrl);
-                                        const blob = await photoResponse.blob();
-                                        // Add photos directly to root with original filename
-                                        zip.file(fileName, blob);
-                                        loadedPhotos++;
-                                        photoCounter++;
-                                    }} catch (photoError) {{
-                                        console.error(`Failed to download photo: ${{photoUrl}}`, photoError);
-                                    }}
-                                }}
-                            }}
-                        }} catch (sessionError) {{
-                            console.error(`Failed to process session ${{i + 1}}`, sessionError);
-                        }}
-                    }}
+                btn.innerHTML = '📥 Preparing photos...';
+                for (let i = 0; i < allPhotos.length; i++) {{
+                    const photoUrl = allPhotos[i];
+                    btn.innerHTML = `📥 Downloading photo ${{i + 1}} of ${{allPhotos.length}}...`;
+                    try {{
+                        let fileName = photoUrl.split('/').pop();
+                        if (fileName.includes('?')) fileName = fileName.split('?')[0];
+                        if (!fileName) fileName = `photo_${{photoCounter.toString().padStart(3, '0')}}.jpg`;
+                        const photoResponse = await fetch(photoUrl);
+                        const blob = await photoResponse.blob();
+                        zip.file(fileName, blob);
+                        loadedPhotos++;
+                        photoCounter++;
+                    }} catch (photoError) {{ /* skip */ }}
                 }}
                 
                 if (loadedPhotos === 0) {{
@@ -2241,6 +2554,8 @@ namespace Photobooth.Services
             const body = encodeURIComponent('View the photos here: ') + url;
             window.location.href = `mailto:?subject=${{subject}}&body=${{body}}`;
         }}
+
+        /* Photos pre-rendered server-side */
     </script>
 </body>
 </html>");

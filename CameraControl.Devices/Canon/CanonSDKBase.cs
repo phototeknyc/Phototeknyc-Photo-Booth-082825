@@ -461,13 +461,34 @@ namespace CameraControl.Devices.Canon
 
         public virtual void AddAditionalProps()
         {
-            AdvancedProperties.Add(InitDriveMode());
-            AdvancedProperties.Add(InitFlahEc());
-            AdvancedProperties.Add(InitBracket());
-            AdvancedProperties.Add(InitAEBracket());
-            foreach (PropertyValue<long> value in AdvancedProperties)
+            try
             {
-                value.SetValue((long)Camera.GetProperty(value.Code), false);
+                AdvancedProperties.Add(InitDriveMode());
+                AdvancedProperties.Add(InitFlahEc());
+                AdvancedProperties.Add(InitBracket());
+                AdvancedProperties.Add(InitAEBracket());
+                foreach (PropertyValue<long> value in AdvancedProperties)
+                {
+                    try
+                    {
+                        value.SetValue((long)Camera.GetProperty(value.Code), false);
+                    }
+                    catch (EosPropertyException ex)
+                    {
+                        // Property not available on this camera model or in current mode
+                        Log.Debug($"Property {value.Code} not available: {ex.Message}");
+                        value.IsEnabled = false;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"Error reading property {value.Code}: {ex.Message}");
+                        value.IsEnabled = false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Error adding additional properties: {ex.Message}");
             }
         }
 

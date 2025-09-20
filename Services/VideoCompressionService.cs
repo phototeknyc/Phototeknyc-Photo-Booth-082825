@@ -84,12 +84,18 @@ namespace Photobooth.Services
                 
                 Debug.WriteLine($"VideoCompressionService: Generating thumbnail at {secondsOffset}s from {videoPath}");
                 
+                // Normalize paths for Windows
+                string normalizedVideoPath = NormalizePath(videoPath);
+                string normalizedThumbnailPath = NormalizePath(thumbnailPath);
+
                 // Build FFmpeg arguments for thumbnail generation
                 // -ss: seek to position (before -i for fast seek)
                 // -i: input file
                 // -vframes 1: extract one frame
                 // -q:v 2: quality (2 is high quality)
-                string ffmpegArgs = $"-ss {secondsOffset} -i \"{videoPath}\" -vframes 1 -q:v 2 -y \"{thumbnailPath}\"";
+                string ffmpegArgs = $"-ss {secondsOffset} -i \"{normalizedVideoPath}\" -vframes 1 -q:v 2 -y \"{normalizedThumbnailPath}\"";
+
+                Debug.WriteLine($"VideoCompressionService: Thumbnail FFmpeg arguments: '{ffmpegArgs}'");
                 
                 // Execute FFmpeg
                 bool success = await ExecuteFFmpegAsync(ffmpegArgs, videoPath);
@@ -133,7 +139,15 @@ namespace Photobooth.Services
             try
             {
                 _isCompressing = true;
-                
+
+                // Validate FFmpeg availability
+                if (!IsFFmpegAvailable())
+                {
+                    Debug.WriteLine("VideoCompressionService: ERROR - FFmpeg is not available");
+                    CompressionError?.Invoke(this, "FFmpeg is not available. Please ensure FFmpeg is installed and accessible.");
+                    return null;
+                }
+
                 // Get compression settings
                 bool compressionEnabled = Properties.Settings.Default.EnableVideoCompression;
                 if (!compressionEnabled)
@@ -141,10 +155,10 @@ namespace Photobooth.Services
                     Debug.WriteLine("VideoCompressionService: Compression disabled, returning original file");
                     return inputPath;
                 }
-                
+
                 string quality = Properties.Settings.Default.VideoCompressionQuality ?? "medium";
                 string resolution = Properties.Settings.Default.VideoUploadResolution ?? "1080p";
-                
+
                 // Generate output path if not provided
                 if (string.IsNullOrEmpty(outputPath))
                 {
@@ -152,21 +166,44 @@ namespace Photobooth.Services
                     string filename = Path.GetFileNameWithoutExtension(inputPath);
                     outputPath = Path.Combine(dir, $"{filename}_compressed.mp4");
                 }
-                
+
+                // Validate output directory exists
+                string outputDir = Path.GetDirectoryName(outputPath);
+                if (!Directory.Exists(outputDir))
+                {
+                    Debug.WriteLine($"VideoCompressionService: Creating output directory: {outputDir}");
+                    Directory.CreateDirectory(outputDir);
+                }
+
+                // Check if input file is accessible
+                try
+                {
+                    using (var fs = new FileStream(inputPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    {
+                        // File is accessible
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"VideoCompressionService: ERROR - Cannot access input file: {ex.Message}");
+                    CompressionError?.Invoke(this, $"Cannot access input file: {ex.Message}");
+                    return null;
+                }
+
                 Debug.WriteLine($"VideoCompressionService: Starting compression - Quality: {quality}, Resolution: {resolution}");
                 Debug.WriteLine($"VideoCompressionService: Input: {inputPath}");
                 Debug.WriteLine($"VideoCompressionService: Output: {outputPath}");
-                
+
                 // Fire started event
-                CompressionStarted?.Invoke(this, new VideoCompressionEventArgs 
-                { 
-                    InputPath = inputPath, 
-                    OutputPath = outputPath 
+                CompressionStarted?.Invoke(this, new VideoCompressionEventArgs
+                {
+                    InputPath = inputPath,
+                    OutputPath = outputPath
                 });
-                
+
                 // Build FFmpeg arguments
                 string ffmpegArgs = BuildFFmpegArguments(inputPath, outputPath, quality, resolution);
-                
+
                 // Execute FFmpeg
                 bool success = await ExecuteFFmpegAsync(ffmpegArgs, inputPath);
                 
@@ -213,12 +250,21 @@ namespace Photobooth.Services
         }
         
         /// <summary>
-        /// Check if FFmpeg is available
+        /// Check if FFmpeg is available and validate executable
         /// </summary>
         public bool IsFFmpegAvailable()
         {
             try
             {
+                Debug.WriteLine($"VideoCompressionService: Checking FFmpeg availability at path: '{_ffmpegPath}'");
+
+                // First check if file exists
+                if (!File.Exists(_ffmpegPath) && _ffmpegPath != "ffmpeg.exe")
+                {
+                    Debug.WriteLine($"VideoCompressionService: FFmpeg executable not found at path: {_ffmpegPath}");
+                    return false;
+                }
+
                 var process = new Process
                 {
                     StartInfo = new ProcessStartInfo
@@ -228,25 +274,100 @@ namespace Photobooth.Services
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
-                        CreateNoWindow = true
+                        CreateNoWindow = true,
+                        WorkingDirectory = Path.GetDirectoryName(_ffmpegPath)
                     }
                 };
-                
+
                 process.Start();
+                string output = process.StandardOutput.ReadToEnd();
+                string errorOutput = process.StandardError.ReadToEnd();
                 process.WaitForExit(5000);
-                
+
                 bool available = process.ExitCode == 0;
                 Debug.WriteLine($"VideoCompressionService: FFmpeg available: {available}");
-                
+                Debug.WriteLine($"VideoCompressionService: FFmpeg version output: {output}");
+
+                if (!available)
+                {
+                    Debug.WriteLine($"VideoCompressionService: FFmpeg error output: {errorOutput}");
+                }
+
                 return available;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"VideoCompressionService: ERROR checking FFmpeg availability - {ex.Message}");
+                Debug.WriteLine($"VideoCompressionService: Exception details: {ex}");
                 return false;
             }
         }
         
+        /// <summary>
+        /// Test method to validate FFmpeg command construction (debug only)
+        /// </summary>
+        public string TestFFmpegCommandConstruction(string inputPath, string outputPath, string quality = "medium", string resolution = "1080p")
+        {
+            Debug.WriteLine("VideoCompressionService: Testing FFmpeg command construction...");
+            string args = BuildFFmpegArguments(inputPath, outputPath, quality, resolution);
+            Debug.WriteLine($"VideoCompressionService: Test command: ffmpeg {args}");
+            return args;
+        }
+
+        /// <summary>
+        /// Test basic FFmpeg functionality with a simple command
+        /// </summary>
+        public async Task<bool> TestBasicFFmpegAsync()
+        {
+            try
+            {
+                Debug.WriteLine("VideoCompressionService: Testing basic FFmpeg functionality...");
+
+                // Simple command that should always work: get input information
+                string testArgs = "-f lavfi -i testsrc2=duration=1:size=320x240:rate=1 -t 1 -f null -";
+
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = _ffmpegPath,
+                        Arguments = testArgs,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        WorkingDirectory = Path.GetDirectoryName(_ffmpegPath)
+                    }
+                };
+
+                Debug.WriteLine($"VideoCompressionService: Running test command: {_ffmpegPath} {testArgs}");
+
+                process.Start();
+                string output = await process.StandardOutput.ReadToEndAsync();
+                string errorOutput = await process.StandardError.ReadToEndAsync();
+                process.WaitForExit();
+
+                bool success = process.ExitCode == 0;
+                Debug.WriteLine($"VideoCompressionService: Basic test result: {success}, exit code: {process.ExitCode}");
+
+                if (!success)
+                {
+                    Debug.WriteLine($"VideoCompressionService: Test error output: {errorOutput}");
+                }
+                else
+                {
+                    Debug.WriteLine("VideoCompressionService: Basic FFmpeg test passed!");
+                }
+
+                return success;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"VideoCompressionService: Basic test failed with exception: {ex.Message}");
+                return false;
+            }
+        }
+
         #endregion
 
         #region Private Methods
@@ -255,29 +376,41 @@ namespace Photobooth.Services
         {
             // Get CRF value based on quality setting
             int crf = GetCRFValue(quality);
-            
+
+            Debug.WriteLine($"VideoCompressionService: Building FFmpeg arguments with quality={quality}, resolution={resolution}, crf={crf}");
+
+            // Normalize paths for Windows - handle spaces and special characters
+            string normalizedInputPath = NormalizePath(inputPath);
+            string normalizedOutputPath = NormalizePath(outputPath);
+
+            Debug.WriteLine($"VideoCompressionService: Normalized input path: '{normalizedInputPath}'");
+            Debug.WriteLine($"VideoCompressionService: Normalized output path: '{normalizedOutputPath}'");
+
             // Build base arguments with H.264 encoding
-            string args = $"-i \"{inputPath}\" -c:v libx264 -preset fast -crf {crf}";
-            
+            string args = $"-i \"{normalizedInputPath}\" -c:v libx264 -preset fast -crf {crf}";
+
             // Add resolution scaling if not original
             if (resolution != "original")
             {
                 string scaleFilter = GetScaleFilter(resolution);
                 if (!string.IsNullOrEmpty(scaleFilter))
                 {
-                    args += $" -vf {scaleFilter}";
+                    args += $" -vf \"{scaleFilter}\""; // Quote the filter for Windows compatibility
+                    Debug.WriteLine($"VideoCompressionService: Added scale filter: '{scaleFilter}'");
                 }
             }
-            
+
             // Add audio compression (AAC, 128k bitrate)
             args += " -c:a aac -b:a 128k";
-            
+
             // Add MP4 optimization for streaming
             args += " -movflags +faststart";
-            
+
             // Overwrite output file if exists
-            args += $" -y \"{outputPath}\"";
-            
+            args += $" -y \"{normalizedOutputPath}\"";
+
+            Debug.WriteLine($"VideoCompressionService: Final FFmpeg arguments: '{args}'");
+
             return args;
         }
         
@@ -299,17 +432,34 @@ namespace Photobooth.Services
         
         private string GetScaleFilter(string resolution)
         {
+            // Use simple scale filter syntax that's reliable across platforms
             switch (resolution?.ToLower())
             {
                 case "1080p":
-                    return "scale='min(1920,iw)':min'(1080,ih)':force_original_aspect_ratio=decrease";
+                    return "scale=1920:1080:force_original_aspect_ratio=decrease";
                 case "720p":
-                    return "scale='min(1280,iw)':min'(720,ih)':force_original_aspect_ratio=decrease";
+                    return "scale=1280:720:force_original_aspect_ratio=decrease";
                 case "480p":
-                    return "scale='min(854,iw)':min'(480,ih)':force_original_aspect_ratio=decrease";
+                    return "scale=854:480:force_original_aspect_ratio=decrease";
                 default:
                     return "";
             }
+        }
+
+        private string NormalizePath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return path;
+
+            // Convert to absolute path and normalize separators
+            string normalized = Path.GetFullPath(path);
+
+            // Replace forward slashes with backslashes for Windows
+            normalized = normalized.Replace('/', '\\');
+
+            Debug.WriteLine($"VideoCompressionService: Path normalized from '{path}' to '{normalized}'");
+
+            return normalized;
         }
         
         private async Task<bool> ExecuteFFmpegAsync(string arguments, string inputPath)
@@ -318,6 +468,12 @@ namespace Photobooth.Services
             {
                 try
                 {
+                    // Add detailed debug logging
+                    Debug.WriteLine($"VideoCompressionService: EXECUTING FFmpeg");
+                    Debug.WriteLine($"VideoCompressionService: FFmpeg Path: '{_ffmpegPath}'");
+                    Debug.WriteLine($"VideoCompressionService: FFmpeg Arguments: '{arguments}'");
+                    Debug.WriteLine($"VideoCompressionService: Working Directory: '{Environment.CurrentDirectory}'");
+
                     var process = new Process
                     {
                         StartInfo = new ProcessStartInfo
@@ -327,36 +483,43 @@ namespace Photobooth.Services
                             UseShellExecute = false,
                             RedirectStandardOutput = true,
                             RedirectStandardError = true,
-                            CreateNoWindow = true
+                            CreateNoWindow = true,
+                            WorkingDirectory = Path.GetDirectoryName(_ffmpegPath) // Set working directory to FFmpeg location
                         }
                     };
-                    
-                    // Variables for progress calculation
+
+                    // Variables for progress calculation and error capture
                     double totalDuration = 0;
-                    
+                    string errorOutput = "";
+                    string standardOutput = "";
+
                     // Handle stderr for progress updates (FFmpeg outputs progress to stderr)
                     process.ErrorDataReceived += (sender, e) =>
                     {
                         if (!string.IsNullOrEmpty(e.Data))
                         {
+                            errorOutput += e.Data + "\n";
+                            Debug.WriteLine($"VideoCompressionService: FFmpeg STDERR: {e.Data}");
+
                             // Parse duration from input file info
                             if (e.Data.Contains("Duration:") && totalDuration == 0)
                             {
                                 string durationStr = ExtractDuration(e.Data);
                                 totalDuration = ParseDuration(durationStr);
+                                Debug.WriteLine($"VideoCompressionService: Detected duration: {totalDuration} seconds");
                             }
-                            
+
                             // Parse current time for progress
                             if (e.Data.Contains("time=") && totalDuration > 0)
                             {
                                 string timeStr = ExtractTime(e.Data);
                                 double currentTime = ParseDuration(timeStr);
-                                
+
                                 if (currentTime > 0)
                                 {
                                     double progress = (currentTime / totalDuration) * 100;
                                     progress = Math.Min(100, Math.Max(0, progress));
-                                    
+
                                     // Fire progress event
                                     CompressionProgress?.Invoke(this, new VideoCompressionProgressEventArgs
                                     {
@@ -368,32 +531,52 @@ namespace Photobooth.Services
                             }
                         }
                     };
-                    
+
+                    // Handle stdout output
+                    process.OutputDataReceived += (sender, e) =>
+                    {
+                        if (!string.IsNullOrEmpty(e.Data))
+                        {
+                            standardOutput += e.Data + "\n";
+                            Debug.WriteLine($"VideoCompressionService: FFmpeg STDOUT: {e.Data}");
+                        }
+                    };
+
+                    Debug.WriteLine("VideoCompressionService: Starting FFmpeg process...");
                     process.Start();
                     process.BeginErrorReadLine();
                     process.BeginOutputReadLine();
-                    
+
                     // Wait for process to complete (with timeout)
                     bool completed = process.WaitForExit(600000); // 10 minute timeout
-                    
+
                     if (!completed)
                     {
                         process.Kill();
                         Debug.WriteLine("VideoCompressionService: ERROR - FFmpeg process timed out");
                         return false;
                     }
-                    
+
+                    Debug.WriteLine($"VideoCompressionService: FFmpeg process completed with exit code: {process.ExitCode}");
+
                     bool success = process.ExitCode == 0;
                     if (!success)
                     {
                         Debug.WriteLine($"VideoCompressionService: ERROR - FFmpeg exited with code {process.ExitCode}");
+                        Debug.WriteLine($"VideoCompressionService: FFmpeg STDERR OUTPUT:\n{errorOutput}");
+                        Debug.WriteLine($"VideoCompressionService: FFmpeg STDOUT OUTPUT:\n{standardOutput}");
                     }
-                    
+                    else
+                    {
+                        Debug.WriteLine("VideoCompressionService: FFmpeg execution successful!");
+                    }
+
                     return success;
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"VideoCompressionService: ERROR executing FFmpeg - {ex.Message}");
+                    Debug.WriteLine($"VideoCompressionService: Exception stack trace: {ex.StackTrace}");
                     return false;
                 }
             });

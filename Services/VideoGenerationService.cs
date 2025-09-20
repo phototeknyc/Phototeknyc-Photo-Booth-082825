@@ -147,42 +147,51 @@ namespace Photobooth.Services
                 
                 using (StreamWriter sw = new StreamWriter(tempListFile))
                 {
-                    // For seamless looping, we'll play forward then backward
-                    // This creates a perfect loop without jarring transitions
-                    
-                    // Forward sequence
-                    for (int i = 0; i < imagePaths.Count; i++)
+                    // Create multiple loops for a video that appears to loop continuously
+                    // Calculate loop count based on desired video duration (aim for ~10-15 seconds)
+                    int totalImages = imagePaths.Count * 2 - 2; // Forward + backward (excluding duplicates)
+                    double singleLoopDuration = totalImages * (frameDurationMs / 1000.0);
+                    int loopCount = Math.Max(1, (int)Math.Ceiling(10.0 / singleLoopDuration)); // At least 10 seconds
+                    loopCount = Math.Min(loopCount, 5); // Cap at 5 loops to avoid huge files
+
+                    File.AppendAllText(debugLog, $"Creating {loopCount} loops for ~{loopCount * singleLoopDuration:F1} seconds of video\r\n");
+
+                    for (int loop = 0; loop < loopCount; loop++)
                     {
-                        string line = $"file '{imagePaths[i].Replace('\\', '/')}'";
-                        sw.WriteLine(line);
-                        sw.WriteLine($"duration {frameDurationMs / 1000.0:F3}");
-                        File.AppendAllText(debugLog, $"Added image (forward): {line}\r\n");
+                        // Forward sequence
+                        for (int i = 0; i < imagePaths.Count; i++)
+                        {
+                            string line = $"file '{imagePaths[i].Replace('\\', '/')}'";
+                            sw.WriteLine(line);
+                            sw.WriteLine($"duration {frameDurationMs / 1000.0:F3}");
+                            if (loop == 0) // Only log first loop
+                                File.AppendAllText(debugLog, $"Added image (forward): {line}\r\n");
+                        }
+
+                        // Backward sequence (excluding first and last to avoid duplication)
+                        for (int i = imagePaths.Count - 2; i > 0; i--)
+                        {
+                            string line = $"file '{imagePaths[i].Replace('\\', '/')}'";
+                            sw.WriteLine(line);
+                            sw.WriteLine($"duration {frameDurationMs / 1000.0:F3}");
+                            if (loop == 0) // Only log first loop
+                                File.AppendAllText(debugLog, $"Added image (backward): {line}\r\n");
+                        }
                     }
-                    
-                    // Backward sequence (excluding first and last to avoid duplication)
-                    for (int i = imagePaths.Count - 2; i > 0; i--)
-                    {
-                        string line = $"file '{imagePaths[i].Replace('\\', '/')}'";
-                        sw.WriteLine(line);
-                        sw.WriteLine($"duration {frameDurationMs / 1000.0:F3}");
-                        File.AppendAllText(debugLog, $"Added image (backward): {line}\r\n");
-                    }
-                    
-                    // Add first image again to complete the loop
+
+                    // Add first image again to complete the final loop
                     sw.WriteLine($"file '{imagePaths[0].Replace('\\', '/')}'");
                 }
 
                 // FFmpeg command for a looping GIF-like video
-                // OPTIMIZED FOR SPEED while maintaining quality
+                // SIMPLIFIED to ensure it works with concat demuxer
                 string arguments = $"-f concat -safe 0 -i \"{tempListFile}\" " +
                                   $"-c:v libx264 -preset ultrafast " +  // Ultra fast encoding
-                                  $"-tune fastdecode " +  // Optimize for fast decoding
-                                  $"-crf 23 " +  // Slightly lower quality for faster encoding (23 vs 18)
+                                  $"-crf 28 " +  // Lower quality for smaller files and faster encoding
                                   $"-pix_fmt yuv420p " +
-                                  $"-vf \"scale=720:480:flags=fast_bilinear,fps=8\" " +  // 720x480 resolution, fast scaling, 8fps
+                                  $"-vf \"scale=640:480\" " +  // Simple scaling without complex filters
+                                  $"-r 10 " +  // Fixed frame rate
                                   $"-movflags +faststart " +  // Web optimization
-                                  $"-threads 0 " +  // Use all available CPU threads
-                                  $"-metadata comment=\"Looping GIF-style video\" " +
                                   $"-y \"{outputPath}\"";
 
                 ProcessStartInfo psi = new ProcessStartInfo
@@ -215,7 +224,7 @@ namespace Photobooth.Services
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
                     
-                    bool completed = process.WaitForExit(15000); // Increased to 15 second timeout
+                    bool completed = process.WaitForExit(30000); // Increased to 30 second timeout
                     
                     string output = outputBuilder.ToString();
                     string error = errorBuilder.ToString();

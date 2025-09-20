@@ -497,32 +497,32 @@ namespace Photobooth.Services
                 // If not a video session or no video thumbnail, try regular photos
                 if (sessionInfo.Photos.Count == 0)
                 {
-                    // First try to get a composed image (better for thumbnail)
-                    var composedImage = _database.GetSessionComposedImages(dbSession.Id).FirstOrDefault();
-                    if (composedImage != null && File.Exists(composedImage.FilePath))
+                    // First try to get a regular photo (better represents the actual session)
+                    var firstPhoto = _database.GetSessionPhotos(dbSession.Id).FirstOrDefault();
+                    if (firstPhoto != null && File.Exists(firstPhoto.FilePath))
                     {
                         sessionInfo.Photos.Add(new GalleryPhotoInfo
                         {
-                            FilePath = composedImage.FilePath,
-                            ThumbnailPath = composedImage.ThumbnailPath ?? composedImage.FilePath,
-                            FileName = composedImage.FileName,
-                            PhotoType = "COMPOSED",
-                            FileSize = composedImage.FileSize ?? 0
+                            FilePath = firstPhoto.FilePath,
+                            ThumbnailPath = firstPhoto.ThumbnailPath ?? firstPhoto.FilePath,
+                            FileName = firstPhoto.FileName,
+                            PhotoType = firstPhoto.PhotoType,
+                            FileSize = firstPhoto.FileSize ?? 0
                         });
                     }
                     else
                     {
-                        // No composed image, get first regular photo
-                        var firstPhoto = _database.GetSessionPhotos(dbSession.Id).FirstOrDefault();
-                        if (firstPhoto != null && File.Exists(firstPhoto.FilePath))
+                        // No regular photo available, try composed image as fallback
+                        var composedImage = _database.GetSessionComposedImages(dbSession.Id).FirstOrDefault();
+                        if (composedImage != null && File.Exists(composedImage.FilePath))
                         {
                             sessionInfo.Photos.Add(new GalleryPhotoInfo
                             {
-                                FilePath = firstPhoto.FilePath,
-                                ThumbnailPath = firstPhoto.ThumbnailPath ?? firstPhoto.FilePath,
-                                FileName = firstPhoto.FileName,
-                                PhotoType = firstPhoto.PhotoType,
-                                FileSize = firstPhoto.FileSize ?? 0
+                                FilePath = composedImage.FilePath,
+                                ThumbnailPath = composedImage.ThumbnailPath ?? composedImage.FilePath,
+                                FileName = composedImage.FileName,
+                                PhotoType = "COMPOSED",
+                                FileSize = composedImage.FileSize ?? 0
                             });
                         }
                     }

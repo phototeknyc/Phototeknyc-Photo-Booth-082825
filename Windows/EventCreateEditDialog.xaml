@@ -92,7 +92,7 @@
                                    BorderThickness="0"
                                    Margin="8,6"
                                    IsReadOnly="{TemplateBinding IsReadOnly}"/>
-                            <Popup Name="Popup"
+                            <Popup Name="PART_Popup"
                                  Placement="Bottom"
                                  IsOpen="{TemplateBinding IsDropDownOpen}"
                                  AllowsTransparency="True" 
