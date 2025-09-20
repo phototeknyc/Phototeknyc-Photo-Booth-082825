@@ -266,7 +266,8 @@
                                x:Name="SettingsTabControl"
                                Background="Transparent"
                                BorderThickness="0"
-                               Margin="24,24,12,24">
+                               Margin="24,24,12,24"
+                               SelectionChanged="SettingsTabControl_SelectionChanged">
                         <TabControl.Resources>
                             <!-- Tab Header Style -->
                             <Style TargetType="TabItem">
@@ -368,23 +369,7 @@
                                           FontSize="12" FontWeight="Bold" Foreground="#2196F3" 
                                           Margin="0,0,0,10"/>
                                 
-                                <!-- Visual Enhancement Toggle (MUST BE ENABLED FOR LIVE VIEW CHANGES TO WORK) -->
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Enable Live View Enhancement" FontSize="14" Foreground="#FFF"/>
-                                        <TextBlock Text="Apply visual adjustments to preview" 
-                                                  FontSize="11" Foreground="#888" Margin="0,2,0,0"/>
-                                    </StackPanel>
-                                    <CheckBox Grid.Column="1" x:Name="LiveViewControlsToggle" 
-                                              IsChecked="False"
-                                              Checked="LiveViewControlsToggle_Checked"
-                                              Unchecked="LiveViewControlsToggle_Unchecked"
-                                              Style="{StaticResource ModernToggleSwitch}"/>
-                                </Grid>
+                                <!-- Removed Live View Enhancement toggle -->
                                 
                                 <!-- Video Mode Toggle -->
                                 <Grid Margin="0,0,0,10">
@@ -486,6 +471,12 @@
                                 <ComboBoxItem Content="3200"/>
                                 <ComboBoxItem Content="6400"/>
                             </ComboBox>
+                            <!-- Max ISO Boost toggle -->
+                            <CheckBox x:Name="MaxIsoBoostToggle" Content="Max ISO Boost" Margin="0,8,0,0"
+                                      Style="{StaticResource ModernToggleSwitch}"
+                                      Checked="MaxIsoBoostToggle_Checked"
+                                      Unchecked="MaxIsoBoostToggle_Unchecked"
+                                      ToolTip="Temporarily set ISO to the highest available for Live View"/>
                         </StackPanel>
                         
                         <!-- Aperture for Live View -->

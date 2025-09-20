@@ -22,12 +22,104 @@ namespace Photobooth.Controls
         private DualCameraSettingsService _dualSettingsService;
         private bool _isInitialized = false;
         private bool _autoSaveEnabled = true;
+        private bool _isPopulatingExposureUI = false; // prevent re-entrancy while populating
+        private bool _applyingMaxIsoBoost = false;     // prevent loops when boost adjusts selection
         private DispatcherTimer _liveViewTimer;
         private DispatcherTimer _autoRestartTimer;
         private bool _isLiveViewActive = false;
         private ICameraDevice _currentCamera;
         private bool _liveViewControlsEnabled = false;
         private bool _videoModeActive = false;
+        private string _lastLvIso;
+        private string _lastLvAperture;
+        private string _lastLvShutter;
+
+        // Persistence for Live View tab selections
+        private class OverlayPersistedSettings
+        {
+            public string LiveViewISO { get; set; }
+            public string LiveViewAperture { get; set; }
+            public string LiveViewShutter { get; set; }
+            public bool? MaxIsoBoost { get; set; }
+        }
+
+        private string GetOverlaySettingsPath()
+        {
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var dir = System.IO.Path.Combine(appData, "Photobooth");
+            try { if (!Directory.Exists(dir)) Directory.CreateDirectory(dir); } catch { }
+            return System.IO.Path.Combine(dir, "overlay_settings.json");
+        }
+
+        private void SaveOverlaySettings()
+        {
+            try
+            {
+                var settings = new OverlayPersistedSettings
+                {
+                    LiveViewISO = LiveViewISOComboBox?.SelectedItem is string sIso ? sIso : (LiveViewISOComboBox?.SelectedItem as ComboBoxItem)?.Content?.ToString(),
+                    LiveViewAperture = LiveViewApertureComboBox?.SelectedItem is string sAv ? sAv : (LiveViewApertureComboBox?.SelectedItem as ComboBoxItem)?.Content?.ToString(),
+                    LiveViewShutter = LiveViewShutterComboBox?.SelectedItem is string sTv ? sTv : (LiveViewShutterComboBox?.SelectedItem as ComboBoxItem)?.Content?.ToString(),
+                    MaxIsoBoost = MaxIsoBoostToggle?.IsChecked
+                };
+                var json = System.Text.Json.JsonSerializer.Serialize(settings);
+                File.WriteAllText(GetOverlaySettingsPath(), json);
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"SaveOverlaySettings error: {ex.Message}");
+            }
+        }
+
+        private void LoadOverlaySettingsAndApply()
+        {
+            try
+            {
+                var path = GetOverlaySettingsPath();
+                if (!File.Exists(path)) return;
+                var json = File.ReadAllText(path);
+                var settings = System.Text.Json.JsonSerializer.Deserialize<OverlayPersistedSettings>(json);
+                if (settings == null) return;
+
+                _isPopulatingExposureUI = true;
+                try
+                {
+                    if (!string.IsNullOrEmpty(settings.LiveViewISO))
+                        SelectComboItemSafe(LiveViewISOComboBox, settings.LiveViewISO);
+                    if (!string.IsNullOrEmpty(settings.LiveViewAperture))
+                        SelectComboItemSafe(LiveViewApertureComboBox, settings.LiveViewAperture);
+                    if (!string.IsNullOrEmpty(settings.LiveViewShutter))
+                        SelectComboItemSafe(LiveViewShutterComboBox, settings.LiveViewShutter);
+                }
+                finally
+                {
+                    _isPopulatingExposureUI = false;
+                }
+
+                if (settings.MaxIsoBoost.HasValue && MaxIsoBoostToggle != null)
+                    MaxIsoBoostToggle.IsChecked = settings.MaxIsoBoost.Value;
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"LoadOverlaySettings error: {ex.Message}");
+            }
+        }
+
+        private void SelectComboItemSafe(ComboBox combo, string value)
+        {
+            try
+            {
+                if (combo == null || string.IsNullOrEmpty(value)) return;
+                foreach (var item in combo.Items)
+                {
+                    if (item is string s && s == value)
+                    { combo.SelectedItem = item; return; }
+                    if (item is ComboBoxItem cbi && cbi.Content?.ToString() == value)
+                    { combo.SelectedItem = cbi; return; }
+                }
+            }
+            catch { }
+        }
 
         public CameraSettingsOverlay()
         {
@@ -95,6 +187,13 @@ namespace Photobooth.Controls
                         _dualSettingsService.ApplyPhotoCaptureSettings();
                         DebugService.LogDebug("Applied photo capture settings on startup");
                     }
+
+                    // Populate Live View exposure choices from the camera
+                    TryPopulateLiveViewIso();
+                    TryPopulateLiveViewAperture();
+                    TryPopulateLiveViewShutter();
+                    // Apply persisted selections
+                    LoadOverlaySettingsAndApply();
                 }
                 else
                 {
@@ -347,6 +446,53 @@ namespace Photobooth.Controls
                 return;
                 
             _cameraSettingsService.OnCameraChanged(CameraComboBox.SelectedItem);
+
+            // Update current camera reference and repopulate ISO choices
+            var sessionManager = CameraSessionManager.Instance;
+            _currentCamera = sessionManager?.DeviceManager?.SelectedCameraDevice;
+            TryPopulateLiveViewIso();
+            TryPopulateLiveViewAperture();
+            TryPopulateLiveViewShutter();
+            LoadOverlaySettingsAndApply();
+            UpdateExposureControlsAvailability();
+        }
+
+        private async void SettingsTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_isInitialized) return;
+
+            try
+            {
+                if (PhotoCaptureTab != null && PhotoCaptureTab.IsSelected)
+                {
+                    if (_videoModeLiveViewService != null && _videoModeLiveViewService.IsVideoModeActive)
+                    {
+                        await _videoModeLiveViewService.StopVideoModeLiveView();
+                    }
+                    if (VideoModeLiveViewToggle != null)
+                    {
+                        VideoModeLiveViewToggle.IsChecked = false;
+                    }
+                    UpdateControlStates(false);
+                    DebugService.LogDebug("Switched to Photo Capture tab: camera restored to photo mode");
+                }
+                else if (LiveViewTab != null && LiveViewTab.IsSelected)
+                {
+                    if (VideoModeLiveViewToggle != null && VideoModeLiveViewToggle.IsChecked == true)
+                    {
+                        if (_videoModeLiveViewService != null && !_videoModeLiveViewService.IsVideoModeActive)
+                        {
+                            await _videoModeLiveViewService.StartVideoModeLiveView();
+                        }
+                        UpdateControlStates(true);
+                        DebugService.LogDebug("Switched to Live View tab: ensured video mode active");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"SettingsTabControl_SelectionChanged error: {ex.Message}");
+            }
         }
 
         private void ImageQualityComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -759,6 +905,9 @@ namespace Photobooth.Controls
                 // Subscribe to the event
                 camera.PhotoCaptured += captureHandler;
                 
+                // Suppress insertion into main workflow for this test capture
+                try { CameraSessionManager.Instance.SuppressNextCameraCaptureOnce(); } catch { }
+
                 // Capture photo
                 System.Diagnostics.Debug.WriteLine("[CameraSettingsOverlay] Calling camera.CapturePhoto()");
                 camera.CapturePhoto();
@@ -1234,6 +1383,7 @@ namespace Photobooth.Controls
             // Update UI based on video mode state
             ApplyToPhotoBtn.IsEnabled = videoModeActive;
             SyncSettingsBtn.IsEnabled = true;
+            UpdateExposureControlsAvailability();
             
             // Update status text
             if (videoModeActive)
@@ -1243,26 +1393,50 @@ namespace Photobooth.Controls
             }
         }
 
-        #endregion
-
-        #region Live View Visual Enhancement Controls (Legacy)
-        private void LiveViewControlsToggle_Checked(object sender, RoutedEventArgs e)
+        private void UpdateExposureControlsAvailability()
         {
-            _liveViewControlsEnabled = true;
-            
-            // Enable visual enhancements for live view preview only
-            _liveViewEnhancementService.IsEnabled = true;
-            DebugService.LogDebug("Live view visual enhancement controls enabled - camera settings unchanged");
+            try
+            {
+                var cam = _currentCamera ?? CameraSessionManager.Instance?.DeviceManager?.SelectedCameraDevice;
+                bool serviceActive = _videoModeLiveViewService?.IsVideoModeActive ?? false;
+
+                // ISO
+                bool isoEnabled = serviceActive && cam?.IsoNumber != null && cam.IsoNumber.Available && cam.IsoNumber.IsEnabled;
+                if (LiveViewISOComboBox != null)
+                {
+                    LiveViewISOComboBox.IsEnabled = isoEnabled;
+                    LiveViewISOComboBox.ToolTip = isoEnabled ? null : "ISO not available in current camera mode";
+                }
+                if (MaxIsoBoostToggle != null)
+                {
+                    MaxIsoBoostToggle.IsEnabled = isoEnabled;
+                }
+
+                // Aperture
+                bool avEnabled = serviceActive && cam?.FNumber != null && cam.FNumber.Available && cam.FNumber.IsEnabled;
+                if (LiveViewApertureComboBox != null)
+                {
+                    LiveViewApertureComboBox.IsEnabled = avEnabled;
+                    LiveViewApertureComboBox.ToolTip = avEnabled ? null : "Aperture not available in current camera mode";
+                }
+
+                // Shutter
+                bool tvEnabled = serviceActive && cam?.ShutterSpeed != null && cam.ShutterSpeed.Available && cam.ShutterSpeed.IsEnabled;
+                if (LiveViewShutterComboBox != null)
+                {
+                    LiveViewShutterComboBox.IsEnabled = tvEnabled;
+                    LiveViewShutterComboBox.ToolTip = tvEnabled ? null : "Shutter not available in current camera mode";
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"UpdateExposureControlsAvailability error: {ex.Message}");
+            }
         }
 
-        private void LiveViewControlsToggle_Unchecked(object sender, RoutedEventArgs e)
-        {
-            _liveViewControlsEnabled = false;
-            _liveViewEnhancementService.IsEnabled = false;
-            DebugService.LogDebug("Live view visual enhancement controls disabled");
-        }
-
         #endregion
+
+        // Live View Enhancement toggle removed
 
         #region Live View Tab Event Handlers
         
@@ -1272,46 +1446,161 @@ namespace Photobooth.Controls
             
             if (LiveViewISOComboBox.SelectedItem != null)
             {
-                var content = (LiveViewISOComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
-                if (!string.IsNullOrEmpty(content))
+                // Support both static ComboBoxItems and ItemsSource-bound string values
+                string selectedIso = null;
+                if (LiveViewISOComboBox.SelectedItem is string s)
+                    selectedIso = s;
+                else
+                    selectedIso = (LiveViewISOComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+
+                if (!string.IsNullOrEmpty(selectedIso))
                 {
-                    LiveViewISOValueText.Text = content;
+                    LiveViewISOValueText.Text = selectedIso;
                     
-                    // Auto-enable enhancement when Live View settings are changed
-                    if (!_liveViewControlsEnabled)
-                    {
-                        _liveViewControlsEnabled = true;
-                        if (_liveViewEnhancementService != null)
-                        {
-                            _liveViewEnhancementService.IsEnabled = true;
-                        }
-                        if (LiveViewControlsToggle != null)
-                        {
-                            LiveViewControlsToggle.IsChecked = true;
-                        }
-                        DebugService.LogDebug("Auto-enabled Live View enhancement due to setting change");
-                    }
+                    // Do not auto-enable Live View enhancement
                     
                     // Update live view settings
                     if (_dualSettingsService != null)
                     {
-                        _dualSettingsService.SetLiveViewSetting("ISO", content);
+                        _dualSettingsService.SetLiveViewSetting("ISO", selectedIso);
                     }
                     
                     // If video mode is active, apply in real-time
                     if (_videoModeActive && _videoModeLiveViewService != null)
                     {
-                        _videoModeLiveViewService.SetISO(content);
+                        _videoModeLiveViewService.SetISO(selectedIso);
                     }
                     
                     // Apply to visual enhancement
-                    if (_liveViewEnhancementService != null && int.TryParse(content, out int isoValue))
+                    if (_liveViewEnhancementService != null && int.TryParse(selectedIso, out int isoValue))
                     {
                         _liveViewEnhancementService.SetSimulatedISO(isoValue);
                     }
                     
-                    DebugService.LogDebug($"Live View ISO set to {content}");
+                    DebugService.LogDebug($"Live View ISO set to {selectedIso}");
+
+                    // If Max ISO Boost toggle is on, ensure it stays at max
+                    if (MaxIsoBoostToggle != null && MaxIsoBoostToggle.IsChecked == true)
+                    {
+                        // Re-apply the max value if user picks a lower value while boost is on
+                        ApplyMaxIsoBoost(true);
+                    }
+
+                    // Persist setting immediately
+                    AutoSaveIfEnabled();
                 }
+            }
+        }
+
+        private void TryPopulateLiveViewIso()
+        {
+            try
+            {
+                if (LiveViewISOComboBox == null || LiveViewISOValueText == null)
+                    return;
+
+                var cam = _currentCamera ?? CameraSessionManager.Instance?.DeviceManager?.SelectedCameraDevice;
+                if (cam?.IsoNumber != null && cam.IsoNumber.Available)
+                {
+                    var values = cam.IsoNumber.Values; // typically list of strings
+                    if (values != null && values.Any())
+                    {
+                        _isPopulatingExposureUI = true;
+                        try
+                        {
+                            LiveViewISOComboBox.ItemsSource = null;
+                            LiveViewISOComboBox.Items.Clear();
+                            LiveViewISOComboBox.ItemsSource = values;
+
+                            // Select current camera ISO if present, else first
+                            var current = cam.IsoNumber.Value;
+                            if (!string.IsNullOrEmpty(current) && values.Contains(current))
+                            {
+                                LiveViewISOComboBox.SelectedItem = current;
+                                LiveViewISOValueText.Text = current;
+                            }
+                            else
+                            {
+                                LiveViewISOComboBox.SelectedIndex = 0;
+                                LiveViewISOValueText.Text = LiveViewISOComboBox.SelectedItem as string;
+                            }
+                        }
+                        finally
+                        {
+                            _isPopulatingExposureUI = false;
+                        }
+
+                        // If Max ISO Boost is enabled, apply the max immediately
+                        if (MaxIsoBoostToggle != null && MaxIsoBoostToggle.IsChecked == true)
+                        {
+                            Dispatcher.BeginInvoke(new Action(() => ApplyMaxIsoBoost(true)));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"Populate Live View ISO failed: {ex.Message}");
+            }
+        }
+
+        private string _previousLiveViewIso;
+
+        private void MaxIsoBoostToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            ApplyMaxIsoBoost(true);
+            SaveOverlaySettings();
+        }
+
+        private void MaxIsoBoostToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            ApplyMaxIsoBoost(false);
+            SaveOverlaySettings();
+        }
+
+        private void ApplyMaxIsoBoost(bool enable)
+        {
+            try
+            {
+                var cam = _currentCamera ?? CameraSessionManager.Instance?.DeviceManager?.SelectedCameraDevice;
+                if (cam?.IsoNumber == null || !cam.IsoNumber.Available || LiveViewISOComboBox == null)
+                    return;
+
+                var values = cam.IsoNumber.Values;
+                if (values == null || values.Count == 0)
+                    return;
+
+                if (enable)
+                {
+                    // Save current selection if not already saved
+                    if (string.IsNullOrEmpty(_previousLiveViewIso))
+                    {
+                        _previousLiveViewIso = cam.IsoNumber.Value ?? LiveViewISOValueText?.Text;
+                    }
+                    // Select the last (assumed highest) ISO value
+                    var maxIso = values[values.Count - 1];
+                    _applyingMaxIsoBoost = true;
+                    LiveViewISOComboBox.SelectedItem = maxIso; // triggers selection changed -> applies to camera
+                    _applyingMaxIsoBoost = false;
+                    DebugService.LogDebug($"Max ISO Boost enabled: applied {maxIso}");
+                }
+                else
+                {
+                    // Restore previous selection if valid
+                    var restore = _previousLiveViewIso;
+                    _previousLiveViewIso = null;
+                    if (!string.IsNullOrEmpty(restore) && values.Contains(restore))
+                    {
+                        _applyingMaxIsoBoost = true;
+                        LiveViewISOComboBox.SelectedItem = restore;
+                        _applyingMaxIsoBoost = false;
+                        DebugService.LogDebug($"Max ISO Boost disabled: restored {restore}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"ApplyMaxIsoBoost error: {ex.Message}");
             }
         }
         
@@ -1321,34 +1610,42 @@ namespace Photobooth.Controls
             
             if (LiveViewApertureComboBox.SelectedItem != null)
             {
-                var content = (LiveViewApertureComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
-                if (!string.IsNullOrEmpty(content))
+                string selectedAv = null;
+                if (LiveViewApertureComboBox.SelectedItem is string s)
+                    selectedAv = s;
+                else
+                    selectedAv = (LiveViewApertureComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+
+                if (!string.IsNullOrEmpty(selectedAv))
                 {
-                    LiveViewApertureValueText.Text = content;
+                    LiveViewApertureValueText.Text = selectedAv;
                     
                     // Update live view settings
                     if (_dualSettingsService != null)
                     {
-                        _dualSettingsService.SetLiveViewSetting("Aperture", content);
+                        _dualSettingsService.SetLiveViewSetting("Aperture", selectedAv);
                     }
                     
                     // If video mode is active, apply in real-time
                     if (_videoModeActive && _videoModeLiveViewService != null)
                     {
-                        _videoModeLiveViewService.SetAperture(content);
+                        _videoModeLiveViewService.SetAperture(selectedAv);
                     }
                     
                     // Apply to visual enhancement
                     if (_liveViewEnhancementService != null)
                     {
-                        var cleanValue = content.Replace("f/", "");
+                        var cleanValue = selectedAv.Replace("f/", "");
                         if (double.TryParse(cleanValue, out double apertureValue))
                         {
                             _liveViewEnhancementService.SetSimulatedAperture(apertureValue);
                         }
                     }
                     
-                    DebugService.LogDebug($"Live View Aperture set to {content}");
+                    DebugService.LogDebug($"Live View Aperture set to {selectedAv}");
+
+                    // Persist setting immediately
+                    AutoSaveIfEnabled();
                 }
             }
         }
@@ -1359,31 +1656,113 @@ namespace Photobooth.Controls
             
             if (LiveViewShutterComboBox.SelectedItem != null)
             {
-                var content = (LiveViewShutterComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
-                if (!string.IsNullOrEmpty(content))
+                string selectedTv = null;
+                if (LiveViewShutterComboBox.SelectedItem is string s)
+                    selectedTv = s;
+                else
+                    selectedTv = (LiveViewShutterComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+
+                if (!string.IsNullOrEmpty(selectedTv))
                 {
-                    LiveViewShutterValueText.Text = content;
+                    LiveViewShutterValueText.Text = selectedTv;
                     
                     // Update live view settings
                     if (_dualSettingsService != null)
                     {
-                        _dualSettingsService.SetLiveViewSetting("ShutterSpeed", content);
+                        _dualSettingsService.SetLiveViewSetting("ShutterSpeed", selectedTv);
                     }
                     
                     // If video mode is active, apply in real-time
                     if (_videoModeActive && _videoModeLiveViewService != null)
                     {
-                        _videoModeLiveViewService.SetShutterSpeed(content);
+                        _videoModeLiveViewService.SetShutterSpeed(selectedTv);
                     }
                     
                     // Apply to visual enhancement
                     if (_liveViewEnhancementService != null)
                     {
-                        _liveViewEnhancementService.SetSimulatedShutterSpeed(content);
+                        _liveViewEnhancementService.SetSimulatedShutterSpeed(selectedTv);
                     }
                     
-                    DebugService.LogDebug($"Live View Shutter Speed set to {content}");
+                    DebugService.LogDebug($"Live View Shutter Speed set to {selectedTv}");
+
+                    // Persist setting immediately
+                    AutoSaveIfEnabled();
                 }
+            }
+        }
+
+        private void TryPopulateLiveViewAperture()
+        {
+            try
+            {
+                if (LiveViewApertureComboBox == null || LiveViewApertureValueText == null)
+                    return;
+
+                var cam = _currentCamera ?? CameraSessionManager.Instance?.DeviceManager?.SelectedCameraDevice;
+                if (cam?.FNumber != null && cam.FNumber.Available)
+                {
+                    var values = cam.FNumber.Values;
+                    if (values != null && values.Any())
+                    {
+                        LiveViewApertureComboBox.ItemsSource = null;
+                        LiveViewApertureComboBox.Items.Clear();
+                        LiveViewApertureComboBox.ItemsSource = values;
+
+                        var current = cam.FNumber.Value;
+                        if (!string.IsNullOrEmpty(current) && values.Contains(current))
+                        {
+                            LiveViewApertureComboBox.SelectedItem = current;
+                            LiveViewApertureValueText.Text = current;
+                        }
+                        else
+                        {
+                            LiveViewApertureComboBox.SelectedIndex = 0;
+                            LiveViewApertureValueText.Text = LiveViewApertureComboBox.SelectedItem as string;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"Populate Live View Aperture failed: {ex.Message}");
+            }
+        }
+
+        private void TryPopulateLiveViewShutter()
+        {
+            try
+            {
+                if (LiveViewShutterComboBox == null || LiveViewShutterValueText == null)
+                    return;
+
+                var cam = _currentCamera ?? CameraSessionManager.Instance?.DeviceManager?.SelectedCameraDevice;
+                if (cam?.ShutterSpeed != null && cam.ShutterSpeed.Available)
+                {
+                    var values = cam.ShutterSpeed.Values;
+                    if (values != null && values.Any())
+                    {
+                        LiveViewShutterComboBox.ItemsSource = null;
+                        LiveViewShutterComboBox.Items.Clear();
+                        LiveViewShutterComboBox.ItemsSource = values;
+
+                        var current = cam.ShutterSpeed.Value;
+                        if (!string.IsNullOrEmpty(current) && values.Contains(current))
+                        {
+                            LiveViewShutterComboBox.SelectedItem = current;
+                            LiveViewShutterValueText.Text = current;
+                        }
+                        else
+                        {
+                            LiveViewShutterComboBox.SelectedIndex = 0;
+                            LiveViewShutterValueText.Text = LiveViewShutterComboBox.SelectedItem as string;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"Populate Live View Shutter failed: {ex.Message}");
             }
         }
         

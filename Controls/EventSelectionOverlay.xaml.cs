@@ -28,7 +28,6 @@ namespace Photobooth.Controls
         private List<EventItemViewModel> _allEvents;
         private ObservableCollection<EventItemViewModel> _eventItems;
         private List<TemplateData> _currentEventTemplates;
-        private int _currentTemplateIndex = 0;
         private EventItemViewModel _selectedEvent;
 
         public event EventHandler<EventData> EventSelected;
@@ -48,6 +47,32 @@ namespace Photobooth.Controls
             _eventSelectionService.PropertyChanged += OnServicePropertyChanged;
             _eventSelectionService.EventSelected += OnServiceEventSelected;
             _eventSelectionService.SearchCleared += OnServiceSearchCleared;
+
+            // Handle responsive sizing
+            this.Loaded += (s, e) => SetResponsiveHeights();
+            this.SizeChanged += (s, e) => SetResponsiveHeights();
+        }
+
+        private void SetResponsiveHeights()
+        {
+            // Get the actual height of the window
+            var window = Window.GetWindow(this);
+            if (window != null)
+            {
+                double screenHeight = window.ActualHeight;
+
+                // Set template panel height to 70% of screen height
+                if (TemplatePanel != null)
+                {
+                    TemplatePanel.MaxHeight = screenHeight * 0.7;
+                }
+
+                // Set ScrollViewer max height
+                if (TemplateScrollViewer != null)
+                {
+                    TemplateScrollViewer.MaxHeight = screenHeight * 0.6;
+                }
+            }
         }
         
         /// <summary>
@@ -417,7 +442,6 @@ namespace Photobooth.Controls
 
                 // Get templates for this event
                 _currentEventTemplates = _eventService.GetEventTemplates(eventData.Id);
-                _currentTemplateIndex = 0;
 
                 // Update UI
                 if (_currentEventTemplates.Count > 0)
@@ -425,20 +449,17 @@ namespace Photobooth.Controls
                     TemplatePanel.Visibility = Visibility.Visible;
                     TemplateCountText.Text = $"({_currentEventTemplates.Count} assigned)";
                     NoTemplatesMessage.Visibility = Visibility.Collapsed;
-                    TemplateCarousel.Visibility = Visibility.Visible;
+                    TemplateScrollViewer.Visibility = Visibility.Visible;
 
-                    // Show first template
-                    DisplayTemplate(_currentTemplateIndex);
-
-                    // Update navigation buttons
-                    UpdateTemplateNavigationButtons();
+                    // Populate templates list
+                    PopulateTemplatesList();
                 }
                 else
                 {
                     TemplatePanel.Visibility = Visibility.Visible;
                     TemplateCountText.Text = "(0 assigned)";
                     NoTemplatesMessage.Visibility = Visibility.Visible;
-                    TemplateCarousel.Visibility = Visibility.Collapsed;
+                    TemplateScrollViewer.Visibility = Visibility.Collapsed;
                 }
             }
             catch (Exception ex)
@@ -447,73 +468,41 @@ namespace Photobooth.Controls
             }
         }
 
-        private void DisplayTemplate(int index)
+        private void PopulateTemplatesList()
         {
-            if (_currentEventTemplates == null || index < 0 || index >= _currentEventTemplates.Count)
-                return;
+            if (_currentEventTemplates == null) return;
 
-            var template = _currentEventTemplates[index];
+            // Create template view models
+            var templateViewModels = new System.Collections.ObjectModel.ObservableCollection<dynamic>();
 
-            // Update template info
-            CurrentTemplateName.Text = template.Name ?? "Untitled Template";
-            CurrentTemplateInfo.Text = $"{index + 1} of {_currentEventTemplates.Count}";
-            IsDefaultCheckBox.IsChecked = template.IsDefault;
-
-            // Load template preview
-            if (!string.IsNullOrEmpty(template.ThumbnailImagePath))
+            for (int i = 0; i < _currentEventTemplates.Count; i++)
             {
-                try
+                var template = _currentEventTemplates[i];
+                var viewModel = new
                 {
-                    var bitmap = new System.Windows.Media.Imaging.BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.UriSource = new Uri(template.ThumbnailImagePath, UriKind.Absolute);
-                    bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    bitmap.EndInit();
-                    CurrentTemplatePreview.Source = bitmap;
-                }
-                catch
-                {
-                    CurrentTemplatePreview.Source = null;
-                }
+                    Template = template,
+                    Name = template.Name ?? "Untitled Template",
+                    Info = $"Template {i + 1}",
+                    IsDefault = template.IsDefault,
+                    PreviewPath = template.ThumbnailImagePath
+                };
+                templateViewModels.Add(viewModel);
             }
-            else
-            {
-                CurrentTemplatePreview.Source = null;
-            }
-        }
 
-        private void UpdateTemplateNavigationButtons()
-        {
-            PrevTemplateButton.IsEnabled = _currentTemplateIndex > 0;
-            NextTemplateButton.IsEnabled = _currentTemplateIndex < _currentEventTemplates.Count - 1;
-        }
+            TemplatesList.ItemsSource = templateViewModels;
 
-        private void PrevTemplate_Click(object sender, RoutedEventArgs e)
-        {
-            if (_currentTemplateIndex > 0)
-            {
-                _currentTemplateIndex--;
-                DisplayTemplate(_currentTemplateIndex);
-                UpdateTemplateNavigationButtons();
-            }
-        }
-
-        private void NextTemplate_Click(object sender, RoutedEventArgs e)
-        {
-            if (_currentTemplateIndex < _currentEventTemplates.Count - 1)
-            {
-                _currentTemplateIndex++;
-                DisplayTemplate(_currentTemplateIndex);
-                UpdateTemplateNavigationButtons();
-            }
+            // Update responsive heights after templates are loaded
+            SetResponsiveHeights();
         }
 
         private void EditTemplate_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentEventTemplates == null || _currentTemplateIndex >= _currentEventTemplates.Count)
-                return;
+            var button = sender as Button;
+            if (button?.Tag == null) return;
 
-            var template = _currentEventTemplates[_currentTemplateIndex];
+            dynamic templateViewModel = button.Tag;
+            var template = templateViewModel.Template as TemplateData;
+            if (template == null) return;
 
             // Create a window to host the TouchTemplateDesignerOverlay
             var designerWindow = new Window
@@ -548,10 +537,13 @@ namespace Photobooth.Controls
 
         private void RemoveTemplate_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentEventTemplates == null || _currentTemplateIndex >= _currentEventTemplates.Count)
-                return;
+            var button = sender as Button;
+            if (button?.Tag == null) return;
 
-            var template = _currentEventTemplates[_currentTemplateIndex];
+            dynamic templateViewModel = button.Tag;
+            var template = templateViewModel.Template as TemplateData;
+            if (template == null) return;
+
             var eventData = _eventSelectionService.SelectedEvent;
 
             if (MessageBox.Show($"Remove template '{template.Name}' from this event?", "Confirm Remove",
@@ -564,53 +556,76 @@ namespace Photobooth.Controls
 
         private void AddTemplate_Click(object sender, RoutedEventArgs e)
         {
-            // Open template browser to add existing templates
-            var templateBrowser = new TemplateBrowserOverlay();
-            templateBrowser.ShowOverlay();
-            templateBrowser.TemplateSelected += (s, template) =>
+            try
             {
-                var eventData = _eventSelectionService.SelectedEvent;
-                if (eventData != null)
-                {
-                    _eventService.AssignTemplateToEvent(eventData.Id, template.Id, _currentEventTemplates.Count == 0);
-                    LoadEventTemplates(eventData);
-                }
-            };
-        }
+                Log.Debug($"EventSelectionOverlay: Opening Template Browser (Event has {_currentEventTemplates.Count} templates)");
 
-        private void ManageTemplates_Click(object sender, RoutedEventArgs e)
-        {
-            // Open template manager for this event
-            var eventData = _eventSelectionService.SelectedEvent;
-            if (eventData != null)
+                // Show the template browser overlay
+                TemplateBrowserOverlay.Visibility = Visibility.Visible;
+                TemplateBrowserOverlay.ShowOverlay();
+
+                // Unsubscribe previous handlers to avoid duplicates
+                TemplateBrowserOverlay.TemplateSelected -= OnTemplateSelectedForAdd;
+                TemplateBrowserOverlay.SelectionCancelled -= OnTemplateBrowserCancelled;
+
+                // Subscribe to events
+                TemplateBrowserOverlay.TemplateSelected += OnTemplateSelectedForAdd;
+                TemplateBrowserOverlay.SelectionCancelled += OnTemplateBrowserCancelled;
+            }
+            catch (Exception ex)
             {
-                var manager = new Window
-                {
-                    Title = $"Manage Templates - {eventData.Name}",
-                    Width = 800,
-                    Height = 600,
-                    WindowStartupLocation = WindowStartupLocation.CenterScreen
-                };
-
-                // You can create a more detailed template management UI here
-                manager.ShowDialog();
+                Log.Error($"EventSelectionOverlay: Failed to open template browser: {ex.Message}");
+                MessageBox.Show($"Failed to open template browser: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void SetDefaultTemplate_Checked(object sender, RoutedEventArgs e)
+        private void OnTemplateSelectedForAdd(object sender, TemplateData template)
         {
-            if (_currentEventTemplates == null || _currentTemplateIndex >= _currentEventTemplates.Count)
-                return;
+            try
+            {
+                var eventData = _eventSelectionService.SelectedEvent;
+                if (eventData != null && template != null)
+                {
+                    // Check if template is already assigned to this event
+                    bool isAlreadyAssigned = _currentEventTemplates.Any(t => t.Id == template.Id);
 
-            var template = _currentEventTemplates[_currentTemplateIndex];
-            var eventData = _eventSelectionService.SelectedEvent;
+                    if (isAlreadyAssigned)
+                    {
+                        MessageBox.Show($"Template '{template.Name}' is already assigned to this event.",
+                            "Template Already Assigned",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        // Add the template to the event
+                        _eventService.AssignTemplateToEvent(eventData.Id, template.Id, _currentEventTemplates.Count == 0);
+                        LoadEventTemplates(eventData);
 
-            // Set this template as default
-            _eventService.AssignTemplateToEvent(eventData.Id, template.Id, true);
+                        Log.Debug($"EventSelectionOverlay: Added template '{template.Name}' to event '{eventData.Name}'");
+                    }
+                }
 
-            // Reload to refresh the default status
-            LoadEventTemplates(eventData);
+                // Hide the browser
+                TemplateBrowserOverlay.HideOverlay();
+                TemplateBrowserOverlay.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionOverlay: Failed to add template: {ex.Message}");
+                MessageBox.Show($"Failed to add template: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
+
+        private void OnTemplateBrowserCancelled(object sender, EventArgs e)
+        {
+            TemplateBrowserOverlay.HideOverlay();
+            TemplateBrowserOverlay.Visibility = Visibility.Collapsed;
+        }
+
+
 
         private void UpdateEventSelection(Border selectedBorder)
         {

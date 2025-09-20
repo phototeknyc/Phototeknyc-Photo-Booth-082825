@@ -96,6 +96,7 @@ namespace Photobooth.Pages
                 DeviceManager.ConnectToCamera();
                 RefreshCameraStatus();
                 LoadCurrentSettings();
+                PopulateIsoComboBox();
                 
                 // Initialize video settings UI
                 InitializeVideoSettings();
@@ -195,6 +196,7 @@ namespace Photobooth.Pages
             {
                 RefreshCameraStatus();
                 LoadCurrentSettings();
+                PopulateIsoComboBox();
             });
         }
 
@@ -212,7 +214,64 @@ namespace Photobooth.Pages
             {
                 RefreshCameraStatus();
                 LoadCurrentSettings();
+                PopulateIsoComboBox();
             });
+        }
+
+        private void PopulateIsoComboBox()
+        {
+            try
+            {
+                var camera = DeviceManager.SelectedCameraDevice;
+                if (camera?.IsoNumber != null && camera.IsoNumber.Available)
+                {
+                    var values = camera.IsoNumber.Values; // typically a list of strings
+                    isoComboBox.ItemsSource = values;
+                    // Select current value if present
+                    var current = camera.IsoNumber.Value;
+                    if (!string.IsNullOrEmpty(current))
+                    {
+                        isoComboBox.SelectedItem = current;
+                    }
+                }
+                else
+                {
+                    isoComboBox.ItemsSource = null;
+                }
+            }
+            catch { /* ignore UI population errors */ }
+        }
+
+        private void IsoComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                var selected = isoComboBox.SelectedItem as string;
+                if (string.IsNullOrEmpty(selected)) return;
+
+                // Prefer the video LV service if active to avoid conflicts
+                var lvService = VideoModeLiveViewService.Instance;
+                if (lvService != null && lvService.IsVideoModeActive)
+                {
+                    lvService.SetISO(selected);
+                }
+                else
+                {
+                    var camera = DeviceManager.SelectedCameraDevice;
+                    if (camera?.IsoNumber != null && camera.IsoNumber.IsEnabled)
+                    {
+                        // Apply directly when not in video mode
+                        camera.IsoNumber.SetValue(selected);
+                    }
+                }
+
+                // Reflect in the text display
+                isoValueText.Text = selected;
+            }
+            catch (Exception ex)
+            {
+                cameraStatusText.Text = $"Failed to set ISO: {ex.Message}";
+            }
         }
 
         // ISO Controls

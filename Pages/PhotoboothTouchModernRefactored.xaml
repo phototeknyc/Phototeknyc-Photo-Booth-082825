@@ -1635,14 +1635,14 @@
                                         
                                         <Border.RenderTransform>
                                             <ScaleTransform ScaleX="1" ScaleY="1"
-                                                            CenterX="160" CenterY="225"/>
+                                                            CenterX="160" CenterY="200"/>
                                         </Border.RenderTransform>
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
-                    
+
                     <!-- Footer Message -->
                     <TextBlock Grid.Row="3"
                                Text="Click on a template to start your session"

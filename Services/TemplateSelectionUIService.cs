@@ -60,7 +60,7 @@ namespace Photobooth.Services
             try
             {
                 Log.Debug($"TemplateSelectionUIService.ShowTemplateSelection: Called with event '{eventData?.Name}' and {templates?.Count ?? 0} templates");
-                
+
                 if (_overlayGrid == null || _templatesGrid == null)
                 {
                     Log.Error($"TemplateSelectionUIService: UI controls not initialized");

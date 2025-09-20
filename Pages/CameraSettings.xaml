@@ -258,6 +258,13 @@
                                 <TextBlock x:Name="isoValueText" Text="Auto" Foreground="{StaticResource SurfaceTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="100" TextAlignment="Center" FontSize="14"/>
                                 <Button x:Name="isoNextButton" Content="▶" Style="{StaticResource SettingButtonStyle}" Click="IsoNext_Click"/>
                             </StackPanel>
+                            <!-- Optional direct ISO selection -->
+                            <ComboBox x:Name="isoComboBox"
+                                      Style="{StaticResource SettingComboBoxStyle}"
+                                      Margin="0,6,0,0"
+                                      Width="180"
+                                      SelectionChanged="IsoComboBox_SelectionChanged"
+                                      ToolTip="Select exact ISO value"/>
                         </StackPanel>
 
                         <!-- Aperture -->

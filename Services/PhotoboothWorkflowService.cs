@@ -70,6 +70,15 @@ namespace Photobooth.Services
             // Create a persistent handler for camera photo capture
             _cameraCaptureHandler = (sender, args) =>
             {
+                // Allow settings/test captures to be ignored by workflow
+                var sessionMgr = CameraSessionManager.Instance;
+                if (sessionMgr != null && sessionMgr.SuppressNextCapture)
+                {
+                    sessionMgr.SuppressNextCapture = false; // consume suppression
+                    Log.Debug("PhotoboothWorkflowService: Suppressing PhotoCaptured (test/settings capture)");
+                    return;
+                }
+
                 Log.Debug("===== CAMERA PHOTO CAPTURED EVENT FIRED =====");
                 Log.Debug($"PhotoboothWorkflowService: Photo captured by camera - File: {args?.FileName}");
                 Log.Debug($"PhotoboothWorkflowService: File exists: {System.IO.File.Exists(args?.FileName)}");

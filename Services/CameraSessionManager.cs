@@ -14,6 +14,7 @@ namespace Photobooth.Services
         private static readonly object _lock = new object();
         private CameraDeviceManager _deviceManager;
         private bool _isInitialized = false;
+        private bool _suppressNextCapture = false;
 
         private CameraSessionManager()
         {
@@ -45,6 +46,24 @@ namespace Photobooth.Services
                 EnsureInitialized();
                 return _deviceManager;
             }
+        }
+
+        /// <summary>
+        /// If true, the next camera PhotoCaptured event will be ignored by the workflow service.
+        /// Used by settings/test capture flows to avoid polluting live sessions.
+        /// </summary>
+        public bool SuppressNextCapture
+        {
+            get { return _suppressNextCapture; }
+            set { _suppressNextCapture = value; }
+        }
+
+        /// <summary>
+        /// Convenience method to suppress the next capture event once.
+        /// </summary>
+        public void SuppressNextCameraCaptureOnce()
+        {
+            _suppressNextCapture = true;
         }
 
         private void EnsureInitialized()
