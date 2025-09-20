@@ -2898,8 +2898,8 @@ namespace Photobooth.Pages
             try
             {
                 // Hide selection overlays
-                if (eventSelectionOverlay != null)
-                    eventSelectionOverlay.Visibility = Visibility.Collapsed;
+                if (EventSelectionOverlayControl != null)
+                    EventSelectionOverlayControl.Visibility = Visibility.Collapsed;
                 if (templateSelectionOverlay != null)
                     templateSelectionOverlay.Visibility = Visibility.Collapsed;
                 if (templateSelectionOverlayNew != null)
@@ -2916,8 +2916,6 @@ namespace Photobooth.Pages
                     TimerSettingsOverlayControl.Visibility = Visibility.Collapsed;
                 if (PrintSettingsOverlayControl != null)
                     PrintSettingsOverlayControl.Visibility = Visibility.Collapsed;
-                if (EventSelectionOverlayControl != null)
-                    EventSelectionOverlayControl.Visibility = Visibility.Collapsed;
                 if (SettingsOverlayControl != null)
                     SettingsOverlayControl.Visibility = Visibility.Collapsed;
                 if (SharingStatusOverlayControl != null)
@@ -2982,15 +2980,8 @@ namespace Photobooth.Pages
                     actionButtonsPanel.Visibility = Visibility.Collapsed;
                 }
 
-                if (galleryActionPanel != null)
-                {
-                    galleryActionPanel.Visibility = Visibility.Collapsed;
-                }
-
-                if (photosPanel != null)
-                {
-                    photosPanel.Visibility = Visibility.Collapsed;
-                }
+                // Note: galleryActionPanel and photosPanel don't exist as separate controls
+                // The photos are in photosContainer which gets cleared below
 
                 if (cancelSessionButton != null)
                 {
