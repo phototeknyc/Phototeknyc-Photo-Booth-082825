@@ -19,7 +19,21 @@ namespace Photobooth.Services
             }
         }
 
-        private bool _isDebugEnabled = false;
+        private bool _isDebugEnabled;
+
+        public DebugService()
+        {
+            // Load saved debug logging preference
+            try
+            {
+                _isDebugEnabled = Properties.Settings.Default.DebugLoggingEnabled;
+            }
+            catch
+            {
+                _isDebugEnabled = false;
+            }
+        }
+
         public bool IsDebugEnabled
         {
             get => _isDebugEnabled;
@@ -30,6 +44,15 @@ namespace Photobooth.Services
                     _isDebugEnabled = value;
                     // Also update DesignerCanvas debug flag
                     DesignerCanvas.Controls.DesignerCanvasDebug.IsDebugEnabled = value;
+
+                    // Save the preference
+                    try
+                    {
+                        Properties.Settings.Default.DebugLoggingEnabled = value;
+                        Properties.Settings.Default.Save();
+                    }
+                    catch { }
+
                     OnPropertyChanged();
                     LogDebug($"Debug mode {(value ? "enabled" : "disabled")}");
                 }

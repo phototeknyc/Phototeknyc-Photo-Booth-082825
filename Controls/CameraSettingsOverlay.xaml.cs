@@ -183,17 +183,33 @@ namespace Photobooth.Controls
                     if (_dualSettingsService != null)
                     {
                         _dualSettingsService.UpdateCameraReference(_currentCamera);
-                        // Apply photo mode settings on startup (app should start in photo mode)
-                        _dualSettingsService.ApplyPhotoCaptureSettings();
-                        DebugService.LogDebug("Applied photo capture settings on startup");
+                        // Don't apply settings on startup - they'll be applied when needed for capture
+                        DebugService.LogDebug("Dual settings service initialized with camera reference");
                     }
+
+                    // Set flag to prevent settings changes during UI population
+                    _isPopulatingExposureUI = true;
 
                     // Populate Live View exposure choices from the camera
                     TryPopulateLiveViewIso();
                     TryPopulateLiveViewAperture();
                     TryPopulateLiveViewShutter();
+
+                    // Populate Photo Capture exposure choices from the camera
+                    TryPopulatePhotoCaptureIso();
+                    TryPopulatePhotoCaptureAperture();
+                    TryPopulatePhotoCaptureShutter();
+
                     // Apply persisted selections
                     LoadOverlaySettingsAndApply();
+                    LoadLiveViewSettings();
+                    LoadPhotoCaptureSettings();
+
+                    // Clear flag after initialization
+                    _isPopulatingExposureUI = false;
+
+                    // Ensure Live View controls are properly enabled
+                    UpdateExposureControlsAvailability();
                 }
                 else
                 {
@@ -461,10 +477,14 @@ namespace Photobooth.Controls
         {
             if (!_isInitialized) return;
 
+            // Skip applying settings during UI population
+            if (_isPopulatingExposureUI) return;
+
             try
             {
                 if (PhotoCaptureTab != null && PhotoCaptureTab.IsSelected)
                 {
+                    _liveViewControlsEnabled = false;  // Disable live view controls
                     if (_videoModeLiveViewService != null && _videoModeLiveViewService.IsVideoModeActive)
                     {
                         await _videoModeLiveViewService.StopVideoModeLiveView();
@@ -474,6 +494,11 @@ namespace Photobooth.Controls
                         VideoModeLiveViewToggle.IsChecked = false;
                     }
                     UpdateControlStates(false);
+
+                    // Don't apply settings during startup - only when user actually switches tabs
+                    // The settings will be applied when actually capturing a photo
+                    DebugService.LogDebug("Switched to Photo Capture tab - settings will be applied on capture");
+
                     DebugService.LogDebug("Switched to Photo Capture tab: camera restored to photo mode");
                 }
                 else if (LiveViewTab != null && LiveViewTab.IsSelected)
@@ -484,8 +509,19 @@ namespace Photobooth.Controls
                         {
                             await _videoModeLiveViewService.StartVideoModeLiveView();
                         }
+                        _liveViewControlsEnabled = true;  // Enable live view controls
                         UpdateControlStates(true);
                         DebugService.LogDebug("Switched to Live View tab: ensured video mode active");
+                    }
+                    else
+                    {
+                        // Video mode is not active, but we still need to enable the live view controls
+                        _liveViewControlsEnabled = true;  // Enable live view controls
+                        UpdateControlStates(false);
+                        UpdateExposureControlsAvailability();
+
+                        // Don't automatically apply settings - they'll be applied when the user changes them
+                        DebugService.LogDebug("Switched to Live View tab: controls enabled without video mode");
                     }
                 }
             }
@@ -514,13 +550,23 @@ namespace Photobooth.Controls
 
         private void ISOComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // Skip if we're populating the UI
+            if (_isPopulatingExposureUI)
+                return;
+
             // Extra defensive null checks
             if (_cameraSettingsService == null || ISOComboBox == null || ISOValueText == null || !_isInitialized)
                 return;
                 
             if (ISOComboBox.SelectedItem != null)
             {
-                var content = (ISOComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+                // Support both string values (from ItemsSource) and ComboBoxItems (from XAML)
+                string content = null;
+                if (ISOComboBox.SelectedItem is string str)
+                    content = str;
+                else if (ISOComboBox.SelectedItem is ComboBoxItem item)
+                    content = item.Content?.ToString();
+
                 if (!string.IsNullOrEmpty(content))
                 {
                     ISOValueText.Text = content;
@@ -540,15 +586,14 @@ namespace Photobooth.Controls
                         }
                     }
                     
-                    // Update dual settings based on current mode
+                    // Update photo capture settings (this is the Photo Capture tab control)
                     if (_dualSettingsService != null)
                     {
-                        if (_dualSettingsService.CurrentMode == DualCameraSettingsService.SettingsMode.LiveView)
-                            _dualSettingsService.LiveViewSettings.ISO = content;
-                        else
-                            _dualSettingsService.PhotoCaptureSettings.ISO = content;
+                        _dualSettingsService.PhotoCaptureSettings.ISO = content;
+                        _dualSettingsService.SaveSettingsToStorage();
+                        DebugService.LogDebug($"Photo Capture ISO set to {content}");
                     }
-                    
+
                     AutoSaveIfEnabled();
                 }
             }
@@ -556,13 +601,23 @@ namespace Photobooth.Controls
 
         private void ApertureComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // Skip if we're populating the UI
+            if (_isPopulatingExposureUI)
+                return;
+
             // Extra defensive null checks
             if (_cameraSettingsService == null || ApertureComboBox == null || ApertureValueText == null || !_isInitialized)
                 return;
                 
             if (ApertureComboBox.SelectedItem != null)
             {
-                var content = (ApertureComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+                // Support both string values (from ItemsSource) and ComboBoxItems (from XAML)
+                string content = null;
+                if (ApertureComboBox.SelectedItem is string str)
+                    content = str;
+                else if (ApertureComboBox.SelectedItem is ComboBoxItem item)
+                    content = item.Content?.ToString();
+
                 if (!string.IsNullOrEmpty(content))
                 {
                     ApertureValueText.Text = content;
@@ -616,7 +671,15 @@ namespace Photobooth.Controls
                         // Fallback to original behavior
                         _cameraSettingsService.OnSettingChanged("Aperture", content);
                     }
-                    
+
+                    // Update photo capture settings (this is the Photo Capture tab control)
+                    if (_dualSettingsService != null)
+                    {
+                        _dualSettingsService.PhotoCaptureSettings.Aperture = content;
+                        _dualSettingsService.SaveSettingsToStorage();
+                        DebugService.LogDebug($"Photo Capture Aperture set to {content}");
+                    }
+
                     AutoSaveIfEnabled();
                 }
             }
@@ -624,13 +687,39 @@ namespace Photobooth.Controls
 
         private void ShutterSpeedComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            DebugService.LogDebug($"ShutterSpeedComboBox_SelectionChanged fired - _isInitialized={_isInitialized}, _isPopulatingExposureUI={_isPopulatingExposureUI}");
+
+            // Skip if we're populating the UI
+            if (_isPopulatingExposureUI)
+            {
+                DebugService.LogDebug("ShutterSpeed selection changed skipped - currently populating UI");
+                return;
+            }
+
             // Extra defensive null checks
             if (_cameraSettingsService == null || ShutterSpeedComboBox == null || ShutterSpeedValueText == null || !_isInitialized)
+            {
+                DebugService.LogDebug($"ShutterSpeed selection changed skipped - cameraSettingsService null: {_cameraSettingsService == null}, ComboBox null: {ShutterSpeedComboBox == null}, ValueText null: {ShutterSpeedValueText == null}, not initialized: {!_isInitialized}");
                 return;
+            }
                 
             if (ShutterSpeedComboBox.SelectedItem != null)
             {
-                var content = (ShutterSpeedComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+                DebugService.LogDebug($"ShutterSpeed SelectedItem type: {ShutterSpeedComboBox.SelectedItem.GetType().Name}, value: {ShutterSpeedComboBox.SelectedItem}");
+
+                // Support both string values (from ItemsSource) and ComboBoxItems (from XAML)
+                string content = null;
+                if (ShutterSpeedComboBox.SelectedItem is string str)
+                {
+                    content = str;
+                    DebugService.LogDebug($"ShutterSpeed selected as string: {content}");
+                }
+                else if (ShutterSpeedComboBox.SelectedItem is ComboBoxItem item)
+                {
+                    content = item.Content?.ToString();
+                    DebugService.LogDebug($"ShutterSpeed selected as ComboBoxItem: {content}");
+                }
+
                 if (!string.IsNullOrEmpty(content))
                 {
                     ShutterSpeedValueText.Text = content;
@@ -676,7 +765,15 @@ namespace Photobooth.Controls
                         // Fallback to original behavior
                         _cameraSettingsService.OnSettingChanged("ShutterSpeed", content);
                     }
-                    
+
+                    // Update photo capture settings (this is the Photo Capture tab control)
+                    if (_dualSettingsService != null)
+                    {
+                        _dualSettingsService.PhotoCaptureSettings.ShutterSpeed = content;
+                        _dualSettingsService.SaveSettingsToStorage();
+                        DebugService.LogDebug($"Photo Capture Shutter Speed set to {content} and saved to storage");
+                    }
+
                     AutoSaveIfEnabled();
                 }
             }
@@ -804,6 +901,14 @@ namespace Photobooth.Controls
         {
             try
             {
+                // Apply photo capture settings before taking test photo
+                if (_dualSettingsService != null && _currentCamera != null)
+                {
+                    _dualSettingsService.UpdateCameraReference(_currentCamera);
+                    _dualSettingsService.ApplyPhotoCaptureSettings();
+                    DebugService.LogDebug($"Test Photo: Applied photo settings - ISO: {_dualSettingsService.PhotoCaptureSettings.ISO}, Aperture: {_dualSettingsService.PhotoCaptureSettings.Aperture}, Shutter: {_dualSettingsService.PhotoCaptureSettings.ShutterSpeed}");
+                }
+
                 // Get the camera session manager
                 var sessionManager = CameraSessionManager.Instance;
                 var camera = sessionManager?.DeviceManager?.SelectedCameraDevice;
@@ -1398,14 +1503,17 @@ namespace Photobooth.Controls
             try
             {
                 var cam = _currentCamera ?? CameraSessionManager.Instance?.DeviceManager?.SelectedCameraDevice;
-                bool serviceActive = _videoModeLiveViewService?.IsVideoModeActive ?? false;
+
+                // Live view controls should always be available when on the Live View tab,
+                // regardless of video mode status, so we can apply different settings for preview
+                bool onLiveViewTab = LiveViewTab != null && LiveViewTab.IsSelected;
 
                 // ISO
-                bool isoEnabled = serviceActive && cam?.IsoNumber != null && cam.IsoNumber.Available && cam.IsoNumber.IsEnabled;
+                bool isoEnabled = onLiveViewTab && cam?.IsoNumber != null && cam.IsoNumber.Available && cam.IsoNumber.IsEnabled;
                 if (LiveViewISOComboBox != null)
                 {
                     LiveViewISOComboBox.IsEnabled = isoEnabled;
-                    LiveViewISOComboBox.ToolTip = isoEnabled ? null : "ISO not available in current camera mode";
+                    LiveViewISOComboBox.ToolTip = isoEnabled ? null : "ISO not available";
                 }
                 if (MaxIsoBoostToggle != null)
                 {
@@ -1413,19 +1521,19 @@ namespace Photobooth.Controls
                 }
 
                 // Aperture
-                bool avEnabled = serviceActive && cam?.FNumber != null && cam.FNumber.Available && cam.FNumber.IsEnabled;
+                bool avEnabled = onLiveViewTab && cam?.FNumber != null && cam.FNumber.Available && cam.FNumber.IsEnabled;
                 if (LiveViewApertureComboBox != null)
                 {
                     LiveViewApertureComboBox.IsEnabled = avEnabled;
-                    LiveViewApertureComboBox.ToolTip = avEnabled ? null : "Aperture not available in current camera mode";
+                    LiveViewApertureComboBox.ToolTip = avEnabled ? null : "Aperture not available";
                 }
 
                 // Shutter
-                bool tvEnabled = serviceActive && cam?.ShutterSpeed != null && cam.ShutterSpeed.Available && cam.ShutterSpeed.IsEnabled;
+                bool tvEnabled = onLiveViewTab && cam?.ShutterSpeed != null && cam.ShutterSpeed.Available && cam.ShutterSpeed.IsEnabled;
                 if (LiveViewShutterComboBox != null)
                 {
                     LiveViewShutterComboBox.IsEnabled = tvEnabled;
-                    LiveViewShutterComboBox.ToolTip = tvEnabled ? null : "Shutter not available in current camera mode";
+                    LiveViewShutterComboBox.ToolTip = tvEnabled ? null : "Shutter not available";
                 }
             }
             catch (Exception ex)
@@ -1442,7 +1550,7 @@ namespace Photobooth.Controls
         
         private void LiveViewISOComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (!_isInitialized || LiveViewISOComboBox == null) return;
+            if (!_isInitialized || LiveViewISOComboBox == null || _isPopulatingExposureUI) return;
             
             if (LiveViewISOComboBox.SelectedItem != null)
             {
@@ -1463,8 +1571,16 @@ namespace Photobooth.Controls
                     if (_dualSettingsService != null)
                     {
                         _dualSettingsService.SetLiveViewSetting("ISO", selectedIso);
+                        _dualSettingsService.SaveSettingsToStorage();
+
+                        // Apply live view settings immediately when not in video mode
+                        // This ensures the preview uses the selected settings
+                        if (!_videoModeActive)
+                        {
+                            _dualSettingsService.ApplyLiveViewSettings();
+                        }
                     }
-                    
+
                     // If video mode is active, apply in real-time
                     if (_videoModeActive && _videoModeLiveViewService != null)
                     {
@@ -1512,18 +1628,8 @@ namespace Photobooth.Controls
                             LiveViewISOComboBox.Items.Clear();
                             LiveViewISOComboBox.ItemsSource = values;
 
-                            // Select current camera ISO if present, else first
-                            var current = cam.IsoNumber.Value;
-                            if (!string.IsNullOrEmpty(current) && values.Contains(current))
-                            {
-                                LiveViewISOComboBox.SelectedItem = current;
-                                LiveViewISOValueText.Text = current;
-                            }
-                            else
-                            {
-                                LiveViewISOComboBox.SelectedIndex = 0;
-                                LiveViewISOValueText.Text = LiveViewISOComboBox.SelectedItem as string;
-                            }
+                            // Don't select any default - let LoadLiveViewSettings handle it
+                            DebugService.LogDebug($"Populated Live View ISO with {values.Count()} values");
                         }
                         finally
                         {
@@ -1606,7 +1712,7 @@ namespace Photobooth.Controls
         
         private void LiveViewApertureComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (!_isInitialized || LiveViewApertureComboBox == null) return;
+            if (!_isInitialized || LiveViewApertureComboBox == null || _isPopulatingExposureUI) return;
             
             if (LiveViewApertureComboBox.SelectedItem != null)
             {
@@ -1624,8 +1730,16 @@ namespace Photobooth.Controls
                     if (_dualSettingsService != null)
                     {
                         _dualSettingsService.SetLiveViewSetting("Aperture", selectedAv);
+                        _dualSettingsService.SaveSettingsToStorage();
+
+                        // Apply live view settings immediately when not in video mode
+                        // This ensures the preview uses the selected settings
+                        if (!_videoModeActive)
+                        {
+                            _dualSettingsService.ApplyLiveViewSettings();
+                        }
                     }
-                    
+
                     // If video mode is active, apply in real-time
                     if (_videoModeActive && _videoModeLiveViewService != null)
                     {
@@ -1652,7 +1766,7 @@ namespace Photobooth.Controls
         
         private void LiveViewShutterComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (!_isInitialized || LiveViewShutterComboBox == null) return;
+            if (!_isInitialized || LiveViewShutterComboBox == null || _isPopulatingExposureUI) return;
             
             if (LiveViewShutterComboBox.SelectedItem != null)
             {
@@ -1670,8 +1784,16 @@ namespace Photobooth.Controls
                     if (_dualSettingsService != null)
                     {
                         _dualSettingsService.SetLiveViewSetting("ShutterSpeed", selectedTv);
+                        _dualSettingsService.SaveSettingsToStorage();
+
+                        // Apply live view settings immediately when not in video mode
+                        // This ensures the preview uses the selected settings
+                        if (!_videoModeActive)
+                        {
+                            _dualSettingsService.ApplyLiveViewSettings();
+                        }
                     }
-                    
+
                     // If video mode is active, apply in real-time
                     if (_videoModeActive && _videoModeLiveViewService != null)
                     {
@@ -1709,23 +1831,297 @@ namespace Photobooth.Controls
                         LiveViewApertureComboBox.Items.Clear();
                         LiveViewApertureComboBox.ItemsSource = values;
 
-                        var current = cam.FNumber.Value;
-                        if (!string.IsNullOrEmpty(current) && values.Contains(current))
-                        {
-                            LiveViewApertureComboBox.SelectedItem = current;
-                            LiveViewApertureValueText.Text = current;
-                        }
-                        else
-                        {
-                            LiveViewApertureComboBox.SelectedIndex = 0;
-                            LiveViewApertureValueText.Text = LiveViewApertureComboBox.SelectedItem as string;
-                        }
+                        // Don't select any default - let LoadLiveViewSettings handle it
+                        DebugService.LogDebug($"Populated Live View Aperture with {values.Count()} values");
                     }
                 }
             }
             catch (Exception ex)
             {
                 DebugService.LogError($"Populate Live View Aperture failed: {ex.Message}");
+            }
+        }
+
+        private void TryPopulatePhotoCaptureIso()
+        {
+            try
+            {
+                if (ISOComboBox == null || ISOValueText == null)
+                    return;
+
+                var cam = _currentCamera ?? CameraSessionManager.Instance?.DeviceManager?.SelectedCameraDevice;
+                if (cam?.IsoNumber != null && cam.IsoNumber.Available)
+                {
+                    var values = cam.IsoNumber.Values;
+                    if (values != null && values.Any())
+                    {
+                        // Temporarily disable events while populating
+                        _isPopulatingExposureUI = true;
+
+                        // Clear static items and use dynamic values
+                        ISOComboBox.ItemsSource = null;
+                        ISOComboBox.Items.Clear();
+                        ISOComboBox.ItemsSource = values;
+
+                        // Set default or current value
+                        var current = cam.IsoNumber.Value;
+                        if (!string.IsNullOrEmpty(current) && values.Contains(current))
+                        {
+                            ISOComboBox.SelectedItem = current;
+                            ISOValueText.Text = current;
+                        }
+                        else if (values.Any())
+                        {
+                            ISOComboBox.SelectedIndex = 0;
+                        }
+
+                        _isPopulatingExposureUI = false;
+
+                        DebugService.LogDebug($"Populated Photo Capture ISO with {values.Count()} values");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"TryPopulatePhotoCaptureIso error: {ex.Message}");
+            }
+        }
+
+        private void TryPopulatePhotoCaptureAperture()
+        {
+            try
+            {
+                if (ApertureComboBox == null || ApertureValueText == null)
+                    return;
+
+                var cam = _currentCamera ?? CameraSessionManager.Instance?.DeviceManager?.SelectedCameraDevice;
+                if (cam?.FNumber != null && cam.FNumber.Available)
+                {
+                    var values = cam.FNumber.Values;
+                    if (values != null && values.Any())
+                    {
+                        // Temporarily disable events while populating
+                        _isPopulatingExposureUI = true;
+
+                        // Clear static items and use dynamic values
+                        ApertureComboBox.ItemsSource = null;
+                        ApertureComboBox.Items.Clear();
+                        ApertureComboBox.ItemsSource = values;
+
+                        var current = cam.FNumber.Value;
+                        if (!string.IsNullOrEmpty(current) && values.Contains(current))
+                        {
+                            ApertureComboBox.SelectedItem = current;
+                            ApertureValueText.Text = current;
+                        }
+                        else if (values.Any())
+                        {
+                            ApertureComboBox.SelectedIndex = 0;
+                        }
+
+                        _isPopulatingExposureUI = false;
+
+                        DebugService.LogDebug($"Populated Photo Capture Aperture with {values.Count()} values");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"TryPopulatePhotoCaptureAperture error: {ex.Message}");
+            }
+        }
+
+        private void TryPopulatePhotoCaptureShutter()
+        {
+            try
+            {
+                if (ShutterSpeedComboBox == null || ShutterSpeedValueText == null)
+                    return;
+
+                var cam = _currentCamera ?? CameraSessionManager.Instance?.DeviceManager?.SelectedCameraDevice;
+                if (cam?.ShutterSpeed != null && cam.ShutterSpeed.Available)
+                {
+                    var values = cam.ShutterSpeed.Values;
+                    if (values != null && values.Any())
+                    {
+                        DebugService.LogDebug($"TryPopulatePhotoCaptureShutter: Clearing combo box and populating with {values.Count()} values from camera");
+
+                        // Temporarily disable events while populating
+                        _isPopulatingExposureUI = true;
+
+                        // Clear static items and use dynamic values
+                        ShutterSpeedComboBox.ItemsSource = null;
+                        ShutterSpeedComboBox.Items.Clear();
+                        ShutterSpeedComboBox.ItemsSource = values;
+
+                        var current = cam.ShutterSpeed.Value;
+                        if (!string.IsNullOrEmpty(current) && values.Contains(current))
+                        {
+                            ShutterSpeedComboBox.SelectedItem = current;
+                            ShutterSpeedValueText.Text = current;
+                        }
+                        else if (values.Any())
+                        {
+                            ShutterSpeedComboBox.SelectedIndex = 0;
+                        }
+
+                        _isPopulatingExposureUI = false;
+
+                        DebugService.LogDebug($"Populated Photo Capture Shutter with {values.Count()} values: {string.Join(", ", values.Take(10))}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"TryPopulatePhotoCaptureShutter error: {ex.Message}");
+            }
+        }
+
+        private void LoadLiveViewSettings()
+        {
+            try
+            {
+                if (_dualSettingsService == null) return;
+
+                // Disable events while loading settings to prevent redundant camera updates
+                _isPopulatingExposureUI = true;
+
+                var liveViewSettings = _dualSettingsService.LiveViewSettings;
+
+                // Load ISO setting
+                if (!string.IsNullOrEmpty(liveViewSettings.ISO) && LiveViewISOComboBox != null)
+                {
+                    if (LiveViewISOComboBox.ItemsSource != null)
+                    {
+                        var values = LiveViewISOComboBox.ItemsSource as IEnumerable<string>;
+                        if (values != null && values.Contains(liveViewSettings.ISO))
+                        {
+                            LiveViewISOComboBox.SelectedItem = liveViewSettings.ISO;
+                            LiveViewISOValueText.Text = liveViewSettings.ISO;
+                            DebugService.LogDebug($"Loaded Live View ISO: {liveViewSettings.ISO}");
+                        }
+                    }
+                }
+
+                // Load Aperture setting
+                if (!string.IsNullOrEmpty(liveViewSettings.Aperture) && LiveViewApertureComboBox != null)
+                {
+                    if (LiveViewApertureComboBox.ItemsSource != null)
+                    {
+                        var values = LiveViewApertureComboBox.ItemsSource as IEnumerable<string>;
+                        if (values != null && values.Contains(liveViewSettings.Aperture))
+                        {
+                            LiveViewApertureComboBox.SelectedItem = liveViewSettings.Aperture;
+                            LiveViewApertureValueText.Text = liveViewSettings.Aperture;
+                            DebugService.LogDebug($"Loaded Live View Aperture: {liveViewSettings.Aperture}");
+                        }
+                    }
+                }
+
+                // Load Shutter Speed setting
+                if (!string.IsNullOrEmpty(liveViewSettings.ShutterSpeed) && LiveViewShutterComboBox != null)
+                {
+                    if (LiveViewShutterComboBox.ItemsSource != null)
+                    {
+                        var values = LiveViewShutterComboBox.ItemsSource as IEnumerable<string>;
+                        if (values != null && values.Contains(liveViewSettings.ShutterSpeed))
+                        {
+                            LiveViewShutterComboBox.SelectedItem = liveViewSettings.ShutterSpeed;
+                            LiveViewShutterValueText.Text = liveViewSettings.ShutterSpeed;
+                            DebugService.LogDebug($"Loaded Live View Shutter: {liveViewSettings.ShutterSpeed}");
+                        }
+                    }
+                }
+
+                // Re-enable events after loading
+                _isPopulatingExposureUI = false;
+            }
+            catch (Exception ex)
+            {
+                _isPopulatingExposureUI = false;
+                DebugService.LogError($"LoadLiveViewSettings error: {ex.Message}");
+            }
+        }
+
+        private void LoadPhotoCaptureSettings()
+        {
+            try
+            {
+                if (_dualSettingsService == null) return;
+
+                // Disable events while loading settings to prevent redundant camera updates
+                _isPopulatingExposureUI = true;
+
+                var photoCaptureSettings = _dualSettingsService.PhotoCaptureSettings;
+
+                // Load ISO setting
+                if (!string.IsNullOrEmpty(photoCaptureSettings.ISO) && ISOComboBox != null)
+                {
+                    if (ISOComboBox.ItemsSource != null)
+                    {
+                        var values = ISOComboBox.ItemsSource as IEnumerable<string>;
+                        if (values != null && values.Contains(photoCaptureSettings.ISO))
+                        {
+                            ISOComboBox.SelectedItem = photoCaptureSettings.ISO;
+                            ISOValueText.Text = photoCaptureSettings.ISO;
+                            DebugService.LogDebug($"Loaded Photo Capture ISO: {photoCaptureSettings.ISO}");
+                        }
+                    }
+                }
+
+                // Load Aperture setting
+                if (!string.IsNullOrEmpty(photoCaptureSettings.Aperture) && ApertureComboBox != null)
+                {
+                    if (ApertureComboBox.ItemsSource != null)
+                    {
+                        var values = ApertureComboBox.ItemsSource as IEnumerable<string>;
+                        if (values != null && values.Contains(photoCaptureSettings.Aperture))
+                        {
+                            ApertureComboBox.SelectedItem = photoCaptureSettings.Aperture;
+                            ApertureValueText.Text = photoCaptureSettings.Aperture;
+                            DebugService.LogDebug($"Loaded Photo Capture Aperture: {photoCaptureSettings.Aperture}");
+                        }
+                    }
+                }
+
+                // Load Shutter Speed setting
+                if (!string.IsNullOrEmpty(photoCaptureSettings.ShutterSpeed) && ShutterSpeedComboBox != null)
+                {
+                    DebugService.LogDebug($"Attempting to load Photo Capture Shutter: {photoCaptureSettings.ShutterSpeed}");
+                    if (ShutterSpeedComboBox.ItemsSource != null)
+                    {
+                        var values = ShutterSpeedComboBox.ItemsSource as IEnumerable<string>;
+                        if (values != null)
+                        {
+                            DebugService.LogDebug($"Available shutter values: {string.Join(", ", values.Take(10))}");
+                            if (values.Contains(photoCaptureSettings.ShutterSpeed))
+                            {
+                                ShutterSpeedComboBox.SelectedItem = photoCaptureSettings.ShutterSpeed;
+                                ShutterSpeedValueText.Text = photoCaptureSettings.ShutterSpeed;
+                                DebugService.LogDebug($"Successfully loaded Photo Capture Shutter: {photoCaptureSettings.ShutterSpeed}");
+                            }
+                            else
+                            {
+                                DebugService.LogDebug($"Warning: Saved shutter speed '{photoCaptureSettings.ShutterSpeed}' not found in available values");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        DebugService.LogDebug("Warning: ShutterSpeedComboBox.ItemsSource is null");
+                    }
+                }
+                else
+                {
+                    DebugService.LogDebug($"Not loading shutter - Empty: {string.IsNullOrEmpty(photoCaptureSettings.ShutterSpeed)}, ComboBox null: {ShutterSpeedComboBox == null}");
+                }
+
+                // Re-enable events after loading
+                _isPopulatingExposureUI = false;
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"LoadPhotoCaptureSettings error: {ex.Message}");
             }
         }
 
@@ -1746,17 +2142,8 @@ namespace Photobooth.Controls
                         LiveViewShutterComboBox.Items.Clear();
                         LiveViewShutterComboBox.ItemsSource = values;
 
-                        var current = cam.ShutterSpeed.Value;
-                        if (!string.IsNullOrEmpty(current) && values.Contains(current))
-                        {
-                            LiveViewShutterComboBox.SelectedItem = current;
-                            LiveViewShutterValueText.Text = current;
-                        }
-                        else
-                        {
-                            LiveViewShutterComboBox.SelectedIndex = 0;
-                            LiveViewShutterValueText.Text = LiveViewShutterComboBox.SelectedItem as string;
-                        }
+                        // Don't select any default - let LoadLiveViewSettings handle it
+                        DebugService.LogDebug($"Populated Live View Shutter with {values.Count()} values");
                     }
                 }
             }

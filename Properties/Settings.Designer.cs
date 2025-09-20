@@ -1785,5 +1785,89 @@ namespace Photobooth.Properties {
                 this["AutoFocusDelay"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("800")]
+        public string LiveViewISO {
+            get {
+                return ((string)(this["LiveViewISO"]));
+            }
+            set {
+                this["LiveViewISO"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("2.8")]
+        public string LiveViewAperture {
+            get {
+                return ((string)(this["LiveViewAperture"]));
+            }
+            set {
+                this["LiveViewAperture"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1/60")]
+        public string LiveViewShutter {
+            get {
+                return ((string)(this["LiveViewShutter"]));
+            }
+            set {
+                this["LiveViewShutter"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("200")]
+        public string PhotoCaptureISO {
+            get {
+                return ((string)(this["PhotoCaptureISO"]));
+            }
+            set {
+                this["PhotoCaptureISO"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("5.6")]
+        public string PhotoCaptureAperture {
+            get {
+                return ((string)(this["PhotoCaptureAperture"]));
+            }
+            set {
+                this["PhotoCaptureAperture"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1/125")]
+        public string PhotoCaptureShutter {
+            get {
+                return ((string)(this["PhotoCaptureShutter"]));
+            }
+            set {
+                this["PhotoCaptureShutter"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool DebugLoggingEnabled {
+            get {
+                return ((bool)(this["DebugLoggingEnabled"]));
+            }
+            set {
+                this["DebugLoggingEnabled"] = value;
+            }
+        }
     }
 }

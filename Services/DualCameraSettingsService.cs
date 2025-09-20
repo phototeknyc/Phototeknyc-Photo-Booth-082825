@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CameraControl.Devices;
 using CameraControl.Devices.Classes;
 
@@ -166,8 +167,8 @@ namespace Photobooth.Services
 
             try
             {
-                DebugService.LogDebug("DualSettings: Applying photo capture settings to camera");
-                
+                DebugService.LogDebug($"DualSettings: Applying photo capture settings to camera - ISO: {PhotoCaptureSettings.ISO}, Aperture: {PhotoCaptureSettings.Aperture}, Shutter: {PhotoCaptureSettings.ShutterSpeed}");
+
                 ApplySettingsToCamera(PhotoCaptureSettings);
                 _isLiveViewActive = false;
                 
@@ -374,19 +375,97 @@ namespace Photobooth.Services
         #region Private Methods
         private void InitializeDefaultSettings()
         {
-            // Default live view settings (brighter for visibility)
-            LiveViewSettings.ISO = "800";
-            LiveViewSettings.Aperture = "2.8";
-            LiveViewSettings.ShutterSpeed = "1/60";
-            LiveViewSettings.WhiteBalance = "Auto";
-            LiveViewSettings.ExposureCompensation = "0";
-            
-            // Default photo capture settings (optimized for flash)
-            PhotoCaptureSettings.ISO = "200";
-            PhotoCaptureSettings.Aperture = "5.6";
-            PhotoCaptureSettings.ShutterSpeed = "1/125";
-            PhotoCaptureSettings.WhiteBalance = "Flash";
-            PhotoCaptureSettings.ExposureCompensation = "0";
+            // Try to load saved settings first
+            if (!LoadSettingsFromStorage())
+            {
+                // Use defaults if no saved settings
+                // Default live view settings (brighter for visibility)
+                LiveViewSettings.ISO = "800";
+                LiveViewSettings.Aperture = "2.8";
+                LiveViewSettings.ShutterSpeed = "1/60";
+                LiveViewSettings.WhiteBalance = "Auto";
+                LiveViewSettings.ExposureCompensation = "0";
+
+                // Default photo capture settings (optimized for flash)
+                PhotoCaptureSettings.ISO = "200";
+                PhotoCaptureSettings.Aperture = "5.6";
+                PhotoCaptureSettings.ShutterSpeed = "1/125";
+                PhotoCaptureSettings.WhiteBalance = "Flash";
+                PhotoCaptureSettings.ExposureCompensation = "0";
+            }
+        }
+
+        private bool LoadSettingsFromStorage()
+        {
+            try
+            {
+                var settings = Properties.Settings.Default;
+
+                // Load Live View Settings
+                if (!string.IsNullOrEmpty(settings.LiveViewISO))
+                {
+                    LiveViewSettings.ISO = settings.LiveViewISO;
+                    DebugService.LogDebug($"Loaded Live View ISO from storage: {LiveViewSettings.ISO}");
+                }
+                if (!string.IsNullOrEmpty(settings.LiveViewAperture))
+                {
+                    LiveViewSettings.Aperture = settings.LiveViewAperture;
+                    DebugService.LogDebug($"Loaded Live View Aperture from storage: {LiveViewSettings.Aperture}");
+                }
+                if (!string.IsNullOrEmpty(settings.LiveViewShutter))
+                {
+                    LiveViewSettings.ShutterSpeed = settings.LiveViewShutter;
+                    DebugService.LogDebug($"Loaded Live View Shutter from storage: {LiveViewSettings.ShutterSpeed}");
+                }
+
+                // Load Photo Capture Settings
+                if (!string.IsNullOrEmpty(settings.PhotoCaptureISO))
+                {
+                    PhotoCaptureSettings.ISO = settings.PhotoCaptureISO;
+                    DebugService.LogDebug($"Loaded Photo Capture ISO from storage: {PhotoCaptureSettings.ISO}");
+                }
+                if (!string.IsNullOrEmpty(settings.PhotoCaptureAperture))
+                {
+                    PhotoCaptureSettings.Aperture = settings.PhotoCaptureAperture;
+                    DebugService.LogDebug($"Loaded Photo Capture Aperture from storage: {PhotoCaptureSettings.Aperture}");
+                }
+                if (!string.IsNullOrEmpty(settings.PhotoCaptureShutter))
+                {
+                    PhotoCaptureSettings.ShutterSpeed = settings.PhotoCaptureShutter;
+                    DebugService.LogDebug($"Loaded Photo Capture Shutter from storage: {PhotoCaptureSettings.ShutterSpeed}");
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public void SaveSettingsToStorage()
+        {
+            try
+            {
+                var settings = Properties.Settings.Default;
+
+                // Save Live View Settings
+                settings.LiveViewISO = LiveViewSettings.ISO;
+                settings.LiveViewAperture = LiveViewSettings.Aperture;
+                settings.LiveViewShutter = LiveViewSettings.ShutterSpeed;
+
+                // Save Photo Capture Settings
+                settings.PhotoCaptureISO = PhotoCaptureSettings.ISO;
+                settings.PhotoCaptureAperture = PhotoCaptureSettings.Aperture;
+                settings.PhotoCaptureShutter = PhotoCaptureSettings.ShutterSpeed;
+
+                settings.Save();
+                DebugService.LogDebug("DualSettings: Settings saved to storage");
+            }
+            catch (Exception ex)
+            {
+                DebugService.LogError($"DualSettings: Error saving settings: {ex.Message}");
+            }
         }
 
         private void InitializeCamera()
@@ -426,7 +505,35 @@ namespace Photobooth.Services
                 
                 if (_currentCamera.ShutterSpeed != null && !string.IsNullOrEmpty(settings.ShutterSpeed))
                 {
-                    _currentCamera.ShutterSpeed.SetValue(settings.ShutterSpeed);
+                    DebugService.LogDebug($"DualSettings: Setting ShutterSpeed to {settings.ShutterSpeed}");
+                    DebugService.LogDebug($"DualSettings: ShutterSpeed IsEnabled={_currentCamera.ShutterSpeed.IsEnabled}, Available={_currentCamera.ShutterSpeed.Available}");
+
+                    // Check if the value exists in available values
+                    if (_currentCamera.ShutterSpeed.Values != null && _currentCamera.ShutterSpeed.Values.Contains(settings.ShutterSpeed))
+                    {
+                        DebugService.LogDebug($"DualSettings: About to call SetValue with ShutterSpeed: {settings.ShutterSpeed}");
+                        _currentCamera.ShutterSpeed.SetValue(settings.ShutterSpeed);
+                        DebugService.LogDebug($"DualSettings: ShutterSpeed SetValue called successfully with {settings.ShutterSpeed}");
+
+                        // Verify it was set
+                        var currentValue = _currentCamera.ShutterSpeed.Value;
+                        DebugService.LogDebug($"DualSettings: Current ShutterSpeed after setting: {currentValue}");
+                    }
+                    else
+                    {
+                        DebugService.LogDebug($"DualSettings: ShutterSpeed value '{settings.ShutterSpeed}' not found in available values");
+                        if (_currentCamera.ShutterSpeed.Values != null)
+                        {
+                            DebugService.LogDebug($"DualSettings: Available shutter speeds: {string.Join(", ", _currentCamera.ShutterSpeed.Values.Take(5))}...");
+                        }
+                    }
+                }
+                else
+                {
+                    if (_currentCamera.ShutterSpeed == null)
+                        DebugService.LogDebug("DualSettings: ShutterSpeed property is null on camera");
+                    if (string.IsNullOrEmpty(settings.ShutterSpeed))
+                        DebugService.LogDebug("DualSettings: ShutterSpeed setting value is empty");
                 }
                 
                 if (_currentCamera.WhiteBalance != null && !string.IsNullOrEmpty(settings.WhiteBalance))

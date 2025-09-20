@@ -283,28 +283,36 @@ namespace Photobooth.Services
                 }
 
                 Log.Debug("PhotoboothWorkflowService: Executing photo capture");
-                
+
+                // Always apply photo capture settings before taking a photo
+                // This ensures we use the correct exposure settings for the actual photo
+                // regardless of what settings are being used for live view
+                var dualSettingsService = DualCameraSettingsService.Instance;
+                dualSettingsService.UpdateCameraReference(camera);
+                dualSettingsService.ApplyPhotoCaptureSettings();
+                Log.Debug($"PhotoboothWorkflowService: Applied photo capture settings - ISO: {dualSettingsService.PhotoCaptureSettings.ISO}, Aperture: {dualSettingsService.PhotoCaptureSettings.Aperture}, Shutter: {dualSettingsService.PhotoCaptureSettings.ShutterSpeed}");
+
                 // Check if we need to switch from video mode to photo mode
                 var videoModeService = VideoModeLiveViewService.Instance;
                 Log.Debug($"PhotoboothWorkflowService: Video mode check - IsVideoModeActive={videoModeService.IsVideoModeActive}, IsEnabled={videoModeService.IsEnabled}");
-                
+
                 if (videoModeService.IsVideoModeActive)
                 {
                     Log.Debug("PhotoboothWorkflowService: Video mode is active, switching to photo mode for capture");
-                    
+
                     // Fire events first (UI updates)
-                    CaptureStarted?.Invoke(this, new CaptureEventArgs 
-                    { 
+                    CaptureStarted?.Invoke(this, new CaptureEventArgs
+                    {
                         PhotoIndex = _sessionService.CurrentPhotoIndex + 1,
                         TotalPhotos = _sessionService.TotalPhotosRequired
                     });
 
                     StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Capturing..." });
-                    
+
                     // Now switch mode and WAIT for it to complete before capture
                     bool switchResult = await videoModeService.SwitchToPhotoModeForCapture();
                     Log.Debug($"PhotoboothWorkflowService: Switch to photo mode result: {switchResult}");
-                    
+
                     // Small delay to ensure mode is fully settled
                     await Task.Delay(20);
                 }
@@ -312,9 +320,9 @@ namespace Photobooth.Services
                 {
                     // Stop live view during capture only if not in video mode
                     camera.StopLiveView();
-                    
-                    CaptureStarted?.Invoke(this, new CaptureEventArgs 
-                    { 
+
+                    CaptureStarted?.Invoke(this, new CaptureEventArgs
+                    {
                         PhotoIndex = _sessionService.CurrentPhotoIndex + 1,
                         TotalPhotos = _sessionService.TotalPhotosRequired
                     });
@@ -642,7 +650,14 @@ namespace Photobooth.Services
             try
             {
                 var videoModeService = VideoModeLiveViewService.Instance;
-                
+                var dualSettingsService = DualCameraSettingsService.Instance;
+
+                // Always restore live view settings after capture
+                // This ensures the preview uses the brighter live view settings
+                dualSettingsService.UpdateCameraReference(CurrentCamera);
+                dualSettingsService.ApplyLiveViewSettings();
+                Log.Debug($"PhotoboothWorkflowService: Restored live view settings after capture - ISO: {dualSettingsService.LiveViewSettings.ISO}, Aperture: {dualSettingsService.LiveViewSettings.Aperture}, Shutter: {dualSettingsService.LiveViewSettings.ShutterSpeed}");
+
                 // Only resume video mode if it was previously active before capture
                 // Don't start it for the first time here - that should be done explicitly
                 // BUT don't resume if we're in a photo session - wait until session completes

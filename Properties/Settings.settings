@@ -398,5 +398,26 @@
     <Setting Name="AutoFocusDelay" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">100</Value>
     </Setting>
+    <Setting Name="LiveViewISO" Type="System.String" Scope="User">
+      <Value Profile="(Default)">800</Value>
+    </Setting>
+    <Setting Name="LiveViewAperture" Type="System.String" Scope="User">
+      <Value Profile="(Default)">2.8</Value>
+    </Setting>
+    <Setting Name="LiveViewShutter" Type="System.String" Scope="User">
+      <Value Profile="(Default)">1/60</Value>
+    </Setting>
+    <Setting Name="PhotoCaptureISO" Type="System.String" Scope="User">
+      <Value Profile="(Default)">200</Value>
+    </Setting>
+    <Setting Name="PhotoCaptureAperture" Type="System.String" Scope="User">
+      <Value Profile="(Default)">5.6</Value>
+    </Setting>
+    <Setting Name="PhotoCaptureShutter" Type="System.String" Scope="User">
+      <Value Profile="(Default)">1/125</Value>
+    </Setting>
+    <Setting Name="DebugLoggingEnabled" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
   </Settings>
 </SettingsFile>
