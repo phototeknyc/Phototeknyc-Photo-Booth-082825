@@ -218,8 +218,8 @@
             </Border>
             
             <!-- Main View Area (Full Width - Gallery Preview Hidden) -->
-            <Border Grid.Column="0" Grid.ColumnSpan="2" Background="#2E2E2E" CornerRadius="10" Margin="20,20,20,20">
-                <Grid>
+            <Border Grid.Column="0" Grid.ColumnSpan="2" Background="#2E2E2E" CornerRadius="10" Margin="20,20,20,20" ClipToBounds="True">
+                <Grid ClipToBounds="True">
                     <Image x:Name="liveViewImage"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"

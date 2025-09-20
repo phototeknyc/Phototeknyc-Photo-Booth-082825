@@ -3664,13 +3664,28 @@ namespace Photobooth.Pages
         {
             try
             {
-                if (liveViewRotateTransform == null)
+                if (liveViewRotateTransform == null || liveViewImage == null)
                     return;
 
                 var rotation = Properties.Settings.Default.CameraRotation;
                 liveViewRotateTransform.Angle = rotation;
 
-                Log.Debug($"Applied camera rotation: {rotation}°");
+                // When rotated 90 or 270 degrees, we need to adjust the image scaling
+                // to ensure it fits within the container bounds
+                if (rotation == 90 || rotation == 270)
+                {
+                    // For 90/270 degree rotations, the aspect ratio is effectively swapped
+                    // We may need to adjust the Stretch property or scale
+                    // Keep Uniform stretch to maintain aspect ratio and fit within bounds
+                    liveViewImage.Stretch = Stretch.Uniform;
+                }
+                else
+                {
+                    // For 0/180 degree rotations, normal uniform stretch
+                    liveViewImage.Stretch = Stretch.Uniform;
+                }
+
+                Log.Debug($"Applied camera rotation: {rotation}°, Stretch: {liveViewImage.Stretch}");
             }
             catch (Exception ex)
             {
