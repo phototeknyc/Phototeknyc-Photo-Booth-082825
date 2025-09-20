@@ -106,48 +106,11 @@
 
         <!-- Header -->
         <Border Grid.Row="0" Background="#0F0F0F" Padding="10">
-            <Grid>
-                <TextBlock Text="LAYERS"
-                          Foreground="White"
-                          FontSize="16"
-                          FontWeight="Bold"
-                          VerticalAlignment="Center"/>
-
-                <StackPanel Orientation="Horizontal"
-                           HorizontalAlignment="Right">
-                    <!-- Blend Mode Dropdown -->
-                    <ComboBox x:Name="BlendModeCombo"
-                             Width="100"
-                             Height="30"
-                             Margin="5,0"
-                             SelectedIndex="0">
-                        <ComboBoxItem>Normal</ComboBoxItem>
-                        <ComboBoxItem>Multiply</ComboBoxItem>
-                        <ComboBoxItem>Screen</ComboBoxItem>
-                        <ComboBoxItem>Overlay</ComboBoxItem>
-                        <ComboBoxItem>Darken</ComboBoxItem>
-                        <ComboBoxItem>Lighten</ComboBoxItem>
-                    </ComboBox>
-
-                    <!-- Opacity Slider -->
-                    <TextBlock Text="Opacity:"
-                              Foreground="Gray"
-                              VerticalAlignment="Center"
-                              Margin="5,0"/>
-                    <Slider x:Name="OpacitySlider"
-                           Width="80"
-                           Minimum="0"
-                           Maximum="100"
-                           Value="100"
-                           VerticalAlignment="Center"
-                           Margin="5,0"/>
-                    <TextBlock x:Name="OpacityText"
-                              Text="100%"
-                              Foreground="White"
-                              VerticalAlignment="Center"
-                              Width="40"/>
-                </StackPanel>
-            </Grid>
+            <TextBlock Text="LAYERS"
+                      Foreground="White"
+                      FontSize="16"
+                      FontWeight="Bold"
+                      VerticalAlignment="Center"/>
         </Border>
 
         <!-- Layers List -->
@@ -244,10 +207,13 @@
                        ToolTip="Duplicate Layer"
                        Content="&#xE8C8;" Margin="5,0"/>
 
-                <Button Style="{StaticResource LayerIconButton}"
+                <Button x:Name="MergeDownButton"
+                       Style="{StaticResource LayerIconButton}"
                        Click="MergeDown_Click"
                        ToolTip="Merge Down"
-                       Content="&#xE74A;" Margin="5,0"/>
+                       Content="&#xE74A;"
+                       IsEnabled="False"
+                       Margin="5,0"/>
 
                 <Button Style="{StaticResource LayerIconButton}"
                        Click="DeleteLayer_Click"

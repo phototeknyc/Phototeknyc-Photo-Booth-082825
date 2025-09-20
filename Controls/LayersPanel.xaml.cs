@@ -20,6 +20,7 @@ namespace Photobooth.Controls
         private SimpleDesignerCanvas _simpleCanvas;
         private Point _dragStartPoint;
         private bool _isDragging;
+        private int _lastSelectedIndex = -1;
 
         public event EventHandler<LayerItem> LayerSelectionChanged;
         public event EventHandler LayersReordered;
@@ -30,8 +31,8 @@ namespace Photobooth.Controls
             Layers = new ObservableCollection<LayerItem>();
             LayersList.ItemsSource = Layers;
 
-            OpacitySlider.ValueChanged += OpacitySlider_ValueChanged;
-            BlendModeCombo.SelectionChanged += BlendModeCombo_SelectionChanged;
+            // Opacity and Blend Mode controls removed from UI per request
+            UpdateMergeDownEnabled();
         }
 
         public void SetDesignerCanvas(TouchEnabledCanvas canvas)
@@ -59,16 +60,21 @@ namespace Photobooth.Controls
         private void SimpleCanvas_SelectionChanged(object sender, EventArgs e)
         {
             if (_simpleCanvas == null) return;
-
-            var selectedItem = _simpleCanvas.SelectedItem;
-            if (selectedItem != null)
+            // Sync multi-selection from canvas to panel
+            foreach (var l in Layers) l.IsSelected = false;
+            foreach (var si in _simpleCanvas.SelectedItems)
             {
-                var layer = Layers.FirstOrDefault(l => l.SimpleCanvasItem == selectedItem);
-                if (layer != null)
-                {
-                    SelectLayer(layer);
-                }
+                var layer = Layers.FirstOrDefault(l => l.SimpleCanvasItem == si);
+                if (layer != null) layer.IsSelected = true;
             }
+            // Track last selected index for shift behavior
+            var last = _simpleCanvas.SelectedItems.LastOrDefault();
+            if (last != null)
+            {
+                _lastSelectedIndex = Layers.IndexOf(Layers.FirstOrDefault(l => l.SimpleCanvasItem == last));
+            }
+            LayerSelectionChanged?.Invoke(this, null);
+            UpdateMergeDownEnabled();
         }
 
         private void Canvas_SelectionChanged(object sender, EventArgs e)
@@ -93,7 +99,8 @@ namespace Photobooth.Controls
             // Handle SimpleDesignerCanvas
             if (_simpleCanvas != null)
             {
-                var items = _simpleCanvas.Items.Reverse();
+                // Show topmost (highest ZIndex) first in the panel
+                var items = _simpleCanvas.Items.OrderByDescending(i => i.ZIndex).ToList();
                 int index = 1;
 
                 foreach (var item in items)
@@ -136,6 +143,9 @@ namespace Photobooth.Controls
                     index++;
                 }
             }
+
+            // Update merge/controls state after rebuilding the list
+            UpdateMergeDownEnabled();
         }
 
         private string GetSimpleItemName(SimpleCanvasItem item, int index)
@@ -180,8 +190,39 @@ namespace Photobooth.Controls
 
         private ImageSource GenerateSimpleThumbnail(SimpleCanvasItem item)
         {
-            // TODO: Generate actual thumbnail
-            return null;
+            try
+            {
+                if (item == null)
+                    return null;
+
+                const int thumbW = 40;
+                const int thumbH = 40;
+
+                // Render a 40x40 thumbnail preserving aspect ratio (letterboxed)
+                var renderBitmap = new RenderTargetBitmap(thumbW, thumbH, 96, 96, PixelFormats.Pbgra32);
+                var visual = new DrawingVisual();
+                using (var context = visual.RenderOpen())
+                {
+                    // Draw background (letterbox bars) - matches panel tile background
+                    context.DrawRectangle(Brushes.White, null, new Rect(0, 0, thumbW, thumbH));
+
+                    var brush = new VisualBrush(item)
+                    {
+                        Stretch = Stretch.Uniform,
+                        AlignmentX = AlignmentX.Center,
+                        AlignmentY = AlignmentY.Center
+                    };
+
+                    // Draw into full thumbnail rect; Uniform keeps aspect ratio with letterboxing
+                    context.DrawRectangle(brush, null, new Rect(0, 0, thumbW, thumbH));
+                }
+                renderBitmap.Render(visual);
+                return renderBitmap;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private string GetItemName(ICanvasItem item, int index)
@@ -252,24 +293,15 @@ namespace Photobooth.Controls
 
             UpdatePropertiesForLayer(layer);
             LayerSelectionChanged?.Invoke(this, layer);
+            UpdateMergeDownEnabled();
         }
 
         private void UpdatePropertiesForLayer(LayerItem layer)
         {
-            if (layer == null || layer.CanvasItem == null) return;
+            if (layer == null) return;
 
-            if (layer.CanvasItem is FrameworkElement fe)
-            {
-                if (OpacitySlider != null)
-                {
-                    OpacitySlider.Value = fe.Opacity * 100;
-                }
-                if (OpacityText != null)
-                {
-                    OpacityText.Text = $"{(int)(fe.Opacity * 100)}%";
-                }
+            // No per-layer opacity UI; nothing to sync here
             }
-        }
 
         private void ToggleVisibility_Click(object sender, RoutedEventArgs e)
         {
@@ -309,27 +341,7 @@ namespace Photobooth.Controls
             }
         }
 
-        private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            var selectedLayer = Layers.FirstOrDefault(l => l.IsSelected);
-            if (selectedLayer != null && selectedLayer.CanvasItem != null)
-            {
-                if (selectedLayer.CanvasItem is FrameworkElement fe)
-                {
-                    fe.Opacity = e.NewValue / 100.0;
-                    if (OpacityText != null)
-                    {
-                        OpacityText.Text = $"{(int)e.NewValue}%";
-                    }
-                }
-            }
-        }
-
-        private void BlendModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            // Blend modes would require custom rendering implementation
-            // This is a placeholder for future enhancement
-        }
+        // Opacity and Blend Mode handlers removed with UI
 
         private void AddLayer_Click(object sender, RoutedEventArgs e)
         {
@@ -393,8 +405,92 @@ namespace Photobooth.Controls
 
         private void MergeDown_Click(object sender, RoutedEventArgs e)
         {
-            // This would merge the selected layer with the one below
-            // Requires complex image processing
+            // Merge selected layer down (SimpleDesignerCanvas only)
+            try
+            {
+                if (_simpleCanvas == null)
+                {
+                    // Not supported for legacy DesignerCanvas path
+                    return;
+                }
+
+                var selectedLayer = Layers.FirstOrDefault(l => l.IsSelected);
+                if (selectedLayer == null) return;
+
+                int index = Layers.IndexOf(selectedLayer);
+                if (index < 0 || index >= Layers.Count - 1) return; // nothing below to merge into
+
+                var belowLayer = Layers[index + 1];
+                var topItem = selectedLayer.SimpleCanvasItem;
+                var bottomItem = belowLayer.SimpleCanvasItem;
+                if (topItem == null || bottomItem == null) return;
+
+                // Do not merge placeholders (photo slots)
+                if ((topItem is SimpleImageItem timg && timg.IsPlaceholder) ||
+                    (bottomItem is SimpleImageItem bimg && bimg.IsPlaceholder))
+                {
+                    return;
+                }
+
+                // Prepare region to render: union of both items (inflate to be safe)
+                Rect r1 = new Rect(topItem.Left, topItem.Top, Math.Max(1, topItem.Width), Math.Max(1, topItem.Height));
+                Rect r2 = new Rect(bottomItem.Left, bottomItem.Top, Math.Max(1, bottomItem.Width), Math.Max(1, bottomItem.Height));
+                Rect union = Rect.Union(r1, r2);
+                union.Inflate(2, 2);
+
+                int pixelW = Math.Max(1, (int)Math.Ceiling(union.Width));
+                int pixelH = Math.Max(1, (int)Math.Ceiling(union.Height));
+
+                // Temporarily hide selection handles for clean render
+                var previouslySelected = _simpleCanvas.SelectedItems.ToList();
+                foreach (var it in previouslySelected)
+                {
+                    it.IsSelected = false;
+                }
+
+                // Render the canvas region to a bitmap (preserve transparency)
+                var rtb = new RenderTargetBitmap(pixelW, pixelH, 96, 96, PixelFormats.Pbgra32);
+                var dv = new DrawingVisual();
+                using (var dc = dv.RenderOpen())
+                {
+                    var vb = new VisualBrush(_simpleCanvas)
+                    {
+                        Viewbox = union,
+                        ViewboxUnits = BrushMappingMode.Absolute,
+                        Stretch = Stretch.Fill,
+                        AlignmentX = AlignmentX.Center,
+                        AlignmentY = AlignmentY.Center
+                    };
+                    dc.DrawRectangle(vb, null, new Rect(0, 0, pixelW, pixelH));
+                }
+                rtb.Render(dv);
+
+                // Create a new image layer with the merged content
+                var merged = new SimpleImageItem
+                {
+                    Left = union.Left,
+                    Top = union.Top,
+                    Width = union.Width,
+                    Height = union.Height,
+                    Stretch = Stretch.Fill,
+                    ImageSource = rtb,
+                    ZIndex = bottomItem.ZIndex // keep position of the lower layer
+                };
+
+                // Apply changes with undo support
+                _simpleCanvas.PushUndo();
+                _simpleCanvas.Items.Remove(topItem);
+                _simpleCanvas.Items.Remove(bottomItem);
+                _simpleCanvas.Items.Add(merged);
+
+                // Select new merged layer and refresh list
+                _simpleCanvas.SetSelectedItem(merged);
+                RefreshLayers();
+            }
+            catch
+            {
+                // Swallow errors for now; could log if logging available here
+            }
         }
 
         private void DeleteLayer_Click(object sender, RoutedEventArgs e)
@@ -450,12 +546,18 @@ namespace Photobooth.Controls
             // Handle SimpleDesignerCanvas
             if (_simpleCanvas != null)
             {
-                var items = Layers.Select(l => l.SimpleCanvasItem).Where(i => i != null).Reverse().ToList();
-                _simpleCanvas.Items.Clear();
+                // Layers list is ordered top-to-bottom; assign highest Z to first
+                var orderedItems = Layers
+                    .Select(l => l.SimpleCanvasItem)
+                    .Where(i => i != null)
+                    .ToList();
 
-                foreach (var item in items)
+                int count = orderedItems.Count;
+                for (int i = 0; i < count; i++)
                 {
-                    _simpleCanvas.Items.Add(item);
+                    var item = orderedItems[i];
+                    // Highest ZIndex for the first (topmost) entry
+                    item.ZIndex = (count - 1) - i;
                 }
             }
             // Handle original TouchEnabledCanvas
@@ -471,6 +573,7 @@ namespace Photobooth.Controls
             }
 
             LayersReordered?.Invoke(this, EventArgs.Empty);
+            UpdateMergeDownEnabled();
         }
 
         // Drag and drop for reordering
@@ -479,10 +582,37 @@ namespace Photobooth.Controls
             _dragStartPoint = e.GetPosition(null);
             var border = sender as Border;
             var layer = border?.Tag as LayerItem;
-            if (layer != null)
+            if (layer == null) return;
+
+            bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+            bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+
+            int currentIndex = Layers.IndexOf(layer);
+
+            if (shift && _lastSelectedIndex >= 0)
             {
-                SelectLayer(layer);
+                // Range select
+                int start = Math.Min(_lastSelectedIndex, currentIndex);
+                int end = Math.Max(_lastSelectedIndex, currentIndex);
+                foreach (var l in Layers) l.IsSelected = false;
+                for (int i = start; i <= end; i++) Layers[i].IsSelected = true;
             }
+            else if (ctrl)
+            {
+                // Toggle current without clearing others
+                layer.IsSelected = !layer.IsSelected;
+                _lastSelectedIndex = currentIndex;
+            }
+            else
+            {
+                // Single select
+                foreach (var l in Layers) l.IsSelected = false;
+                layer.IsSelected = true;
+                _lastSelectedIndex = currentIndex;
+            }
+
+            SyncSelectionToCanvas();
+            UpdateMergeDownEnabled();
         }
 
         private void Layer_MouseMove(object sender, MouseEventArgs e)
@@ -545,6 +675,90 @@ namespace Photobooth.Controls
                 }
             }
             _isDragging = false;
+            UpdateMergeDownEnabled();
+        }
+
+        private void SyncSelectionToCanvas()
+        {
+            try
+            {
+                if (_simpleCanvas == null) return;
+
+                var selectedItems = Layers
+                    .Where(l => l.IsSelected && l.SimpleCanvasItem != null)
+                    .Select(l => l.SimpleCanvasItem)
+                    .ToList();
+
+                // Clear existing selection
+                _simpleCanvas.ClearSelection();
+
+                // Apply selection flags and update SelectedItems collection
+                foreach (var item in _simpleCanvas.Items)
+                {
+                    item.IsSelected = selectedItems.Contains(item);
+                }
+                _simpleCanvas.SelectedItems.Clear();
+                foreach (var item in selectedItems)
+                {
+                    _simpleCanvas.SelectedItems.Add(item);
+                }
+            }
+            catch { }
+        }
+
+        private static bool IsPlaceholderLayer(LayerItem layer)
+        {
+            if (layer?.SimpleCanvasItem is SimpleImageItem img)
+            {
+                return img.IsPlaceholder;
+            }
+            return false;
+        }
+
+        private void UpdateMergeDownEnabled()
+        {
+            try
+            {
+                if (MergeDownButton == null)
+                    return;
+
+                // Only supported in SimpleDesignerCanvas mode
+                if (_simpleCanvas == null)
+                {
+                    MergeDownButton.IsEnabled = false;
+                    return;
+                }
+
+                var selectedLayer = Layers.FirstOrDefault(l => l.IsSelected);
+                if (selectedLayer == null)
+                {
+                    MergeDownButton.IsEnabled = false;
+                    return;
+                }
+
+                int index = Layers.IndexOf(selectedLayer);
+                if (index < 0 || index >= Layers.Count - 1)
+                {
+                    MergeDownButton.IsEnabled = false;
+                    return;
+                }
+
+                var belowLayer = Layers[index + 1];
+                // Disallow merge if either layer is a photo placeholder
+                if (IsPlaceholderLayer(selectedLayer) || IsPlaceholderLayer(belowLayer))
+                {
+                    MergeDownButton.IsEnabled = false;
+                    return;
+                }
+
+                // Both layers exist and are not placeholders
+                MergeDownButton.IsEnabled = true;
+            }
+            catch
+            {
+                // Be safe in UI logic
+                if (MergeDownButton != null) MergeDownButton.IsEnabled = false;
+            }
         }
     }
 

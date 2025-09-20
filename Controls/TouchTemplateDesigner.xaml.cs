@@ -1627,6 +1627,12 @@ namespace Photobooth.Controls
                     {
                         // IsPlaceholder is already set by AddImage when imagePath is null
                         canvas.SelectItem(placeholder);
+
+                        // Refresh layers panel if visible
+                        if (LayersPanelContainer.Visibility == Visibility.Visible)
+                        {
+                            LayersPanel.RefreshLayers();
+                        }
                     }
                     Log.Debug("TouchTemplateDesigner: Added placeholder using SimpleDesignerCanvas");
                 }
@@ -1663,6 +1669,12 @@ namespace Photobooth.Controls
                         text.FontSize = 72;
                         text.TextColor = new SolidColorBrush(_currentSelectedColor);
                         canvas.SelectItem(text);
+
+                        // Refresh layers panel if visible
+                        if (LayersPanelContainer.Visibility == Visibility.Visible)
+                        {
+                            LayersPanel.RefreshLayers();
+                        }
                     }
                     Log.Debug("TouchTemplateDesigner: Added text using SimpleDesignerCanvas");
                 }
@@ -1698,8 +1710,13 @@ namespace Photobooth.Controls
 
                     if (dialog.ShowDialog() == true)
                     {
-                        // Load the image to get its actual dimensions
-                        var bitmap = new BitmapImage(new Uri(dialog.FileName));
+                        // Load the image to get its actual dimensions while preserving transparency
+                        var bitmap = new BitmapImage();
+                        bitmap.BeginInit();
+                        bitmap.UriSource = new Uri(dialog.FileName);
+                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                        bitmap.EndInit();
+                        bitmap.Freeze();
 
                         // Get actual image dimensions (convert to device-independent units)
                         double dpiX = bitmap.DpiX > 0 ? bitmap.DpiX : 96.0;
@@ -1725,6 +1742,13 @@ namespace Photobooth.Controls
                             {
                                 canvas.SelectItem(imageFit);
                             }
+
+                            // Refresh layers panel if visible
+                            if (LayersPanelContainer.Visibility == Visibility.Visible)
+                            {
+                                LayersPanel.RefreshLayers();
+                            }
+
                             Log.Debug("TouchTemplateDesigner: Added full-canvas image (auto-fit)");
                             return;
                         }
@@ -1744,6 +1768,13 @@ namespace Photobooth.Controls
                             {
                                 canvas.SelectItem(imageFill);
                             }
+
+                            // Refresh layers panel if visible
+                            if (LayersPanelContainer.Visibility == Visibility.Visible)
+                            {
+                                LayersPanel.RefreshLayers();
+                            }
+
                             Log.Debug("TouchTemplateDesigner: Added canvas-fill image (aspect match)");
                             return;
                         }
@@ -1772,6 +1803,12 @@ namespace Photobooth.Controls
                         if (image != null)
                         {
                             canvas.SelectItem(image);
+
+                            // Refresh layers panel if visible
+                            if (LayersPanelContainer.Visibility == Visibility.Visible)
+                            {
+                                LayersPanel.RefreshLayers();
+                            }
                         }
                     }
                     Log.Debug("TouchTemplateDesigner: Added image using SimpleDesignerCanvas");

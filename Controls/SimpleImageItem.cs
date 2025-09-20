@@ -280,7 +280,7 @@ namespace Photobooth.Controls
 
             _border = new Border
             {
-                Background = Brushes.White,
+                Background = Brushes.Transparent, // Changed to Transparent to preserve image transparency
                 BorderBrush = Brushes.DarkGray,
                 BorderThickness = new Thickness(2),
                 Child = _containerGrid
@@ -558,7 +558,8 @@ namespace Photobooth.Controls
                 }
                 else
                 {
-                    _border.Background = Brushes.White;
+                    // Keep transparent background to preserve image transparency
+                    _border.Background = Brushes.Transparent;
                     _border.BorderBrush = StrokeBrush ?? Brushes.DarkGray;
                     _border.BorderThickness = new Thickness(Math.Max(0, StrokeThickness));
                 }
@@ -632,7 +633,10 @@ namespace Photobooth.Controls
                 bitmap.BeginInit();
                 bitmap.UriSource = new Uri(filePath, UriKind.Absolute);
                 bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                // Preserve transparency by not setting CreateOptions
+                // This ensures the alpha channel is preserved for PNG images
                 bitmap.EndInit();
+                bitmap.Freeze(); // Freeze for performance
 
                 ImageSource = bitmap;
                 ImagePath = filePath;
@@ -661,7 +665,10 @@ namespace Photobooth.Controls
                 bitmap.BeginInit();
                 bitmap.StreamSource = new MemoryStream(imageData);
                 bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                // Preserve transparency by not setting CreateOptions
+                // This ensures the alpha channel is preserved for PNG images
                 bitmap.EndInit();
+                bitmap.Freeze(); // Freeze for performance
 
                 ImageSource = bitmap;
                 IsPlaceholder = false;
