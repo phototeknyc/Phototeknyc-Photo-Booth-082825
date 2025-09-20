@@ -2897,8 +2897,60 @@ namespace Photobooth.Pages
         {
             Dispatcher.Invoke(() =>
             {
-                Log.Debug("Auto-clear timer expired - session will be cleared");
+                Log.Debug("Auto-clear timer expired - clearing session and resetting UI");
+
+                // If we're displaying any session content, we need to clear it
+                if (_isDisplayingSessionResult || _isDisplayingCapturedPhoto || _isInGalleryMode)
+                {
+                    Log.Debug($"Clearing displayed content due to auto-clear timeout (Result: {_isDisplayingSessionResult}, Photo: {_isDisplayingCapturedPhoto}, Gallery: {_isInGalleryMode})");
+
+                    // Clear display flags
+                    SetDisplayingSessionResult(false);
+                    _isDisplayingCapturedPhoto = false;
+
+                    // Exit gallery mode if we're in it
+                    if (_isInGalleryMode)
+                    {
+                        _isInGalleryMode = false;
+                        _currentGallerySession = null;
+                        _currentGallerySessionIndex = 0;
+                        Log.Debug("Exited gallery mode due to auto-clear");
+                    }
+
+                    // Clear the live view image if it's showing a captured photo
+                    if (liveViewImage != null)
+                    {
+                        liveViewImage.Source = null;
+                    }
+
+                    // Hide action buttons
+                    if (actionButtonsPanel != null)
+                    {
+                        actionButtonsPanel.Visibility = Visibility.Collapsed;
+                    }
+
+                    // Clear photo strip
+                    if (photosContainer != null)
+                    {
+                        photosContainer.Children.Clear();
+                    }
+
+                    // Show the start button again
+                    if (startButtonOverlay != null)
+                    {
+                        startButtonOverlay.Visibility = Visibility.Visible;
+                    }
+
+                    // Resume live view
+                    if (_liveViewTimer != null && !_liveViewTimer.IsEnabled)
+                    {
+                        Log.Debug("Resuming live view after auto-clear");
+                        _liveViewTimer.Start();
+                    }
+                }
+
                 // Service will automatically clear the session after this event
+                // OnServiceSessionCleared will be called to complete the cleanup
             });
         }
         
