@@ -190,39 +190,31 @@ namespace Photobooth.Controls
 
         #endregion
 
-        #region Settings Button
+        #region Close Button
 
-        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                // Show the settings overlay
-                var settingsOverlay = new SettingsOverlay();
+                // Hide this control
+                this.Visibility = Visibility.Collapsed;
 
-                // Find the parent window
-                var window = Window.GetWindow(this);
-                if (window != null)
+                // Try to remove from parent if in a grid
+                var parent = this.Parent;
+                if (parent is Grid grid)
                 {
-                    // Add settings overlay to the window's root grid
-                    if (window.Content is Grid rootGrid)
-                    {
-                        Grid.SetRowSpan(settingsOverlay, Math.Max(1, rootGrid.RowDefinitions.Count));
-                        Grid.SetColumnSpan(settingsOverlay, Math.Max(1, rootGrid.ColumnDefinitions.Count));
-                        Panel.SetZIndex(settingsOverlay, 10000);
-                        rootGrid.Children.Add(settingsOverlay);
-
-                        // Show the overlay
-                        settingsOverlay.ShowOverlay();
-
-                        // Note: The settings overlay will handle its own removal when closed
-                    }
+                    grid.Children.Remove(this);
                 }
+                else if (parent is Panel panel)
+                {
+                    panel.Children.Remove(this);
+                }
+
+                Log.Debug("[GuestBackgroundPicker] Closed by user");
             }
             catch (Exception ex)
             {
-                Log.Error($"Failed to open settings: {ex.Message}");
-                MessageBox.Show("Unable to open settings at this time.", "Settings",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                Log.Error($"Failed to close picker: {ex.Message}");
             }
         }
 

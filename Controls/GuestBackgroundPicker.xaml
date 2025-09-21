@@ -54,33 +54,12 @@
                             BorderBrush="{StaticResource BorderBrush}"
                             BorderThickness="1">
                         <Grid>
-                            <!-- Background Preview or Icon -->
-                            <Border CornerRadius="12,12,0,0"
-                                    ClipToBounds="True"
-                                    Height="150">
-                                <Grid>
-                                    <!-- Image for backgrounds -->
-                                    <Image Source="{Binding ThumbnailPath}"
-                                           Stretch="UniformToFill"
-                                           Visibility="{Binding HasThumbnail, Converter={StaticResource BoolToVisibilityConverter}}"/>
-
-                                    <!-- Removed No Background option -->
-                                </Grid>
-                            </Border>
-
-                            <!-- Name Label -->
-                            <Border VerticalAlignment="Bottom"
-                                    Background="{StaticResource CardBackgroundBrush}"
-                                    Height="50"
-                                    CornerRadius="0,0,12,12"
-                                    BorderBrush="{StaticResource BorderBrush}"
-                                    BorderThickness="0,1,0,0">
-                                <TextBlock Text="{Binding Name}"
-                                           FontSize="18"
-                                           FontWeight="Medium"
-                                           Foreground="{StaticResource TextBrush}"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
+                            <!-- Background Preview -->
+                            <Border CornerRadius="12"
+                                    ClipToBounds="True">
+                                <Image Source="{Binding ThumbnailPath}"
+                                       Stretch="UniformToFill"
+                                       Visibility="{Binding HasThumbnail, Converter={StaticResource BoolToVisibilityConverter}}"/>
                             </Border>
 
                             <!-- Selection Indicator -->
@@ -136,6 +115,36 @@
                            FontWeight="Light"
                            Foreground="{StaticResource TextBrush}"
                            HorizontalAlignment="Center"/>
+
+                <!-- Close Button -->
+                <Button x:Name="CloseButton"
+                        Click="CloseButton_Click"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Width="40"
+                        Height="40"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="ButtonBorder"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="20">
+                                <TextBlock Text="✕"
+                                           FontSize="24"
+                                           Foreground="{StaticResource TextBrush}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#44FFFFFF"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
             </Grid>
         </Border>
 
@@ -164,44 +173,12 @@
                 BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Settings Button -->
-                <Button Grid.Column="0"
-                        x:Name="SettingsButton"
-                        Click="SettingsButton_Click"
-                        Width="120"
-                        Height="45"
-                        Background="{StaticResource AccentBrush}"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="0,0,20,0">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border Background="{TemplateBinding Background}"
-                                    CornerRadius="8">
-                                <StackPanel Orientation="Horizontal"
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Center">
-                                    <TextBlock Text="⚙"
-                                               FontSize="20"
-                                               Foreground="White"
-                                               Margin="0,0,8,0"/>
-                                    <TextBlock Text="Settings"
-                                               FontSize="16"
-                                               Foreground="White"
-                                               FontWeight="Medium"/>
-                                </StackPanel>
-                            </Border>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
                 <!-- Instructions -->
-                <StackPanel Grid.Column="1"
+                <StackPanel Grid.Column="0"
                             Orientation="Horizontal"
                             HorizontalAlignment="Center">
                     <TextBlock Text="👆"
@@ -214,7 +191,7 @@
                 </StackPanel>
 
                 <!-- Loading Indicator -->
-                <Border Grid.Column="2"
+                <Border Grid.Column="1"
                         x:Name="LoadingIndicator"
                         Visibility="Collapsed"
                         Padding="20,10"
