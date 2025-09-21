@@ -207,35 +207,5 @@
             </Grid>
         </Border>
 
-        <!-- Start Animation Overlay -->
-        <Grid x:Name="StartOverlay"
-              Grid.RowSpan="3"
-              Background="#CC000000"
-              Visibility="Collapsed">
-            <Border Background="{StaticResource CardBackgroundBrush}"
-                    CornerRadius="20"
-                    Padding="50"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    BorderBrush="{StaticResource BorderBrush}"
-                    BorderThickness="2">
-                <StackPanel>
-                    <TextBlock Text="📸"
-                               FontSize="80"
-                               HorizontalAlignment="Center"
-                               Margin="0,0,0,20"/>
-                    <TextBlock Text="Get Ready!"
-                               FontSize="36"
-                               FontWeight="Medium"
-                               Foreground="{StaticResource TextBrush}"
-                               HorizontalAlignment="Center"
-                               Margin="0,0,0,10"/>
-                    <TextBlock Text="Your photo session is starting..."
-                               FontSize="20"
-                               Foreground="{StaticResource SubTextBrush}"
-                               HorizontalAlignment="Center"/>
-                </StackPanel>
-            </Border>
-        </Grid>
     </Grid>
 </UserControl>

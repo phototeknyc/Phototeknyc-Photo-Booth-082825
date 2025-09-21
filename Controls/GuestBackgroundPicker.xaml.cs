@@ -7,8 +7,6 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media.Animation;
-using System.Windows.Threading;
 using CameraControl.Devices;
 using Photobooth.Services;
 
@@ -24,7 +22,6 @@ namespace Photobooth.Controls
         private EventBackgroundService _eventBackgroundService;
         private ObservableCollection<GuestBackgroundViewModel> _backgrounds;
         private GuestBackgroundViewModel _selectedBackground;
-        private DispatcherTimer _startTimer;
 
         #endregion
 
@@ -142,17 +139,14 @@ namespace Photobooth.Controls
 
         #region Session Start
 
-        private async void StartSession()
+        private void StartSession()
         {
             try
             {
-                // Show loading indicator
+                // Show loading indicator briefly
                 LoadingIndicator.Visibility = Visibility.Visible;
 
-                // Show start overlay with animation
-                await ShowStartAnimation();
-
-                // Raise event
+                // Raise event immediately
                 BackgroundSelected?.Invoke(this, new GuestBackgroundSelectedEventArgs
                 {
                     BackgroundId = _selectedBackground.Id,
@@ -160,32 +154,17 @@ namespace Photobooth.Controls
                     BackgroundName = _selectedBackground.Name
                 });
 
-                // Request session start
+                // Request session start immediately
                 SessionStartRequested?.Invoke(this, EventArgs.Empty);
+
+                // Hide the picker overlay
+                this.Visibility = Visibility.Collapsed;
             }
             catch (Exception ex)
             {
                 Log.Error($"Failed to start session: {ex.Message}");
                 LoadingIndicator.Visibility = Visibility.Collapsed;
             }
-        }
-
-        private async Task ShowStartAnimation()
-        {
-            // Show overlay
-            StartOverlay.Visibility = Visibility.Visible;
-
-            // Fade in animation
-            var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300));
-            StartOverlay.BeginAnimation(OpacityProperty, fadeIn);
-
-            // Wait for animation
-            await Task.Delay(2000);
-
-            // Fade out
-            var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(300));
-            fadeOut.Completed += (s, e) => StartOverlay.Visibility = Visibility.Collapsed;
-            StartOverlay.BeginAnimation(OpacityProperty, fadeOut);
         }
 
         #endregion
@@ -242,7 +221,6 @@ namespace Photobooth.Controls
             }
 
             LoadingIndicator.Visibility = Visibility.Collapsed;
-            StartOverlay.Visibility = Visibility.Collapsed;
         }
 
         #endregion
