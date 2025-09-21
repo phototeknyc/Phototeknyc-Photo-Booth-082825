@@ -113,6 +113,13 @@ namespace Photobooth.Services
                 return;
             }
 
+            // Check if we're already loaded for this event
+            if (_currentEvent != null && _currentEvent.Id == eventData.Id && _eventBackgrounds.Any())
+            {
+                Log.Debug($"Event {eventData.Name} already loaded, skipping reload");
+                return;
+            }
+
             _currentEvent = eventData;
 
             try

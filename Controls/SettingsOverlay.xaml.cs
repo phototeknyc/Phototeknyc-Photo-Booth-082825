@@ -3823,10 +3823,8 @@ namespace Photobooth.Controls
                 // Hide the settings overlay temporarily
                 HideOverlay();
 
-                // Get current event (may be null for virtual backgrounds management)
-                var db = new Photobooth.Database.TemplateDatabase();
-                var events = db.GetAllEvents();
-                var currentEvent = events?.OrderByDescending(ev => ev.EventDate).FirstOrDefault();
+                // Use the currently selected event from EventSelectionService
+                var currentEvent = Photobooth.Services.EventSelectionService.Instance.SelectedEvent;
 
                 // Use unified EventBackgroundManager for all background management
                 Photobooth.Controls.EventBackgroundManager.ShowInWindow(currentEvent, Application.Current.MainWindow);

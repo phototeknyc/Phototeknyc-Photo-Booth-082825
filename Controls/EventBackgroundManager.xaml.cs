@@ -96,6 +96,13 @@ namespace Photobooth.Controls
             // Show the overlay
             Show();
 
+            // Check if we're already loaded for this event
+            if (_currentEvent != null && eventData != null && _currentEvent.Id == eventData.Id)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Already loaded for event: {eventData.Name}");
+                return;
+            }
+
             _currentEvent = eventData;
 
             if (eventData != null)

@@ -5471,16 +5471,23 @@ NOTES:
         {
             try
             {
-                // Get current event data - you may need to get this from your event service
-                EventData currentEvent = null;
+                // Use the currently selected event from EventSelectionService
+                EventData currentEvent = Photobooth.Services.EventSelectionService.Instance.SelectedEvent;
 
-                // Try to get the current event from database
-                var db = new Photobooth.Database.TemplateDatabase();
-                var eventsList = db.GetAllEvents();
-                if (eventsList != null && eventsList.Count > 0)
+                // If no event is selected, try to get the most recent from database
+                if (currentEvent == null)
                 {
-                    // Get the most recent event or show selection dialog
-                    currentEvent = eventsList.OrderByDescending(ev => ev.EventDate).FirstOrDefault();
+                    var db = new Photobooth.Database.TemplateDatabase();
+                    var eventsList = db.GetAllEvents();
+                    if (eventsList != null && eventsList.Count > 0)
+                    {
+                        currentEvent = eventsList.OrderByDescending(ev => ev.EventDate).FirstOrDefault();
+                        // Update the EventSelectionService with this event
+                        if (currentEvent != null)
+                        {
+                            Photobooth.Services.EventSelectionService.Instance.SelectedEvent = currentEvent;
+                        }
+                    }
                 }
 
                 if (currentEvent == null)
