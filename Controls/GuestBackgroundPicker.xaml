@@ -7,11 +7,13 @@
              d:DesignHeight="800" d:DesignWidth="1200">
 
     <UserControl.Resources>
-        <!-- Simple, clean theme for guests -->
-        <SolidColorBrush x:Key="BackgroundBrush" Color="#F5F5F5"/>
-        <SolidColorBrush x:Key="AccentBrush" Color="#4CAF50"/>
-        <SolidColorBrush x:Key="TextBrush" Color="#333333"/>
-        <SolidColorBrush x:Key="BorderBrush" Color="#E0E0E0"/>
+        <!-- Dark theme matching the app -->
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#1E1E1E"/>
+        <SolidColorBrush x:Key="CardBackgroundBrush" Color="#2D2D30"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#007ACC"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="SubTextBrush" Color="#B0B0B0"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#3F3F46"/>
 
         <!-- Large touch-friendly style -->
         <Style x:Key="BackgroundOptionStyle" TargetType="Border">
@@ -48,7 +50,7 @@
 
                     <!-- Main Content -->
                     <Border CornerRadius="12"
-                            Background="White"
+                            Background="{StaticResource CardBackgroundBrush}"
                             BorderBrush="{StaticResource BorderBrush}"
                             BorderThickness="1">
                         <Grid>
@@ -62,21 +64,17 @@
                                            Stretch="UniformToFill"
                                            Visibility="{Binding HasThumbnail, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
-                                    <!-- Icon for "No Background" -->
-                                    <TextBlock Text="❌"
-                                               FontSize="60"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               Foreground="#CCCCCC"
-                                               Visibility="{Binding IsNoBackground, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                    <!-- Removed No Background option -->
                                 </Grid>
                             </Border>
 
                             <!-- Name Label -->
                             <Border VerticalAlignment="Bottom"
-                                    Background="White"
+                                    Background="{StaticResource CardBackgroundBrush}"
                                     Height="50"
-                                    CornerRadius="0,0,12,12">
+                                    CornerRadius="0,0,12,12"
+                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="0,1,0,0">
                                 <TextBlock Text="{Binding Name}"
                                            FontSize="18"
                                            FontWeight="Medium"
@@ -87,7 +85,7 @@
 
                             <!-- Selection Indicator -->
                             <Border x:Name="SelectionIndicator"
-                                    Background="#CC4CAF50"
+                                    Background="#CC007ACC"
                                     CornerRadius="12"
                                     Visibility="Collapsed">
                                 <Grid>
@@ -128,15 +126,17 @@
 
         <!-- Header -->
         <Border Grid.Row="0"
-                Background="White"
+                Background="{StaticResource CardBackgroundBrush}"
                 Padding="40,30"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,0,0,1">
-            <TextBlock Text="Choose Your Photo Background"
-                       FontSize="36"
-                       FontWeight="Light"
-                       Foreground="{StaticResource TextBrush}"
-                       HorizontalAlignment="Center"/>
+            <Grid>
+                <TextBlock Text="Choose Your Photo Background"
+                           FontSize="36"
+                           FontWeight="Light"
+                           Foreground="{StaticResource TextBrush}"
+                           HorizontalAlignment="Center"/>
+            </Grid>
         </Border>
 
         <!-- Background Options Grid -->
@@ -158,18 +158,50 @@
 
         <!-- Bottom Instruction Bar -->
         <Border Grid.Row="2"
-                Background="White"
+                Background="{StaticResource CardBackgroundBrush}"
                 Padding="30,20"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
+                <!-- Settings Button -->
+                <Button Grid.Column="0"
+                        x:Name="SettingsButton"
+                        Click="SettingsButton_Click"
+                        Width="120"
+                        Height="45"
+                        Background="{StaticResource AccentBrush}"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="0,0,20,0">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    CornerRadius="8">
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="⚙"
+                                               FontSize="20"
+                                               Foreground="White"
+                                               Margin="0,0,8,0"/>
+                                    <TextBlock Text="Settings"
+                                               FontSize="16"
+                                               Foreground="White"
+                                               FontWeight="Medium"/>
+                                </StackPanel>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
                 <!-- Instructions -->
-                <StackPanel Grid.Column="0"
+                <StackPanel Grid.Column="1"
                             Orientation="Horizontal"
                             HorizontalAlignment="Center">
                     <TextBlock Text="👆"
@@ -182,7 +214,7 @@
                 </StackPanel>
 
                 <!-- Loading Indicator -->
-                <Border Grid.Column="1"
+                <Border Grid.Column="2"
                         x:Name="LoadingIndicator"
                         Visibility="Collapsed"
                         Padding="20,10"
@@ -203,11 +235,13 @@
               Grid.RowSpan="3"
               Background="#CC000000"
               Visibility="Collapsed">
-            <Border Background="White"
+            <Border Background="{StaticResource CardBackgroundBrush}"
                     CornerRadius="20"
                     Padding="50"
                     HorizontalAlignment="Center"
-                    VerticalAlignment="Center">
+                    VerticalAlignment="Center"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="2">
                 <StackPanel>
                     <TextBlock Text="📸"
                                FontSize="80"
@@ -221,7 +255,7 @@
                                Margin="0,0,0,10"/>
                     <TextBlock Text="Your photo session is starting..."
                                FontSize="20"
-                               Foreground="#666666"
+                               Foreground="{StaticResource SubTextBrush}"
                                HorizontalAlignment="Center"/>
                 </StackPanel>
             </Border>

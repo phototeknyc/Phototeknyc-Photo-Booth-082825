@@ -75,22 +75,23 @@ namespace Photobooth.Controls
 
                 foreach (var option in options)
                 {
+                    // Skip "no background" option
+                    if (option.Id == "none")
+                        continue;
+
                     _backgrounds.Add(new GuestBackgroundViewModel
                     {
                         Id = option.Id,
                         Name = option.Name,
                         ThumbnailPath = option.ThumbnailPath,
                         BackgroundPath = option.BackgroundPath,
-                        IsNoBackground = option.Id == "none",
+                        IsNoBackground = false,
                         HasThumbnail = !string.IsNullOrEmpty(option.ThumbnailPath)
                     });
                 }
 
-                // Pre-select first option (usually "No Background")
-                if (_backgrounds.Any())
-                {
-                    SelectBackground(_backgrounds.First());
-                }
+                // Don't pre-select any option
+                // User must explicitly choose
 
                 await Task.CompletedTask;
             }
@@ -185,6 +186,44 @@ namespace Photobooth.Controls
             var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(300));
             fadeOut.Completed += (s, e) => StartOverlay.Visibility = Visibility.Collapsed;
             StartOverlay.BeginAnimation(OpacityProperty, fadeOut);
+        }
+
+        #endregion
+
+        #region Settings Button
+
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Show the settings overlay
+                var settingsOverlay = new SettingsOverlay();
+
+                // Find the parent window
+                var window = Window.GetWindow(this);
+                if (window != null)
+                {
+                    // Add settings overlay to the window's root grid
+                    if (window.Content is Grid rootGrid)
+                    {
+                        Grid.SetRowSpan(settingsOverlay, Math.Max(1, rootGrid.RowDefinitions.Count));
+                        Grid.SetColumnSpan(settingsOverlay, Math.Max(1, rootGrid.ColumnDefinitions.Count));
+                        Panel.SetZIndex(settingsOverlay, 10000);
+                        rootGrid.Children.Add(settingsOverlay);
+
+                        // Show the overlay
+                        settingsOverlay.ShowOverlay();
+
+                        // Note: The settings overlay will handle its own removal when closed
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to open settings: {ex.Message}");
+                MessageBox.Show("Unable to open settings at this time.", "Settings",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
 
         #endregion
