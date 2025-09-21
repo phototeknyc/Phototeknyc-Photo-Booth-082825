@@ -29,6 +29,7 @@ namespace Photobooth.Controls
 
         public event EventHandler<GuestBackgroundSelectedEventArgs> BackgroundSelected;
         public event EventHandler SessionStartRequested;
+        public event EventHandler PickerClosed;
 
         #endregion
 
@@ -175,6 +176,9 @@ namespace Photobooth.Controls
         {
             try
             {
+                // Raise closed event first so the page can react
+                PickerClosed?.Invoke(this, EventArgs.Empty);
+
                 // Hide this control
                 this.Visibility = Visibility.Collapsed;
 

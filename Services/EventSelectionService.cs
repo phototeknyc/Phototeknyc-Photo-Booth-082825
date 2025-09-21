@@ -469,7 +469,7 @@ namespace Photobooth.Services
         /// <summary>
         /// Check if saved event has expired and restore if still valid
         /// </summary>
-        public void CheckAndRestoreSavedEvent()
+        public async Task CheckAndRestoreSavedEvent()
         {
             try
             {
@@ -496,8 +496,8 @@ namespace Photobooth.Services
                             // Load event backgrounds
                             try
                             {
-                                Task.Run(async () => await EventBackgroundService.Instance.LoadEventBackgroundsAsync(eventData));
-                                Log.Debug($"EventSelectionService: Loading event backgrounds for restored event '{eventData.Name}'");
+                                await EventBackgroundService.Instance.LoadEventBackgroundsAsync(eventData);
+                                Log.Debug($"EventSelectionService: Loaded event backgrounds for restored event '{eventData.Name}'");
                             }
                             catch (Exception ex)
                             {
@@ -521,6 +521,19 @@ namespace Photobooth.Services
                         // Event has expired
                         Log.Debug($"EventSelectionService: Saved event has expired (selected {elapsed.TotalHours:F1} hours ago)");
                         ClearSavedEventSelection();
+                    }
+                }
+                else
+                {
+                    // No saved event found, try loading from EventBackgroundService's internal startup logic
+                    Log.Debug("EventSelectionService: No saved event, calling EventBackgroundService startup load");
+                    try
+                    {
+                        await EventBackgroundService.Instance.LoadLastSelectedEventOnStartup();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"EventSelectionService: Failed to load from EventBackgroundService startup: {ex.Message}");
                     }
                 }
             }

@@ -74,10 +74,14 @@ namespace Photobooth.Services
             _eventBackgrounds = new List<EventBackground>();
             _placementDataCache = new Dictionary<string, Models.PhotoPlacementData>();
             LoadPlacementCacheFromSettings();
+
+            // Ensure VirtualBackgroundService is initialized before we use it
+            // This will be done automatically when LoadBackgroundsAsync() is called
+
             Log.Debug("EventBackgroundService initialized");
 
-            // Load last selected event backgrounds on startup
-            Task.Run(async () => await LoadLastSelectedEventOnStartup());
+            // Note: LoadLastSelectedEventOnStartup is now called explicitly by EventSelectionService
+            // to avoid race conditions with EventSelectionService.CheckAndRestoreSavedEvent()
         }
 
         private void LoadPlacementCacheFromSettings()
@@ -103,8 +107,9 @@ namespace Photobooth.Services
 
         /// <summary>
         /// Load the last selected event and its backgrounds on application startup
+        /// Public method to be called explicitly by EventSelectionService to avoid race conditions
         /// </summary>
-        private async Task LoadLastSelectedEventOnStartup()
+        public async Task LoadLastSelectedEventOnStartup()
         {
             try
             {

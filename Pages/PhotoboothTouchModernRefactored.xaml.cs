@@ -4277,8 +4277,13 @@ namespace Photobooth.Pages
             BackgroundSettingsSyncService.SyncAllBackgroundSettings();
             Log.Debug("LoadInitialEventTemplate: Synced background settings");
 
+            // Ensure EventBackgroundService is instantiated before EventSelectionService
+            // This prevents any race conditions in initialization
+            var eventBackgroundService = Services.EventBackgroundService.Instance;
+            Log.Debug("LoadInitialEventTemplate: EventBackgroundService instantiated");
+
             // First check if there's a saved event that hasn't expired
-            EventSelectionService.Instance.CheckAndRestoreSavedEvent();
+            await EventSelectionService.Instance.CheckAndRestoreSavedEvent();
 
             // If a saved event was restored, use it
             if (EventSelectionService.Instance.SelectedEvent != null)
@@ -5044,6 +5049,30 @@ namespace Photobooth.Pages
 
                         // Start the session
                         await ContinueSessionAfterBackgroundSelection();
+                    });
+                };
+
+                // Handle picker closed event
+                guestPicker.PickerClosed += (sender, e) =>
+                {
+                    Log.Debug("Guest background picker closed - returning to initial state");
+
+                    Dispatcher.Invoke(() =>
+                    {
+                        // Show the start button again
+                        if (startButtonOverlay != null)
+                        {
+                            startButtonOverlay.Visibility = Visibility.Visible;
+                        }
+
+                        // Update status to ready
+                        _uiService?.UpdateStatus("Touch START to begin");
+
+                        // Clean up the picker from the grid
+                        if (MainGrid.Children.Contains(guestPicker))
+                        {
+                            MainGrid.Children.Remove(guestPicker);
+                        }
                     });
                 };
 
