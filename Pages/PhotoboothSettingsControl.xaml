@@ -1860,7 +1860,241 @@
                     </Border>
                 </StackPanel>
             </Expander>
-            
+
+            <!-- Background Removal Settings -->
+            <Expander Header="Background Removal" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xF354;" FontFamily="{StaticResource SegoeMDL2}"
+                                      FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="40,20,20,20">
+                    <Border BorderBrush="#3A3E57"
+                            BorderThickness="1" CornerRadius="8"
+                            Background="#2A2E47"
+                            Padding="20">
+                        <StackPanel>
+                            <!-- Enable Background Removal -->
+                            <StackPanel Margin="0,0,0,20">
+                                <TextBlock Text="Background Removal" FontWeight="SemiBold" FontSize="14"
+                                         Foreground="#E4E6EB" Margin="0,0,0,10"/>
+                                <CheckBox Name="EnableBackgroundRemovalCheckbox"
+                                        IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=EnableBackgroundRemoval}"
+                                        Content="Enable AI Background Removal"
+                                        Foreground="#B0B3B8"/>
+                                <TextBlock Text="Remove backgrounds from photos using AI and replace with virtual backgrounds"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="25,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Live View Background Removal -->
+                            <StackPanel Margin="0,0,0,20">
+                                <CheckBox Name="EnableLiveViewBackgroundRemovalCheckbox"
+                                        IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=EnableLiveViewBackgroundRemoval}"
+                                        Content="Enable Live View Background Removal"
+                                        IsEnabled="{Binding ElementName=EnableBackgroundRemovalCheckbox, Path=IsChecked}"
+                                        Foreground="#B0B3B8"/>
+                                <TextBlock Text="Apply background removal to live camera preview (may affect performance)"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="25,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Quality Settings -->
+                            <StackPanel Margin="0,0,0,20">
+                                <TextBlock Text="Processing Quality" FontWeight="SemiBold" FontSize="14"
+                                         Foreground="#E4E6EB" Margin="0,0,0,10"/>
+                                <ComboBox Name="BackgroundRemovalQualityCombo"
+                                        SelectedValue="{Binding Source={x:Static properties:Settings.Default}, Path=BackgroundRemovalQuality}"
+                                        IsEnabled="{Binding ElementName=EnableBackgroundRemovalCheckbox, Path=IsChecked}"
+                                        Width="200" HorizontalAlignment="Left">
+                                    <ComboBoxItem Content="Low (Fast)" Tag="Low"/>
+                                    <ComboBoxItem Content="Medium (Balanced)" Tag="Medium"/>
+                                    <ComboBoxItem Content="High (Best Quality)" Tag="High"/>
+                                </ComboBox>
+                                <TextBlock Text="Higher quality provides better edge detection but slower processing"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Edge Refinement -->
+                            <StackPanel Margin="0,0,0,20">
+                                <TextBlock Text="Edge Refinement" FontWeight="SemiBold" FontSize="14"
+                                         Foreground="#E4E6EB" Margin="0,0,0,10"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="60"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Name="BackgroundRemovalEdgeRefinementSlider"
+                                          Grid.Column="0"
+                                          Value="{Binding Source={x:Static properties:Settings.Default}, Path=BackgroundRemovalEdgeRefinement}"
+                                          Minimum="0" Maximum="10" TickFrequency="1" IsSnapToTickEnabled="True"
+                                          IsEnabled="{Binding ElementName=EnableBackgroundRemovalCheckbox, Path=IsChecked}"/>
+                                    <TextBlock Grid.Column="1"
+                                             Text="{Binding ElementName=BackgroundRemovalEdgeRefinementSlider, Path=Value, StringFormat='{}{0:F0}'}"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                                             Foreground="#B0B3B8"/>
+                                </Grid>
+                                <TextBlock Text="Adjust edge smoothing for hair and fine details"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- GPU Acceleration -->
+                            <StackPanel Margin="0,0,0,20">
+                                <CheckBox Name="EnableBackgroundRemovalGPUCheckbox"
+                                        IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=BackgroundRemovalUseGPU}"
+                                        Content="Enable GPU Acceleration (DirectML)"
+                                        IsEnabled="{Binding ElementName=EnableBackgroundRemovalCheckbox, Path=IsChecked}"
+                                        Foreground="#B0B3B8"/>
+                                <TextBlock Text="Use GPU for faster processing if available"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="25,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Default Background Path -->
+                            <StackPanel Margin="0,0,0,20">
+                                <TextBlock Text="Default Virtual Background" FontWeight="SemiBold" FontSize="14"
+                                         Foreground="#E4E6EB" Margin="0,0,0,10"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Name="DefaultBackgroundPathTextBox"
+                                           Grid.Column="0"
+                                           Text="{Binding Source={x:Static properties:Settings.Default}, Path=DefaultVirtualBackground}"
+                                           IsEnabled="{Binding ElementName=EnableBackgroundRemovalCheckbox, Path=IsChecked}"
+                                           Margin="0,0,10,0"/>
+                                    <Button Grid.Column="1" Content="Browse..."
+                                          Click="BrowseDefaultBackground_Click"
+                                          IsEnabled="{Binding ElementName=EnableBackgroundRemovalCheckbox, Path=IsChecked}"
+                                          Width="80" Height="32"/>
+                                </Grid>
+                                <TextBlock Text="Select the default virtual background image"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Manage Backgrounds Button -->
+                            <Button Content="Manage Virtual Backgrounds"
+                                  Click="ManageBackgrounds_Click"
+                                  IsEnabled="{Binding ElementName=EnableBackgroundRemovalCheckbox, Path=IsChecked}"
+                                  HorizontalAlignment="Left"
+                                  Width="200" Height="36">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background">
+                                            <Setter.Value>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#667EEA" Offset="0"/>
+                                                    <GradientStop Color="#764BA2" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter Property="FontWeight" Value="Medium"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="{TemplateBinding Background}"
+                                                          CornerRadius="8"
+                                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                                          BorderBrush="{TemplateBinding BorderBrush}">
+                                                        <ContentPresenter HorizontalAlignment="Center"
+                                                                        VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background">
+                                                    <Setter.Value>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#7789EA" Offset="0"/>
+                                                            <GradientStop Color="#855BA2" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- Event Background Manager -->
+                            <StackPanel Margin="0,20,0,0">
+                                <CheckBox Name="UseGuestBackgroundPickerCheckbox"
+                                        IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=UseGuestBackgroundPicker}"
+                                        Content="Enable Guest Background Selection"
+                                        IsEnabled="{Binding ElementName=EnableBackgroundRemovalCheckbox, Path=IsChecked}"
+                                        Foreground="#B0B3B8"
+                                        Margin="0,0,0,10"/>
+                                <TextBlock Text="Allow guests to select their own backgrounds at the start of each session"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="25,5,0,10"/>
+
+                                <Button Content="Manage Event Backgrounds"
+                                      Click="ManageEventBackgrounds_Click"
+                                      IsEnabled="{Binding ElementName=UseGuestBackgroundPickerCheckbox, Path=IsChecked}"
+                                      HorizontalAlignment="Left"
+                                      Width="200" Height="36">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Background">
+                                                <Setter.Value>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#4CAF50" Offset="0"/>
+                                                        <GradientStop Color="#45A049" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Setter.Value>
+                                            </Setter>
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="FontWeight" Value="Medium"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="{TemplateBinding Background}"
+                                                              CornerRadius="8"
+                                                              BorderThickness="{TemplateBinding BorderThickness}"
+                                                              BorderBrush="{TemplateBinding BorderBrush}">
+                                                            <ContentPresenter HorizontalAlignment="Center"
+                                                                            VerticalAlignment="Center"/>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background">
+                                                        <Setter.Value>
+                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                <GradientStop Color="#5CBF60" Offset="0"/>
+                                                                <GradientStop Color="#55B059" Offset="1"/>
+                                                            </LinearGradientBrush>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <TextBlock Text="Select which backgrounds guests can choose from"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Expander>
+
             <!-- Print Settings -->
             <Expander Header="Print Settings" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
                 <Expander.HeaderTemplate>

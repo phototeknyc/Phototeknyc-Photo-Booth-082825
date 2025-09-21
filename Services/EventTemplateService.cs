@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -73,13 +74,24 @@ namespace Photobooth.Services
         /// <summary>
         /// Select an event
         /// </summary>
-        public void SelectEvent(EventData eventData)
+        public async void SelectEvent(EventData eventData)
         {
             if (eventData == null) return;
-            
+
             SelectedEventForOverlay = eventData;
             LoadAvailableTemplates(eventData.Id);
             Log.Debug($"EventTemplateService: Selected event {eventData.Name}");
+
+            // Load event backgrounds
+            try
+            {
+                await EventBackgroundService.Instance.LoadEventBackgroundsAsync(eventData);
+                Log.Debug($"EventTemplateService: Loaded event backgrounds for '{eventData.Name}'");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventTemplateService: Failed to load event backgrounds: {ex.Message}");
+            }
         }
         
         /// <summary>

@@ -155,6 +155,7 @@ namespace Photobooth.Pages
         // Current module
         private IPhotoboothModule _activeModule;
         private ModuleManager _moduleManager;
+        private Photobooth.Controls.ModularComponents.BackgroundRemovalModule _backgroundRemovalModule;
         private UILayoutService _uiLayoutService;
         
         // Gallery navigation state
@@ -231,6 +232,9 @@ namespace Photobooth.Pages
             _templateOverlayService = new Services.TemplateOverlayService();
             _shareService = CloudShareProvider.GetShareService();
             _sessionManager = new SessionManager();
+
+            // Initialize BackgroundSelectionService with container
+            BackgroundSelectionService.Instance.SetOverlayContainer(MainGrid);
             
             // Initialize camera settings service (lazy loading - only when overlay shown)
             var cameraSettingsService = CameraSettingsService.Instance;
@@ -321,8 +325,11 @@ namespace Photobooth.Pages
                 Interval = TimeSpan.FromMilliseconds(intervalMs)
             };
             _liveViewTimer.Tick += LiveViewTimer_Tick;
-            
+
             Log.Debug($"Live view timer configured for {liveViewFps} FPS ({intervalMs}ms interval) from settings");
+
+            // Load idle background image if configured
+            LoadIdleBackgroundImage();
             
             _countdownTimer = new DispatcherTimer
             {
@@ -470,22 +477,90 @@ namespace Photobooth.Pages
             });
         }
 
+        private void LoadIdleBackgroundImage()
+        {
+            try
+            {
+                var imagePath = Properties.Settings.Default.IdleBackgroundImage;
+                if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
+                {
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.UriSource = new Uri(imagePath, UriKind.Absolute);
+                    bitmap.EndInit();
+
+                    idleBackgroundImage.Source = bitmap;
+                    idleBackgroundImage.Opacity = Properties.Settings.Default.IdleBackgroundOpacity;
+
+                    // Set stretch mode from settings
+                    var stretchMode = Properties.Settings.Default.IdleBackgroundStretch;
+                    if (Enum.TryParse<Stretch>(stretchMode, out var stretch))
+                    {
+                        idleBackgroundImage.Stretch = stretch;
+                    }
+
+                    // Show background initially if live view is not active
+                    UpdateIdleBackgroundVisibility();
+
+                    Log.Debug($"Loaded idle background image: {imagePath}");
+                }
+                else
+                {
+                    idleBackgroundImage.Visibility = Visibility.Collapsed;
+                    Log.Debug("No idle background image configured or file not found");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to load idle background image: {ex.Message}");
+                idleBackgroundImage.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void UpdateIdleBackgroundVisibility()
+        {
+            // Show background when live view is NOT active and we have a background configured
+            if (idleBackgroundImage?.Source != null)
+            {
+                bool isLiveViewActive = _liveViewTimer?.IsEnabled == true;
+                bool hasLiveViewImage = liveViewImage?.Source != null;
+
+                // Hide background if live view is active or we have an image displayed
+                idleBackgroundImage.Visibility = (!isLiveViewActive && !hasLiveViewImage)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+                Log.Debug($"Idle background visibility updated - LiveView active: {isLiveViewActive}, Has image: {hasLiveViewImage}, Background visible: {idleBackgroundImage.Visibility == Visibility.Visible}");
+            }
+        }
+
         private void InitializeModules()
         {
             // Use singleton instance
             _moduleManager = ModuleManager.Instance;
-            
+
             // Initialize modules when camera is ready
             var outputFolder = FileValidationService.Instance.GetDefaultPhotoOutputFolder("Photobooth");
-            
+
             // Initialize will be called later when camera is ready
             if (DeviceManager?.SelectedCameraDevice != null)
             {
                 _moduleManager.Initialize(DeviceManager.SelectedCameraDevice, outputFolder);
             }
-            
+
             // Set default module to Photo
             _activeModule = _moduleManager.GetModule("Photo");
+
+            // Initialize background removal module if enabled
+            if (Properties.Settings.Default.EnableBackgroundRemoval)
+            {
+                _backgroundRemovalModule = new Photobooth.Controls.ModularComponents.BackgroundRemovalModule();
+                if (DeviceManager?.SelectedCameraDevice != null)
+                {
+                    _backgroundRemovalModule.Initialize(DeviceManager.SelectedCameraDevice, outputFolder);
+                }
+            }
         }
         #endregion
 
@@ -545,13 +620,22 @@ namespace Photobooth.Pages
             // Show the START button
             _uiService?.ShowStartButton();
 
-            // Initialize template overlay (enabled by default)
-            if (_showTemplateOverlay)
+            // Initialize template overlay (enabled by default or when background removal is enabled)
+            bool shouldShowOverlay = _showTemplateOverlay || Properties.Settings.Default.EnableBackgroundRemoval;
+
+            if (shouldShowOverlay)
             {
                 if (templateOverlayContainer != null)
                 {
                     templateOverlayContainer.Visibility = Visibility.Visible;
-                    Log.Debug($"Template overlay container visibility set to Visible");
+                    Log.Debug($"Template overlay container visibility set to Visible (background removal: {Properties.Settings.Default.EnableBackgroundRemoval})");
+
+                    // Force template overlay to be visible during background removal
+                    if (Properties.Settings.Default.EnableBackgroundRemoval)
+                    {
+                        _showTemplateOverlay = true;
+                        Log.Debug("Template overlay enabled for background removal workflow");
+                    }
                 }
                 else
                 {
@@ -1264,6 +1348,7 @@ namespace Photobooth.Pages
                 {
                     cameraDevice?.StartLiveView();
                     _liveViewTimer.Start();
+                    UpdateIdleBackgroundVisibility(); // Hide background when live view starts
                     Log.Debug("DeviceManager_CameraConnected: Started idle live view");
                 }
                 else if (!Properties.Settings.Default.EnableIdleLiveView)
@@ -1282,6 +1367,7 @@ namespace Photobooth.Pages
                 UpdateCameraStatus("Camera disconnected - Attempting to reconnect...");
                 _liveViewTimer.Stop();
                 liveViewImage.Source = null;
+                UpdateIdleBackgroundVisibility(); // Show background when live view stops
                 
                 // Start auto-reconnect timer
                 if (!_isReconnecting && _cameraReconnectTimer != null)
@@ -1336,6 +1422,7 @@ namespace Photobooth.Pages
                 {
                     DeviceManager.SelectedCameraDevice.StartLiveView();
                     _liveViewTimer.Start();
+                    UpdateIdleBackgroundVisibility(); // Hide background when live view starts
                     Log.Debug("Live view started for photo session");
                 }
             });
@@ -1796,6 +1883,7 @@ namespace Photobooth.Pages
                 
                 // Stop live view timer during capture (camera will stop live view)
                 _liveViewTimer?.Stop();
+                UpdateIdleBackgroundVisibility(); // May show background during capture
                 Log.Debug("Live view timer stopped for capture");
                 
                 _uiService.UpdateStatus("Capturing...");
@@ -1898,6 +1986,7 @@ namespace Photobooth.Pages
                     Log.Debug($"Starting live view timer to resume camera feed");
                     // Resume live view timer - it will update the image on next tick
                     _liveViewTimer?.Start();
+                    UpdateIdleBackgroundVisibility(); // Hide background when live view restarts
                     Log.Debug("Live view timer restarted - camera feed will replace photo on next tick");
                 }
                 else
@@ -2855,6 +2944,7 @@ namespace Photobooth.Pages
                     {
                         DeviceManager.SelectedCameraDevice.StartLiveView();
                         _liveViewTimer?.Start();
+                        UpdateIdleBackgroundVisibility(); // Hide background when live view starts
                         Log.Debug("Live view restarted after session clear (idle live view enabled)");
                     }
                     else if (_isDisplayingSessionResult)
@@ -2876,6 +2966,7 @@ namespace Photobooth.Pages
                             }
                         }
                         _liveViewTimer?.Stop();
+                        UpdateIdleBackgroundVisibility(); // Show background when live view stops
                         Log.Debug("Live view stopped after session clear (idle live view disabled)");
                     }
                 }
@@ -3111,6 +3202,7 @@ namespace Photobooth.Pages
                 {
                     Log.Debug("Resuming live view after force clear");
                     _liveViewTimer.Start();
+                    UpdateIdleBackgroundVisibility(); // Update background visibility
                 }
 
                 // Reset UI to initial state
@@ -3677,6 +3769,7 @@ namespace Photobooth.Pages
                         {
                             device.StartLiveView();
                             _liveViewTimer.Start();
+                            UpdateIdleBackgroundVisibility(); // Hide background when live view starts
                             Log.Debug($"InitializeCamera: Started live view (IdleLiveView: {Properties.Settings.Default.EnableIdleLiveView}, VideoModule: {modulesConfig.VideoEnabled})");
                         }
                         else
@@ -3837,6 +3930,12 @@ namespace Photobooth.Pages
                     if (liveViewImage != null)
                     {
                         liveViewImage.Source = bitmap;
+
+                        // Ensure background is hidden when we have live view image
+                        if (idleBackgroundImage?.Visibility == Visibility.Visible)
+                        {
+                            idleBackgroundImage.Visibility = Visibility.Collapsed;
+                        }
 
                         // Update template overlay if needed (only during live view, not when displaying captured photos)
                         if (_showTemplateOverlay && !_isDisplayingCapturedPhoto && !_isDisplayingSessionResult)
@@ -4170,7 +4269,7 @@ namespace Photobooth.Pages
         #endregion
 
         #region Event/Template Management
-        private void LoadInitialEventTemplate()
+        private async void LoadInitialEventTemplate()
         {
             Log.Debug("LoadInitialEventTemplate: Starting event/template loading");
 
@@ -4199,7 +4298,24 @@ namespace Photobooth.Pages
             {
                 _eventTemplateService.SelectEvent(_currentEvent);
                 statusText.Text = $"Event: {_currentEvent.Name}";
-                
+
+                // Load event backgrounds if configured
+                try
+                {
+                    await Services.EventBackgroundService.Instance.LoadEventBackgroundsAsync(_currentEvent);
+                    Log.Debug($"LoadInitialEventTemplate: Loaded event backgrounds for '{_currentEvent.Name}'");
+
+                    // Check if we have event backgrounds saved
+                    if (Services.EventBackgroundService.Instance.HasEventBackgrounds)
+                    {
+                        Log.Debug($"LoadInitialEventTemplate: Found {Services.EventBackgroundService.Instance.EventBackgrounds.Count} backgrounds for event");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"LoadInitialEventTemplate: Failed to load event backgrounds: {ex.Message}");
+                }
+
                 // Save the event ID to settings for use by other services
                 Properties.Settings.Default.SelectedEventId = _currentEvent.Id;
                 Properties.Settings.Default.Save();
@@ -4562,7 +4678,7 @@ namespace Photobooth.Pages
         }
         
         #region Template Designer Overlay Methods
-        
+
         /// <summary>
         /// Show the template designer overlay
         /// </summary>
@@ -4572,6 +4688,53 @@ namespace Photobooth.Pages
             {
                 Log.Debug($"Showing template designer overlay {(string.IsNullOrEmpty(templatePath) ? "for new template" : $"for: {templatePath}")}");
                 TemplateDesignerOverlayControl.ShowOverlay(templatePath);
+            }
+        }
+
+
+        /// <summary>
+        /// Show the virtual backgrounds overlay
+        /// </summary>
+        public void ShowVirtualBackgroundsOverlay()
+        {
+            try
+            {
+                // Create the overlay if it doesn't exist
+                var overlay = new VirtualBackgroundsOverlay();
+
+                // Handle close event
+                overlay.CloseRequested += (s, e) =>
+                {
+                    if (MainGrid.Children.Contains(overlay))
+                    {
+                        MainGrid.Children.Remove(overlay);
+                    }
+                };
+
+                // Handle background selection
+                overlay.BackgroundSelected += (s, e) =>
+                {
+                    Log.Debug($"Virtual background selected: {e.BackgroundName} from {e.Category}");
+
+                    // Update the background removal module if active
+                    if (_backgroundRemovalModule != null)
+                    {
+                        _backgroundRemovalModule.SetVirtualBackground(e.BackgroundPath);
+                    }
+                };
+
+                // Add to main grid as overlay
+                Grid.SetRowSpan(overlay, 10);
+                Grid.SetColumnSpan(overlay, 10);
+                Panel.SetZIndex(overlay, 1000);
+                MainGrid.Children.Add(overlay);
+
+                Log.Debug("Virtual backgrounds overlay displayed");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to show virtual backgrounds overlay: {ex.Message}");
+                MessageBox.Show("Failed to open virtual backgrounds", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         
@@ -4599,33 +4762,41 @@ namespace Photobooth.Pages
         private void TemplateDesignerButton_Click(object sender, RoutedEventArgs e)
         {
             Log.Debug("Template Designer button clicked");
-            
+
             // Hide the bottom control bar
             if (bottomControlBar != null)
             {
                 bottomControlBar.Visibility = Visibility.Collapsed;
                 bottomBarToggleChevron.Text = "⚙"; // Reset to gear icon
             }
-            
+
             // Check if we have a current template to edit
             TemplateData currentTemplateData = _eventTemplateService?.CurrentTemplate;
             if (currentTemplateData == null)
             {
                 currentTemplateData = _currentTemplate;
             }
-            
+
             // For now, always open a new template designer
             // In the future, we could show a menu to choose between:
             // - Create New Template
             // - Edit Current Template
             // - Browse Templates
             ShowTemplateDesignerOverlay(null);
-            
-            // Optional: Show a message about the current template
-            if (currentTemplateData != null)
+        }
+
+        private void VirtualBackgroundsButton_Click(object sender, RoutedEventArgs e)
+        {
+            Log.Debug("Virtual Backgrounds button clicked");
+
+            // Hide the bottom control bar
+            if (bottomControlBar != null)
             {
-                Log.Debug($"Current template available for editing: {currentTemplateData.Name}");
+                bottomControlBar.Visibility = Visibility.Collapsed;
+                bottomBarToggleChevron.Text = "⚙"; // Reset to gear icon
             }
+
+            ShowVirtualBackgroundsOverlay();
         }
         
         /// <summary>
@@ -4721,22 +4892,48 @@ namespace Photobooth.Pages
             try
             {
                 Log.Debug("=== STARTING PHOTO SESSION USING CLEAN SERVICES ===");
-                
+
+                // Check if we should show guest background picker
+                if (Properties.Settings.Default.UseGuestBackgroundPicker &&
+                    Properties.Settings.Default.EnableBackgroundRemoval)
+                {
+                    ShowGuestBackgroundPicker();
+                    return;
+                }
+                // Otherwise use standard background selection if enabled
+                else if (Properties.Settings.Default.EnableBackgroundRemoval)
+                {
+                    var bgSelectionService = BackgroundSelectionService.Instance;
+                    if (bgSelectionService.ShouldShowBackgroundSelection())
+                    {
+                        // Show background selection and wait for result
+                        var result = await bgSelectionService.ShowSelectionOverlayAsync();
+
+                        if (result.Cancelled)
+                        {
+                            Log.Debug("Background selection cancelled by user");
+                            return;
+                        }
+
+                        Log.Debug($"Background selection completed - Selected: {result.Selected}, Skipped: {result.Skipped}");
+                    }
+                }
+
                 // Check if capture modes are enabled
                 var captureModesService = CaptureModesService.Instance;
                 Log.Debug($"CaptureModesService - Enabled: {captureModesService.IsEnabled}, HasMultipleModes: {captureModesService.HasMultipleModes}, EnabledModes Count: {captureModesService.EnabledModes.Count}");
-                
+
                 if (captureModesService.IsEnabled && captureModesService.HasMultipleModes)
                 {
                     // Show capture modes overlay for user to select
                     ShowCaptureModesOverlay();
                     return;
                 }
-                
+
                 // Ensure template and event are loaded
                 if (!await EnsureTemplateAndEvent())
                     return;
-                
+
                 // Start session using clean service
                 bool sessionStarted = await _sessionService.StartSessionAsync(
                     _currentEvent, 
@@ -4781,7 +4978,179 @@ namespace Photobooth.Pages
                 HandleSessionStartFailure("Session start failed - Please try again");
             }
         }
-        
+
+        private void ShowGuestBackgroundPicker()
+        {
+            try
+            {
+                Log.Debug("=== SHOWING GUEST BACKGROUND PICKER ===");
+
+                // Hide start button
+                if (startButtonOverlay != null)
+                    startButtonOverlay.Visibility = Visibility.Collapsed;
+
+                // Ensure template overlay is visible for background removal
+                if (Properties.Settings.Default.EnableBackgroundRemoval)
+                {
+                    _showTemplateOverlay = true;
+                    if (templateOverlayContainer != null)
+                    {
+                        templateOverlayContainer.Visibility = Visibility.Visible;
+                        Log.Debug("Template overlay enabled for background removal picker");
+                    }
+
+                    // Load current template into overlay if available
+                    if (_currentTemplate != null)
+                    {
+                        LoadTemplateForOverlay(_currentTemplate);
+                    }
+                }
+
+                // Create and show the guest background picker
+                var guestPicker = new Controls.GuestBackgroundPicker();
+
+                // Handle background selected event
+                guestPicker.BackgroundSelected += async (sender, e) =>
+                {
+                    Log.Debug($"Guest selected background: {e.BackgroundName} (ID: {e.BackgroundId})");
+
+                    // Background has already been applied by the picker
+                    // Continue with normal session start
+                    await Dispatcher.InvokeAsync(async () =>
+                    {
+                        // Hide the picker
+                        if (MainGrid.Children.Contains(guestPicker))
+                            MainGrid.Children.Remove(guestPicker);
+
+                        // Continue with session
+                        await ContinueSessionAfterBackgroundSelection();
+                    });
+                };
+
+                // Handle session start request
+                guestPicker.SessionStartRequested += async (sender, e) =>
+                {
+                    Log.Debug("Guest picker requested session start");
+
+                    await Dispatcher.InvokeAsync(async () =>
+                    {
+                        // Hide the picker
+                        if (MainGrid.Children.Contains(guestPicker))
+                            MainGrid.Children.Remove(guestPicker);
+
+                        // Start the session
+                        await ContinueSessionAfterBackgroundSelection();
+                    });
+                };
+
+                // Add to main grid
+                Grid.SetRow(guestPicker, 0);
+                Grid.SetColumn(guestPicker, 0);
+                Grid.SetRowSpan(guestPicker, MainGrid.RowDefinitions.Count > 0 ? MainGrid.RowDefinitions.Count : 1);
+                Grid.SetColumnSpan(guestPicker, MainGrid.ColumnDefinitions.Count > 0 ? MainGrid.ColumnDefinitions.Count : 1);
+                Panel.SetZIndex(guestPicker, 100);
+                guestPicker.Width = ActualWidth;
+                guestPicker.Height = ActualHeight;
+                MainGrid.Children.Add(guestPicker);
+
+                Log.Debug("Guest background picker shown");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ShowGuestBackgroundPicker error: {ex.Message}");
+                // Fallback to normal session start
+                _ = ContinueSessionAfterBackgroundSelection();
+            }
+        }
+
+        private async Task ContinueSessionAfterBackgroundSelection()
+        {
+            try
+            {
+                Log.Debug("=== CONTINUING SESSION AFTER BACKGROUND SELECTION ===");
+
+                // Ensure template overlay remains visible during background removal workflow
+                if (Properties.Settings.Default.EnableBackgroundRemoval)
+                {
+                    _showTemplateOverlay = true;
+                    if (templateOverlayContainer != null)
+                    {
+                        templateOverlayContainer.Visibility = Visibility.Visible;
+                        Log.Debug("Template overlay maintained for background removal session");
+                    }
+                }
+
+                // Ensure template and event are loaded
+                if (!await EnsureTemplateAndEvent())
+                {
+                    Log.Error("Failed to ensure template and event");
+                    HandleSessionStartFailure("Please select a template to continue");
+                    return;
+                }
+
+                // Load template overlay if we have a template
+                if (_currentTemplate != null && _showTemplateOverlay)
+                {
+                    LoadTemplateForOverlay(_currentTemplate);
+                    Log.Debug($"Template overlay loaded for: {_currentTemplate.Name}");
+                }
+
+                // Stop any existing idle live view as we're starting a session
+                if (DeviceManager?.SelectedCameraDevice != null)
+                {
+                    DeviceManager.SelectedCameraDevice.StopLiveView();
+                    _liveViewTimer?.Stop();
+                }
+
+                // Clean up any previous session state
+                CleanupVideoElements();
+                photosContainer.Children.Clear();
+
+                // Clear the live view during session start
+                liveViewImage.Source = null;
+
+                // Set capture in progress flag
+                _isCapturing = true;
+                _isSessionBeingCleared = false;
+
+                // Hide overlays
+                HideAllOverlays();
+
+                // Update idle background visibility during session
+                UpdateIdleBackgroundVisibility();
+
+                // Start session using services - same as regular StartPhotoSession
+                bool sessionStarted = await _sessionService.StartSessionAsync(
+                    _currentEvent,
+                    _currentTemplate,
+                    GetTotalPhotosNeeded());
+
+                if (sessionStarted)
+                {
+                    // Show stop button during session
+                    if (stopSessionButton != null)
+                    {
+                        stopSessionButton.Visibility = Visibility.Visible;
+                    }
+
+                    Log.Debug("Session started successfully through services");
+
+                    // Start the workflow to trigger photo capture
+                    await _workflowService.StartPhotoCaptureWorkflowAsync();
+                }
+                else
+                {
+                    Log.Error("Failed to start session through service");
+                    HandleSessionStartFailure("Failed to start photo session");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ContinueSessionAfterBackgroundSelection error: {ex.Message}");
+                HandleSessionStartFailure("Session start failed - Please try again");
+            }
+        }
+
         private async Task<bool> EnsureTemplateAndEvent()
         {
             // Load template if missing
@@ -5185,6 +5554,7 @@ namespace Photobooth.Pages
                 
                 // Stop live view for gallery mode
                 _liveViewTimer?.Stop();
+                UpdateIdleBackgroundVisibility(); // Show background when entering gallery
                 
                 // Show gallery using service, filtered by current event (we know it's not null from check above)
                 await _galleryService?.ShowGalleryAsync(_currentEvent.Id);
@@ -5632,6 +6002,7 @@ namespace Photobooth.Pages
             {
                 DeviceManager?.SelectedCameraDevice?.StartLiveView();
                 _liveViewTimer.Start();
+                UpdateIdleBackgroundVisibility(); // Update background visibility
                 Log.Debug("Live view restarted in ResetForNewSession");
             }
             else
@@ -6492,6 +6863,7 @@ namespace Photobooth.Pages
             {
                 DeviceManager.SelectedCameraDevice.StartLiveView();
                 _liveViewTimer.Start();
+                UpdateIdleBackgroundVisibility(); // Update background visibility
             }
             
             // Show start button

@@ -17,6 +17,8 @@
                 <ResourceDictionary Source="Styles/TouchFriendlyStyle.xaml"/>
                 <ResourceDictionary Source="Resources/SegoeMDL2Icons.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+            <!-- Global Converters -->
+            <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         </ResourceDictionary>
 
     </Application.Resources>

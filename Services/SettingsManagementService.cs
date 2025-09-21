@@ -77,6 +77,9 @@ namespace Photobooth.Services
             public double ButtonSizeScale { get; set; }
             public string Theme { get; set; }
             public int ScreenBrightness { get; set; }
+            public string IdleBackgroundImage { get; set; }
+            public double IdleBackgroundOpacity { get; set; }
+            public string IdleBackgroundStretch { get; set; }
         }
         
         public class PrintSettings
@@ -141,6 +144,16 @@ namespace Photobooth.Services
             public bool AutoCleanupOldFiles { get; set; }
             public int KeepFilesForDays { get; set; }
         }
+
+        public class BackgroundRemovalSettings
+        {
+            public bool EnableBackgroundRemoval { get; set; }
+            public bool EnableLiveViewRemoval { get; set; }
+            public string Quality { get; set; }
+            public int EdgeRefinement { get; set; }
+            public string DefaultBackground { get; set; }
+            public bool UseGPU { get; set; }
+        }
         #endregion
         
         #region Properties
@@ -153,6 +166,7 @@ namespace Photobooth.Services
         private SecuritySettings _securitySettings;
         private RetakeSettings _retakeSettings;
         private StorageSettings _storageSettings;
+        private BackgroundRemovalSettings _backgroundRemovalSettings;
         
         public SessionSettings Session
         {
@@ -214,6 +228,12 @@ namespace Photobooth.Services
             get => _storageSettings;
             set { _storageSettings = value; OnPropertyChanged(); }
         }
+
+        public BackgroundRemovalSettings BackgroundRemoval
+        {
+            get => _backgroundRemovalSettings;
+            set { _backgroundRemovalSettings = value; OnPropertyChanged(); }
+        }
         #endregion
         
         private SettingsManagementService()
@@ -260,7 +280,10 @@ namespace Photobooth.Services
                 {
                     FullscreenMode = Properties.Settings.Default.FullscreenMode,
                     HideCursor = Properties.Settings.Default.HideCursor,
-                    ButtonSizeScale = Properties.Settings.Default.ButtonSizeScale
+                    ButtonSizeScale = Properties.Settings.Default.ButtonSizeScale,
+                    IdleBackgroundImage = Properties.Settings.Default.IdleBackgroundImage,
+                    IdleBackgroundOpacity = Properties.Settings.Default.IdleBackgroundOpacity,
+                    IdleBackgroundStretch = Properties.Settings.Default.IdleBackgroundStretch
                 };
                 
                 // Print Settings
@@ -310,6 +333,17 @@ namespace Photobooth.Services
                     SessionFolder = Properties.Settings.Default.PhotoLocation ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                     OrganizeByDate = true,
                     OrganizeByEvent = false
+                };
+
+                // Background Removal Settings
+                _backgroundRemovalSettings = new BackgroundRemovalSettings
+                {
+                    EnableBackgroundRemoval = Properties.Settings.Default.EnableBackgroundRemoval,
+                    EnableLiveViewRemoval = Properties.Settings.Default.EnableLiveViewBackgroundRemoval,
+                    Quality = Properties.Settings.Default.BackgroundRemovalQuality,
+                    EdgeRefinement = Properties.Settings.Default.BackgroundRemovalEdgeRefinement,
+                    DefaultBackground = Properties.Settings.Default.DefaultVirtualBackground,
+                    UseGPU = Properties.Settings.Default.BackgroundRemovalUseGPU
                 };
                 
                 // Sharing Settings
@@ -361,6 +395,9 @@ namespace Photobooth.Services
                 Properties.Settings.Default.FullscreenMode = _displaySettings.FullscreenMode;
                 Properties.Settings.Default.HideCursor = _displaySettings.HideCursor;
                 Properties.Settings.Default.ButtonSizeScale = _displaySettings.ButtonSizeScale;
+                Properties.Settings.Default.IdleBackgroundImage = _displaySettings.IdleBackgroundImage;
+                Properties.Settings.Default.IdleBackgroundOpacity = _displaySettings.IdleBackgroundOpacity;
+                Properties.Settings.Default.IdleBackgroundStretch = _displaySettings.IdleBackgroundStretch;
                 
                 // Print Settings
                 Properties.Settings.Default.EnablePrinting = _printSettings.EnablePrinting;
@@ -396,7 +433,15 @@ namespace Photobooth.Services
                 // Storage Settings
                 Properties.Settings.Default.PhotoLocation = _storageSettings.PhotoLocation;
                 // SessionFolder uses PhotoLocation, OrganizeByDate and OrganizeByEvent might be stored elsewhere
-                
+
+                // Background Removal Settings
+                Properties.Settings.Default.EnableBackgroundRemoval = _backgroundRemovalSettings.EnableBackgroundRemoval;
+                Properties.Settings.Default.EnableLiveViewBackgroundRemoval = _backgroundRemovalSettings.EnableLiveViewRemoval;
+                Properties.Settings.Default.BackgroundRemovalQuality = _backgroundRemovalSettings.Quality;
+                Properties.Settings.Default.BackgroundRemovalEdgeRefinement = _backgroundRemovalSettings.EdgeRefinement;
+                Properties.Settings.Default.DefaultVirtualBackground = _backgroundRemovalSettings.DefaultBackground;
+                Properties.Settings.Default.BackgroundRemovalUseGPU = _backgroundRemovalSettings.UseGPU;
+
                 // Sharing Settings
                 // Sharing settings might be stored elsewhere or use different property names
                 
@@ -446,6 +491,66 @@ namespace Photobooth.Services
 
                     Log.Debug($"SettingsManagementService: Successfully updated {settingName} to {value}");
                     return;
+                }
+
+                // Special handling for BackgroundRemoval settings that need direct property access
+                if (category == "BackgroundRemoval")
+                {
+                    bool handled = true;
+                    var oldValue = "";
+
+                    switch (settingName)
+                    {
+                        case "BackgroundRemovalQuality":
+                        case "Quality":
+                            oldValue = Properties.Settings.Default.BackgroundRemovalQuality;
+                            Properties.Settings.Default.BackgroundRemovalQuality = value?.ToString();
+                            BackgroundRemoval.Quality = value?.ToString();
+                            break;
+                        case "EnableBackgroundRemoval":
+                            Properties.Settings.Default.EnableBackgroundRemoval = Convert.ToBoolean(value);
+                            BackgroundRemoval.EnableBackgroundRemoval = Convert.ToBoolean(value);
+                            break;
+                        case "EnableLiveViewRemoval":
+                            Properties.Settings.Default.EnableLiveViewBackgroundRemoval = Convert.ToBoolean(value);
+                            BackgroundRemoval.EnableLiveViewRemoval = Convert.ToBoolean(value);
+                            break;
+                        case "EdgeRefinement":
+                        case "BackgroundRemovalEdgeRefinement":
+                            Properties.Settings.Default.BackgroundRemovalEdgeRefinement = Convert.ToInt32(value);
+                            BackgroundRemoval.EdgeRefinement = Convert.ToInt32(value);
+                            break;
+                        case "UseGPU":
+                        case "BackgroundRemovalUseGPU":
+                            Properties.Settings.Default.BackgroundRemovalUseGPU = Convert.ToBoolean(value);
+                            BackgroundRemoval.UseGPU = Convert.ToBoolean(value);
+                            break;
+                        case "DefaultBackground":
+                        case "DefaultVirtualBackground":
+                            Properties.Settings.Default.DefaultVirtualBackground = value?.ToString();
+                            BackgroundRemoval.DefaultBackground = value?.ToString();
+                            break;
+                        default:
+                            handled = false;
+                            break;
+                    }
+
+                    if (handled)
+                    {
+                        Properties.Settings.Default.Save();
+
+                        // Notify
+                        SettingChanged?.Invoke(this, new SettingChangedEventArgs
+                        {
+                            Category = category,
+                            SettingName = settingName,
+                            OldValue = oldValue,
+                            NewValue = value
+                        });
+
+                        Log.Debug($"SettingsManagementService: Successfully updated BackgroundRemoval.{settingName} to {value}");
+                        return;
+                    }
                 }
 
                 // Use reflection to update the property
@@ -621,6 +726,16 @@ namespace Photobooth.Services
                 OrganizeByDate = true,
                 OrganizeByEvent = false
             };
+
+            _backgroundRemovalSettings = new BackgroundRemovalSettings
+            {
+                EnableBackgroundRemoval = false,
+                EnableLiveViewRemoval = false,
+                Quality = "Balanced",
+                EdgeRefinement = 50,
+                DefaultBackground = "",
+                UseGPU = false
+            };
             
             _sharingSettings = new SharingSettings
             {
@@ -698,7 +813,18 @@ namespace Photobooth.Services
             {
                 new SettingItem { Name = "FullscreenMode", DisplayName = "Fullscreen", Value = Display.FullscreenMode, Type = SettingType.Toggle },
                 new SettingItem { Name = "HideCursor", DisplayName = "Hide Cursor", Value = Display.HideCursor, Type = SettingType.Toggle },
-                new SettingItem { Name = "ButtonSizeScale", DisplayName = "Button Size", Value = Display.ButtonSizeScale * 100, Type = SettingType.Slider, Min = 50, Max = 200, Unit = "%" }
+                new SettingItem { Name = "ButtonSizeScale", DisplayName = "Button Size", Value = Display.ButtonSizeScale * 100, Type = SettingType.Slider, Min = 50, Max = 200, Unit = "%" },
+                new SettingItem { Name = "IdleBackgroundImage", DisplayName = "Idle Background", Value = Display.IdleBackgroundImage ?? "", Type = SettingType.Text },
+                new SettingItem { Name = "IdleBackgroundOpacity", DisplayName = "Background Opacity", Value = Display.IdleBackgroundOpacity * 100, Type = SettingType.Slider, Min = 0, Max = 100, Unit = "%" },
+                new SettingItem { Name = "IdleBackgroundStretch", DisplayName = "Background Stretch", Value = Display.IdleBackgroundStretch, Type = SettingType.Dropdown,
+                    DropdownOptions = new List<DropdownOption>
+                    {
+                        new DropdownOption { Display = "Fill", Value = "Fill" },
+                        new DropdownOption { Display = "Uniform to Fill", Value = "UniformToFill" },
+                        new DropdownOption { Display = "Uniform", Value = "Uniform" },
+                        new DropdownOption { Display = "None", Value = "None" }
+                    }
+                }
             };
             
             // Retake Settings - Name must match property names for reflection to work
@@ -734,7 +860,24 @@ namespace Photobooth.Services
                 new SettingItem { Name = "EnableLockFeature", DisplayName = "Enable Lock", Value = Security.EnableLockFeature, Type = SettingType.Toggle },
                 new SettingItem { Name = "AutoLockTimeout", DisplayName = "Lock Timeout", Value = Security.AutoLockTimeout, Type = SettingType.Slider, Min = 60, Max = 600, Unit = "seconds" }
             };
-            
+
+            // Background Removal Settings - Note: property name is BackgroundRemoval (no space)
+            categories["BackgroundRemoval"] = new List<SettingItem>
+            {
+                new SettingItem { Name = "EnableBackgroundRemoval", DisplayName = "Enable Background Removal", Value = BackgroundRemoval.EnableBackgroundRemoval, Type = SettingType.Toggle },
+                new SettingItem { Name = "EnableLiveViewRemoval", DisplayName = "Live View Removal", Value = BackgroundRemoval.EnableLiveViewRemoval, Type = SettingType.Toggle },
+                new SettingItem { Name = "Quality", DisplayName = "Processing Quality", Value = BackgroundRemoval.Quality, Type = SettingType.Dropdown,
+                    DropdownOptions = new List<DropdownOption>
+                    {
+                        new DropdownOption { Display = "Fast", Value = "Fast" },
+                        new DropdownOption { Display = "Balanced", Value = "Balanced" },
+                        new DropdownOption { Display = "High Quality", Value = "High" }
+                    }
+                },
+                new SettingItem { Name = "EdgeRefinement", DisplayName = "Edge Refinement", Value = BackgroundRemoval.EdgeRefinement, Type = SettingType.Slider, Min = 0, Max = 100, Unit = "%" },
+                new SettingItem { Name = "UseGPU", DisplayName = "GPU Acceleration", Value = BackgroundRemoval.UseGPU, Type = SettingType.Toggle }
+            };
+
             return categories;
         }
         

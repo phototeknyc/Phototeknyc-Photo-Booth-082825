@@ -1,0 +1,100 @@
+<UserControl x:Class="Photobooth.Controls.SimplePhotoPositioner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="400" d:DesignWidth="600">
+
+    <Grid>
+        <!-- Background Image -->
+        <Image x:Name="BackgroundImage"
+               Stretch="Uniform"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"/>
+
+        <!-- Canvas for positioning -->
+        <Canvas x:Name="PositioningCanvas"
+                Background="Transparent"
+                ClipToBounds="True"
+                SizeChanged="Canvas_SizeChanged">
+
+            <!-- Photo placement rectangle -->
+            <Border x:Name="PhotoZone"
+                    Width="200" Height="150"
+                    Canvas.Left="100" Canvas.Top="100"
+                    Background="#3076FF76"
+                    BorderBrush="#FF76FF76"
+                    BorderThickness="3"
+                    CornerRadius="4"
+                    Cursor="SizeAll"
+                    MouseLeftButtonDown="PhotoZone_MouseDown"
+                    MouseMove="PhotoZone_MouseMove"
+                    MouseLeftButtonUp="PhotoZone_MouseUp"
+                    TouchDown="PhotoZone_TouchDown"
+                    TouchMove="PhotoZone_TouchMove"
+                    TouchUp="PhotoZone_TouchUp"
+                    ManipulationStarting="PhotoZone_ManipulationStarting"
+                    ManipulationDelta="PhotoZone_ManipulationDelta"
+                    IsManipulationEnabled="True">
+
+                <Grid>
+                    <!-- Center label -->
+                    <TextBlock Text="Photo Area"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="White"
+                               FontSize="14"
+                               FontWeight="Bold"/>
+
+                    <!-- Resize handles -->
+                    <Ellipse Width="20" Height="20"
+                             Fill="White"
+                             Stroke="Gray"
+                             StrokeThickness="2"
+                             HorizontalAlignment="Right"
+                             VerticalAlignment="Bottom"
+                             Margin="-10,-10,0,0"
+                             Cursor="SizeNWSE"
+                             MouseLeftButtonDown="ResizeHandle_MouseDown"
+                             MouseMove="ResizeHandle_MouseMove"
+                             MouseLeftButtonUp="ResizeHandle_MouseUp"
+                             TouchDown="ResizeHandle_TouchDown"
+                             TouchMove="ResizeHandle_TouchMove"
+                             TouchUp="ResizeHandle_TouchUp"/>
+                </Grid>
+            </Border>
+        </Canvas>
+
+        <!-- Simple size controls at bottom -->
+        <Border Background="#DD2D2D30"
+                VerticalAlignment="Bottom"
+                HorizontalAlignment="Center"
+                CornerRadius="8"
+                Margin="10"
+                Padding="15,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Size:"
+                           Foreground="White"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0"/>
+
+                <Slider x:Name="SizeSlider"
+                        Width="150"
+                        Minimum="0.2"
+                        Maximum="0.8"
+                        Value="0.5"
+                        Height="30"
+                        VerticalAlignment="Center"
+                        ValueChanged="SizeSlider_ValueChanged"/>
+
+                <CheckBox x:Name="LockAspectRatio"
+                          Content="Lock Ratio"
+                          IsChecked="True"
+                          Foreground="White"
+                          VerticalAlignment="Center"
+                          Margin="15,0,0,0"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

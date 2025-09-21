@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using Photobooth.Database;
 using Photobooth.Models;
@@ -399,12 +400,23 @@ namespace Photobooth.Services
         /// <summary>
         /// Select an event and notify subscribers
         /// </summary>
-        public void SelectEvent(EventData eventData)
+        public async void SelectEvent(EventData eventData)
         {
             if (eventData == null) return;
 
             Log.Debug($"EventSelectionService: Selecting event '{eventData.Name}'");
             SelectedEvent = eventData;
+
+            // Load event backgrounds
+            try
+            {
+                await EventBackgroundService.Instance.LoadEventBackgroundsAsync(eventData);
+                Log.Debug($"EventSelectionService: Loaded event backgrounds for '{eventData.Name}'");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to load event backgrounds: {ex.Message}");
+            }
 
             // Start the 5-hour expiration timer
             StartEventExpirationTimer();
@@ -470,6 +482,17 @@ namespace Photobooth.Services
                         {
                             SelectedEvent = eventData;
                             _eventSelectionTime = savedTime;
+
+                            // Load event backgrounds
+                            try
+                            {
+                                Task.Run(async () => await EventBackgroundService.Instance.LoadEventBackgroundsAsync(eventData));
+                                Log.Debug($"EventSelectionService: Loading event backgrounds for restored event '{eventData.Name}'");
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Error($"EventSelectionService: Failed to load event backgrounds: {ex.Message}");
+                            }
 
                             // Restart timer with remaining time
                             var remainingTime = expirationTime - elapsed;

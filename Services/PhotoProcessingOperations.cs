@@ -327,6 +327,15 @@ namespace Photobooth.Services
             if (placeholderIndex >= 0 && placeholderIndex < capturedPhotoPaths.Count)
             {
                 var photoPath = capturedPhotoPaths[placeholderIndex];
+
+                // DON'T use the transparent PNG for template composition
+                // The transparent PNG is only for virtual background processing
+                // If a virtual background was applied, the original photo would have been replaced
+                // If no virtual background, we want to use the original photo with its background
+
+                // Just use the photo as-is (either original or replaced with virtual background)
+                Log.Debug($"Using photo for composition: {photoPath}");
+
                 Log.Debug($"Inserting photo into placeholder {item.PlaceholderNumber} from {photoPath}");
 
                 if (File.Exists(photoPath))
@@ -394,7 +403,45 @@ namespace Photobooth.Services
                 }
             }
         }
-        
+
+        /// <summary>
+        /// Get the path to the background-removed version of a photo
+        /// </summary>
+        private string GetBackgroundRemovedPath(string originalPath)
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(originalPath);
+                var fileName = Path.GetFileNameWithoutExtension(originalPath);
+                var extension = Path.GetExtension(originalPath);
+
+                // Check for background removed folder
+                var bgRemovedFolder = Path.Combine(directory, "BackgroundRemoved");
+                if (Directory.Exists(bgRemovedFolder))
+                {
+                    // Look for the processed file with _nobg suffix
+                    var processedFile = Path.Combine(bgRemovedFolder, $"{fileName}_composed{extension}");
+                    if (File.Exists(processedFile))
+                    {
+                        return processedFile;
+                    }
+
+                    // Also check for _nobg version
+                    processedFile = Path.Combine(bgRemovedFolder, $"{fileName}_nobg.png");
+                    if (File.Exists(processedFile))
+                    {
+                        return processedFile;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Error checking for background-removed photo: {ex.Message}");
+            }
+
+            return originalPath;
+        }
+
         /// <summary>
         /// Draw image item
         /// </summary>

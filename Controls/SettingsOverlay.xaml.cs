@@ -11,6 +11,7 @@ using System.Windows.Documents;
 using System.Windows.Threading;
 using Photobooth.Services;
 using CameraControl.Devices;
+using Microsoft.Win32;
 
 namespace Photobooth.Controls
 {
@@ -294,6 +295,16 @@ namespace Photobooth.Controls
                     Summary = $"Lock: {(_settingsService.Security.EnableLockFeature ? "Enabled" : "Disabled")}",
                     SettingsCount = 2
                 });
+
+                // Background Removal Settings
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "BackgroundRemoval",
+                    DisplayName = "Background Removal",
+                    Icon = "🎭",
+                    Summary = $"Removal: {(_settingsService.BackgroundRemoval.EnableBackgroundRemoval ? "On" : "Off")}, Guest Picker: {(Properties.Settings.Default.UseGuestBackgroundPicker ? "On" : "Off")}",
+                    SettingsCount = 10  // Updated to include all settings
+                });
                 
                 // Debug/Logging Settings
                 categories.Add(new CategoryViewModel
@@ -417,11 +428,40 @@ namespace Photobooth.Controls
             }
 
             /// <summary>
+            /// Get display-friendly name for category
+            /// </summary>
+            private string GetDisplayName(string categoryName)
+            {
+                switch (categoryName)
+                {
+                    case "BackgroundRemoval":
+                        return "Background Removal";
+                    case "GIF/Animation":
+                        return "GIF/Animation";
+                    case "Video Recording":
+                        return "Video Recording";
+                    case "Capture Modes":
+                        return "Capture Modes";
+                    default:
+                        return categoryName;
+                }
+            }
+
+            /// <summary>
             /// Display filtered categories
             /// </summary>
             private void DisplayCategories(List<CategoryViewModel> categories)
             {
                 Log.Debug($"SettingsOverlay: Displaying {categories.Count} categories (search: '{_searchText}')");
+
+                // Set display names if not already set
+                foreach (var category in categories)
+                {
+                    if (string.IsNullOrEmpty(category.DisplayName))
+                    {
+                        category.DisplayName = GetDisplayName(category.Name);
+                    }
+                }
 
                 CategoriesGrid.ItemsSource = categories;
 
@@ -458,7 +498,7 @@ namespace Photobooth.Controls
             try
             {
                 _currentCategory = categoryName;
-                CategoryTitle.Text = categoryName;
+                CategoryTitle.Text = GetDisplayName(categoryName);
                 
                 // Load settings for this category
                 LoadCategorySettings(categoryName);
@@ -466,7 +506,7 @@ namespace Photobooth.Controls
                 // Show and animate panel
                 CategoryDetailPanel.Visibility = Visibility.Visible;
                 
-                var slideIn = new DoubleAnimation(400, 0, TimeSpan.FromMilliseconds(300));
+                var slideIn = new DoubleAnimation(500, 0, TimeSpan.FromMilliseconds(300));
                 slideIn.EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut };
                 DetailPanelTransform.BeginAnimation(TranslateTransform.XProperty, slideIn);
             }
@@ -483,7 +523,7 @@ namespace Photobooth.Controls
         {
             if (CategoryDetailPanel.Visibility != Visibility.Visible) return;
             
-            var slideOut = new DoubleAnimation(0, 400, TimeSpan.FromMilliseconds(200));
+            var slideOut = new DoubleAnimation(0, 500, TimeSpan.FromMilliseconds(200));
             slideOut.Completed += (s, e) =>
             {
                 CategoryDetailPanel.Visibility = Visibility.Collapsed;
@@ -569,6 +609,13 @@ namespace Photobooth.Controls
                 return;
             }
 
+            // Special handling for Background Removal category
+            if (categoryName == "BackgroundRemoval")
+            {
+                LoadBackgroundRemovalSettings();
+                return;
+            }
+
             var settings = _settingsService.GetCategorizedSettings();
             if (!settings.ContainsKey(categoryName)) return;
             
@@ -651,8 +698,10 @@ namespace Photobooth.Controls
                     slider.ValueChanged += (s, e) =>
                     {
                         valueText.Text = $"{(int)e.NewValue} {setting.Unit ?? ""}";
-                        // Special handling for ButtonSizeScale which needs to be divided by 100
-                        var value = setting.Name == "ButtonSizeScale" ? e.NewValue / 100.0 : e.NewValue;
+                        // Special handling for properties that need to be divided by 100 (percentages to decimals)
+                        var value = (setting.Name == "ButtonSizeScale" || setting.Name == "IdleBackgroundOpacity")
+                            ? e.NewValue / 100.0
+                            : e.NewValue;
                         OnSettingValueChanged(category, setting.Name, value);
                     };
 
@@ -709,6 +758,148 @@ namespace Photobooth.Controls
                     };
 
                     control = dropdown;
+                    break;
+
+                case SettingType.Text:
+                    Log.Debug($"Creating Text control for setting: {setting.Name}, Value: {setting.Value}");
+                    // Special handling for file/folder paths
+                    if (setting.Name == "IdleBackgroundImage" || setting.Name == "PhotoLocation" || setting.Name == "SessionFolder")
+                    {
+                        var filePanel = new StackPanel
+                        {
+                            Orientation = Orientation.Vertical
+                        };
+
+                        var inputRow = new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Margin = new Thickness(0, 0, 0, 5)
+                        };
+
+                        var textBox = new TextBox
+                        {
+                            Text = setting.Value?.ToString() ?? "",
+                            Width = 250,
+                            Height = 30,
+                            Padding = new Thickness(6, 4, 6, 4),
+                            FontSize = 11,
+                            Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
+                            Foreground = Brushes.White,
+                            BorderBrush = new SolidColorBrush(Color.FromRgb(0x45, 0x45, 0x45)),
+                            BorderThickness = new Thickness(1),
+                            Tag = $"{category}.{setting.Name}",
+                            IsReadOnly = true,
+                            VerticalContentAlignment = VerticalAlignment.Center,
+                            ToolTip = setting.Value?.ToString() ?? "No file selected"
+                        };
+
+                        var browseButton = new Button
+                        {
+                            Content = "Browse",
+                            Margin = new Thickness(5, 0, 0, 0),
+                            Padding = new Thickness(10, 4, 10, 4),
+                            FontSize = 11,
+                            Background = new SolidColorBrush(Color.FromRgb(0x45, 0x45, 0x45)),
+                            Foreground = Brushes.White,
+                            BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                            BorderThickness = new Thickness(1),
+                            Cursor = Cursors.Hand,
+                            MinWidth = 60,
+                            Height = 30
+                        };
+
+                        var clearButton = new Button
+                        {
+                            Content = "Clear",
+                            Margin = new Thickness(5, 0, 0, 0),
+                            Padding = new Thickness(10, 4, 10, 4),
+                            FontSize = 11,
+                            Background = new SolidColorBrush(Color.FromRgb(0x45, 0x45, 0x45)),
+                            Foreground = Brushes.White,
+                            BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                            BorderThickness = new Thickness(1),
+                            Cursor = Cursors.Hand,
+                            MinWidth = 50,
+                            Height = 30
+                        };
+
+                        browseButton.Click += (s, e) =>
+                        {
+                            if (setting.Name == "IdleBackgroundImage")
+                            {
+                                // File picker for background image
+                                var dialog = new OpenFileDialog
+                                {
+                                    Title = "Select Background Image",
+                                    Filter = "Image Files (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp|All Files (*.*)|*.*",
+                                    CheckFileExists = true
+                                };
+
+                                if (dialog.ShowDialog() == true)
+                                {
+                                    textBox.Text = dialog.FileName;
+                                    OnSettingValueChanged(category, setting.Name, dialog.FileName);
+                                }
+                            }
+                            else
+                            {
+                                // Folder picker for PhotoLocation and SessionFolder
+                                var dialog = new System.Windows.Forms.FolderBrowserDialog
+                                {
+                                    Description = $"Select {setting.DisplayName}",
+                                    ShowNewFolderButton = true
+                                };
+
+                                if (!string.IsNullOrEmpty(textBox.Text))
+                                {
+                                    dialog.SelectedPath = textBox.Text;
+                                }
+
+                                if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                                {
+                                    textBox.Text = dialog.SelectedPath;
+                                    OnSettingValueChanged(category, setting.Name, dialog.SelectedPath);
+                                }
+                            }
+                        };
+
+                        clearButton.Click += (s, e) =>
+                        {
+                            textBox.Text = "";
+                            OnSettingValueChanged(category, setting.Name, "");
+                        };
+
+                        inputRow.Children.Add(textBox);
+                        inputRow.Children.Add(browseButton);
+                        inputRow.Children.Add(clearButton);
+
+                        filePanel.Children.Add(inputRow);
+                        control = filePanel;
+                        Log.Debug($"Created file picker control for {setting.Name} with input row containing {inputRow.Children.Count} children");
+                    }
+                    else
+                    {
+                        // Regular text input for other text settings
+                        var textBox = new TextBox
+                        {
+                            Text = setting.Value?.ToString() ?? "",
+                            Width = 400,
+                            Padding = new Thickness(8, 6, 8, 6),
+                            FontSize = 12,
+                            Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
+                            Foreground = Brushes.White,
+                            BorderBrush = new SolidColorBrush(Color.FromRgb(0x45, 0x45, 0x45)),
+                            BorderThickness = new Thickness(1),
+                            Tag = $"{category}.{setting.Name}"
+                        };
+
+                        textBox.TextChanged += (s, e) =>
+                        {
+                            OnSettingValueChanged(category, setting.Name, textBox.Text);
+                        };
+
+                        control = textBox;
+                    }
                     break;
             }
             
@@ -3313,6 +3504,338 @@ namespace Photobooth.Controls
         }
 
         #endregion
+
+        #region Background Removal Settings
+
+        /// <summary>
+        /// Load background removal settings with event background management
+        /// </summary>
+        private void LoadBackgroundRemovalSettings()
+        {
+            try
+            {
+                // Enable Background Removal
+                var enableRemovalSetting = new SettingItem
+                {
+                    Name = "EnableBackgroundRemoval",
+                    DisplayName = "Enable Background Removal",
+                    Type = SettingType.Toggle,
+                    Value = Properties.Settings.Default.EnableBackgroundRemoval
+                };
+                var enableRemovalControl = CreateSettingControl(enableRemovalSetting, "BackgroundRemoval");
+                SettingsListPanel.Children.Add(enableRemovalControl);
+
+                // Enable Live View Background Removal
+                var enableLiveViewSetting = new SettingItem
+                {
+                    Name = "EnableLiveViewBackgroundRemoval",
+                    DisplayName = "Enable Live View Background Removal",
+                    Type = SettingType.Toggle,
+                    Value = Properties.Settings.Default.EnableLiveViewBackgroundRemoval
+                };
+                var enableLiveViewControl = CreateSettingControl(enableLiveViewSetting, "BackgroundRemoval");
+                SettingsListPanel.Children.Add(enableLiveViewControl);
+
+                // Background Removal Quality
+                var qualitySetting = new SettingItem
+                {
+                    Name = "BackgroundRemovalQuality",
+                    DisplayName = "Processing Quality",
+                    Type = SettingType.Dropdown,
+                    Value = Properties.Settings.Default.BackgroundRemovalQuality,
+                    DropdownOptions = new List<DropdownOption>
+                    {
+                        new DropdownOption { Display = "Low (Fast)", Value = "Low" },
+                        new DropdownOption { Display = "Medium (Balanced)", Value = "Medium" },
+                        new DropdownOption { Display = "High (Best Quality)", Value = "High" }
+                    }
+                };
+                var qualityControl = CreateSettingControl(qualitySetting, "BackgroundRemoval");
+                SettingsListPanel.Children.Add(qualityControl);
+
+                // Edge Refinement Slider
+                var edgeRefinementSetting = new SettingItem
+                {
+                    Name = "BackgroundRemovalEdgeRefinement",
+                    DisplayName = "Edge Refinement",
+                    Type = SettingType.Slider,
+                    Value = Properties.Settings.Default.BackgroundRemovalEdgeRefinement,
+                    Min = 0,
+                    Max = 10,
+                    Unit = ""
+                };
+                var edgeRefinementControl = CreateSettingControl(edgeRefinementSetting, "BackgroundRemoval");
+                SettingsListPanel.Children.Add(edgeRefinementControl);
+
+                // GPU Acceleration
+                var gpuAccelerationSetting = new SettingItem
+                {
+                    Name = "BackgroundRemovalUseGPU",
+                    DisplayName = "Enable GPU Acceleration (DirectML)",
+                    Type = SettingType.Toggle,
+                    Value = Properties.Settings.Default.BackgroundRemovalUseGPU
+                };
+                var gpuAccelerationControl = CreateSettingControl(gpuAccelerationSetting, "BackgroundRemoval");
+                SettingsListPanel.Children.Add(gpuAccelerationControl);
+
+                // Default Virtual Background
+                var defaultBackgroundContainer = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                    CornerRadius = new CornerRadius(8),
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(15)
+                };
+
+                var defaultBgGrid = new Grid();
+                defaultBgGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                defaultBgGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                // Label
+                var defaultBgLabel = new TextBlock
+                {
+                    Text = "Default Virtual Background",
+                    FontSize = 14,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Brushes.White,
+                    Margin = new Thickness(0, 0, 0, 8)
+                };
+                Grid.SetRow(defaultBgLabel, 0);
+                defaultBgGrid.Children.Add(defaultBgLabel);
+
+                // Path display and browse button
+                var pathPanel = new Grid();
+                pathPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                pathPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                var pathText = new TextBlock
+                {
+                    Text = string.IsNullOrEmpty(Properties.Settings.Default.DefaultVirtualBackground)
+                        ? "No background selected"
+                        : System.IO.Path.GetFileName(Properties.Settings.Default.DefaultVirtualBackground),
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Margin = new Thickness(0, 0, 10, 0)
+                };
+                Grid.SetColumn(pathText, 0);
+                pathPanel.Children.Add(pathText);
+
+                var browseBtn = new Button
+                {
+                    Content = "Browse...",
+                    Padding = new Thickness(15, 8, 15, 8),
+                    Background = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                    Foreground = Brushes.White,
+                    BorderThickness = new Thickness(0)
+                };
+                browseBtn.Click += (s, e) =>
+                {
+                    var dialog = new OpenFileDialog
+                    {
+                        Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp",
+                        Title = "Select Virtual Background"
+                    };
+
+                    if (dialog.ShowDialog() == true)
+                    {
+                        Properties.Settings.Default.DefaultVirtualBackground = dialog.FileName;
+                        Properties.Settings.Default.Save();
+                        pathText.Text = System.IO.Path.GetFileName(dialog.FileName);
+
+                        // Also update the VirtualBackgroundService
+                        VirtualBackgroundService.Instance.SetSelectedBackground(dialog.FileName);
+                    }
+                };
+                Grid.SetColumn(browseBtn, 1);
+                pathPanel.Children.Add(browseBtn);
+
+                Grid.SetRow(pathPanel, 1);
+                defaultBgGrid.Children.Add(pathPanel);
+
+                defaultBackgroundContainer.Child = defaultBgGrid;
+                SettingsListPanel.Children.Add(defaultBackgroundContainer);
+
+                // Separator
+                var separator = new Border
+                {
+                    Height = 1,
+                    Background = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
+                    Margin = new Thickness(0, 15, 0, 15)
+                };
+                SettingsListPanel.Children.Add(separator);
+
+                // Guest Background Selection Section
+                var guestSectionHeader = new TextBlock
+                {
+                    Text = "Guest Background Selection",
+                    FontSize = 16,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                    Margin = new Thickness(0, 0, 0, 10)
+                };
+                SettingsListPanel.Children.Add(guestSectionHeader);
+
+                // Enable Guest Background Picker
+                var enableGuestPickerSetting = new SettingItem
+                {
+                    Name = "UseGuestBackgroundPicker",
+                    DisplayName = "Enable Guest Background Selection",
+                    Type = SettingType.Toggle,
+                    Value = Properties.Settings.Default.UseGuestBackgroundPicker
+                };
+                var enableGuestPickerControl = CreateSettingControl(enableGuestPickerSetting, "BackgroundRemoval");
+                SettingsListPanel.Children.Add(enableGuestPickerControl);
+
+                // Description text
+                var descriptionText = new TextBlock
+                {
+                    Text = "Allow guests to select their own backgrounds at the start of each photo session",
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+                    Margin = new Thickness(0, 5, 0, 15)
+                };
+                SettingsListPanel.Children.Add(descriptionText);
+
+                // Manage Event Backgrounds Button
+                var manageButton = new Button
+                {
+                    Content = "Manage Event Backgrounds",
+                    Height = 45,
+                    FontSize = 14,
+                    FontWeight = FontWeights.Medium,
+                    Margin = new Thickness(0, 0, 0, 10),
+                    IsEnabled = Properties.Settings.Default.UseGuestBackgroundPicker
+                };
+
+                // Button style
+                manageButton.Style = new Style(typeof(Button));
+                manageButton.Background = new LinearGradientBrush(
+                    Color.FromRgb(0x4C, 0xAF, 0x50),
+                    Color.FromRgb(0x45, 0xA0, 0x49),
+                    new Point(0, 0),
+                    new Point(1, 1));
+                manageButton.Foreground = Brushes.White;
+                manageButton.BorderThickness = new Thickness(0);
+
+                manageButton.Click += ManageEventBackgroundsButton_Click;
+
+                SettingsListPanel.Children.Add(manageButton);
+
+                // Manage Virtual Backgrounds Button
+                var manageVirtualButton = new Button
+                {
+                    Content = "Manage Virtual Backgrounds",
+                    Height = 45,
+                    FontSize = 14,
+                    FontWeight = FontWeights.Medium,
+                    Margin = new Thickness(0, 0, 0, 10)
+                };
+
+                // Button style
+                manageVirtualButton.Style = new Style(typeof(Button));
+                manageVirtualButton.Background = new LinearGradientBrush(
+                    Color.FromRgb(0x66, 0x7E, 0xEA),
+                    Color.FromRgb(0x76, 0x4B, 0xA2),
+                    new Point(0, 0),
+                    new Point(1, 1));
+                manageVirtualButton.Foreground = Brushes.White;
+                manageVirtualButton.BorderThickness = new Thickness(0);
+
+                manageVirtualButton.Click += ManageVirtualBackgroundsButton_Click;
+
+                SettingsListPanel.Children.Add(manageVirtualButton);
+
+                // Update button states when settings change
+                var checkboxes = SettingsListPanel.Children.OfType<Border>()
+                    .SelectMany(b => (b.Child as Grid)?.Children.OfType<CheckBox>() ?? new CheckBox[0]);
+
+                foreach (var checkbox in checkboxes)
+                {
+                    if (checkbox.Tag?.ToString()?.Contains("UseGuestBackgroundPicker") == true)
+                    {
+                        checkbox.Checked += (s, e) => manageButton.IsEnabled = true;
+                        checkbox.Unchecked += (s, e) => manageButton.IsEnabled = false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to load background removal settings: {ex.Message}");
+            }
+        }
+
+        private void ManageEventBackgroundsButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Get current event
+                var db = new Photobooth.Database.TemplateDatabase();
+                var events = db.GetAllEvents();
+
+                if (events != null && events.Count > 0)
+                {
+                    var currentEvent = events.OrderByDescending(ev => ev.EventDate).FirstOrDefault();
+                    if (currentEvent != null)
+                    {
+                        // Hide the settings overlay temporarily
+                        HideOverlay();
+
+                        // Show the event background manager
+                        Photobooth.Controls.EventBackgroundManager.ShowInWindow(currentEvent, Application.Current.MainWindow);
+
+                        // Show the settings overlay again
+                        ShowOverlay(bypassPin: true); // Bypass PIN since user already authenticated
+                    }
+                    else
+                    {
+                        MessageBox.Show("Please create or select an event first.", "No Event",
+                            MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("No events found. Please create an event first.", "No Events",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to open event background manager: {ex.Message}");
+                MessageBox.Show("Failed to open background manager. Please try again.", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ManageVirtualBackgroundsButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Hide the settings overlay temporarily
+                HideOverlay();
+
+                // Get current event (may be null for virtual backgrounds management)
+                var db = new Photobooth.Database.TemplateDatabase();
+                var events = db.GetAllEvents();
+                var currentEvent = events?.OrderByDescending(ev => ev.EventDate).FirstOrDefault();
+
+                // Use unified EventBackgroundManager for all background management
+                Photobooth.Controls.EventBackgroundManager.ShowInWindow(currentEvent, Application.Current.MainWindow);
+
+                // Show the settings overlay again
+                ShowOverlay(bypassPin: true); // Bypass PIN since user already authenticated
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to open background manager: {ex.Message}");
+                MessageBox.Show("Failed to open background manager. Please try again.", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        #endregion
     }
 
     /// <summary>
@@ -3321,6 +3844,7 @@ namespace Photobooth.Controls
     public class CategoryViewModel
     {
         public string Name { get; set; }
+        public string DisplayName { get; set; }
         public string Icon { get; set; }
         public string Summary { get; set; }
         public int SettingsCount { get; set; }

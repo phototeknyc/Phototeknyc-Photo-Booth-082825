@@ -187,3 +187,6 @@ ffmpeg.exe
 # Sony Camera SDK - Large folder, DLLs copied to root
 CrSDK_v2.00.00_20250805a_Win64/
 
+
+# ONNX model files (too large for GitHub)
+Models/BackgroundRemoval/*.onnx

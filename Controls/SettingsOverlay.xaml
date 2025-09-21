@@ -318,7 +318,7 @@
                                         
                                         <!-- Category Name -->
                                         <TextBlock Grid.Row="1"
-                                                   Text="{Binding Name}"
+                                                   Text="{Binding DisplayName}"
                                                    FontSize="18"
                                                    FontWeight="SemiBold"
                                                    Foreground="White"
@@ -447,12 +447,12 @@
         <!-- Category Detail Panel (slides in from right) -->
         <Border x:Name="CategoryDetailPanel"
                 Background="#2D2D30"
-                Width="400"
+                Width="500"
                 HorizontalAlignment="Right"
                 Visibility="Collapsed"
                 RenderTransformOrigin="1,0">
             <Border.RenderTransform>
-                <TranslateTransform x:Name="DetailPanelTransform" X="400"/>
+                <TranslateTransform x:Name="DetailPanelTransform" X="500"/>
             </Border.RenderTransform>
             
             <Grid>

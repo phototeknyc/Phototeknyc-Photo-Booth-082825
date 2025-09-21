@@ -1,0 +1,372 @@
+<UserControl x:Class="Photobooth.Controls.PhotoPositioningOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="1200"
+             Background="#DD1E1E1E">
+
+    <UserControl.Resources>
+        <!-- Dark Theme Colors -->
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#2D2D30"/>
+        <SolidColorBrush x:Key="SecondaryBackgroundBrush" Color="#252525"/>
+        <SolidColorBrush x:Key="CardBackgroundBrush" Color="#353535"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#4CAF50"/>
+        <SolidColorBrush x:Key="SecondaryAccentBrush" Color="#2196F3"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="#F44336"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E4E6EB"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B0B3B8"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#404040"/>
+        <SolidColorBrush x:Key="HighlightBrush" Color="#505050"/>
+
+        <!-- Modern Button Style - Touch Friendly -->
+        <Style x:Key="ModernButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="50"/>
+            <Setter Property="MinWidth" Value="120"/>
+            <Setter Property="Padding" Value="25,15"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                BorderThickness="0">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Tool Button Style -->
+        <Style x:Key="ToolButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="44"/>
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource HighlightBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- Main container -->
+        <Border Background="{StaticResource BackgroundBrush}"
+                CornerRadius="12"
+                Margin="50"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="2">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <Border Grid.Row="0"
+                        Background="{StaticResource SecondaryBackgroundBrush}"
+                        CornerRadius="12,12,0,0"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="20,15">
+                    <Grid>
+                        <TextBlock Text="Configure Photo Position on Background"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   VerticalAlignment="Center"/>
+
+                        <Button Content="&#xE711;"
+                                Style="{StaticResource ToolButtonStyle}"
+                                HorizontalAlignment="Right"
+                                Click="CloseButton_Click"
+                                ToolTip="Close"/>
+                    </Grid>
+                </Border>
+
+                <!-- Main Content Area -->
+                <Grid Grid.Row="1" Margin="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="300"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Canvas Area -->
+                    <Border Grid.Column="0"
+                            Background="#181818"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Margin="0,0,10,0">
+                        <Grid>
+                            <!-- Background Image -->
+                            <Image x:Name="BackgroundImage"
+                                   Stretch="Uniform"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+
+                            <!-- Canvas for positioning -->
+                            <Canvas x:Name="PositioningCanvas"
+                                    ClipToBounds="True"
+                                    Background="Transparent">
+                                <!-- Photo placement zones will be added here dynamically -->
+                            </Canvas>
+
+                            <!-- Instructions when no background -->
+                            <TextBlock x:Name="NoBackgroundText"
+                                       Text="Select a background first to configure photo positions"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="16"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Visibility="Collapsed"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Control Panel -->
+                    <Border Grid.Column="1"
+                            Background="{StaticResource CardBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="15">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <!-- Zone Controls -->
+                                <TextBlock Text="Photo Zones"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           Margin="0,0,0,10"/>
+
+                                <!-- Add/Remove Zone Buttons - Hidden for simplicity -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,15" Visibility="Collapsed">
+                                    <Button Content="&#xE109; Add Zone"
+                                            Style="{StaticResource ModernButtonStyle}"
+                                            Background="{StaticResource AccentBrush}"
+                                            Click="AddZone_Click"
+                                            Margin="0,0,10,0"/>
+                                    <Button Content="&#xE108; Remove"
+                                            x:Name="RemoveZoneButton"
+                                            Style="{StaticResource ModernButtonStyle}"
+                                            Background="{StaticResource DangerBrush}"
+                                            Click="RemoveZone_Click"
+                                            IsEnabled="False"/>
+                                </StackPanel>
+
+                                <!-- Zone List - Hidden since we only use one zone -->
+                                <ListBox x:Name="ZonesList"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         SelectionChanged="ZonesList_SelectionChanged"
+                                         MaxHeight="200"
+                                         Margin="0,0,0,15"
+                                         Visibility="Collapsed">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{StaticResource SecondaryBackgroundBrush}"
+                                                    BorderBrush="{StaticResource BorderBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4"
+                                                    Padding="10,5"
+                                                    Margin="0,2">
+                                                <TextBlock Text="{Binding Name}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <Separator Background="{StaticResource BorderBrush}" Margin="0,10"/>
+
+                                <!-- Selected Zone Properties -->
+                                <TextBlock Text="Zone Properties"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           Margin="0,10,0,10"/>
+
+                                <!-- Position Controls - Touch Friendly -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="45"/>
+                                        <RowDefinition Height="45"/>
+                                        <RowDefinition Height="45"/>
+                                        <RowDefinition Height="45"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- X Position -->
+                                    <TextBlock Grid.Row="0" Grid.Column="0"
+                                               Text="X:"
+                                               FontSize="16"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <Slider x:Name="XSlider"
+                                            Grid.Row="0" Grid.Column="1"
+                                            Minimum="0" Maximum="1"
+                                            Height="30"
+                                            VerticalAlignment="Center"
+                                            ValueChanged="PositionSlider_ValueChanged"
+                                            IsEnabled="False"/>
+
+                                    <!-- Y Position -->
+                                    <TextBlock Grid.Row="1" Grid.Column="0"
+                                               Text="Y:"
+                                               FontSize="16"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <Slider x:Name="YSlider"
+                                            Grid.Row="1" Grid.Column="1"
+                                            Minimum="0" Maximum="1"
+                                            Height="30"
+                                            VerticalAlignment="Center"
+                                            ValueChanged="PositionSlider_ValueChanged"
+                                            IsEnabled="False"/>
+
+                                    <!-- Width -->
+                                    <TextBlock Grid.Row="2" Grid.Column="0"
+                                               Text="Width:"
+                                               FontSize="16"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <Slider x:Name="WidthSlider"
+                                            Grid.Row="2" Grid.Column="1"
+                                            Minimum="0.05" Maximum="1"
+                                            Height="30"
+                                            VerticalAlignment="Center"
+                                            ValueChanged="SizeSlider_ValueChanged"
+                                            IsEnabled="False"/>
+
+                                    <!-- Height -->
+                                    <TextBlock Grid.Row="3" Grid.Column="0"
+                                               Text="Height:"
+                                               FontSize="16"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <Slider x:Name="HeightSlider"
+                                            Grid.Row="3" Grid.Column="1"
+                                            Minimum="0.05" Maximum="1"
+                                            Height="30"
+                                            VerticalAlignment="Center"
+                                            ValueChanged="SizeSlider_ValueChanged"
+                                            IsEnabled="False"/>
+                                </Grid>
+
+                                <!-- Aspect Ratio Lock -->
+                                <CheckBox x:Name="AspectRatioCheckBox"
+                                          Content="Lock Aspect Ratio"
+                                          IsChecked="True"
+                                          Foreground="{StaticResource TextPrimaryBrush}"
+                                          Margin="0,0,0,10"
+                                          Checked="AspectRatio_Changed"
+                                          Unchecked="AspectRatio_Changed"/>
+
+                                <Separator Background="{StaticResource BorderBrush}" Margin="0,10"/>
+
+                                <!-- Presets - Hidden for simplicity -->
+                                <StackPanel Visibility="Collapsed">
+                                    <TextBlock Text="Quick Presets"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               Margin="0,10,0,10"/>
+
+                                    <WrapPanel>
+                                        <Button Content="Single Photo"
+                                                Style="{StaticResource ModernButtonStyle}"
+                                                Background="{StaticResource SecondaryAccentBrush}"
+                                                Click="SinglePhotoPreset_Click"
+                                                Margin="0,0,5,5"/>
+                                        <Button Content="2 Photos"
+                                                Style="{StaticResource ModernButtonStyle}"
+                                                Background="{StaticResource SecondaryAccentBrush}"
+                                                Click="TwoPhotosPreset_Click"
+                                                Margin="0,0,5,5"/>
+                                        <Button Content="4 Photos"
+                                                Style="{StaticResource ModernButtonStyle}"
+                                                Background="{StaticResource SecondaryAccentBrush}"
+                                                Click="FourPhotosPreset_Click"
+                                                Margin="0,0,5,5"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- Footer with action buttons -->
+                <Border Grid.Row="2"
+                        Background="{StaticResource SecondaryBackgroundBrush}"
+                        CornerRadius="0,0,12,12"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,1,0,0"
+                        Padding="20,15">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                            <Button Content="Reset to Default"
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="{StaticResource CardBackgroundBrush}"
+                                    Click="Reset_Click"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Cancel"
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="{StaticResource CardBackgroundBrush}"
+                                    Click="Cancel_Click"
+                                    Margin="0,0,10,0"/>
+                            <Button Content="Save Configuration"
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="{StaticResource AccentBrush}"
+                                    Click="Save_Click"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

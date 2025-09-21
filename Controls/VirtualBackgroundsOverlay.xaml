@@ -1,0 +1,439 @@
+<UserControl x:Class="Photobooth.Controls.VirtualBackgroundsOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="1200">
+
+    <UserControl.Resources>
+        <!-- Dark Theme Colors -->
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#1A1C2E"/>
+        <SolidColorBrush x:Key="SecondaryBackgroundBrush" Color="#2A2E47"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#4CAF50"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E4E6EB"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B0B3B8"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#3A3E57"/>
+
+        <!-- Touch-friendly Button Style -->
+        <Style x:Key="TouchButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="44"/>
+            <Setter Property="MinWidth" Value="44"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#3A3E57"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#4A4E67"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Category Tab Style -->
+        <Style x:Key="CategoryTabStyle" TargetType="RadioButton">
+            <Setter Property="MinHeight" Value="50"/>
+            <Setter Property="MinWidth" Value="120"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="0,0,0,2"
+                                Padding="12,8">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#2A2E47"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Background Item Template -->
+        <DataTemplate x:Key="BackgroundItemTemplate">
+            <Border Width="180" Height="120" Margin="8"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="2"
+                    CornerRadius="8"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="BackgroundItem_MouseDown">
+                <Grid>
+                    <!-- Background Preview Image -->
+                    <Image Source="{Binding ThumbnailPath}"
+                           Stretch="UniformToFill"/>
+
+                    <!-- Selection Overlay -->
+                    <Border x:Name="SelectionOverlay"
+                            Background="#804CAF50"
+                            Visibility="Collapsed"
+                            CornerRadius="6">
+                        <TextBlock Text="✓"
+                                   FontSize="32"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Background Name -->
+                    <Border VerticalAlignment="Bottom"
+                            Background="#CC000000"
+                            CornerRadius="0,0,6,6">
+                        <TextBlock Text="{Binding Name}"
+                                   Foreground="White"
+                                   Padding="8,4"
+                                   FontSize="12"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </Border>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="SelectionOverlay" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource BackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0"
+                Background="{StaticResource SecondaryBackgroundBrush}"
+                Padding="20,15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🌄" FontSize="28" Margin="0,0,12,0"/>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Virtual Backgrounds"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock Text="Select or upload backgrounds for photo sessions"
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Close Button -->
+                <Button Grid.Column="1"
+                        x:Name="CloseButton"
+                        Content="✕"
+                        FontSize="20"
+                        Width="40"
+                        Height="40"
+                        Style="{StaticResource TouchButtonStyle}"
+                        Background="#FF5252"
+                        Click="CloseButton_Click"/>
+            </Grid>
+        </Border>
+
+        <!-- Enable/Disable Toggle -->
+        <Border Grid.Row="1"
+                Background="{StaticResource SecondaryBackgroundBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <CheckBox x:Name="EnableBackgroundRemovalCheckbox"
+                          Grid.Column="0"
+                          IsChecked="True"
+                          VerticalAlignment="Center"
+                          Checked="EnableBackgroundRemoval_Changed"
+                          Unchecked="EnableBackgroundRemoval_Changed">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Enable Background Removal"
+                                   FontSize="16"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="8,0,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <!-- Live View Toggle -->
+                <CheckBox x:Name="EnableLiveViewCheckbox"
+                          Grid.Column="1"
+                          IsChecked="False"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Margin="20,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Live View Background"
+                                   FontSize="14"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="8,0,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <!-- Quality Settings -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <TextBlock Text="Quality:"
+                               FontSize="14"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0"/>
+                    <ComboBox x:Name="QualityComboBox"
+                              Width="120"
+                              SelectedIndex="1">
+                        <ComboBoxItem Content="Low (Fast)"/>
+                        <ComboBoxItem Content="Medium"/>
+                        <ComboBoxItem Content="High (Slow)"/>
+                    </ComboBox>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Category Tabs -->
+        <ScrollViewer Grid.Row="2"
+                      VerticalScrollBarVisibility="Disabled"
+                      HorizontalScrollBarVisibility="Auto"
+                      Margin="0,10,0,0">
+            <StackPanel Orientation="Horizontal"
+                        x:Name="CategoryTabs"
+                        Margin="20,0">
+                <RadioButton x:Name="SolidTab"
+                             Content="Solid Colors"
+                             Style="{StaticResource CategoryTabStyle}"
+                             IsChecked="True"
+                             Checked="CategoryTab_Checked"/>
+                <RadioButton x:Name="GradientTab"
+                             Content="Gradients"
+                             Style="{StaticResource CategoryTabStyle}"
+                             Checked="CategoryTab_Checked"/>
+                <RadioButton x:Name="NatureTab"
+                             Content="Nature"
+                             Style="{StaticResource CategoryTabStyle}"
+                             Checked="CategoryTab_Checked"/>
+                <RadioButton x:Name="OfficeTab"
+                             Content="Office"
+                             Style="{StaticResource CategoryTabStyle}"
+                             Checked="CategoryTab_Checked"/>
+                <RadioButton x:Name="AbstractTab"
+                             Content="Abstract"
+                             Style="{StaticResource CategoryTabStyle}"
+                             Checked="CategoryTab_Checked"/>
+                <RadioButton x:Name="CustomTab"
+                             Content="Custom"
+                             Style="{StaticResource CategoryTabStyle}"
+                             Checked="CategoryTab_Checked"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Backgrounds Grid -->
+        <ScrollViewer Grid.Row="2"
+                      x:Name="BackgroundsScrollViewer"
+                      VerticalScrollBarVisibility="Auto"
+                      Margin="0,60,0,0">
+            <ItemsControl x:Name="BackgroundsItemsControl"
+                          ItemTemplate="{StaticResource BackgroundItemTemplate}"
+                          Margin="20">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Preview Panel -->
+        <Border Grid.Row="3"
+                Background="{StaticResource SecondaryBackgroundBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Height="200"
+                Padding="20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Selected Background Preview -->
+                <Border Grid.Column="0"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Background="#1A1C2E">
+                    <Grid>
+                        <Image x:Name="PreviewImage"
+                               Stretch="UniformToFill"/>
+                        <TextBlock x:Name="NoPreviewText"
+                                   Text="No background selected"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
+
+                <!-- Background Info -->
+                <StackPanel Grid.Column="1"
+                            Margin="20,0"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="Selected Background"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Margin="0,0,0,8"/>
+                    <TextBlock x:Name="BackgroundNameText"
+                               Text="None"
+                               FontSize="14"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,0,0,4"/>
+                    <TextBlock x:Name="BackgroundCategoryText"
+                               Text=""
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,0,0,12"/>
+
+                    <!-- Background Actions -->
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="ApplyButton"
+                                Content="Apply"
+                                Width="100"
+                                Style="{StaticResource TouchButtonStyle}"
+                                Background="{StaticResource AccentBrush}"
+                                Click="ApplyButton_Click"
+                                IsEnabled="False"/>
+                        <Button x:Name="RemoveButton"
+                                Content="Remove BG"
+                                Width="100"
+                                Style="{StaticResource TouchButtonStyle}"
+                                Click="RemoveButton_Click"
+                                ToolTip="Remove background without replacement"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Upload Custom Background -->
+                <StackPanel Grid.Column="2"
+                            VerticalAlignment="Center">
+                    <Button x:Name="UploadButton"
+                            Width="150"
+                            Height="50"
+                            Style="{StaticResource TouchButtonStyle}"
+                            Background="#2196F3"
+                            Click="UploadButton_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📁" FontSize="18" Margin="0,0,8,0"/>
+                            <TextBlock Text="Upload" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="DeleteButton"
+                            Width="150"
+                            Height="50"
+                            Margin="0,8,0,0"
+                            Style="{StaticResource TouchButtonStyle}"
+                            Background="#FF5252"
+                            Click="DeleteButton_Click"
+                            Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🗑️" FontSize="18" Margin="0,0,8,0"/>
+                            <TextBlock Text="Delete" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Advanced Settings -->
+        <Border Grid.Row="4"
+                Background="{StaticResource SecondaryBackgroundBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,10">
+            <WrapPanel Orientation="Horizontal">
+                <!-- Edge Refinement -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
+                    <TextBlock Text="Edge Refinement:"
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0"/>
+                    <Slider x:Name="EdgeRefinementSlider"
+                            Width="100"
+                            Minimum="0"
+                            Maximum="10"
+                            Value="5"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="True"/>
+                    <TextBlock Text="{Binding ElementName=EdgeRefinementSlider, Path=Value}"
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="8,0,0,0"/>
+                </StackPanel>
+
+                <!-- Blur Background -->
+                <CheckBox x:Name="BlurBackgroundCheckbox"
+                          VerticalAlignment="Center"
+                          Margin="0,0,20,0">
+                    <TextBlock Text="Blur Background"
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                </CheckBox>
+
+                <!-- Auto Apply -->
+                <CheckBox x:Name="AutoApplyCheckbox"
+                          IsChecked="True"
+                          VerticalAlignment="Center">
+                    <TextBlock Text="Auto-apply to new photos"
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                </CheckBox>
+            </WrapPanel>
+        </Border>
+    </Grid>
+</UserControl>

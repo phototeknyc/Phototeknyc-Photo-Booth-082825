@@ -8,6 +8,15 @@
     <Setting Name="BackgroundImage" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
+    <Setting Name="IdleBackgroundImage" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="IdleBackgroundOpacity" Type="System.Double" Scope="User">
+      <Value Profile="(Default)">1.0</Value>
+    </Setting>
+    <Setting Name="IdleBackgroundStretch" Type="System.String" Scope="User">
+      <Value Profile="(Default)">UniformToFill</Value>
+    </Setting>
     <Setting Name="CountdownSeconds" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">5</Value>
     </Setting>
@@ -424,6 +433,33 @@
     </Setting>
     <Setting Name="DebugLoggingEnabled" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="EnableBackgroundRemoval" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="EnableLiveViewBackgroundRemoval" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="BackgroundRemovalQuality" Type="System.String" Scope="User">
+      <Value Profile="(Default)">Fast</Value>
+    </Setting>
+    <Setting Name="BackgroundRemovalEdgeRefinement" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">0</Value>
+    </Setting>
+    <Setting Name="DefaultVirtualBackground" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="SelectedVirtualBackground" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="BackgroundRemovalUseGPU" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="UseGuestBackgroundPicker" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="EventBackgroundIds" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
     </Setting>
   </Settings>
 </SettingsFile>

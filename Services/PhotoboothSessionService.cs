@@ -231,13 +231,103 @@ namespace Photobooth.Services
                     throw new Exception("PhotoCaptureService returned empty path");
                 }
                 
-                // Apply Beauty Mode if enabled (before adding to session)
+                // Apply Background Removal if enabled
+                if (Properties.Settings.Default.EnableBackgroundRemoval)
+                {
+                    try
+                    {
+                        Log.Debug("Applying Background Removal to photo");
+                        var removalService = BackgroundRemovalService.Instance;
+                        var virtualBgService = VirtualBackgroundService.Instance;
+
+                        // Get quality setting from properties
+                        var qualityString = Properties.Settings.Default.BackgroundRemovalQuality;
+                        BackgroundRemovalQuality quality = BackgroundRemovalQuality.Medium;
+
+                        switch (qualityString?.ToLower())
+                        {
+                            case "fast":
+                            case "low":
+                                quality = BackgroundRemovalQuality.Low;
+                                break;
+                            case "balanced":
+                            case "medium":
+                                quality = BackgroundRemovalQuality.Medium;
+                                break;
+                            case "quality":
+                            case "high":
+                                quality = BackgroundRemovalQuality.High;
+                                break;
+                        }
+
+                        System.Diagnostics.Debug.WriteLine($"Using background removal quality: {quality}");
+
+                        // Remove background
+                        var removalResult = await removalService.RemoveBackgroundAsync(
+                            processedPhotoPath,
+                            quality);
+
+                        if (removalResult.Success && !string.IsNullOrEmpty(removalResult.MaskPath))
+                        {
+                            // Get selected background (if any)
+                            string selectedBackground = virtualBgService.GetDefaultBackgroundPath();
+
+                            // Apply virtual background if one is selected
+                            if (!string.IsNullOrEmpty(selectedBackground))
+                            {
+                                string outputFolder = Path.GetDirectoryName(processedPhotoPath);
+                                string composedPath = await virtualBgService.ApplyBackgroundAsync(
+                                    processedPhotoPath,
+                                    removalResult.MaskPath,
+                                    selectedBackground,
+                                    outputFolder);
+
+                                if (!string.IsNullOrEmpty(composedPath) && File.Exists(composedPath))
+                                {
+                                    // Replace the original with the composed version
+                                    File.Delete(processedPhotoPath);
+                                    File.Move(composedPath, processedPhotoPath);
+                                    Log.Debug("Successfully applied virtual background");
+                                }
+                            }
+                            else if (!string.IsNullOrEmpty(removalResult.ProcessedImagePath))
+                            {
+                                // When no virtual background is selected, keep the original photo
+                                // Don't replace with transparent PNG as it won't work for template composition
+                                Log.Debug("Background removed but no virtual background selected - keeping original photo for composition");
+
+                                // Clean up the transparent PNG since we're not using it
+                                if (File.Exists(removalResult.ProcessedImagePath))
+                                {
+                                    File.Delete(removalResult.ProcessedImagePath);
+                                }
+                            }
+
+                            // Clean up mask file
+                            if (File.Exists(removalResult.MaskPath))
+                            {
+                                File.Delete(removalResult.MaskPath);
+                            }
+                        }
+                        else if (!removalResult.Success)
+                        {
+                            Log.Error($"Background removal failed: {removalResult.ErrorMessage}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"Failed to apply background removal: {ex.Message}");
+                        // Continue with original photo on error
+                    }
+                }
+
+                // Apply Beauty Mode if enabled (after background removal)
                 if (Properties.Settings.Default.BeautyModeEnabled)
                 {
                     Log.Debug($"Applying Beauty Mode to photo with intensity {Properties.Settings.Default.BeautyModeIntensity}");
                     BeautyModeService.Instance.ApplyBeautyMode(
-                        processedPhotoPath, 
-                        processedPhotoPath, 
+                        processedPhotoPath,
+                        processedPhotoPath,
                         Properties.Settings.Default.BeautyModeIntensity);
                 }
 

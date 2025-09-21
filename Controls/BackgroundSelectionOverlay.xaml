@@ -1,0 +1,300 @@
+<UserControl x:Class="Photobooth.Controls.BackgroundSelectionOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="1200">
+
+    <UserControl.Resources>
+        <!-- Dark Theme Colors -->
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#E61A1C2E"/>
+        <SolidColorBrush x:Key="SecondaryBackgroundBrush" Color="#2A2E47"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#4CAF50"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E4E6EB"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B0B3B8"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#3A3E57"/>
+
+        <!-- Touch-friendly Button Style -->
+        <Style x:Key="TouchButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="60"/>
+            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="Padding" Value="20,12"/>
+            <Setter Property="Margin" Value="8"/>
+            <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#3A3E57"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#4A4E67"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.5"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Background Item Template -->
+        <DataTemplate x:Key="BackgroundItemTemplate">
+            <Border Width="220" Height="150" Margin="10"
+                    BorderThickness="3"
+                    CornerRadius="12"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="BackgroundItem_Click">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="BorderBrush" Value="Transparent"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="BorderBrush" Value="#7A7E97"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <!-- Background Preview Image -->
+                    <Border CornerRadius="10" ClipToBounds="True">
+                        <Image Source="{Binding ThumbnailPath}"
+                               Stretch="UniformToFill"/>
+                    </Border>
+
+                    <!-- Selection Check -->
+                    <Border x:Name="SelectionCheck"
+                            Width="40" Height="40"
+                            Background="{StaticResource AccentBrush}"
+                            CornerRadius="20"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="10"
+                            Visibility="Collapsed">
+                        <TextBlock Text="✓"
+                                   FontSize="24"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Background Name -->
+                    <Border VerticalAlignment="Bottom"
+                            Background="#DD000000"
+                            CornerRadius="0,0,9,9">
+                        <TextBlock Text="{Binding Name}"
+                                   Foreground="White"
+                                   Padding="10,6"
+                                   FontSize="14"
+                                   FontWeight="Medium"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </Border>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="SelectionCheck" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <!-- Main Overlay Background -->
+    <Grid Background="{StaticResource BackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0"
+                Background="{StaticResource SecondaryBackgroundBrush}"
+                Padding="30,20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Vertical">
+                    <TextBlock Text="Choose Your Background"
+                               FontSize="32"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Margin="0,0,0,8"/>
+                    <TextBlock Text="Select a virtual background for your photo session"
+                               FontSize="18"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                </StackPanel>
+
+                <!-- Skip Button (Use No Background) -->
+                <Button Grid.Column="1"
+                        x:Name="SkipButton"
+                        Width="200"
+                        Height="50"
+                        Style="{StaticResource TouchButtonStyle}"
+                        Background="#FF6B6B"
+                        Click="SkipButton_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="❌" FontSize="20" Margin="0,0,8,0"/>
+                        <TextBlock Text="No Background" FontSize="16"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Background Gallery -->
+        <Grid Grid.Row="1" Margin="30,20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Quick Filter Tabs -->
+            <Border Grid.Row="0"
+                    Background="{StaticResource SecondaryBackgroundBrush}"
+                    CornerRadius="12"
+                    Padding="15,10"
+                    Margin="0,0,0,20">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled">
+                    <StackPanel Orientation="Horizontal" x:Name="CategoryButtons">
+                        <RadioButton x:Name="AllTab"
+                                     Content="All"
+                                     GroupName="Categories"
+                                     IsChecked="True"
+                                     Margin="5,0"
+                                     FontSize="16"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     Checked="CategoryTab_Checked"/>
+                        <RadioButton x:Name="PopularTab"
+                                     Content="Popular"
+                                     GroupName="Categories"
+                                     Margin="5,0"
+                                     FontSize="16"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     Checked="CategoryTab_Checked"/>
+                        <RadioButton x:Name="SolidTab"
+                                     Content="Solid Colors"
+                                     GroupName="Categories"
+                                     Margin="5,0"
+                                     FontSize="16"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     Checked="CategoryTab_Checked"/>
+                        <RadioButton x:Name="GradientTab"
+                                     Content="Gradients"
+                                     GroupName="Categories"
+                                     Margin="5,0"
+                                     FontSize="16"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     Checked="CategoryTab_Checked"/>
+                        <RadioButton x:Name="NatureTab"
+                                     Content="Nature"
+                                     GroupName="Categories"
+                                     Margin="5,0"
+                                     FontSize="16"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     Checked="CategoryTab_Checked"/>
+                        <RadioButton x:Name="AbstractTab"
+                                     Content="Abstract"
+                                     GroupName="Categories"
+                                     Margin="5,0"
+                                     FontSize="16"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     Checked="CategoryTab_Checked"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Backgrounds Grid -->
+            <Border Grid.Row="1"
+                    Background="{StaticResource SecondaryBackgroundBrush}"
+                    CornerRadius="12"
+                    Padding="20">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="BackgroundsItemsControl"
+                                  ItemTemplate="{StaticResource BackgroundItemTemplate}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"
+                                           HorizontalAlignment="Center"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <!-- Bottom Action Bar -->
+        <Border Grid.Row="2"
+                Background="{StaticResource SecondaryBackgroundBrush}"
+                Padding="30,20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Selected Background Info -->
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="Selected: "
+                               FontSize="18"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <TextBlock x:Name="SelectedBackgroundText"
+                               Text="None"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                </StackPanel>
+
+                <!-- Cancel Button -->
+                <Button Grid.Column="1"
+                        x:Name="CancelButton"
+                        Content="Cancel"
+                        Width="150"
+                        Style="{StaticResource TouchButtonStyle}"
+                        Background="#FF5252"
+                        Click="CancelButton_Click"/>
+
+                <!-- Start Session Button -->
+                <Button Grid.Column="2"
+                        x:Name="StartButton"
+                        Width="200"
+                        Style="{StaticResource TouchButtonStyle}"
+                        Background="{StaticResource AccentBrush}"
+                        IsEnabled="False"
+                        Click="StartButton_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="📸" FontSize="24" Margin="0,0,10,0"/>
+                        <TextBlock Text="Start Session" FontSize="18"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

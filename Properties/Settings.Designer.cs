@@ -46,7 +46,43 @@ namespace Photobooth.Properties {
                 this["BackgroundImage"] = value;
             }
         }
-        
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string IdleBackgroundImage {
+            get {
+                return ((string)(this["IdleBackgroundImage"]));
+            }
+            set {
+                this["IdleBackgroundImage"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1.0")]
+        public double IdleBackgroundOpacity {
+            get {
+                return ((double)(this["IdleBackgroundOpacity"]));
+            }
+            set {
+                this["IdleBackgroundOpacity"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("UniformToFill")]
+        public string IdleBackgroundStretch {
+            get {
+                return ((string)(this["IdleBackgroundStretch"]));
+            }
+            set {
+                this["IdleBackgroundStretch"] = value;
+            }
+        }
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("5")]
@@ -1891,6 +1927,102 @@ namespace Photobooth.Properties {
             }
             set {
                 this["DebugLoggingEnabled"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool EnableBackgroundRemoval {
+            get {
+                return ((bool)(this["EnableBackgroundRemoval"]));
+            }
+            set {
+                this["EnableBackgroundRemoval"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool EnableLiveViewBackgroundRemoval {
+            get {
+                return ((bool)(this["EnableLiveViewBackgroundRemoval"]));
+            }
+            set {
+                this["EnableLiveViewBackgroundRemoval"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Balanced")]
+        public string BackgroundRemovalQuality {
+            get {
+                return ((string)(this["BackgroundRemovalQuality"]));
+            }
+            set {
+                this["BackgroundRemovalQuality"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int BackgroundRemovalEdgeRefinement {
+            get {
+                return ((int)(this["BackgroundRemovalEdgeRefinement"]));
+            }
+            set {
+                this["BackgroundRemovalEdgeRefinement"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string DefaultVirtualBackground {
+            get {
+                return ((string)(this["DefaultVirtualBackground"]));
+            }
+            set {
+                this["DefaultVirtualBackground"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool BackgroundRemovalUseGPU {
+            get {
+                return ((bool)(this["BackgroundRemovalUseGPU"]));
+            }
+            set {
+                this["BackgroundRemovalUseGPU"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool UseGuestBackgroundPicker {
+            get {
+                return ((bool)(this["UseGuestBackgroundPicker"]));
+            }
+            set {
+                this["UseGuestBackgroundPicker"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string EventBackgroundIds {
+            get {
+                return ((string)(this["EventBackgroundIds"]));
+            }
+            set {
+                this["EventBackgroundIds"] = value;
             }
         }
     }

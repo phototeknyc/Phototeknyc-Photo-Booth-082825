@@ -258,6 +258,14 @@
                         </Image.RenderTransform>
                     </Image>
 
+                    <!-- Idle Background Image (shows when live view is not active) -->
+                    <Image x:Name="idleBackgroundImage"
+                           Stretch="UniformToFill"
+                           HorizontalAlignment="Stretch"
+                           VerticalAlignment="Stretch"
+                           Opacity="1.0"
+                           Visibility="Collapsed"/>
+
                     <!-- Template Overlay for Live View -->
                     <Grid x:Name="templateOverlayContainer"
                           HorizontalAlignment="Stretch"
@@ -1325,12 +1333,26 @@
                             <TextBlock Text="Templates" FontSize="16" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    
+
+                    <!-- Virtual Backgrounds Button -->
+                    <Button Style="{StaticResource TouchButtonStyle}"
+                            Background="#4CAF50"
+                            Width="180"
+                            Height="50"
+                            Margin="5"
+                            Click="VirtualBackgroundsButton_Click"
+                            ToolTip="Manage Virtual Backgrounds">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🌄" FontSize="18" Margin="0,0,6,0"/>
+                            <TextBlock Text="Backgrounds" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
                     <!-- Sharing Status Button -->
                     <Button Style="{StaticResource TouchButtonStyle}"
                             Background="#607D8B"
-                            Width="160" 
-                            Height="50" 
+                            Width="160"
+                            Height="50"
                             Margin="5"
                             Click="SharingStatusButton_Click"
                             ToolTip="View Upload &amp; Sharing Queue">

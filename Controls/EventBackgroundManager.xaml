@@ -1,0 +1,732 @@
+<UserControl x:Class="Photobooth.Controls.EventBackgroundManager"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:Photobooth.Controls"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="1200"
+             Visibility="Collapsed">
+
+    <UserControl.Resources>
+        <!-- Dark Theme Colors (matching SettingsOverlay) -->
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#2D2D30"/>
+        <SolidColorBrush x:Key="SecondaryBackgroundBrush" Color="#252525"/>
+        <SolidColorBrush x:Key="CardBackgroundBrush" Color="#353535"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#4CAF50"/>
+        <SolidColorBrush x:Key="SecondaryAccentBrush" Color="#2196F3"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="#F44336"/>
+        <SolidColorBrush x:Key="WarningBrush" Color="#FFC107"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E4E6EB"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B0B3B8"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#404040"/>
+        <SolidColorBrush x:Key="HighlightBrush" Color="#505050"/>
+
+        <!-- Modern Touch-Friendly Button Style -->
+        <Style x:Key="ModernButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="50"/>
+            <Setter Property="MinWidth" Value="120"/>
+            <Setter Property="Padding" Value="24,12"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                BorderThickness="0">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Tab Button Style - Touch-optimized -->
+        <Style x:Key="TabButtonStyle" TargetType="RadioButton">
+            <Setter Property="MinHeight" Value="60"/>
+            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="Margin" Value="5,0"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="0,0,0,4"
+                                Padding="20,12"
+                                CornerRadius="8,8,0,0">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource HighlightBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Background Item Style -->
+        <Style x:Key="BackgroundItemStyle" TargetType="Border">
+            <Setter Property="Width" Value="160"/>
+            <Setter Property="Height" Value="120"/>
+            <Setter Property="Margin" Value="8"/>
+            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Close Button Style -->
+        <Style x:Key="CloseButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="20">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource HighlightBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Drop shadow effect -->
+        <DropShadowEffect x:Key="DropShadowEffect"
+                          BlurRadius="20"
+                          ShadowDepth="0"
+                          Opacity="0.5"/>
+    </UserControl.Resources>
+
+    <!-- Overlay Container - Full window coverage -->
+    <Grid>
+        <!-- Semi-transparent backdrop - covers entire window -->
+        <Rectangle Fill="Black" Opacity="0.85"
+                   IsHitTestVisible="True"
+                   MouseLeftButtonDown="Backdrop_MouseDown"/>
+
+        <!-- Main content panel - optimized for touch screens -->
+        <Border Background="{StaticResource BackgroundBrush}"
+                CornerRadius="20"
+                Margin="20"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Effect="{StaticResource DropShadowEffect}">
+            <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header - Touch-optimized -->
+        <Border Grid.Row="0"
+                Background="{StaticResource SecondaryBackgroundBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                CornerRadius="20,20,0,0"
+                Padding="30,20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Vertical">
+                    <TextBlock Text="Background Manager"
+                               FontSize="24"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock x:Name="EventNameText"
+                               Text="Manage backgrounds for events and virtual backgrounds"
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <Button Grid.Column="2"
+                        x:Name="CloseButton"
+                        Content="✕"
+                        FontSize="32"
+                        FontWeight="Bold"
+                        Width="60"
+                        Height="60"
+                        Background="Transparent"
+                        Foreground="{StaticResource TextSecondaryBrush}"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Click="CloseButton_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    CornerRadius="25">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#40FFFFFF"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter Property="Background" Value="#60FFFFFF"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Tab Navigation - Touch-optimized -->
+        <Border Grid.Row="1"
+                Background="{StaticResource CardBackgroundBrush}"
+                Padding="15,10">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <RadioButton x:Name="AllTab"
+                            Content="All Backgrounds"
+                            Style="{StaticResource TabButtonStyle}"
+                            IsChecked="True"
+                            Checked="Tab_Changed"/>
+                <RadioButton x:Name="CategoriesTab"
+                            Content="By Category"
+                            Style="{StaticResource TabButtonStyle}"
+                            Checked="Tab_Changed"/>
+                <RadioButton x:Name="EventTab"
+                            Content="Event Selection"
+                            Style="{StaticResource TabButtonStyle}"
+                            Checked="Tab_Changed"/>
+                <RadioButton x:Name="CustomTab"
+                            Content="Custom/Upload"
+                            Style="{StaticResource TabButtonStyle}"
+                            Checked="Tab_Changed"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Content Area -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="*" MinWidth="400"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left side - Background selection -->
+            <Grid Grid.Column="0">
+                <!-- All Backgrounds View -->
+                <Grid x:Name="AllBackgroundsView" Visibility="Visible">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Search Bar -->
+                <Border Grid.Row="0"
+                        Background="{StaticResource HighlightBrush}"
+                        Margin="10"
+                        CornerRadius="8"
+                        Padding="10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                   Text="🔍"
+                                   FontSize="16"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="5,0,10,0"/>
+
+                        <TextBox Grid.Column="1"
+                                 x:Name="SearchBox"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                 FontSize="14"
+                                 VerticalAlignment="Center"
+                                 TextChanged="SearchBox_TextChanged"/>
+
+                        <TextBlock Grid.Column="1"
+                                   Text="Search backgrounds..."
+                                   IsHitTestVisible="False"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="14"
+                                   VerticalAlignment="Center"
+                                   Margin="5,0,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text.Length, ElementName=SearchBox}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <Button Grid.Column="2"
+                                Content="Clear"
+                                Background="{StaticResource HighlightBrush}"
+                                Foreground="{StaticResource TextSecondaryBrush}"
+                                BorderThickness="0"
+                                Padding="10,5"
+                                Click="ClearSearch_Click"/>
+                    </Grid>
+                </Border>
+
+                <!-- Backgrounds Grid -->
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="AllBackgroundsList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"
+                                          HorizontalAlignment="Center"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource BackgroundItemStyle}"
+                                        Tag="{Binding Id}"
+                                        MouseLeftButtonDown="BackgroundItem_Click">
+                                    <Grid>
+                                        <Image Source="{Binding ThumbnailPath}"
+                                               Stretch="UniformToFill"/>
+                                        <Border Background="#CC000000"
+                                                VerticalAlignment="Bottom"
+                                                Padding="5,2">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Foreground="White"
+                                                       FontSize="11"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+                                        <!-- Selection Overlay -->
+                                        <Border x:Name="SelectionOverlay"
+                                                Background="{StaticResource AccentBrush}"
+                                                Opacity="0.3"
+                                                CornerRadius="6"
+                                                Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBlock Text="✓"
+                                                       FontSize="40"
+                                                       FontWeight="Bold"
+                                                       Foreground="White"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Categories View -->
+            <Grid x:Name="CategoriesView" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Category List -->
+                <Border Grid.Column="0"
+                        Background="{StaticResource CardBackgroundBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,0,1,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="CategoryList" Margin="10"/>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Category Content -->
+                <ScrollViewer Grid.Column="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="CategoryBackgroundsList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"
+                                          HorizontalAlignment="Center"
+                                          Margin="10"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource BackgroundItemStyle}"
+                                        Tag="{Binding Id}"
+                                        MouseLeftButtonDown="BackgroundItem_Click">
+                                    <Grid>
+                                        <Image Source="{Binding ThumbnailPath}"
+                                               Stretch="UniformToFill"/>
+                                        <Border Background="#CC000000"
+                                                VerticalAlignment="Bottom"
+                                                Padding="5,2">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Foreground="White"
+                                                       FontSize="11"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+                                        <!-- Selection Overlay -->
+                                        <Border x:Name="SelectionOverlay"
+                                                Background="{StaticResource AccentBrush}"
+                                                Opacity="0.3"
+                                                CornerRadius="6"
+                                                Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBlock Text="✓"
+                                                       FontSize="40"
+                                                       FontWeight="Bold"
+                                                       Foreground="White"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Event Selection View -->
+            <Grid x:Name="EventSelectionView" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Info Bar -->
+                <Border Grid.Row="0"
+                        Background="{StaticResource CardBackgroundBrush}"
+                        Margin="10"
+                        CornerRadius="8"
+                        Padding="15">
+                    <StackPanel>
+                        <TextBlock Text="Event Background Selection"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   Margin="0,0,0,5"/>
+                        <TextBlock Text="Select backgrounds that guests can choose from at the start of their session"
+                                   TextWrapping="Wrap"
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="Selected: "
+                                       FontSize="14"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="SelectionCountText"
+                                       Text="0"
+                                       FontSize="14"
+                                       FontWeight="Bold"
+                                       Foreground="{StaticResource AccentBrush}"/>
+                            <TextBlock Text=" backgrounds"
+                                       FontSize="14"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Selected Backgrounds -->
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="SelectedBackgroundsList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"
+                                          HorizontalAlignment="Center"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource BackgroundItemStyle}"
+                                        Tag="{Binding Id}"
+                                        MouseLeftButtonDown="BackgroundItem_Click">
+                                    <Grid>
+                                        <Image Source="{Binding ThumbnailPath}"
+                                               Stretch="UniformToFill"/>
+                                        <Border Background="#CC000000"
+                                                VerticalAlignment="Bottom"
+                                                Padding="5,2">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Foreground="White"
+                                                       FontSize="11"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+                                        <!-- Remove Button -->
+                                        <Button Content="✕"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top"
+                                                Width="24"
+                                                Height="24"
+                                                Background="Red"
+                                                Foreground="White"
+                                                BorderThickness="0"
+                                                Margin="4"
+                                                Click="RemoveBackground_Click"
+                                                Tag="{Binding Id}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- Empty State -->
+                <TextBlock x:Name="EmptyStateText"
+                           Grid.Row="1"
+                           Text="No backgrounds selected for this event"
+                           FontSize="16"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Visibility="Collapsed"/>
+            </Grid>
+
+            <!-- Custom/Upload View -->
+            <Grid x:Name="CustomUploadView" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Upload Section -->
+                <Border Grid.Row="0"
+                        Background="{StaticResource CardBackgroundBrush}"
+                        Margin="10"
+                        CornerRadius="8"
+                        Padding="15">
+                    <StackPanel>
+                        <TextBlock Text="Upload Custom Backgrounds"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource SecondaryAccentBrush}"
+                                   Margin="0,0,0,10"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Button Grid.Column="0"
+                                    x:Name="UploadButton"
+                                    Content="📁 Choose Files to Upload"
+                                    HorizontalAlignment="Left"
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="{StaticResource SecondaryAccentBrush}"
+                                    Click="UploadButton_Click"/>
+
+                            <Button Grid.Column="1"
+                                    Content="Delete Selected"
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="{StaticResource DangerBrush}"
+                                    Click="DeleteSelected_Click"
+                                    Visibility="Visible"/>
+                        </Grid>
+                        <TextBlock Text="Supported formats: JPG, PNG, BMP, GIF"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,5,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Custom Backgrounds Grid -->
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="CustomBackgroundsList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"
+                                          HorizontalAlignment="Center"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource BackgroundItemStyle}"
+                                        Tag="{Binding Id}">
+                                    <Grid>
+                                        <Image Source="{Binding ThumbnailPath}"
+                                               Stretch="UniformToFill"/>
+                                        <Border Background="#CC000000"
+                                                VerticalAlignment="Bottom"
+                                                Padding="5,2">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Foreground="White"
+                                                       FontSize="11"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+                                        <!-- Selection Checkbox -->
+                                        <CheckBox IsChecked="{Binding IsSelected}"
+                                                  HorizontalAlignment="Left"
+                                                  VerticalAlignment="Top"
+                                                  Margin="8"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Loading Overlay -->
+            <Grid x:Name="LoadingOverlay"
+                  Visibility="Collapsed"
+                  Background="#CC000000">
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        CornerRadius="10"
+                        Padding="30"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                    <StackPanel>
+                        <ProgressBar IsIndeterminate="True"
+                                     Width="200"
+                                     Height="4"
+                                     Foreground="{StaticResource AccentBrush}"/>
+                        <TextBlock Text="Loading backgrounds..."
+                                   FontSize="14"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="0,15,0,0"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+            </Grid>
+
+            <!-- Right side - Live preview with positioning -->
+            <Border Grid.Column="1"
+                    Background="{StaticResource CardBackgroundBrush}"
+                    Margin="10"
+                    CornerRadius="8"
+                    Padding="10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Preview Header -->
+                    <TextBlock Grid.Row="0"
+                               Text="Photo Position Preview"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,10"/>
+
+                    <!-- Positioner -->
+                    <local:SimplePhotoPositioner x:Name="PhotoPositioner"
+                                                 Grid.Row="1"
+                                                 PositionChanged="PhotoPositioner_PositionChanged"/>
+
+                    <!-- Info text -->
+                    <TextBlock Grid.Row="2"
+                               Text="Drag to move • Resize handle at corner • Pinch to zoom"
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               HorizontalAlignment="Center"
+                               Margin="0,10,0,0"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Footer Actions - Touch-optimized -->
+        <Border Grid.Row="3"
+                Background="{StaticResource SecondaryBackgroundBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                CornerRadius="0,0,20,20"
+                Padding="30,20">
+            <Grid>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <Button Content="Select Popular"
+                            Style="{StaticResource ModernButtonStyle}"
+                            Background="{StaticResource WarningBrush}"
+                            Click="SelectPopular_Click"
+                            Margin="0,0,10,0"/>
+                    <Button Content="Clear All"
+                            Style="{StaticResource ModernButtonStyle}"
+                            Background="{StaticResource DangerBrush}"
+                            Click="ClearAll_Click"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <CheckBox x:Name="EnableGuestPickerCheckbox"
+                              Content="Enable Guest Selection"
+                              IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=UseGuestBackgroundPicker}"
+                              Foreground="{StaticResource TextPrimaryBrush}"
+                              VerticalAlignment="Center"
+                              Margin="0,0,20,0"
+                              Checked="EnableGuestPicker_Changed"
+                              Unchecked="EnableGuestPicker_Changed"
+                              xmlns:properties="clr-namespace:Photobooth.Properties"/>
+
+                    <!-- Configure Position button removed - positioning is now always visible in right panel -->
+
+                    <Button x:Name="SaveButton"
+                            Content="Save Selection"
+                            Style="{StaticResource ModernButtonStyle}"
+                            Background="{StaticResource AccentBrush}"
+                            Click="SaveButton_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

@@ -28,6 +28,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -39,6 +40,7 @@
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="ColorPicker, Version=3.4.2.0, Culture=neutral, PublicKeyToken=1c61eec504ce2276, processorArchitecture=MSIL">
@@ -130,6 +132,12 @@
     </Reference>
     <Reference Include="System.Text.Json, Version=8.0.0.5, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>packages\System.Text.Json.8.0.5\lib\net462\System.Text.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.ML.OnnxRuntime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=f27f157f0a5b7bb6, processorArchitecture=MSIL">
+      <HintPath>packages\Microsoft.ML.OnnxRuntime.Managed.1.16.3\lib\netstandard2.0\Microsoft.ML.OnnxRuntime.dll</HintPath>
+    </Reference>
+    <Reference Include="SixLabors.ImageSharp, Version=2.0.0.0, Culture=neutral, PublicKeyToken=d998eea7b14cab13, processorArchitecture=MSIL">
+      <HintPath>packages\SixLabors.ImageSharp.2.1.11\lib\net472\SixLabors.ImageSharp.dll</HintPath>
     </Reference>
     <Reference Include="System.Threading.Tasks.Extensions, Version=4.2.0.1, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>packages\System.Threading.Tasks.Extensions.4.5.4\lib\net461\System.Threading.Tasks.Extensions.dll</HintPath>
@@ -232,6 +240,27 @@
     <Compile Include="Controls\PinEntryOverlay.xaml.cs">
       <DependentUpon>PinEntryOverlay.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\BackgroundSelectionControl.xaml.cs">
+      <DependentUpon>BackgroundSelectionControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\VirtualBackgroundsOverlay.xaml.cs">
+      <DependentUpon>VirtualBackgroundsOverlay.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\BackgroundSelectionOverlay.xaml.cs">
+      <DependentUpon>BackgroundSelectionOverlay.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\GuestBackgroundPicker.xaml.cs">
+      <DependentUpon>GuestBackgroundPicker.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\EventBackgroundManager.xaml.cs">
+      <DependentUpon>EventBackgroundManager.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\PhotoPositioningOverlay.xaml.cs">
+      <DependentUpon>PhotoPositioningOverlay.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\SimplePhotoPositioner.xaml.cs">
+      <DependentUpon>SimplePhotoPositioner.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\PixiEditorColorPickerDialog.xaml.cs">
       <DependentUpon>PixiEditorColorPickerDialog.xaml</DependentUpon>
     </Compile>
@@ -284,6 +313,11 @@
     <Compile Include="Services\VideoModeLiveViewService.cs" />
     <Compile Include="Services\DualCameraSettingsService.cs" />
     <Compile Include="Services\SettingsManagementService.cs" />
+    <Compile Include="Services\BackgroundRemovalService.cs" />
+    <Compile Include="Services\BackgroundRemovalModelManager.cs" />
+    <Compile Include="Services\VirtualBackgroundService.cs" />
+    <Compile Include="Services\BackgroundSelectionService.cs" />
+    <Compile Include="Services\EventBackgroundService.cs" />
     <Compile Include="Services\PhotoFilterService.cs" />
     <Compile Include="Services\PhotoFilterServiceMagick.cs" />
     <Compile Include="Services\PhotoFilterServiceHybrid.cs" />
@@ -511,6 +545,34 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\BackgroundSelectionControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\VirtualBackgroundsOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\BackgroundSelectionOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\GuestBackgroundPicker.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\EventBackgroundManager.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\PhotoPositioningOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\SimplePhotoPositioner.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\FilterSelectionControl.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -659,6 +721,7 @@
     <Compile Include="MVVM\ViewModels\Designer\DesignerVM.cs" />
     <Compile Include="MVVM\ViewModels\Designer\TouchTemplateDesignerViewModel.cs" />
     <Compile Include="Models\Template.cs" />
+    <Compile Include="Models\PhotoPlacementData.cs" />
     <Compile Include="Pages\BackgroundSettingControl.xaml.cs">
       <DependentUpon>BackgroundSettingControl.xaml</DependentUpon>
     </Compile>
@@ -698,6 +761,7 @@
     <Compile Include="Controls\ModularComponents\PhotoCaptureModule.cs" />
     <Compile Include="Controls\ModularComponents\VideoModule.cs" />
     <Compile Include="Controls\ModularComponents\GifModule.cs" />
+    <Compile Include="Controls\ModularComponents\BackgroundRemovalModule.cs" />
     <Compile Include="Controls\ModularComponents\BoomerangModule.cs" />
     <!-- Temporarily commented out XAML components with compilation issues
     <Compile Include="Controls\ModularComponents\ModuleSettingsControl.xaml.cs">

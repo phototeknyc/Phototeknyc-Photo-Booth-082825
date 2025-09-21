@@ -9,6 +9,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Photobooth.Services;
+using Photobooth.Controls;
+using Photobooth.Database;
 using System.Runtime.InteropServices;
 using System.Drawing.Printing;
 
@@ -5404,9 +5406,102 @@ NOTES:
 - For DMX control, you'll need a DMX shield or module
 */";
         }
-        
+
         #endregion
-        
+
+        #region Background Removal Event Handlers
+
+        private void BrowseDefaultBackground_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dialog = new OpenFileDialog
+                {
+                    Title = "Select Default Virtual Background",
+                    Filter = "Image Files (*.jpg;*.jpeg;*.png;*.bmp)|*.jpg;*.jpeg;*.png;*.bmp|All Files (*.*)|*.*",
+                    CheckFileExists = true
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    Properties.Settings.Default.DefaultVirtualBackground = dialog.FileName;
+                    Properties.Settings.Default.Save();
+
+                    if (DefaultBackgroundPathTextBox != null)
+                    {
+                        DefaultBackgroundPathTextBox.Text = dialog.FileName;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error selecting background: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ManageBackgrounds_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Open the background selection control in a new window
+                var backgroundWindow = new Window
+                {
+                    Title = "Manage Virtual Backgrounds",
+                    Width = 900,
+                    Height = 600,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                    Owner = Window.GetWindow(this)
+                };
+
+                var backgroundControl = new Controls.BackgroundSelectionControl();
+                backgroundControl.Closed += (s, args) => backgroundWindow.Close();
+
+                backgroundWindow.Content = backgroundControl;
+                backgroundWindow.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening background manager: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ManageEventBackgrounds_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Get current event data - you may need to get this from your event service
+                EventData currentEvent = null;
+
+                // Try to get the current event from database
+                var db = new Photobooth.Database.TemplateDatabase();
+                var eventsList = db.GetAllEvents();
+                if (eventsList != null && eventsList.Count > 0)
+                {
+                    // Get the most recent event or show selection dialog
+                    currentEvent = eventsList.OrderByDescending(ev => ev.EventDate).FirstOrDefault();
+                }
+
+                if (currentEvent == null)
+                {
+                    MessageBox.Show("Please create or select an event first before managing backgrounds.",
+                        "No Event Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                // Open the event background manager
+                EventBackgroundManager.ShowInWindow(currentEvent, Application.Current.MainWindow);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening event background manager: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        #endregion
+
         #endregion
     }
 }

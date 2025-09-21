@@ -525,7 +525,74 @@ namespace Photobooth.Database
                 // Migration 2: Remove BLOB columns if path columns exist (optional cleanup)
                 // Note: SQLite doesn't support DROP COLUMN, so we'll just ignore the old columns
                 
-                // Migration 3: Add GalleryUrl column to PhotoSessions table for cloud sharing
+                // Migration 3: Add background selection columns to Events table
+                try
+                {
+                    bool hasSelectedBackgroundPath = false;
+                    bool hasSelectedBackgroundType = false;
+                    bool hasBackgroundSettings = false;
+                    bool hasPhotoPlacementData = false;
+
+                    string checkEventColumns = "PRAGMA table_info(Events)";
+                    using (var command = new SQLiteCommand(checkEventColumns, connection))
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            string columnName = reader["name"].ToString();
+                            if (columnName == "SelectedBackgroundPath") hasSelectedBackgroundPath = true;
+                            if (columnName == "SelectedBackgroundType") hasSelectedBackgroundType = true;
+                            if (columnName == "BackgroundSettings") hasBackgroundSettings = true;
+                            if (columnName == "PhotoPlacementData") hasPhotoPlacementData = true;
+                        }
+                    }
+
+                    if (!hasSelectedBackgroundPath)
+                    {
+                        string addColumn = "ALTER TABLE Events ADD COLUMN SelectedBackgroundPath TEXT";
+                        using (var command = new SQLiteCommand(addColumn, connection))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        System.Diagnostics.Debug.WriteLine("Added SelectedBackgroundPath column to Events table");
+                    }
+
+                    if (!hasSelectedBackgroundType)
+                    {
+                        string addColumn = "ALTER TABLE Events ADD COLUMN SelectedBackgroundType TEXT";
+                        using (var command = new SQLiteCommand(addColumn, connection))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        System.Diagnostics.Debug.WriteLine("Added SelectedBackgroundType column to Events table");
+                    }
+
+                    if (!hasBackgroundSettings)
+                    {
+                        string addColumn = "ALTER TABLE Events ADD COLUMN BackgroundSettings TEXT";
+                        using (var command = new SQLiteCommand(addColumn, connection))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        System.Diagnostics.Debug.WriteLine("Added BackgroundSettings column to Events table");
+                    }
+
+                    if (!hasPhotoPlacementData)
+                    {
+                        string addColumn = "ALTER TABLE Events ADD COLUMN PhotoPlacementData TEXT";
+                        using (var command = new SQLiteCommand(addColumn, connection))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        System.Diagnostics.Debug.WriteLine("Added PhotoPlacementData column to Events table");
+                    }
+                }
+                catch (Exception eventMigrationEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Events background migration failed: {eventMigrationEx.Message}");
+                }
+
+                // Migration 4: Add GalleryUrl column to PhotoSessions table for cloud sharing
                 bool hasGalleryUrl = false;
                 try
                 {
@@ -1278,10 +1345,12 @@ namespace Photobooth.Database
                 connection.Open();
                 
                 string insertEvent = @"
-                    INSERT INTO Events (Name, Description, EventType, Location, EventDate, 
-                                      StartTime, EndTime, HostName, ContactEmail, ContactPhone)
-                    VALUES (@name, @description, @eventType, @location, @eventDate, 
-                            @startTime, @endTime, @hostName, @email, @phone);
+                    INSERT INTO Events (Name, Description, EventType, Location, EventDate,
+                                      StartTime, EndTime, HostName, ContactEmail, ContactPhone,
+                                      SelectedBackgroundPath, SelectedBackgroundType, BackgroundSettings)
+                    VALUES (@name, @description, @eventType, @location, @eventDate,
+                            @startTime, @endTime, @hostName, @email, @phone,
+                            @backgroundPath, @backgroundType, @backgroundSettings);
                     SELECT last_insert_rowid();";
                 
                 using (var command = new SQLiteCommand(insertEvent, connection))
@@ -1296,7 +1365,11 @@ namespace Photobooth.Database
                     command.Parameters.AddWithValue("@hostName", eventData.HostName ?? "");
                     command.Parameters.AddWithValue("@email", eventData.ContactEmail ?? "");
                     command.Parameters.AddWithValue("@phone", eventData.ContactPhone ?? "");
-                    
+                    command.Parameters.AddWithValue("@backgroundPath", eventData.SelectedBackgroundPath ?? "");
+                    command.Parameters.AddWithValue("@backgroundType", eventData.SelectedBackgroundType ?? "");
+                    command.Parameters.AddWithValue("@backgroundSettings", eventData.BackgroundSettings ?? "");
+                    command.Parameters.AddWithValue("@photoPlacementData", eventData.PhotoPlacementData ?? "");
+
                     return Convert.ToInt32(command.ExecuteScalar());
                 }
             }
@@ -1312,7 +1385,8 @@ namespace Photobooth.Database
                 
                 string selectEvents = @"
                     SELECT Id, Name, Description, EventType, Location, EventDate, StartTime, EndTime,
-                           HostName, ContactEmail, ContactPhone, IsActive, CreatedDate, ModifiedDate
+                           HostName, ContactEmail, ContactPhone, IsActive, CreatedDate, ModifiedDate,
+                           SelectedBackgroundPath, SelectedBackgroundType, BackgroundSettings, PhotoPlacementData
                     FROM Events 
                     WHERE IsActive = 1 
                     ORDER BY EventDate DESC, CreatedDate DESC";
@@ -1338,8 +1412,9 @@ namespace Photobooth.Database
                 
                 string selectEvent = @"
                     SELECT Id, Name, Description, EventType, Location, EventDate, StartTime, EndTime,
-                           HostName, ContactEmail, ContactPhone, IsActive, CreatedDate, ModifiedDate
-                    FROM Events 
+                           HostName, ContactEmail, ContactPhone, IsActive, CreatedDate, ModifiedDate,
+                           SelectedBackgroundPath, SelectedBackgroundType, BackgroundSettings, PhotoPlacementData
+                    FROM Events
                     WHERE Id = @id AND IsActive = 1";
                 
                 using (var command = new SQLiteCommand(selectEvent, connection))
@@ -1366,7 +1441,7 @@ namespace Photobooth.Database
                 connection.Open();
                 
                 string updateQuery = @"
-                    UPDATE Events SET 
+                    UPDATE Events SET
                         Name = @name,
                         Description = @description,
                         EventType = @eventType,
@@ -1377,6 +1452,10 @@ namespace Photobooth.Database
                         HostName = @hostName,
                         ContactEmail = @contactEmail,
                         ContactPhone = @contactPhone,
+                        SelectedBackgroundPath = @backgroundPath,
+                        SelectedBackgroundType = @backgroundType,
+                        BackgroundSettings = @backgroundSettings,
+                        PhotoPlacementData = @photoPlacementData,
                         ModifiedDate = CURRENT_TIMESTAMP
                     WHERE Id = @id";
                 
@@ -1393,7 +1472,11 @@ namespace Photobooth.Database
                     command.Parameters.AddWithValue("@hostName", eventData.HostName ?? "");
                     command.Parameters.AddWithValue("@contactEmail", eventData.ContactEmail ?? "");
                     command.Parameters.AddWithValue("@contactPhone", eventData.ContactPhone ?? "");
-                    
+                    command.Parameters.AddWithValue("@backgroundPath", eventData.SelectedBackgroundPath ?? "");
+                    command.Parameters.AddWithValue("@backgroundType", eventData.SelectedBackgroundType ?? "");
+                    command.Parameters.AddWithValue("@backgroundSettings", eventData.BackgroundSettings ?? "");
+                    command.Parameters.AddWithValue("@photoPlacementData", eventData.PhotoPlacementData ?? "");
+
                     command.ExecuteNonQuery();
                 }
             }
@@ -1565,6 +1648,18 @@ namespace Photobooth.Database
             }
         }
         
+        private bool HasColumn(SQLiteDataReader reader, string columnName)
+        {
+            try
+            {
+                return reader.GetOrdinal(columnName) >= 0;
+            }
+            catch (IndexOutOfRangeException)
+            {
+                return false;
+            }
+        }
+
         private EventData MapReaderToEventData(SQLiteDataReader reader)
         {
             return new EventData
@@ -1582,7 +1677,17 @@ namespace Photobooth.Database
                 ContactPhone = reader.IsDBNull(reader.GetOrdinal("ContactPhone")) ? null : reader.GetString(reader.GetOrdinal("ContactPhone")),
                 IsActive = Convert.ToBoolean(reader["IsActive"]),
                 CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
-                ModifiedDate = Convert.ToDateTime(reader["ModifiedDate"])
+                ModifiedDate = Convert.ToDateTime(reader["ModifiedDate"]),
+
+                // Background fields - check if columns exist to handle old databases
+                SelectedBackgroundPath = HasColumn(reader, "SelectedBackgroundPath") && !reader.IsDBNull(reader.GetOrdinal("SelectedBackgroundPath"))
+                    ? reader.GetString(reader.GetOrdinal("SelectedBackgroundPath")) : null,
+                SelectedBackgroundType = HasColumn(reader, "SelectedBackgroundType") && !reader.IsDBNull(reader.GetOrdinal("SelectedBackgroundType"))
+                    ? reader.GetString(reader.GetOrdinal("SelectedBackgroundType")) : null,
+                BackgroundSettings = HasColumn(reader, "BackgroundSettings") && !reader.IsDBNull(reader.GetOrdinal("BackgroundSettings"))
+                    ? reader.GetString(reader.GetOrdinal("BackgroundSettings")) : null,
+                PhotoPlacementData = HasColumn(reader, "PhotoPlacementData") && !reader.IsDBNull(reader.GetOrdinal("PhotoPlacementData"))
+                    ? reader.GetString(reader.GetOrdinal("PhotoPlacementData")) : null
             };
         }
         
@@ -2724,6 +2829,14 @@ namespace Photobooth.Database
         public DateTime ModifiedDate { get; set; }
         public string GalleryUrl { get; set; }
         public string GalleryPassword { get; set; }
+
+        // Background selection for the event
+        public string SelectedBackgroundPath { get; set; }
+        public string SelectedBackgroundType { get; set; } // 'Event', 'Virtual', 'Custom'
+        public string BackgroundSettings { get; set; } // JSON for additional settings
+
+        // Photo positioning on background
+        public string PhotoPlacementData { get; set; } // JSON for photo placement zones
     }
     
     // New data classes for photo session management
