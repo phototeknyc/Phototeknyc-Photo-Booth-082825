@@ -1992,6 +1992,18 @@ namespace Photobooth.Properties {
 
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string SelectedVirtualBackground {
+            get {
+                return ((string)(this["SelectedVirtualBackground"]));
+            }
+            set {
+                this["SelectedVirtualBackground"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]
         public bool BackgroundRemovalUseGPU {
             get {
@@ -2023,6 +2035,30 @@ namespace Photobooth.Properties {
             }
             set {
                 this["EventBackgroundIds"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string PhotoPlacementData {
+            get {
+                return ((string)(this["PhotoPlacementData"]));
+            }
+            set {
+                this["PhotoPlacementData"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string CurrentBackgroundPhotoPosition {
+            get {
+                return ((string)(this["CurrentBackgroundPhotoPosition"]));
+            }
+            set {
+                this["CurrentBackgroundPhotoPosition"] = value;
             }
         }
     }

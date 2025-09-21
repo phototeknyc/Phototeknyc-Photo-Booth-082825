@@ -143,12 +143,31 @@ namespace Photobooth.Controls
                             System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Failed to parse photo placement data: {ex.Message}");
                         }
                     }
+                    else if (!string.IsNullOrEmpty(Properties.Settings.Default.PhotoPlacementData))
+                    {
+                        // Fallback to settings if not in event
+                        try
+                        {
+                            _photoPlacementData = PhotoPlacementData.FromJson(Properties.Settings.Default.PhotoPlacementData);
+                            System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Loaded photo placement data from settings");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Failed to parse settings photo placement data: {ex.Message}");
+                        }
+                    }
 
                     // Set selected background path if available
                     if (!string.IsNullOrEmpty(_currentEvent.SelectedBackgroundPath))
                     {
                         _selectedBackgroundPath = _currentEvent.SelectedBackgroundPath;
                         System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Set selected background path: {_selectedBackgroundPath}");
+                    }
+                    else if (!string.IsNullOrEmpty(Properties.Settings.Default.SelectedVirtualBackground))
+                    {
+                        // Fallback to settings if not in event
+                        _selectedBackgroundPath = Properties.Settings.Default.SelectedVirtualBackground;
+                        System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Set selected background path from settings: {_selectedBackgroundPath}");
                     }
                 }
 
@@ -341,12 +360,16 @@ namespace Photobooth.Controls
                 var background = _allBackgrounds.FirstOrDefault(b => b.Id == backgroundId);
                 if (background != null)
                 {
+                    // Toggle selection and auto-save immediately
                     ToggleBackgroundSelection(background);
+
+                    // Also save to settings immediately for instant persistence
+                    SaveSelectionsToSettingsImmediately();
                 }
             }
         }
 
-        private void RemoveBackground_Click(object sender, RoutedEventArgs e)
+        private async void RemoveBackground_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button button && button.Tag is string backgroundId)
             {
@@ -357,12 +380,16 @@ namespace Photobooth.Controls
                     _selectedBackgrounds.Remove(background);
                     UpdateSelectionCount();
                     UpdateEmptyState();
+
+                    // Auto-save immediately when background is removed
+                    SaveSelectionsToSettingsImmediately();
+                    await AutoSaveEventSettings();
                 }
                 e.Handled = true; // Prevent event bubbling to BackgroundItem_Click
             }
         }
 
-        private void ToggleBackgroundSelection(UnifiedBackgroundViewModel background)
+        private async void ToggleBackgroundSelection(UnifiedBackgroundViewModel background)
         {
             // Save current position for previous background before switching
             if (!string.IsNullOrEmpty(_selectedBackgroundPath) && PhotoPositioner != null)
@@ -371,11 +398,19 @@ namespace Photobooth.Controls
                 if (currentPlacement != null)
                 {
                     // Save position for the current background
-                    _ = _eventBackgroundService.SavePhotoPlacementForBackground(_selectedBackgroundPath, currentPlacement);
+                    await _eventBackgroundService.SavePhotoPlacementForBackground(_selectedBackgroundPath, currentPlacement);
+                    _photoPlacementData = currentPlacement;
                 }
             }
 
             background.IsSelected = !background.IsSelected;
+
+            // Immediately save to settings for instant persistence
+            if (background.IsSelected)
+            {
+                Properties.Settings.Default.SelectedVirtualBackground = background.BackgroundPath;
+                Properties.Settings.Default.Save();
+            }
 
             if (background.IsSelected)
             {
@@ -395,11 +430,28 @@ namespace Photobooth.Controls
                     if (savedPlacement != null)
                     {
                         PhotoPositioner.SetPlacementData(savedPlacement);
+                        _photoPlacementData = savedPlacement;
                     }
                     else
                     {
-                        // Use default placement if none saved - let SimplePhotoPositioner handle defaults
-                        // The control will use its default settings when no data is provided
+                        // Create default placement if none saved
+                        _photoPlacementData = new Models.PhotoPlacementData
+                        {
+                            PlacementZones = new System.Collections.Generic.List<Models.PhotoPlacementZone>
+                            {
+                                new Models.PhotoPlacementZone
+                                {
+                                    PhotoIndex = 0,
+                                    X = 0.1,
+                                    Y = 0.1,
+                                    Width = 0.8,
+                                    Height = 0.8,
+                                    Rotation = 0,
+                                    IsEnabled = true
+                                }
+                            }
+                        };
+                        PhotoPositioner.SetPlacementData(_photoPlacementData);
                     }
                 }
             }
@@ -420,6 +472,9 @@ namespace Photobooth.Controls
 
             UpdateSelectionCount();
             UpdateEmptyState();
+
+            // Auto-save the changes
+            await AutoSaveEventSettings();
         }
 
         private void CategoryButton_Checked(object sender, RoutedEventArgs e)
@@ -639,104 +694,46 @@ namespace Photobooth.Controls
 
         #region Save and Close
 
-        private async void SaveButton_Click(object sender, RoutedEventArgs e)
+        // SaveButton_Click removed - now uses auto-save on selection
+
+        /// <summary>
+        /// Immediately save selections to settings for instant persistence
+        /// </summary>
+        private void SaveSelectionsToSettingsImmediately()
         {
-            if (_currentEvent == null)
-            {
-                MessageBox.Show("Please select an event first.", "No Event",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (!_selectedBackgrounds.Any())
-            {
-                var result = MessageBox.Show(
-                    "No backgrounds selected. Guests will see the default selection. Continue?",
-                    "No Selection",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
-
-                if (result != MessageBoxResult.Yes)
-                {
-                    return;
-                }
-            }
-
             try
             {
-                ShowLoading(true);
-
-                // Save current position for the currently displayed background
-                if (!string.IsNullOrEmpty(_selectedBackgroundPath) && PhotoPositioner != null)
-                {
-                    var currentPlacement = PhotoPositioner.GetPlacementData();
-                    if (currentPlacement != null)
-                    {
-                        await _eventBackgroundService.SavePhotoPlacementForBackground(_selectedBackgroundPath, currentPlacement);
-                    }
-                }
-
-                // Get selected background IDs
+                // Save selected background IDs
                 var selectedIds = _selectedBackgrounds.Select(b => b.Id).ToList();
+                Properties.Settings.Default.EventBackgroundIds = string.Join(",", selectedIds);
 
-                // Save to event background service
-                bool saved = await _eventBackgroundService.SaveEventBackgroundsAsync(_currentEvent, selectedIds);
-
-                if (saved)
+                // Save first selected background as the default
+                if (_selectedBackgrounds.Any())
                 {
-                    // Save the UseGuestBackgroundPicker setting
-                    Properties.Settings.Default.Save();
-
-                    // If there's at least one background selected, save the first one as the default
-                    if (_selectedBackgrounds.Any())
-                    {
-                        var firstBackground = _selectedBackgrounds.First();
-                        _currentEvent.SelectedBackgroundPath = firstBackground.BackgroundPath;
-                        _currentEvent.SelectedBackgroundType = firstBackground.IsCustom ? "Custom" : firstBackground.Category;
-                        _currentEvent.BackgroundSettings = System.Text.Json.JsonSerializer.Serialize(new
-                        {
-                            SelectedCount = selectedIds.Count,
-                            AllIds = selectedIds,
-                            DefaultId = firstBackground.Id,
-                            LastUpdated = DateTime.Now
-                        });
-
-                        // Save photo placement data if configured
-                        if (_photoPlacementData != null)
-                        {
-                            _currentEvent.PhotoPlacementData = _photoPlacementData.ToJson();
-                        }
-
-                        // Update the event in the database
-                        var templateDb = new Database.TemplateDatabase();
-                        templateDb.UpdateEvent(_currentEvent.Id, _currentEvent);
-                    }
-
-                    MessageBox.Show(
-                        $"Successfully saved {selectedIds.Count} backgrounds for {_currentEvent.Name}",
-                        "Saved",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
-
-                    SelectionSaved?.Invoke(this, EventArgs.Empty);
+                    var firstBackground = _selectedBackgrounds.First();
+                    Properties.Settings.Default.SelectedVirtualBackground = firstBackground.BackgroundPath;
+                    Properties.Settings.Default.EnableBackgroundRemoval = true;
                 }
                 else
                 {
-                    throw new Exception("Failed to save backgrounds");
+                    // Clear selection if no backgrounds selected
+                    Properties.Settings.Default.SelectedVirtualBackground = string.Empty;
                 }
+
+                // Save photo placement data if available
+                if (_photoPlacementData != null)
+                {
+                    Properties.Settings.Default.PhotoPlacementData = _photoPlacementData.ToJson();
+                }
+
+                // Save immediately
+                Properties.Settings.Default.Save();
+
+                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Selections saved immediately to settings");
             }
             catch (Exception ex)
             {
-                Log.Error($"Failed to save event backgrounds: {ex.Message}");
-                MessageBox.Show(
-                    "Failed to save background selection. Please try again.",
-                    "Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            }
-            finally
-            {
-                ShowLoading(false);
+                Log.Error($"Failed to save selections immediately: {ex.Message}");
             }
         }
 
@@ -797,14 +794,106 @@ namespace Photobooth.Controls
             Properties.Settings.Default.Save();
         }
 
-        private void PhotoPositioner_PositionChanged(object sender, PhotoPlacementData e)
+        private async void PhotoPositioner_PositionChanged(object sender, PhotoPlacementData e)
         {
             // Auto-save positioning data for the current background
             if (!string.IsNullOrEmpty(_selectedBackgroundPath) && e != null)
             {
                 // Save position for the current background
                 _ = _eventBackgroundService.SavePhotoPlacementForBackground(_selectedBackgroundPath, e);
-                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Photo position updated for background: {_selectedBackgroundPath}");
+
+                // Also save to global photo placement data for the event
+                _photoPlacementData = e;
+
+                // Auto-save to database immediately
+                await AutoSaveEventSettings();
+
+                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Photo position updated and auto-saved for background: {_selectedBackgroundPath}");
+            }
+        }
+
+        /// <summary>
+        /// Auto-save all event settings including backgrounds and positioning
+        /// </summary>
+        private async Task AutoSaveEventSettings()
+        {
+            if (_currentEvent == null) return;
+
+            try
+            {
+                // Update event with current settings
+                if (_selectedBackgrounds.Any())
+                {
+                    var firstBackground = _selectedBackgrounds.First();
+                    _currentEvent.SelectedBackgroundPath = firstBackground.BackgroundPath;
+                    _currentEvent.SelectedBackgroundType = firstBackground.IsCustom ? "Custom" : firstBackground.Category;
+
+                    // Save selected background IDs
+                    var selectedIds = _selectedBackgrounds.Select(b => b.Id).ToList();
+                    _currentEvent.BackgroundSettings = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        SelectedCount = selectedIds.Count,
+                        AllIds = selectedIds,
+                        DefaultId = firstBackground.Id,
+                        DefaultBackgroundPath = _selectedBackgroundPath,
+                        LastUpdated = DateTime.Now
+                    });
+                }
+
+                // Save photo placement data
+                if (_photoPlacementData != null)
+                {
+                    _currentEvent.PhotoPlacementData = _photoPlacementData.ToJson();
+                }
+
+                // Update in database
+                var templateDb = new Database.TemplateDatabase();
+                templateDb.UpdateEvent(_currentEvent.Id, _currentEvent);
+
+                // Also save to settings for quick access
+                Properties.Settings.Default.EventBackgroundIds = string.Join(",", _selectedBackgrounds.Select(b => b.Id));
+                if (!string.IsNullOrEmpty(_selectedBackgroundPath))
+                {
+                    Properties.Settings.Default.SelectedVirtualBackground = _selectedBackgroundPath;
+                }
+                Properties.Settings.Default.Save();
+
+                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Auto-saved event settings for: {_currentEvent.Name}");
+
+                // Fire the SelectionSaved event for any listeners
+                SelectionSaved?.Invoke(this, EventArgs.Empty);
+
+                // Show brief save feedback
+                ShowSaveConfirmation();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to auto-save event settings: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Show brief visual confirmation that settings were saved
+        /// </summary>
+        private void ShowSaveConfirmation()
+        {
+            // Update selection count to show save happened
+            if (SelectionCountText != null)
+            {
+                var originalText = SelectionCountText.Text;
+                SelectionCountText.Text = "✓ Saved";
+                SelectionCountText.Foreground = new SolidColorBrush(Colors.Green);
+
+                // Restore original text after brief delay
+                var timer = new System.Windows.Threading.DispatcherTimer();
+                timer.Interval = TimeSpan.FromSeconds(1);
+                timer.Tick += (s, e) =>
+                {
+                    timer.Stop();
+                    SelectionCountText.Text = originalText;
+                    SelectionCountText.Foreground = new SolidColorBrush(Colors.White);
+                };
+                timer.Start();
             }
         }
 

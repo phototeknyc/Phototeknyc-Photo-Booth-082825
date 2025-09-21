@@ -276,18 +276,42 @@ namespace Photobooth.Services
                             if (!string.IsNullOrEmpty(selectedBackground))
                             {
                                 string outputFolder = Path.GetDirectoryName(processedPhotoPath);
-                                string composedPath = await virtualBgService.ApplyBackgroundAsync(
+
+                                // Get photo placement data for this background
+                                var placementData = EventBackgroundService.Instance.GetPhotoPlacementForBackground(selectedBackground);
+                                if (placementData == null)
+                                {
+                                    // Try to get from settings if not in event service
+                                    var savedPlacementJson = Properties.Settings.Default.PhotoPlacementData;
+                                    if (!string.IsNullOrEmpty(savedPlacementJson))
+                                    {
+                                        try
+                                        {
+                                            placementData = Models.PhotoPlacementData.FromJson(savedPlacementJson);
+                                        }
+                                        catch
+                                        {
+                                            Log.Debug("Could not parse saved placement data");
+                                        }
+                                    }
+                                }
+
+                                Log.Debug($"Applying virtual background with placement data: {placementData != null}");
+
+                                string composedPath = await virtualBgService.ApplyBackgroundWithPositioningAsync(
                                     processedPhotoPath,
                                     removalResult.MaskPath,
                                     selectedBackground,
-                                    outputFolder);
+                                    outputFolder,
+                                    placementData,
+                                    0); // Photo index 0 for single photos
 
                                 if (!string.IsNullOrEmpty(composedPath) && File.Exists(composedPath))
                                 {
                                     // Replace the original with the composed version
                                     File.Delete(processedPhotoPath);
                                     File.Move(composedPath, processedPhotoPath);
-                                    Log.Debug("Successfully applied virtual background");
+                                    Log.Debug("Successfully applied virtual background with positioning");
                                 }
                             }
                             else if (!string.IsNullOrEmpty(removalResult.ProcessedImagePath))

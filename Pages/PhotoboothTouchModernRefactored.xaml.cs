@@ -4273,6 +4273,10 @@ namespace Photobooth.Pages
         {
             Log.Debug("LoadInitialEventTemplate: Starting event/template loading");
 
+            // Sync all background settings from Properties.Settings
+            BackgroundSettingsSyncService.SyncAllBackgroundSettings();
+            Log.Debug("LoadInitialEventTemplate: Synced background settings");
+
             // First check if there's a saved event that hasn't expired
             EventSelectionService.Instance.CheckAndRestoreSavedEvent();
 

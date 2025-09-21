@@ -716,13 +716,7 @@
                               Unchecked="EnableGuestPicker_Changed"
                               xmlns:properties="clr-namespace:Photobooth.Properties"/>
 
-                    <!-- Configure Position button removed - positioning is now always visible in right panel -->
-
-                    <Button x:Name="SaveButton"
-                            Content="Save Selection"
-                            Style="{StaticResource ModernButtonStyle}"
-                            Background="{StaticResource AccentBrush}"
-                            Click="SaveButton_Click"/>
+                    <!-- Save button removed - auto-saves on selection -->
                 </StackPanel>
             </Grid>
         </Border>

@@ -318,6 +318,7 @@
     <Compile Include="Services\VirtualBackgroundService.cs" />
     <Compile Include="Services\BackgroundSelectionService.cs" />
     <Compile Include="Services\EventBackgroundService.cs" />
+    <Compile Include="Services\BackgroundSettingsSyncService.cs" />
     <Compile Include="Services\PhotoFilterService.cs" />
     <Compile Include="Services\PhotoFilterServiceMagick.cs" />
     <Compile Include="Services\PhotoFilterServiceHybrid.cs" />

@@ -106,15 +106,33 @@ namespace Photobooth.Services
                         _eventBackgrounds = savedBackgrounds;
                         Log.Debug($"Loaded {_eventBackgrounds.Count} backgrounds for event {eventData.Name}");
 
-                        // Set the first background as selected by default if no background is currently selected
-                        if (string.IsNullOrEmpty(_backgroundService.GetDefaultBackgroundPath()))
+                        // Restore selected background from settings or use first as default
+                        string selectedBg = Properties.Settings.Default.SelectedVirtualBackground;
+                        if (string.IsNullOrEmpty(selectedBg) || !_eventBackgrounds.Any(b => b.BackgroundPath == selectedBg))
                         {
+                            // Use first background if no saved selection or saved selection not in list
                             var firstBg = _eventBackgrounds.FirstOrDefault();
                             if (firstBg != null && !string.IsNullOrEmpty(firstBg.BackgroundPath))
                             {
-                                _backgroundService.SetSelectedBackground(firstBg.BackgroundPath);
-                                Properties.Settings.Default.EnableBackgroundRemoval = true;
-                                Log.Debug($"Set default background to: {firstBg.Name}");
+                                selectedBg = firstBg.BackgroundPath;
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(selectedBg))
+                        {
+                            _backgroundService.SetSelectedBackground(selectedBg);
+                            Properties.Settings.Default.EnableBackgroundRemoval = true;
+                            Properties.Settings.Default.SelectedVirtualBackground = selectedBg;
+                            Properties.Settings.Default.Save();
+                            Log.Debug($"Set background to: {selectedBg}");
+
+                            // Load placement data for the selected background
+                            var placementData = GetPhotoPlacementForBackground(selectedBg);
+                            if (placementData != null)
+                            {
+                                Properties.Settings.Default.PhotoPlacementData = placementData.ToJson();
+                                Properties.Settings.Default.Save();
+                                Log.Debug($"Restored photo placement for background: {selectedBg}");
                             }
                         }
                     }
@@ -124,15 +142,33 @@ namespace Photobooth.Services
                         LoadPopularDefaults();
                         Log.Debug("No saved backgrounds, loaded popular defaults");
 
-                        // Set first default background as selected
-                        if (_eventBackgrounds.Any() && string.IsNullOrEmpty(_backgroundService.GetDefaultBackgroundPath()))
+                        // Restore selected background from settings or use first as default
+                        string selectedBg = Properties.Settings.Default.SelectedVirtualBackground;
+                        if (string.IsNullOrEmpty(selectedBg) || !_eventBackgrounds.Any(b => b.BackgroundPath == selectedBg))
                         {
+                            // Use first background if no saved selection
                             var firstBg = _eventBackgrounds.FirstOrDefault();
                             if (firstBg != null && !string.IsNullOrEmpty(firstBg.BackgroundPath))
                             {
-                                _backgroundService.SetSelectedBackground(firstBg.BackgroundPath);
-                                Properties.Settings.Default.EnableBackgroundRemoval = true;
-                                Log.Debug($"Set default background to: {firstBg.Name}");
+                                selectedBg = firstBg.BackgroundPath;
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(selectedBg))
+                        {
+                            _backgroundService.SetSelectedBackground(selectedBg);
+                            Properties.Settings.Default.EnableBackgroundRemoval = true;
+                            Properties.Settings.Default.SelectedVirtualBackground = selectedBg;
+                            Properties.Settings.Default.Save();
+                            Log.Debug($"Set background to: {selectedBg}");
+
+                            // Load placement data for the selected background
+                            var placementData = GetPhotoPlacementForBackground(selectedBg);
+                            if (placementData != null)
+                            {
+                                Properties.Settings.Default.PhotoPlacementData = placementData.ToJson();
+                                Properties.Settings.Default.Save();
+                                Log.Debug($"Restored photo placement for background: {selectedBg}");
                             }
                         }
                     }
@@ -401,6 +437,18 @@ namespace Photobooth.Services
         {
             try
             {
+                // Always save to settings for persistence
+                if (placementData != null)
+                {
+                    Properties.Settings.Default.PhotoPlacementData = placementData.ToJson();
+                    Properties.Settings.Default.CurrentBackgroundPhotoPosition = Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        BackgroundPath = backgroundPath,
+                        PlacementData = placementData
+                    });
+                    Properties.Settings.Default.Save();
+                }
+
                 // Find the background in our list
                 var eventBg = _eventBackgrounds?.FirstOrDefault(b => b.BackgroundPath == backgroundPath);
                 if (eventBg != null)
@@ -418,8 +466,9 @@ namespace Photobooth.Services
                     return true;
                 }
 
-                Log.Debug($"Background not found for saving placement: {backgroundPath}");
-                return false;
+                // Even if background not in list, we saved to settings
+                Log.Debug($"Saved photo placement to settings for: {backgroundPath}");
+                return true;
             }
             catch (Exception ex)
             {
@@ -435,8 +484,38 @@ namespace Photobooth.Services
         {
             try
             {
+                // First try to get from event backgrounds
                 var eventBg = _eventBackgrounds?.FirstOrDefault(b => b.BackgroundPath == backgroundPath);
-                return eventBg?.PhotoPlacement;
+                if (eventBg?.PhotoPlacement != null)
+                {
+                    return eventBg.PhotoPlacement;
+                }
+
+                // Fallback to settings if not found in event
+                if (!string.IsNullOrEmpty(Properties.Settings.Default.CurrentBackgroundPhotoPosition))
+                {
+                    try
+                    {
+                        var savedPosition = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(Properties.Settings.Default.CurrentBackgroundPhotoPosition);
+                        if (savedPosition?.BackgroundPath == backgroundPath && savedPosition?.PlacementData != null)
+                        {
+                            return Models.PhotoPlacementData.FromJson(savedPosition.PlacementData.ToString());
+                        }
+                    }
+                    catch { }
+                }
+
+                // Final fallback to general placement data
+                if (!string.IsNullOrEmpty(Properties.Settings.Default.PhotoPlacementData))
+                {
+                    try
+                    {
+                        return Models.PhotoPlacementData.FromJson(Properties.Settings.Default.PhotoPlacementData);
+                    }
+                    catch { }
+                }
+
+                return null;
             }
             catch (Exception ex)
             {

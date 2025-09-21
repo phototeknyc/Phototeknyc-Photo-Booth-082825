@@ -89,6 +89,10 @@ namespace Photobooth.Controls
         {
             Log.Debug("SettingsOverlay: Showing overlay");
 
+            // Sync background settings when showing overlay
+            Services.BackgroundSettingsSyncService.SyncAllBackgroundSettings();
+            Log.Debug("SettingsOverlay: Synced background settings");
+
             // Make sure the control itself is visible
             this.Visibility = Visibility.Visible;
 
@@ -118,10 +122,13 @@ namespace Photobooth.Controls
             try
             {
                 Log.Debug("SettingsOverlay: Hiding overlay");
-                
+
+                // Sync settings before closing
+                Services.BackgroundSettingsSyncService.SyncAllBackgroundSettings();
+
                 // Hide detail panel if open
                 HideCategoryDetail();
-                
+
                 // Animate out
                 var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200));
                 fadeOut.Completed += (s, e) =>
