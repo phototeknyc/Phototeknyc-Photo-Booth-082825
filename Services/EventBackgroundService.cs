@@ -123,29 +123,27 @@ namespace Photobooth.Services
 
                     if (eventData != null)
                     {
-                        Log.Debug($"Loading saved event on startup: {eventData.Name}");
+                        Log.Debug($"[EventBackgroundService] Loading saved event backgrounds on startup: {eventData.Name}");
 
-                        // Load the event backgrounds
+                        // Just load the event backgrounds, don't set EventSelectionService.SelectedEvent
+                        // EventSelectionService will handle setting its own SelectedEvent
                         await LoadEventBackgroundsAsync(eventData);
 
-                        // Update EventSelectionService
-                        EventSelectionService.Instance.SelectedEvent = eventData;
-
-                        Log.Debug($"Successfully loaded event '{eventData.Name}' with {_eventBackgrounds.Count} backgrounds on startup");
+                        Log.Debug($"[EventBackgroundService] Successfully loaded {_eventBackgrounds.Count} backgrounds for event '{eventData.Name}'");
                     }
                     else
                     {
-                        Log.Debug($"Saved event ID {savedEventId} not found in database");
+                        Log.Debug($"[EventBackgroundService] Saved event ID {savedEventId} not found in database");
                     }
                 }
                 else
                 {
-                    Log.Debug("No saved event ID found, starting with no event selected");
+                    Log.Debug("[EventBackgroundService] No saved event ID found, starting with no event selected");
                 }
             }
             catch (Exception ex)
             {
-                Log.Error($"Failed to load last selected event on startup: {ex.Message}");
+                Log.Error($"[EventBackgroundService] Failed to load last selected event on startup: {ex.Message}");
             }
         }
 

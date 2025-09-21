@@ -87,13 +87,20 @@ namespace Photobooth.Services
                     // Save the selected event ID for persistence
                     Properties.Settings.Default.SelectedEventId = value.Id;
                     Properties.Settings.Default.Save();
-                    Log.Debug($"Saved selected event ID: {value.Id} - {value.Name}");
+
+                    // Update and save the selection time
+                    _eventSelectionTime = DateTime.Now;
+                    SaveEventSelectionTime();
+
+                    Log.Debug($"Saved selected event ID: {value.Id} - {value.Name} at {_eventSelectionTime}");
                 }
                 else
                 {
-                    // Clear the saved event ID
+                    // Clear the saved event ID and time
                     Properties.Settings.Default.SelectedEventId = 0;
+                    Properties.Settings.Default.EventSelectionTime = DateTime.MinValue;
                     Properties.Settings.Default.Save();
+                    _eventSelectionTime = DateTime.MinValue;
                 }
             }
         }
