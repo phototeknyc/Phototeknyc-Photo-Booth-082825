@@ -4572,14 +4572,11 @@ namespace Photobooth.Pages
 
                 // Update EventSelectionService with the selected event and start timer
                 // This will also trigger the 5-hour expiration timer
+                // The EventSelectionService will handle saving the ID and timestamp automatically
                 EventSelectionService.Instance.SelectedEvent = selectedEvent;
                 EventSelectionService.Instance.StartTimerForCurrentEvent();
 
-                // Save the selected event ID and timestamp to settings for use by other services
-                Properties.Settings.Default.SelectedEventId = selectedEvent.Id;
-                Properties.Settings.Default.EventSelectionTime = DateTime.Now;
-                Properties.Settings.Default.Save();
-                Log.Debug($"OnEventSelectionOverlayEventSelected: Saved SelectedEventId {selectedEvent.Id} and timestamp to settings");
+                Log.Debug($"OnEventSelectionOverlayEventSelected: Event selection delegated to EventSelectionService");
                 
                 // Initialize template selection with the selected event
                 Log.Debug($"OnEventSelectionOverlayEventSelected: Initializing template selection for event ID {selectedEvent.Id}");

@@ -52,6 +52,7 @@ namespace Photobooth.Services
         private BitmapImage _templatePreviewImage;
         private System.Timers.Timer _eventExpirationTimer;
         private DateTime _eventSelectionTime;
+        private bool _isRestoringFromSettings = false;
         
         public ObservableCollection<EventData> FilteredEvents
         {
@@ -88,11 +89,17 @@ namespace Photobooth.Services
                     Properties.Settings.Default.SelectedEventId = value.Id;
                     Properties.Settings.Default.Save();
 
-                    // Update and save the selection time
-                    _eventSelectionTime = DateTime.Now;
-                    SaveEventSelectionTime();
-
-                    Log.Debug($"Saved selected event ID: {value.Id} - {value.Name} at {_eventSelectionTime}");
+                    // Only update selection time if this is a new selection (not restoring from settings)
+                    if (!_isRestoringFromSettings)
+                    {
+                        _eventSelectionTime = DateTime.Now;
+                        SaveEventSelectionTime();
+                        Log.Debug($"Saved selected event ID: {value.Id} - {value.Name} at {_eventSelectionTime}");
+                    }
+                    else
+                    {
+                        Log.Debug($"Restored selected event ID: {value.Id} - {value.Name} (preserving original selection time)");
+                    }
                 }
                 else
                 {
@@ -497,8 +504,15 @@ namespace Photobooth.Services
                         var eventData = _eventService.GetEvent(savedEventId);
                         if (eventData != null)
                         {
+                            // Set flag to prevent overwriting selection time during restore
+                            _isRestoringFromSettings = true;
+                            _eventSelectionTime = savedTime; // Set the correct time BEFORE setting SelectedEvent
                             SelectedEvent = eventData;
-                            _eventSelectionTime = savedTime;
+                            _isRestoringFromSettings = false; // Reset flag
+
+                            // Ensure the original selection time is preserved in settings
+                            SaveEventSelectionTime();
+                            Log.Debug($"EventSelectionService: Preserved original selection time: {_eventSelectionTime}");
 
                             // Load event backgrounds
                             try
