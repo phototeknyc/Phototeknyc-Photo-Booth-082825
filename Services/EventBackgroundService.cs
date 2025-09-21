@@ -48,6 +48,7 @@ namespace Photobooth.Services
         private List<EventBackground> _eventBackgrounds;
         private EventData _currentEvent;
         private VirtualBackgroundService _backgroundService;
+        private Dictionary<string, Models.PhotoPlacementData> _placementDataCache = new Dictionary<string, Models.PhotoPlacementData>();
 
         #endregion
 
@@ -71,7 +72,29 @@ namespace Photobooth.Services
         {
             _backgroundService = VirtualBackgroundService.Instance;
             _eventBackgrounds = new List<EventBackground>();
+            LoadPlacementCacheFromSettings();
             Log.Debug("EventBackgroundService initialized");
+        }
+
+        private void LoadPlacementCacheFromSettings()
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(Properties.Settings.Default.CurrentBackgroundPhotoPosition))
+                {
+                    var savedCache = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, Models.PhotoPlacementData>>(Properties.Settings.Default.CurrentBackgroundPhotoPosition);
+                    if (savedCache != null)
+                    {
+                        _placementDataCache = savedCache;
+                        Log.Debug($"Loaded {_placementDataCache.Count} placement settings from cache");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to load placement cache: {ex.Message}");
+                _placementDataCache = new Dictionary<string, Models.PhotoPlacementData>();
+            }
         }
 
         #endregion
@@ -437,15 +460,14 @@ namespace Photobooth.Services
         {
             try
             {
-                // Always save to settings for persistence
-                if (placementData != null)
+                // Update in-memory cache for this specific background
+                if (!string.IsNullOrEmpty(backgroundPath))
                 {
-                    Properties.Settings.Default.PhotoPlacementData = placementData.ToJson();
-                    Properties.Settings.Default.CurrentBackgroundPhotoPosition = Newtonsoft.Json.JsonConvert.SerializeObject(new
-                    {
-                        BackgroundPath = backgroundPath,
-                        PlacementData = placementData
-                    });
+                    _placementDataCache[backgroundPath] = placementData;
+
+                    // Save the entire cache to settings for persistence
+                    var cacheJson = Newtonsoft.Json.JsonConvert.SerializeObject(_placementDataCache);
+                    Properties.Settings.Default.CurrentBackgroundPhotoPosition = cacheJson;
                     Properties.Settings.Default.Save();
                 }
 
@@ -466,8 +488,8 @@ namespace Photobooth.Services
                     return true;
                 }
 
-                // Even if background not in list, we saved to settings
-                Log.Debug($"Saved photo placement to settings for: {backgroundPath}");
+                // Even if background not in list, we saved to cache
+                Log.Debug($"Saved photo placement to cache for: {backgroundPath}");
                 return true;
             }
             catch (Exception ex)
@@ -484,33 +506,35 @@ namespace Photobooth.Services
         {
             try
             {
-                // First try to get from event backgrounds
+                // First try to get from in-memory cache
+                if (!string.IsNullOrEmpty(backgroundPath) && _placementDataCache.ContainsKey(backgroundPath))
+                {
+                    return _placementDataCache[backgroundPath];
+                }
+
+                // Then try to get from event backgrounds
                 var eventBg = _eventBackgrounds?.FirstOrDefault(b => b.BackgroundPath == backgroundPath);
                 if (eventBg?.PhotoPlacement != null)
                 {
+                    // Add to cache for faster access
+                    _placementDataCache[backgroundPath] = eventBg.PhotoPlacement;
                     return eventBg.PhotoPlacement;
                 }
 
-                // Fallback to settings if not found in event
+                // Try to load cache from settings if not loaded
                 if (!string.IsNullOrEmpty(Properties.Settings.Default.CurrentBackgroundPhotoPosition))
                 {
                     try
                     {
-                        var savedPosition = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(Properties.Settings.Default.CurrentBackgroundPhotoPosition);
-                        if (savedPosition?.BackgroundPath == backgroundPath && savedPosition?.PlacementData != null)
+                        var savedCache = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, Models.PhotoPlacementData>>(Properties.Settings.Default.CurrentBackgroundPhotoPosition);
+                        if (savedCache != null)
                         {
-                            return Models.PhotoPlacementData.FromJson(savedPosition.PlacementData.ToString());
+                            _placementDataCache = savedCache;
+                            if (_placementDataCache.ContainsKey(backgroundPath))
+                            {
+                                return _placementDataCache[backgroundPath];
+                            }
                         }
-                    }
-                    catch { }
-                }
-
-                // Final fallback to general placement data
-                if (!string.IsNullOrEmpty(Properties.Settings.Default.PhotoPlacementData))
-                {
-                    try
-                    {
-                        return Models.PhotoPlacementData.FromJson(Properties.Settings.Default.PhotoPlacementData);
                     }
                     catch { }
                 }

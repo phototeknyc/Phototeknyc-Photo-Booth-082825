@@ -452,12 +452,25 @@ namespace Photobooth.Controls
                             }
                         };
                         PhotoPositioner.SetPlacementData(_photoPlacementData);
+
+                        // Save the default placement for this background
+                        await _eventBackgroundService.SavePhotoPlacementForBackground(_selectedBackgroundPath, _photoPlacementData);
                     }
                 }
             }
             else
             {
                 _selectedBackgrounds.Remove(background);
+
+                // Save the current position for the background being deselected
+                if (background.BackgroundPath == _selectedBackgroundPath && PhotoPositioner != null)
+                {
+                    var currentPlacement = PhotoPositioner.GetPlacementData();
+                    if (currentPlacement != null)
+                    {
+                        await _eventBackgroundService.SavePhotoPlacementForBackground(background.BackgroundPath, currentPlacement);
+                    }
+                }
 
                 // Clear preview if no backgrounds selected
                 if (!_selectedBackgrounds.Any())
@@ -466,6 +479,38 @@ namespace Photobooth.Controls
                     if (PhotoPositioner != null)
                     {
                         PhotoPositioner.SetBackground("");
+                        // Reset to default positioning when no background selected
+                        PhotoPositioner.SetPlacementData(new Models.PhotoPlacementData
+                        {
+                            PlacementZones = new System.Collections.Generic.List<Models.PhotoPlacementZone>
+                            {
+                                new Models.PhotoPlacementZone
+                                {
+                                    PhotoIndex = 0,
+                                    X = 0.1,
+                                    Y = 0.1,
+                                    Width = 0.8,
+                                    Height = 0.8,
+                                    Rotation = 0,
+                                    IsEnabled = true
+                                }
+                            }
+                        });
+                    }
+                }
+                else if (_selectedBackgrounds.Any())
+                {
+                    // If there are still selected backgrounds, switch to the first one
+                    var firstBackground = _selectedBackgrounds.First();
+                    _selectedBackgroundPath = firstBackground.BackgroundPath;
+                    if (PhotoPositioner != null)
+                    {
+                        PhotoPositioner.SetBackground(_selectedBackgroundPath);
+                        var savedPlacement = _eventBackgroundService.GetPhotoPlacementForBackground(_selectedBackgroundPath);
+                        if (savedPlacement != null)
+                        {
+                            PhotoPositioner.SetPlacementData(savedPlacement);
+                        }
                     }
                 }
             }
@@ -799,11 +844,8 @@ namespace Photobooth.Controls
             // Auto-save positioning data for the current background
             if (!string.IsNullOrEmpty(_selectedBackgroundPath) && e != null)
             {
-                // Save position for the current background
-                _ = _eventBackgroundService.SavePhotoPlacementForBackground(_selectedBackgroundPath, e);
-
-                // Also save to global photo placement data for the event
-                _photoPlacementData = e;
+                // Save position for the specific current background (not globally)
+                await _eventBackgroundService.SavePhotoPlacementForBackground(_selectedBackgroundPath, e);
 
                 // Auto-save to database immediately
                 await AutoSaveEventSettings();
