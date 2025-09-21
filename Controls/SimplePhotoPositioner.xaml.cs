@@ -171,9 +171,16 @@ namespace Photobooth.Controls
             PhotoZone.Width = zoneWidth;
             PhotoZone.Height = zoneHeight;
 
-            // Center it within the background bounds
-            Canvas.SetLeft(PhotoZone, _backgroundBounds.X + (_backgroundBounds.Width - zoneWidth) / 2);
-            Canvas.SetTop(PhotoZone, _backgroundBounds.Y + (_backgroundBounds.Height - zoneHeight) / 2);
+            // Center the photo zone in canvas
+            var left = (_canvasWidth / 2) - (zoneWidth / 2);
+            var top = (_canvasHeight / 2) - (zoneHeight / 2);
+
+            // Ensure it's within bounds
+            left = Math.Max(0, Math.Min(left, _canvasWidth - zoneWidth));
+            top = Math.Max(0, Math.Min(top, _canvasHeight - zoneHeight));
+
+            Canvas.SetLeft(PhotoZone, left);
+            Canvas.SetTop(PhotoZone, top);
 
             // Update slider to match
             _isUpdatingSlider = true;
@@ -277,12 +284,19 @@ namespace Photobooth.Controls
                 var deltaX = currentPosition.X - _clickPosition.X;
                 var deltaY = currentPosition.Y - _clickPosition.Y;
 
-                var newLeft = Canvas.GetLeft(PhotoZone) + deltaX;
-                var newTop = Canvas.GetTop(PhotoZone) + deltaY;
+                var currentLeft = Canvas.GetLeft(PhotoZone);
+                var currentTop = Canvas.GetTop(PhotoZone);
 
-                // Keep within background bounds
-                newLeft = Math.Max(_backgroundBounds.X, Math.Min(newLeft, _backgroundBounds.X + _backgroundBounds.Width - PhotoZone.Width));
-                newTop = Math.Max(_backgroundBounds.Y, Math.Min(newTop, _backgroundBounds.Y + _backgroundBounds.Height - PhotoZone.Height));
+                // Handle NaN values
+                if (double.IsNaN(currentLeft)) currentLeft = 0;
+                if (double.IsNaN(currentTop)) currentTop = 0;
+
+                var newLeft = currentLeft + deltaX;
+                var newTop = currentTop + deltaY;
+
+                // Keep within canvas bounds (0, 0, canvasWidth, canvasHeight)
+                newLeft = Math.Max(0, Math.Min(newLeft, _canvasWidth - PhotoZone.Width));
+                newTop = Math.Max(0, Math.Min(newTop, _canvasHeight - PhotoZone.Height));
 
                 Canvas.SetLeft(PhotoZone, newLeft);
                 Canvas.SetTop(PhotoZone, newTop);
@@ -397,12 +411,19 @@ namespace Photobooth.Controls
                 var deltaX = currentPos.X - startPos.X;
                 var deltaY = currentPos.Y - startPos.Y;
 
-                var newLeft = Canvas.GetLeft(PhotoZone) + deltaX;
-                var newTop = Canvas.GetTop(PhotoZone) + deltaY;
+                var currentLeft = Canvas.GetLeft(PhotoZone);
+                var currentTop = Canvas.GetTop(PhotoZone);
 
-                // Keep within background bounds
-                newLeft = Math.Max(_backgroundBounds.X, Math.Min(newLeft, _backgroundBounds.X + _backgroundBounds.Width - PhotoZone.Width));
-                newTop = Math.Max(_backgroundBounds.Y, Math.Min(newTop, _backgroundBounds.Y + _backgroundBounds.Height - PhotoZone.Height));
+                // Handle NaN values
+                if (double.IsNaN(currentLeft)) currentLeft = 0;
+                if (double.IsNaN(currentTop)) currentTop = 0;
+
+                var newLeft = currentLeft + deltaX;
+                var newTop = currentTop + deltaY;
+
+                // Keep within canvas bounds (0, 0, canvasWidth, canvasHeight)
+                newLeft = Math.Max(0, Math.Min(newLeft, _canvasWidth - PhotoZone.Width));
+                newTop = Math.Max(0, Math.Min(newTop, _canvasHeight - PhotoZone.Height));
 
                 Canvas.SetLeft(PhotoZone, newLeft);
                 Canvas.SetTop(PhotoZone, newTop);
@@ -507,12 +528,23 @@ namespace Photobooth.Controls
             try
             {
                 var newWidth = PositioningCanvas.ActualWidth * e.NewValue;
-                var newHeight = newWidth / _defaultAspectRatio; // Use stored aspect ratio
+                var newHeight = newWidth / _defaultAspectRatio; // Always maintain default aspect ratio
 
-                if (LockAspectRatio.IsChecked == true && PhotoZone.Width > 0 && PhotoZone.Height > 0)
+                // Constrain to canvas size
+                newWidth = Math.Min(newWidth, _canvasWidth);
+                newHeight = Math.Min(newHeight, _canvasHeight);
+
+                // If we hit a boundary, recalculate to maintain aspect ratio
+                if (LockAspectRatio.IsChecked == true)
                 {
-                    var aspectRatio = PhotoZone.Width / PhotoZone.Height;
-                    newHeight = newWidth / aspectRatio;
+                    if (newWidth == _canvasWidth)
+                    {
+                        newHeight = newWidth / _defaultAspectRatio;
+                    }
+                    else if (newHeight == _canvasHeight)
+                    {
+                        newWidth = newHeight * _defaultAspectRatio;
+                    }
                 }
 
                 PhotoZone.Width = newWidth;
@@ -524,18 +556,26 @@ namespace Photobooth.Controls
 
                 // Handle NaN values from Canvas.GetLeft/GetTop
                 if (double.IsNaN(left))
-                    left = 0;
+                    left = (_canvasWidth - newWidth) / 2; // Center if no position
                 if (double.IsNaN(top))
-                    top = 0;
+                    top = (_canvasHeight - newHeight) / 2; // Center if no position
 
-                if (left + newWidth > PositioningCanvas.ActualWidth)
+                // Adjust position if photo goes out of bounds
+                if (left + newWidth > _canvasWidth)
                 {
-                    Canvas.SetLeft(PhotoZone, PositioningCanvas.ActualWidth - newWidth);
+                    left = _canvasWidth - newWidth;
                 }
-                if (top + newHeight > PositioningCanvas.ActualHeight)
+                if (top + newHeight > _canvasHeight)
                 {
-                    Canvas.SetTop(PhotoZone, PositioningCanvas.ActualHeight - newHeight);
+                    top = _canvasHeight - newHeight;
                 }
+
+                // Ensure not negative
+                left = Math.Max(0, left);
+                top = Math.Max(0, top);
+
+                Canvas.SetLeft(PhotoZone, left);
+                Canvas.SetTop(PhotoZone, top);
 
                 FirePositionChanged();
             }

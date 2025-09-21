@@ -880,6 +880,10 @@ namespace Photobooth.Controls
                         DefaultBackgroundPath = _selectedBackgroundPath,
                         LastUpdated = DateTime.Now
                     });
+
+                    // Also save to EventBackgroundService
+                    await _eventBackgroundService.SaveEventBackgroundsAsync(_currentEvent, selectedIds);
+                    Log.Debug($"Saved {selectedIds.Count} backgrounds to event service");
                 }
 
                 // Save photo placement data
