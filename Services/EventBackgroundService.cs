@@ -72,8 +72,12 @@ namespace Photobooth.Services
         {
             _backgroundService = VirtualBackgroundService.Instance;
             _eventBackgrounds = new List<EventBackground>();
+            _placementDataCache = new Dictionary<string, Models.PhotoPlacementData>();
             LoadPlacementCacheFromSettings();
             Log.Debug("EventBackgroundService initialized");
+
+            // Load last selected event backgrounds on startup
+            Task.Run(async () => await LoadLastSelectedEventOnStartup());
         }
 
         private void LoadPlacementCacheFromSettings()
@@ -94,6 +98,49 @@ namespace Photobooth.Services
             {
                 Log.Error($"Failed to load placement cache: {ex.Message}");
                 _placementDataCache = new Dictionary<string, Models.PhotoPlacementData>();
+            }
+        }
+
+        /// <summary>
+        /// Load the last selected event and its backgrounds on application startup
+        /// </summary>
+        private async Task LoadLastSelectedEventOnStartup()
+        {
+            try
+            {
+                // Check if we have a saved event ID
+                int savedEventId = Properties.Settings.Default.SelectedEventId;
+                if (savedEventId > 0)
+                {
+                    // Load the event from database
+                    var database = new TemplateDatabase();
+                    var eventData = database.GetEvent(savedEventId);
+
+                    if (eventData != null)
+                    {
+                        Log.Debug($"Loading saved event on startup: {eventData.Name}");
+
+                        // Load the event backgrounds
+                        await LoadEventBackgroundsAsync(eventData);
+
+                        // Update EventSelectionService
+                        EventSelectionService.Instance.SelectedEvent = eventData;
+
+                        Log.Debug($"Successfully loaded event '{eventData.Name}' with {_eventBackgrounds.Count} backgrounds on startup");
+                    }
+                    else
+                    {
+                        Log.Debug($"Saved event ID {savedEventId} not found in database");
+                    }
+                }
+                else
+                {
+                    Log.Debug("No saved event ID found, starting with no event selected");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to load last selected event on startup: {ex.Message}");
             }
         }
 

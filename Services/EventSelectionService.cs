@@ -84,6 +84,16 @@ namespace Photobooth.Services
                 if (value != null)
                 {
                     LoadTemplatePreview(value);
+                    // Save the selected event ID for persistence
+                    Properties.Settings.Default.SelectedEventId = value.Id;
+                    Properties.Settings.Default.Save();
+                    Log.Debug($"Saved selected event ID: {value.Id} - {value.Name}");
+                }
+                else
+                {
+                    // Clear the saved event ID
+                    Properties.Settings.Default.SelectedEventId = 0;
+                    Properties.Settings.Default.Save();
                 }
             }
         }
