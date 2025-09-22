@@ -299,6 +299,7 @@
       <DependentUpon>PrinterAlignmentDialog.xaml</DependentUpon>
     </Compile>
     <Compile Include="Database\TemplateDatabase.cs" />
+    <Compile Include="Database\EventBackgroundDatabase.cs" />
     <Compile Include="Services\EventService.cs" />
     <Compile Include="Services\TemplateService.cs" />
     <Compile Include="Services\TemplateSelectionService.cs" />

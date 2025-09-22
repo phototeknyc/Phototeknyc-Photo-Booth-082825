@@ -45,7 +45,7 @@ namespace Photobooth.Services
                         // Store in event background service for access during composition
                         if (!string.IsNullOrEmpty(selectedBackground))
                         {
-                            _ = EventBackgroundService.Instance.SavePhotoPlacementForBackground(selectedBackground, placementData);
+                            EventBackgroundService.Instance.SavePhotoPlacementForBackground(selectedBackground, placementData);
                             Log.Debug($"[BackgroundSync] Synced photo placement data");
                         }
                     }

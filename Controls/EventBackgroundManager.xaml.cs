@@ -17,11 +17,13 @@ using Photobooth.Database;
 using Photobooth.Models;
 using Photobooth.Services;
 using Newtonsoft.Json;
+using System.Windows.Threading;
 
 namespace Photobooth.Controls
 {
     /// <summary>
-    /// Unified control for managing virtual backgrounds and event background selections
+    /// Event-centric background manager with auto-save functionality
+    /// All changes are automatically saved to the current event
     /// </summary>
     public partial class EventBackgroundManager : UserControl
     {
@@ -29,15 +31,18 @@ namespace Photobooth.Controls
 
         private EventBackgroundService _eventBackgroundService;
         private VirtualBackgroundService _virtualBackgroundService;
+        private EventService _eventService;
         private EventData _currentEvent;
         private ObservableCollection<UnifiedBackgroundViewModel> _allBackgrounds;
         private ObservableCollection<UnifiedBackgroundViewModel> _selectedBackgrounds;
         private ObservableCollection<UnifiedBackgroundViewModel> _customBackgrounds;
         private ObservableCollection<UnifiedBackgroundViewModel> _filteredBackgrounds;
+        private ObservableCollection<EventData> _events;
         private string _searchText = string.Empty;
         private string _currentCategory = "All";
-        private PhotoPlacementData _photoPlacementData;
-        private string _selectedBackgroundPath;
+        private PhotoPlacementData _currentPlacementData;
+        private DispatcherTimer _autoSaveTimer;
+        private bool _isLoadingEvent = false;
 
         #endregion
 
@@ -45,6 +50,7 @@ namespace Photobooth.Controls
 
         public event EventHandler SelectionSaved;
         public event EventHandler Closed;
+        public event EventHandler EventChanged;
 
         #endregion
 
@@ -57,6 +63,7 @@ namespace Photobooth.Controls
             _selectedBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
             _customBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
             _filteredBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
+            _events = new ObservableCollection<EventData>();
 
             // Handle Loaded event to ensure proper initialization
             this.Loaded += EventBackgroundManager_Loaded;
@@ -66,6 +73,9 @@ namespace Photobooth.Controls
 
         private void EventBackgroundManager_Loaded(object sender, RoutedEventArgs e)
         {
+            // Load events for dropdown
+            LoadEvents();
+
             // Set initial view after everything is loaded
             if (AllTab?.IsChecked == true)
             {
@@ -81,486 +91,611 @@ namespace Photobooth.Controls
         {
             _eventBackgroundService = EventBackgroundService.Instance;
             _virtualBackgroundService = VirtualBackgroundService.Instance;
+            _eventService = new EventService();
 
+            // Subscribe to service events
+            _eventBackgroundService.BackgroundsChanged += OnBackgroundsChanged;
+            _eventBackgroundService.SettingsChanged += OnSettingsChanged;
+            _eventBackgroundService.BackgroundSelected += OnBackgroundSelected;
+
+            // Initialize auto-save timer (saves placement data after 500ms of inactivity)
+            _autoSaveTimer = new DispatcherTimer();
+            _autoSaveTimer.Interval = TimeSpan.FromMilliseconds(500);
+            _autoSaveTimer.Tick += AutoSaveTimer_Tick;
+
+            // Set ItemsSource
             AllBackgroundsList.ItemsSource = _filteredBackgrounds;
             CategoryBackgroundsList.ItemsSource = _filteredBackgrounds;
             SelectedBackgroundsList.ItemsSource = _selectedBackgrounds;
             CustomBackgroundsList.ItemsSource = _customBackgrounds;
+
+            // Add event selection UI if not present
+            AddEventSelectionUI();
         }
 
-        /// <summary>
-        /// Load backgrounds for event management and show the overlay
-        /// </summary>
-        public async Task LoadForEventAsync(EventData eventData)
+        private void AddEventSelectionUI()
         {
-            // Show the overlay
-            Show();
-
-            // Check if we're already loaded for this event
-            if (_currentEvent != null && eventData != null && _currentEvent.Id == eventData.Id)
+            // This will be added in XAML, but we can set up the binding here
+            if (EventComboBox != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Already loaded for event: {eventData.Name}");
-                return;
+                EventComboBox.ItemsSource = _events;
+                EventComboBox.DisplayMemberPath = "Name";
+                EventComboBox.SelectionChanged += EventComboBox_SelectionChanged;
             }
+        }
 
-            _currentEvent = eventData;
-
-            if (eventData != null)
-            {
-                EventNameText.Text = $"Managing backgrounds for: {eventData.Name}";
-            }
-
+        private async void LoadEvents()
+        {
             try
             {
-                ShowLoading(true);
-
-                // Load all available backgrounds
-                await _virtualBackgroundService.LoadBackgroundsAsync();
-
-                // Load current event selections
-                if (_currentEvent != null)
+                var events = _eventService.GetAllEvents();
+                _events.Clear();
+                foreach (var evt in events)
                 {
-                    await _eventBackgroundService.LoadEventBackgroundsAsync(_currentEvent);
-
-                    // Restore previously saved selections from database
-                    if (!string.IsNullOrEmpty(_currentEvent.BackgroundSettings))
-                    {
-                        try
-                        {
-                            var settings = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(_currentEvent.BackgroundSettings);
-                            System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Loaded background settings for event: {_currentEvent.Name}");
-                            System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Selected background: {_currentEvent.SelectedBackgroundPath}");
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Failed to parse background settings: {ex.Message}");
-                        }
-                    }
-
-                    // Load photo placement data if available
-                    if (!string.IsNullOrEmpty(_currentEvent.PhotoPlacementData))
-                    {
-                        try
-                        {
-                            _photoPlacementData = PhotoPlacementData.FromJson(_currentEvent.PhotoPlacementData);
-                            System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Loaded photo placement data for event: {_currentEvent.Name}");
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Failed to parse photo placement data: {ex.Message}");
-                        }
-                    }
-                    else if (!string.IsNullOrEmpty(Properties.Settings.Default.PhotoPlacementData))
-                    {
-                        // Fallback to settings if not in event
-                        try
-                        {
-                            _photoPlacementData = PhotoPlacementData.FromJson(Properties.Settings.Default.PhotoPlacementData);
-                            System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Loaded photo placement data from settings");
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Failed to parse settings photo placement data: {ex.Message}");
-                        }
-                    }
-
-                    // Set selected background path if available
-                    if (!string.IsNullOrEmpty(_currentEvent.SelectedBackgroundPath))
-                    {
-                        _selectedBackgroundPath = _currentEvent.SelectedBackgroundPath;
-                        System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Set selected background path: {_selectedBackgroundPath}");
-                    }
-                    else if (!string.IsNullOrEmpty(Properties.Settings.Default.SelectedVirtualBackground))
-                    {
-                        // Fallback to settings if not in event
-                        _selectedBackgroundPath = Properties.Settings.Default.SelectedVirtualBackground;
-                        System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Set selected background path from settings: {_selectedBackgroundPath}");
-                    }
+                    _events.Add(evt);
                 }
 
-                // Populate UI
-                await PopulateBackgroundsAsync();
-
-                UpdateSelectionCount();
-                UpdateEmptyState();
-
-                // Load the selected background into the positioner if available
-                if (!string.IsNullOrEmpty(_selectedBackgroundPath) && PhotoPositioner != null)
+                // Select current event if already set
+                if (_currentEvent != null)
                 {
-                    PhotoPositioner.SetBackground(_selectedBackgroundPath);
-
-                    // Also load placement data if available
-                    if (_photoPlacementData != null)
-                    {
-                        PhotoPositioner.SetPlacementData(_photoPlacementData);
-                    }
+                    EventComboBox.SelectedItem = _events.FirstOrDefault(e => e.Id == _currentEvent.Id);
+                }
+                else if (_events.Any())
+                {
+                    // Auto-select first event
+                    EventComboBox.SelectedIndex = 0;
                 }
             }
             catch (Exception ex)
             {
-                Log.Error($"Failed to load backgrounds for event: {ex.Message}");
-                MessageBox.Show("Failed to load backgrounds. Please try again.", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                Log.Error($"Failed to load events: {ex.Message}");
+            }
+        }
+
+        private async void EventComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoadingEvent) return;
+
+            var selectedEvent = EventComboBox.SelectedItem as EventData;
+            if (selectedEvent != null)
+            {
+                await LoadForEventAsync(selectedEvent);
+            }
+        }
+
+        #endregion
+
+        #region Event Service Event Handlers
+
+        private void OnBackgroundsChanged(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() => RefreshBackgroundLists());
+        }
+
+        private void OnSettingsChanged(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() => UpdateSettingsUI());
+        }
+
+        private void OnBackgroundSelected(object sender, string backgroundPath)
+        {
+            Dispatcher.Invoke(() => UpdateSelectedBackground(backgroundPath));
+        }
+
+        #endregion
+
+        #region Event Loading
+
+        /// <summary>
+        /// Load backgrounds for a specific event
+        /// </summary>
+        public async Task LoadForEventAsync(EventData eventData)
+        {
+            if (eventData == null) return;
+
+            _isLoadingEvent = true;
+
+            try
+            {
+                // Check if we're already loaded for this event
+                if (_currentEvent != null && _currentEvent.Id == eventData.Id)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Already loaded for event: {eventData.Name}");
+                    return;
+                }
+
+                _currentEvent = eventData;
+
+                // Update UI
+                if (EventNameText != null)
+                {
+                    EventNameText.Text = $"Event: {eventData.Name}";
+                }
+
+                ShowLoading(true);
+
+                // Load all available backgrounds first
+                await _virtualBackgroundService.LoadBackgroundsAsync();
+
+                // Load event-specific data from database
+                await _eventBackgroundService.LoadEventAsync(eventData);
+
+                // Refresh UI lists
+                RefreshBackgroundLists();
+                UpdateSettingsUI();
+
+                // Update event dropdown selection
+                if (EventComboBox != null && EventComboBox.SelectedItem != eventData)
+                {
+                    EventComboBox.SelectedItem = _events.FirstOrDefault(e => e.Id == eventData.Id);
+                }
+
+                ShowLoading(false);
+
+                // Fire event changed
+                EventChanged?.Invoke(this, EventArgs.Empty);
+
+                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Loaded event: {eventData.Name} with {_eventBackgroundService.EventBackgrounds.Count} backgrounds");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Error loading event: {ex.Message}");
+                ShowLoading(false);
+                ShowError($"Failed to load event: {ex.Message}");
             }
             finally
             {
-                ShowLoading(false);
+                _isLoadingEvent = false;
             }
-        }
 
-        private async Task PopulateBackgroundsAsync()
-        {
-            await Task.Run(() =>
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    _allBackgrounds.Clear();
-                    _selectedBackgrounds.Clear();
-                    _customBackgrounds.Clear();
-
-                    // Get all backgrounds from virtual background service
-                    var allBgs = _virtualBackgroundService.GetAllBackgrounds();
-
-                    // Get currently selected background IDs for the event
-                    var selectedIds = _eventBackgroundService.EventBackgrounds
-                        .Select(eb => eb.BackgroundId)
-                        .ToList();
-
-                    foreach (var bg in allBgs)
-                    {
-                        var viewModel = new UnifiedBackgroundViewModel
-                        {
-                            Id = bg.Id,
-                            Name = bg.Name,
-                            Category = bg.Category,
-                            ThumbnailPath = bg.ThumbnailPath,
-                            BackgroundPath = bg.FilePath,
-                            IsSelected = selectedIds.Contains(bg.Id),
-                            IsCustom = bg.Category == "Custom"
-                        };
-
-                        _allBackgrounds.Add(viewModel);
-
-                        if (viewModel.IsSelected)
-                        {
-                            _selectedBackgrounds.Add(viewModel);
-                        }
-
-                        if (viewModel.IsCustom)
-                        {
-                            _customBackgrounds.Add(viewModel);
-                        }
-                    }
-
-                    // Initially show all backgrounds
-                    FilterBackgrounds();
-                    PopulateCategories();
-                });
-            });
-        }
-
-        private void PopulateCategories()
-        {
-            CategoryList.Children.Clear();
-
-            var categories = _allBackgrounds
-                .Where(b => !b.IsCustom)
-                .Select(b => b.Category)
-                .Distinct()
-                .OrderBy(c => c);
-
-            // Add "All" option
-            var allButton = CreateCategoryButton("All", true);
-            CategoryList.Children.Add(allButton);
-
-            foreach (var category in categories)
-            {
-                var button = CreateCategoryButton(category, false);
-                CategoryList.Children.Add(button);
-            }
-        }
-
-        private RadioButton CreateCategoryButton(string category, bool isChecked)
-        {
-            var button = new RadioButton
-            {
-                Content = category,
-                GroupName = "Categories",
-                IsChecked = isChecked,
-                Style = FindResource("TabButtonStyle") as Style,
-                Tag = category,
-                Margin = new Thickness(0, 2, 0, 2)
-            };
-
-            button.Checked += CategoryButton_Checked;
-            return button;
+            // Show the overlay
+            Show();
         }
 
         #endregion
 
-        #region Tab Navigation
+        #region Background Management
 
-        private void Tab_Changed(object sender, RoutedEventArgs e)
+        private void RefreshBackgroundLists()
         {
-            // Prevent firing during initialization
-            if (!IsLoaded)
-                return;
+            _allBackgrounds.Clear();
+            _selectedBackgrounds.Clear();
+            _customBackgrounds.Clear();
 
-            if (AllTab?.IsChecked == true)
+            // Get all available backgrounds
+            var availableBackgrounds = _virtualBackgroundService.GetAllBackgrounds();
+
+            // Get event backgrounds
+            var eventBackgrounds = _eventBackgroundService.EventBackgrounds;
+
+            // Create view models for all available backgrounds
+            foreach (var bg in availableBackgrounds)
             {
-                ShowView("All");
+                var bgPath = bg.BackgroundPath ?? bg.FilePath; // Handle both properties
+                var viewModel = new UnifiedBackgroundViewModel
+                {
+                    BackgroundPath = bgPath,
+                    BackgroundName = bg.Name ?? Path.GetFileNameWithoutExtension(bgPath),
+                    IsSelected = eventBackgrounds.Any(eb => eb.BackgroundPath == bgPath),
+                    IsCustom = bgPath.Contains("\\Custom\\"),
+                    Category = GetBackgroundCategory(bgPath)
+                };
+
+                _allBackgrounds.Add(viewModel);
+
+                if (viewModel.IsSelected)
+                {
+                    _selectedBackgrounds.Add(viewModel);
+                }
+
+                if (viewModel.IsCustom)
+                {
+                    _customBackgrounds.Add(viewModel);
+                }
             }
-            else if (CategoriesTab?.IsChecked == true)
+
+            // Apply current filter
+            ApplyFilter();
+        }
+
+        private void UpdateSelectedBackground(string backgroundPath)
+        {
+            // Update view models
+            foreach (var vm in _allBackgrounds)
             {
-                ShowView("Categories");
-            }
-            else if (EventTab?.IsChecked == true)
-            {
-                ShowView("Event");
-            }
-            else if (CustomTab?.IsChecked == true)
-            {
-                ShowView("Custom");
+                vm.IsCurrentlyActive = vm.BackgroundPath == backgroundPath;
             }
         }
 
-        private void ShowView(string viewName)
+        private void UpdateSettingsUI()
         {
-            // Check if UI elements are initialized
-            if (AllBackgroundsView == null || CategoriesView == null ||
-                EventSelectionView == null || CustomUploadView == null)
+            if (_eventBackgroundService.CurrentSettings == null) return;
+
+            var settings = _eventBackgroundService.CurrentSettings;
+
+            // Update checkboxes
+            if (EnableBackgroundRemovalCheckBox != null)
             {
-                return;
+                EnableBackgroundRemovalCheckBox.IsChecked = settings.EnableBackgroundRemoval;
             }
 
-            AllBackgroundsView.Visibility = Visibility.Collapsed;
-            CategoriesView.Visibility = Visibility.Collapsed;
-            EventSelectionView.Visibility = Visibility.Collapsed;
-            CustomUploadView.Visibility = Visibility.Collapsed;
-
-            switch (viewName)
+            if (UseGuestPickerCheckBox != null)
             {
-                case "All":
-                    AllBackgroundsView.Visibility = Visibility.Visible;
-                    break;
-                case "Categories":
-                    CategoriesView.Visibility = Visibility.Visible;
-                    break;
-                case "Event":
-                    EventSelectionView.Visibility = Visibility.Visible;
-                    UpdateEmptyState();
-                    break;
-                case "Custom":
-                    CustomUploadView.Visibility = Visibility.Visible;
-                    break;
+                UseGuestPickerCheckBox.IsChecked = settings.UseGuestBackgroundPicker;
+            }
+
+            // Update quality combo
+            if (QualityComboBox != null)
+            {
+                QualityComboBox.SelectedItem = QualityComboBox.Items
+                    .Cast<ComboBoxItem>()
+                    .FirstOrDefault(item => item.Tag?.ToString() == settings.BackgroundRemovalQuality);
             }
         }
 
         #endregion
 
-        #region Background Selection
+        #region Background Selection (Auto-Save)
 
-        private void BackgroundItem_Click(object sender, MouseButtonEventArgs e)
+        private void BackgroundItem_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Border border && border.Tag is string backgroundId)
+            if (sender is Button button && button.DataContext is UnifiedBackgroundViewModel viewModel)
             {
-                var background = _allBackgrounds.FirstOrDefault(b => b.Id == backgroundId);
-                if (background != null)
+                if (_currentEvent == null)
                 {
-                    // Toggle selection and auto-save immediately
-                    ToggleBackgroundSelection(background);
-
-                    // Also save to settings immediately for instant persistence
-                    SaveSelectionsToSettingsImmediately();
-                }
-            }
-        }
-
-        private async void RemoveBackground_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button button && button.Tag is string backgroundId)
-            {
-                var background = _selectedBackgrounds.FirstOrDefault(b => b.Id == backgroundId);
-                if (background != null)
-                {
-                    background.IsSelected = false;
-                    _selectedBackgrounds.Remove(background);
-                    UpdateSelectionCount();
-                    UpdateEmptyState();
-
-                    // Auto-save immediately when background is removed
-                    SaveSelectionsToSettingsImmediately();
-                    await AutoSaveEventSettings();
-                }
-                e.Handled = true; // Prevent event bubbling to BackgroundItem_Click
-            }
-        }
-
-        private async void ToggleBackgroundSelection(UnifiedBackgroundViewModel background)
-        {
-            // Save current position for previous background before switching
-            if (!string.IsNullOrEmpty(_selectedBackgroundPath) && PhotoPositioner != null)
-            {
-                var currentPlacement = PhotoPositioner.GetPlacementData();
-                if (currentPlacement != null)
-                {
-                    // Save position for the current background
-                    await _eventBackgroundService.SavePhotoPlacementForBackground(_selectedBackgroundPath, currentPlacement);
-                    _photoPlacementData = currentPlacement;
-                }
-            }
-
-            background.IsSelected = !background.IsSelected;
-
-            // Immediately save to settings for instant persistence
-            if (background.IsSelected)
-            {
-                Properties.Settings.Default.SelectedVirtualBackground = background.BackgroundPath;
-                Properties.Settings.Default.Save();
-            }
-
-            if (background.IsSelected)
-            {
-                if (!_selectedBackgrounds.Contains(background))
-                {
-                    _selectedBackgrounds.Add(background);
+                    ShowError("Please select an event first");
+                    return;
                 }
 
-                // Update the live preview with the selected background
-                _selectedBackgroundPath = background.BackgroundPath;
-                if (PhotoPositioner != null)
-                {
-                    PhotoPositioner.SetBackground(_selectedBackgroundPath);
+                // Check if this is in selected view - if so, it's a selection
+                var isInSelectedView = SelectedBackgroundsList.Items.Contains(viewModel);
 
-                    // Load saved placement data for this specific background
-                    var savedPlacement = _eventBackgroundService.GetPhotoPlacementForBackground(_selectedBackgroundPath);
-                    if (savedPlacement != null)
+                if (isInSelectedView)
+                {
+                    // Select this background as active
+                    _eventBackgroundService.SelectBackground(viewModel.BackgroundPath);
+                }
+                else
+                {
+                    // Toggle selection for event
+                    if (viewModel.IsSelected)
                     {
-                        PhotoPositioner.SetPlacementData(savedPlacement);
-                        _photoPlacementData = savedPlacement;
+                        // Remove from event
+                        _eventBackgroundService.RemoveBackground(viewModel.BackgroundPath);
+                        viewModel.IsSelected = false;
                     }
                     else
                     {
-                        // Create default placement if none saved
-                        _photoPlacementData = new Models.PhotoPlacementData
-                        {
-                            PlacementZones = new System.Collections.Generic.List<Models.PhotoPlacementZone>
-                            {
-                                new Models.PhotoPlacementZone
-                                {
-                                    PhotoIndex = 0,
-                                    X = 0.1,
-                                    Y = 0.1,
-                                    Width = 0.8,
-                                    Height = 0.8,
-                                    Rotation = 0,
-                                    IsEnabled = true
-                                }
-                            }
-                        };
-                        PhotoPositioner.SetPlacementData(_photoPlacementData);
+                        // Add to event
+                        _eventBackgroundService.AddBackground(viewModel.BackgroundPath, viewModel.BackgroundName);
+                        viewModel.IsSelected = true;
 
-                        // Save the default placement for this background
-                        await _eventBackgroundService.SavePhotoPlacementForBackground(_selectedBackgroundPath, _photoPlacementData);
-                    }
-                }
-            }
-            else
-            {
-                _selectedBackgrounds.Remove(background);
-
-                // Save the current position for the background being deselected
-                if (background.BackgroundPath == _selectedBackgroundPath && PhotoPositioner != null)
-                {
-                    var currentPlacement = PhotoPositioner.GetPlacementData();
-                    if (currentPlacement != null)
-                    {
-                        await _eventBackgroundService.SavePhotoPlacementForBackground(background.BackgroundPath, currentPlacement);
-                    }
-                }
-
-                // Clear preview if no backgrounds selected
-                if (!_selectedBackgrounds.Any())
-                {
-                    _selectedBackgroundPath = null;
-                    if (PhotoPositioner != null)
-                    {
-                        PhotoPositioner.SetBackground("");
-                        // Reset to default positioning when no background selected
-                        PhotoPositioner.SetPlacementData(new Models.PhotoPlacementData
+                        // If it's the first background, select it
+                        if (_selectedBackgrounds.Count == 0)
                         {
-                            PlacementZones = new System.Collections.Generic.List<Models.PhotoPlacementZone>
-                            {
-                                new Models.PhotoPlacementZone
-                                {
-                                    PhotoIndex = 0,
-                                    X = 0.1,
-                                    Y = 0.1,
-                                    Width = 0.8,
-                                    Height = 0.8,
-                                    Rotation = 0,
-                                    IsEnabled = true
-                                }
-                            }
-                        });
-                    }
-                }
-                else if (_selectedBackgrounds.Any())
-                {
-                    // If there are still selected backgrounds, switch to the first one
-                    var firstBackground = _selectedBackgrounds.First();
-                    _selectedBackgroundPath = firstBackground.BackgroundPath;
-                    if (PhotoPositioner != null)
-                    {
-                        PhotoPositioner.SetBackground(_selectedBackgroundPath);
-                        var savedPlacement = _eventBackgroundService.GetPhotoPlacementForBackground(_selectedBackgroundPath);
-                        if (savedPlacement != null)
-                        {
-                            PhotoPositioner.SetPlacementData(savedPlacement);
+                            _eventBackgroundService.SelectBackground(viewModel.BackgroundPath);
                         }
                     }
                 }
             }
-
-            UpdateSelectionCount();
-            UpdateEmptyState();
-
-            // Auto-save the changes
-            await AutoSaveEventSettings();
         }
 
-        private void CategoryButton_Checked(object sender, RoutedEventArgs e)
+        private void RemoveBackground_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is RadioButton button && button.Tag is string category)
+            if (sender is Button button && button.DataContext is UnifiedBackgroundViewModel viewModel)
             {
-                _currentCategory = category;
-                FilterBackgrounds();
+                if (_currentEvent == null) return;
+
+                // Remove from event (auto-saves)
+                _eventBackgroundService.RemoveBackground(viewModel.BackgroundPath);
+            }
+        }
+
+        private void SetAsDefault_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem && menuItem.DataContext is UnifiedBackgroundViewModel viewModel)
+            {
+                if (_currentEvent == null) return;
+
+                // Select as default (auto-saves)
+                _eventBackgroundService.SelectBackground(viewModel.BackgroundPath);
             }
         }
 
         #endregion
 
-        #region Search and Filter
+        #region Photo Positioning (Auto-Save)
+
+        private void PositionPhoto_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.DataContext is UnifiedBackgroundViewModel viewModel)
+            {
+                if (_currentEvent == null)
+                {
+                    ShowError("Please select an event first");
+                    return;
+                }
+
+                ShowPhotoPositioner(viewModel.BackgroundPath);
+            }
+        }
+
+        private void ShowPhotoPositioner(string backgroundPath)
+        {
+            // Show photo positioner overlay
+            PhotoPositionerOverlay.Visibility = Visibility.Visible;
+
+            // Load current placement data
+            _currentPlacementData = _eventBackgroundService.GetPlacementData(backgroundPath) ?? new PhotoPlacementData();
+
+            // Set up the positioning UI
+            // TODO: Implement the actual positioning UI
+
+            // For now, show a placeholder
+            PositionerContent.Children.Clear();
+            PositionerContent.Children.Add(new TextBlock
+            {
+                Text = "Photo Positioning UI\n(To be implemented)",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 24
+            });
+        }
+
+        private void SavePhotoPosition_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentPlacementData != null && !string.IsNullOrEmpty(_eventBackgroundService.SelectedBackgroundPath))
+            {
+                // Save placement data (auto-saves to database)
+                _eventBackgroundService.UpdatePhotoPlacement(_currentPlacementData);
+
+                PhotoPositionerOverlay.Visibility = Visibility.Collapsed;
+                ShowNotification("Photo position saved");
+            }
+        }
+
+        private void CancelPhotoPosition_Click(object sender, RoutedEventArgs e)
+        {
+            PhotoPositionerOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void OnPlacementDataChanged()
+        {
+            // Start/restart auto-save timer
+            _autoSaveTimer.Stop();
+            _autoSaveTimer.Start();
+        }
+
+        private void AutoSaveTimer_Tick(object sender, EventArgs e)
+        {
+            _autoSaveTimer.Stop();
+
+            if (_currentPlacementData != null && !string.IsNullOrEmpty(_eventBackgroundService.SelectedBackgroundPath))
+            {
+                // Auto-save placement data
+                _eventBackgroundService.UpdatePhotoPlacement(_currentPlacementData);
+                System.Diagnostics.Debug.WriteLine("[EventBackgroundManager] Auto-saved photo placement data");
+            }
+        }
+
+        #endregion
+
+        #region Settings Management (Auto-Save)
+
+        private void EnableBackgroundRemoval_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_currentEvent == null || _isLoadingEvent) return;
+
+            var checkBox = sender as CheckBox;
+            if (checkBox != null)
+            {
+                // Update setting (auto-saves)
+                _eventBackgroundService.UpdateSetting("EnableBackgroundRemoval", checkBox.IsChecked == true);
+                ShowNotification("Background removal setting updated");
+            }
+        }
+
+        private void UseGuestPicker_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_currentEvent == null || _isLoadingEvent) return;
+
+            var checkBox = sender as CheckBox;
+            if (checkBox != null)
+            {
+                // Update setting (auto-saves)
+                _eventBackgroundService.UpdateSetting("UseGuestBackgroundPicker", checkBox.IsChecked == true);
+                ShowNotification("Guest picker setting updated");
+            }
+        }
+
+        private void Quality_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_currentEvent == null || _isLoadingEvent) return;
+
+            var comboBox = sender as ComboBox;
+            var selectedItem = comboBox?.SelectedItem as ComboBoxItem;
+            if (selectedItem != null)
+            {
+                var quality = selectedItem.Tag?.ToString() ?? "Low";
+                _eventBackgroundService.UpdateSetting("BackgroundRemovalQuality", quality);
+                ShowNotification("Quality setting updated");
+            }
+        }
+
+        #endregion
+
+        #region Custom Background Management
+
+        private async void AddCustomBackground_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentEvent == null)
+            {
+                ShowError("Please select an event first");
+                return;
+            }
+
+            var openFileDialog = new OpenFileDialog
+            {
+                Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp",
+                Multiselect = true,
+                Title = "Select Background Images"
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                foreach (var fileName in openFileDialog.FileNames)
+                {
+                    try
+                    {
+                        // Copy to custom backgrounds folder
+                        string customDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Models", "Backgrounds", "Custom");
+                        Directory.CreateDirectory(customDir);
+
+                        string destFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_{DateTime.Now:yyyyMMdd_HHmmss}{Path.GetExtension(fileName)}";
+                        string destPath = Path.Combine(customDir, destFileName);
+
+                        File.Copy(fileName, destPath, true);
+
+                        // Add to event (auto-saves)
+                        _eventBackgroundService.AddBackground(destPath, Path.GetFileNameWithoutExtension(destFileName));
+
+                        ShowNotification($"Added custom background: {destFileName}");
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowError($"Failed to add background: {ex.Message}");
+                    }
+                }
+
+                // Reload backgrounds
+                await _virtualBackgroundService.LoadBackgroundsAsync();
+                RefreshBackgroundLists();
+            }
+        }
+
+        private void DeleteCustomBackground_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.DataContext is UnifiedBackgroundViewModel viewModel)
+            {
+                if (!viewModel.IsCustom)
+                {
+                    ShowError("Only custom backgrounds can be deleted");
+                    return;
+                }
+
+                var result = MessageBox.Show(
+                    $"Are you sure you want to delete '{viewModel.BackgroundName}'?\n\nThis will remove it from all events.",
+                    "Delete Background",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        // Remove from current event if selected
+                        if (viewModel.IsSelected && _currentEvent != null)
+                        {
+                            _eventBackgroundService.RemoveBackground(viewModel.BackgroundPath);
+                        }
+
+                        // Delete the file
+                        if (File.Exists(viewModel.BackgroundPath))
+                        {
+                            File.Delete(viewModel.BackgroundPath);
+                        }
+
+                        // Remove from collections
+                        _allBackgrounds.Remove(viewModel);
+                        _customBackgrounds.Remove(viewModel);
+                        _selectedBackgrounds.Remove(viewModel);
+                        _filteredBackgrounds.Remove(viewModel);
+
+                        ShowNotification("Background deleted successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowError($"Failed to delete background: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        #endregion
+
+        #region UI Management
+
+        private void ShowView(string viewName)
+        {
+            // Hide all views
+            AllView.Visibility = Visibility.Collapsed;
+            CategoryView.Visibility = Visibility.Collapsed;
+            SelectedView.Visibility = Visibility.Collapsed;
+            CustomView.Visibility = Visibility.Collapsed;
+
+            // Show selected view
+            switch (viewName)
+            {
+                case "All":
+                    AllView.Visibility = Visibility.Visible;
+                    _currentCategory = "All";
+                    break;
+                case "Category":
+                    CategoryView.Visibility = Visibility.Visible;
+                    break;
+                case "Selected":
+                    SelectedView.Visibility = Visibility.Visible;
+                    break;
+                case "Custom":
+                    CustomView.Visibility = Visibility.Visible;
+                    break;
+            }
+
+            ApplyFilter();
+        }
+
+        private void Tab_Checked(object sender, RoutedEventArgs e)
+        {
+            if (sender is RadioButton radioButton)
+            {
+                ShowView(radioButton.Tag?.ToString() ?? "All");
+            }
+        }
+
+        private void Category_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button)
+            {
+                _currentCategory = button.Tag?.ToString() ?? "All";
+                ApplyFilter();
+
+                // Update category button states
+                foreach (var child in CategoryButtons.Children)
+                {
+                    if (child is Button categoryButton)
+                    {
+                        categoryButton.Background = categoryButton == button
+                            ? FindResource("AccentBrush") as Brush
+                            : FindResource("CardBackgroundBrush") as Brush;
+                    }
+                }
+            }
+        }
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             _searchText = SearchBox.Text?.ToLower() ?? string.Empty;
-            FilterBackgrounds();
+            ApplyFilter();
         }
 
-        private void ClearSearch_Click(object sender, RoutedEventArgs e)
-        {
-            SearchBox.Text = string.Empty;
-        }
-
-        private void FilterBackgrounds()
+        private void ApplyFilter()
         {
             _filteredBackgrounds.Clear();
 
             var filtered = _allBackgrounds.AsEnumerable();
 
             // Apply category filter
-            if (_currentCategory != "All" && !string.IsNullOrEmpty(_currentCategory))
+            if (_currentCategory != "All")
             {
                 filtered = filtered.Where(b => b.Category == _currentCategory);
             }
@@ -569,230 +704,95 @@ namespace Photobooth.Controls
             if (!string.IsNullOrWhiteSpace(_searchText))
             {
                 filtered = filtered.Where(b =>
-                    b.Name?.ToLower().Contains(_searchText) == true ||
-                    b.Category?.ToLower().Contains(_searchText) == true);
+                    b.BackgroundName?.ToLower().Contains(_searchText) == true ||
+                    b.BackgroundPath?.ToLower().Contains(_searchText) == true);
             }
 
-            foreach (var bg in filtered)
+            foreach (var item in filtered)
             {
-                _filteredBackgrounds.Add(bg);
+                _filteredBackgrounds.Add(item);
+            }
+        }
+
+        private string GetBackgroundCategory(string path)
+        {
+            if (path.Contains("\\Popular\\")) return "Popular";
+            if (path.Contains("\\Nature\\")) return "Nature";
+            if (path.Contains("\\Abstract\\")) return "Abstract";
+            if (path.Contains("\\Holiday\\")) return "Holiday";
+            if (path.Contains("\\Custom\\")) return "Custom";
+            return "Other";
+        }
+
+        private void ShowLoading(bool show)
+        {
+            if (LoadingOverlay != null)
+            {
+                LoadingOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        private void ShowError(string message)
+        {
+            MessageBox.Show(message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+
+        private void ShowNotification(string message)
+        {
+            // Show temporary notification
+            if (NotificationText != null && NotificationPanel != null)
+            {
+                NotificationText.Text = message;
+                NotificationPanel.Visibility = Visibility.Visible;
+
+                // Hide after 2 seconds
+                var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                timer.Tick += (s, timerArgs) =>
+                {
+                    NotificationPanel.Visibility = Visibility.Collapsed;
+                    timer.Stop();
+                };
+                timer.Start();
             }
         }
 
         #endregion
 
-        #region Custom Backgrounds
+        #region Overlay Management
 
-        private async void UploadButton_Click(object sender, RoutedEventArgs e)
+        public void Show()
         {
-            var openFileDialog = new OpenFileDialog
+            this.Visibility = Visibility.Visible;
+
+            // Animate in
+            var animation = new DoubleAnimation
             {
-                Title = "Select Background Images",
-                Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp;*.gif|All Files|*.*",
-                Multiselect = true
+                From = 0,
+                To = 1,
+                Duration = TimeSpan.FromMilliseconds(200),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
             };
 
-            if (openFileDialog.ShowDialog() == true)
-            {
-                ShowLoading(true);
-
-                try
-                {
-                    foreach (var filePath in openFileDialog.FileNames)
-                    {
-                        await _virtualBackgroundService.AddCustomBackground(filePath);
-                    }
-
-                    // Reload backgrounds to show new uploads
-                    await _virtualBackgroundService.ReloadCustomBackgroundsAsync();
-                    await PopulateBackgroundsAsync();
-
-                    MessageBox.Show($"Successfully uploaded {openFileDialog.FileNames.Length} background(s)",
-                        "Upload Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error($"Failed to upload backgrounds: {ex.Message}");
-                    MessageBox.Show($"Failed to upload backgrounds: {ex.Message}",
-                        "Upload Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                finally
-                {
-                    ShowLoading(false);
-                }
-            }
+            this.BeginAnimation(OpacityProperty, animation);
         }
 
-        private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
+        public void Hide()
         {
-            var selectedCustom = _customBackgrounds.Where(b => b.IsSelected).ToList();
-
-            if (!selectedCustom.Any())
+            var animation = new DoubleAnimation
             {
-                MessageBox.Show("Please select custom backgrounds to delete.",
-                    "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
+                From = 1,
+                To = 0,
+                Duration = TimeSpan.FromMilliseconds(200),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            };
 
-            var result = MessageBox.Show(
-                $"Are you sure you want to delete {selectedCustom.Count} custom background(s)?",
-                "Confirm Delete",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
+            animation.Completed += (s, e) =>
             {
-                ShowLoading(true);
+                this.Visibility = Visibility.Collapsed;
+                Closed?.Invoke(this, EventArgs.Empty);
+            };
 
-                try
-                {
-                    foreach (var bg in selectedCustom)
-                    {
-                        // Delete file if it exists
-                        if (File.Exists(bg.BackgroundPath))
-                        {
-                            File.Delete(bg.BackgroundPath);
-                        }
-
-                        // Delete thumbnail if it exists
-                        if (!string.IsNullOrEmpty(bg.ThumbnailPath) && File.Exists(bg.ThumbnailPath))
-                        {
-                            File.Delete(bg.ThumbnailPath);
-                        }
-
-                        // Remove from collections
-                        _allBackgrounds.Remove(bg);
-                        _customBackgrounds.Remove(bg);
-                        _selectedBackgrounds.Remove(bg);
-                    }
-
-                    FilterBackgrounds();
-                    UpdateSelectionCount();
-
-                    MessageBox.Show($"Deleted {selectedCustom.Count} custom background(s)",
-                        "Delete Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error($"Failed to delete backgrounds: {ex.Message}");
-                    MessageBox.Show($"Failed to delete backgrounds: {ex.Message}",
-                        "Delete Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                finally
-                {
-                    ShowLoading(false);
-                }
-            }
-        }
-
-        #endregion
-
-        #region Quick Actions
-
-        private void SelectPopular_Click(object sender, RoutedEventArgs e)
-        {
-            // Clear current selection
-            foreach (var bg in _selectedBackgrounds.ToList())
-            {
-                bg.IsSelected = false;
-            }
-            _selectedBackgrounds.Clear();
-
-            // Select popular backgrounds (first 3 solids, 2 gradients)
-            var popularBackgrounds = _allBackgrounds
-                .Where(b => b.Category == "Solid")
-                .Take(3)
-                .Concat(_allBackgrounds
-                    .Where(b => b.Category == "Gradient")
-                    .Take(2));
-
-            foreach (var bg in popularBackgrounds)
-            {
-                bg.IsSelected = true;
-                _selectedBackgrounds.Add(bg);
-            }
-
-            UpdateSelectionCount();
-            UpdateEmptyState();
-            FilterBackgrounds();
-
-            // Switch to event tab to show selection
-            EventTab.IsChecked = true;
-        }
-
-        private void ClearAll_Click(object sender, RoutedEventArgs e)
-        {
-            var result = MessageBox.Show(
-                "Are you sure you want to clear all selected backgrounds?",
-                "Clear Selection",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
-            {
-                foreach (var bg in _selectedBackgrounds.ToList())
-                {
-                    bg.IsSelected = false;
-                }
-                _selectedBackgrounds.Clear();
-
-                UpdateSelectionCount();
-                UpdateEmptyState();
-                FilterBackgrounds();
-            }
-        }
-
-        #endregion
-
-        #region Save and Close
-
-        // SaveButton_Click removed - now uses auto-save on selection
-
-        /// <summary>
-        /// Immediately save selections to settings for instant persistence
-        /// </summary>
-        private void SaveSelectionsToSettingsImmediately()
-        {
-            try
-            {
-                // Save selected background IDs - this preserves the user's background selection
-                var selectedIds = _selectedBackgrounds.Select(b => b.Id).ToList();
-                Properties.Settings.Default.EventBackgroundIds = string.Join(",", selectedIds);
-
-                // Save first selected background as the default virtual background
-                // This is ONLY for knowing which background to display, not to enable/disable removal
-                if (_selectedBackgrounds.Any())
-                {
-                    var firstBackground = _selectedBackgrounds.First();
-                    Properties.Settings.Default.SelectedVirtualBackground = firstBackground.BackgroundPath;
-                    // IMPORTANT: We do NOT change EnableBackgroundRemoval here
-                    // That setting is controlled independently by the user
-                    System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Saved selected background: {firstBackground.BackgroundPath}");
-                }
-                else
-                {
-                    // Clear selection if no backgrounds selected
-                    Properties.Settings.Default.SelectedVirtualBackground = string.Empty;
-                    System.Diagnostics.Debug.WriteLine("[EventBackgroundManager] Cleared background selection");
-                }
-
-                // Save photo placement data if available
-                if (_photoPlacementData != null)
-                {
-                    Properties.Settings.Default.PhotoPlacementData = _photoPlacementData.ToJson();
-                    System.Diagnostics.Debug.WriteLine("[EventBackgroundManager] Saved photo placement data");
-                }
-
-                // Save immediately - only the background selection data, not removal settings
-                Properties.Settings.Default.Save();
-
-                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Background selections saved (IDs: {string.Join(",", selectedIds)})");
-                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] EnableBackgroundRemoval remains: {Properties.Settings.Default.EnableBackgroundRemoval}");
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Failed to save selections immediately: {ex.Message}");
-            }
+            this.BeginAnimation(OpacityProperty, animation);
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
@@ -800,247 +800,216 @@ namespace Photobooth.Controls
             Hide();
         }
 
-        private void Backdrop_MouseDown(object sender, MouseButtonEventArgs e)
+        private void OverlayBackground_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            // Close overlay when clicking on backdrop
-            if (e.OriginalSource == sender)
+            // Allow closing by clicking outside if the click is on the background
+            if (e.Source == sender)
             {
                 Hide();
             }
         }
 
-        /// <summary>
-        /// Show the overlay
-        /// </summary>
-        public void Show()
+        #endregion
+
+        #region Copy From Event
+
+        private async void CopyFromEvent_Click(object sender, RoutedEventArgs e)
         {
-            this.Visibility = Visibility.Visible;
-
-            // Animate in
-            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation
+            if (_currentEvent == null)
             {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromMilliseconds(200)
-            };
-            this.BeginAnimation(OpacityProperty, fadeIn);
-        }
-
-        /// <summary>
-        /// Hide the overlay
-        /// </summary>
-        public void Hide()
-        {
-            // Animate out
-            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation
-            {
-                From = 1,
-                To = 0,
-                Duration = TimeSpan.FromMilliseconds(200)
-            };
-            fadeOut.Completed += (s, e) =>
-            {
-                this.Visibility = Visibility.Collapsed;
-                Closed?.Invoke(this, EventArgs.Empty);
-            };
-            this.BeginAnimation(OpacityProperty, fadeOut);
-        }
-
-        private void EnableGuestPicker_Changed(object sender, RoutedEventArgs e)
-        {
-            // Setting is automatically saved through binding
-            Properties.Settings.Default.Save();
-        }
-
-        private async void PhotoPositioner_PositionChanged(object sender, PhotoPlacementData e)
-        {
-            // Auto-save positioning data for the current background
-            if (!string.IsNullOrEmpty(_selectedBackgroundPath) && e != null)
-            {
-                // Save position for the specific current background (not globally)
-                await _eventBackgroundService.SavePhotoPlacementForBackground(_selectedBackgroundPath, e);
-
-                // Auto-save to database immediately
-                await AutoSaveEventSettings();
-
-                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Photo position updated and auto-saved for background: {_selectedBackgroundPath}");
+                ShowError("Please select an event first");
+                return;
             }
+
+            // Show event selection dialog
+            var dialog = new Window
+            {
+                Title = "Copy Backgrounds From Event",
+                Width = 400,
+                Height = 300,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                Owner = Window.GetWindow(this)
+            };
+
+            var stackPanel = new StackPanel { Margin = new Thickness(10) };
+            stackPanel.Children.Add(new TextBlock { Text = "Select event to copy from:", Margin = new Thickness(0, 0, 0, 10) });
+
+            var listBox = new ListBox { Height = 200 };
+            var otherEvents = _events.Where(evt => evt.Id != _currentEvent.Id).ToList();
+            listBox.ItemsSource = otherEvents;
+            listBox.DisplayMemberPath = "Name";
+            stackPanel.Children.Add(listBox);
+
+            var buttonPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+
+            var okButton = new Button { Content = "Copy", Width = 80, Margin = new Thickness(0, 0, 10, 0) };
+            okButton.Click += (s, clickArgs) =>
+            {
+                var selectedEvent = listBox.SelectedItem as EventData;
+                if (selectedEvent != null)
+                {
+                    _eventBackgroundService.CopyFromEvent(selectedEvent.Id);
+                    ShowNotification($"Copied backgrounds from {selectedEvent.Name}");
+                    dialog.DialogResult = true;
+                }
+            };
+            buttonPanel.Children.Add(okButton);
+
+            var cancelButton = new Button { Content = "Cancel", Width = 80 };
+            cancelButton.Click += (s, clickArgs) => dialog.DialogResult = false;
+            buttonPanel.Children.Add(cancelButton);
+
+            stackPanel.Children.Add(buttonPanel);
+            dialog.Content = stackPanel;
+
+            dialog.ShowDialog();
         }
 
-        /// <summary>
-        /// Auto-save all event settings including backgrounds and positioning
-        /// </summary>
-        private async Task AutoSaveEventSettings()
+        #endregion
+
+        #region Clear All
+
+        private void ClearAll_Click(object sender, RoutedEventArgs e)
         {
             if (_currentEvent == null) return;
 
+            var result = MessageBox.Show(
+                $"Are you sure you want to remove all backgrounds from '{_currentEvent.Name}'?",
+                "Clear All Backgrounds",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                _eventBackgroundService.ClearAllBackgrounds();
+                ShowNotification("All backgrounds removed");
+            }
+        }
+
+        #endregion
+
+        #region Missing Event Handlers
+
+        private void Backdrop_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Allow closing by clicking backdrop
+            if (e.Source == sender)
+            {
+                Hide();
+            }
+        }
+
+        private void ClearSearch_Click(object sender, RoutedEventArgs e)
+        {
+            SearchBox.Text = string.Empty;
+        }
+
+        private void UploadButton_Click(object sender, RoutedEventArgs e)
+        {
+            AddCustomBackground_Click(sender, e);
+        }
+
+        private void DeleteSelected_Click(object sender, RoutedEventArgs e)
+        {
+            // Handle deletion of selected custom backgrounds
+            var selectedItems = _customBackgrounds.Where(b => b.IsSelected).ToList();
+            foreach (var item in selectedItems)
+            {
+                DeleteCustomBackground(item);
+            }
+        }
+
+        private void DeleteCustomBackground(UnifiedBackgroundViewModel viewModel)
+        {
+            if (!viewModel.IsCustom) return;
+
             try
             {
-                // Update event with current settings
-                if (_selectedBackgrounds.Any())
+                // Remove from event if selected
+                if (viewModel.IsSelected && _currentEvent != null)
                 {
-                    var firstBackground = _selectedBackgrounds.First();
-                    _currentEvent.SelectedBackgroundPath = firstBackground.BackgroundPath;
-                    _currentEvent.SelectedBackgroundType = firstBackground.IsCustom ? "Custom" : firstBackground.Category;
-
-                    // Save selected background IDs
-                    var selectedIds = _selectedBackgrounds.Select(b => b.Id).ToList();
-                    _currentEvent.BackgroundSettings = System.Text.Json.JsonSerializer.Serialize(new
-                    {
-                        SelectedCount = selectedIds.Count,
-                        AllIds = selectedIds,
-                        DefaultId = firstBackground.Id,
-                        DefaultBackgroundPath = _selectedBackgroundPath,
-                        LastUpdated = DateTime.Now
-                    });
-
-                    // Also save to EventBackgroundService
-                    await _eventBackgroundService.SaveEventBackgroundsAsync(_currentEvent, selectedIds);
-                    Log.Debug($"Saved {selectedIds.Count} backgrounds to event service");
+                    _eventBackgroundService.RemoveBackground(viewModel.BackgroundPath);
                 }
 
-                // Save photo placement data
-                if (_photoPlacementData != null)
+                // Delete file
+                if (File.Exists(viewModel.BackgroundPath))
                 {
-                    _currentEvent.PhotoPlacementData = _photoPlacementData.ToJson();
+                    File.Delete(viewModel.BackgroundPath);
                 }
 
-                // Update in database
-                var templateDb = new Database.TemplateDatabase();
-                templateDb.UpdateEvent(_currentEvent.Id, _currentEvent);
+                // Remove from collections
+                _allBackgrounds.Remove(viewModel);
+                _customBackgrounds.Remove(viewModel);
+                _selectedBackgrounds.Remove(viewModel);
+                _filteredBackgrounds.Remove(viewModel);
 
-                // Also save to settings for quick access
-                Properties.Settings.Default.EventBackgroundIds = string.Join(",", _selectedBackgrounds.Select(b => b.Id));
-                if (!string.IsNullOrEmpty(_selectedBackgroundPath))
-                {
-                    Properties.Settings.Default.SelectedVirtualBackground = _selectedBackgroundPath;
-                }
-                Properties.Settings.Default.Save();
-
-                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Auto-saved event settings for: {_currentEvent.Name}");
-
-                // Fire the SelectionSaved event for any listeners
-                SelectionSaved?.Invoke(this, EventArgs.Empty);
-
-                // Show brief save feedback
-                ShowSaveConfirmation();
+                ShowNotification("Background deleted");
             }
             catch (Exception ex)
             {
-                Log.Error($"Failed to auto-save event settings: {ex.Message}");
+                ShowError($"Failed to delete background: {ex.Message}");
             }
         }
 
-        /// <summary>
-        /// Show brief visual confirmation that settings were saved
-        /// </summary>
-        private void ShowSaveConfirmation()
+        private void SelectPopular_Click(object sender, RoutedEventArgs e)
         {
-            // Update selection count to show save happened
-            if (SelectionCountText != null)
+            if (_currentEvent == null)
             {
-                var originalText = SelectionCountText.Text;
-                SelectionCountText.Text = "✓ Saved";
-                SelectionCountText.Foreground = new SolidColorBrush(Colors.Green);
-
-                // Restore original text after brief delay
-                var timer = new System.Windows.Threading.DispatcherTimer();
-                timer.Interval = TimeSpan.FromSeconds(1);
-                timer.Tick += (s, e) =>
-                {
-                    timer.Stop();
-                    SelectionCountText.Text = originalText;
-                    SelectionCountText.Foreground = new SolidColorBrush(Colors.White);
-                };
-                timer.Start();
+                ShowError("Please select an event first");
+                return;
             }
-        }
 
-        // Removed old overlay methods - using integrated positioner now
-
-        #endregion
-
-        #region UI Updates
-
-        private void UpdateSelectionCount()
-        {
-            if (SelectionCountText != null)
-                SelectionCountText.Text = _selectedBackgrounds.Count.ToString();
-        }
-
-        private void UpdateEmptyState()
-        {
-            if (EmptyStateText != null)
-                EmptyStateText.Visibility = _selectedBackgrounds.Any() ?
-                    Visibility.Collapsed : Visibility.Visible;
-        }
-
-        private void ShowLoading(bool show)
-        {
-            if (LoadingOverlay != null)
-                LoadingOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        #endregion
-
-        #region Public Methods
-
-        /// <summary>
-        /// Show the manager as an overlay in the parent window
-        /// </summary>
-        public static async void ShowInWindow(EventData eventData, Window owner = null)
-        {
-            if (owner == null)
-                owner = Application.Current.MainWindow;
-
-            // Find or create the manager overlay
-            EventBackgroundManager manager = null;
-
-            // Look for existing overlay in the window
-            if (owner.Content is Grid rootGrid)
+            // Select popular backgrounds
+            var popularBackgrounds = _allBackgrounds.Where(b => b.Category == "Popular").Take(6);
+            foreach (var bg in popularBackgrounds)
             {
-                foreach (var child in rootGrid.Children)
+                if (!bg.IsSelected)
                 {
-                    if (child is EventBackgroundManager existing)
-                    {
-                        manager = existing;
-                        break;
-                    }
+                    _eventBackgroundService.AddBackground(bg.BackgroundPath, bg.BackgroundName);
+                    bg.IsSelected = true;
                 }
             }
 
-            // If not found, create and add to window
-            if (manager == null)
+            RefreshBackgroundLists();
+            ShowNotification("Popular backgrounds selected");
+        }
+
+        public static void ShowInWindow(Window owner, EventData eventData = null)
+        {
+            // Static method for compatibility - creates instance in a window
+            var manager = new EventBackgroundManager();
+            ShowInternal(owner, eventData, manager);
+        }
+
+        // Overload with different parameter order for compatibility
+        public static void ShowInWindow(EventData eventData, Window owner)
+        {
+            // Static method for compatibility - creates instance in a window
+            var manager = new EventBackgroundManager();
+            ShowInternal(owner, eventData, manager);
+        }
+
+        private static void ShowInternal(Window owner, EventData eventData, EventBackgroundManager manager)
+        {
+            var window = new Window
             {
-                manager = new EventBackgroundManager();
+                Title = "Background Manager",
+                Content = manager,
+                Owner = owner,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Width = 1200,
+                Height = 800,
+                WindowStyle = WindowStyle.None,
+                AllowsTransparency = true,
+                Background = Brushes.Transparent
+            };
 
-                // Add to the window's root grid
-                if (owner.Content is Grid grid)
-                {
-                    Grid.SetRowSpan(manager, Math.Max(1, grid.RowDefinitions.Count));
-                    Grid.SetColumnSpan(manager, Math.Max(1, grid.ColumnDefinitions.Count));
-                    Panel.SetZIndex(manager, 9999); // Ensure it's on top
-                    grid.Children.Add(manager);
-                }
-                else if (owner.Content is Panel panel)
-                {
-                    Panel.SetZIndex(manager, 9999);
-                    panel.Children.Add(manager);
-                }
-                else
-                {
-                    // Wrap existing content in a Grid
-                    var originalContent = owner.Content;
-                    var newGrid = new Grid();
-                    owner.Content = newGrid;
-                    newGrid.Children.Add(originalContent as UIElement);
-                    Panel.SetZIndex(manager, 9999);
-                    newGrid.Children.Add(manager);
-                }
+            if (eventData != null)
+            {
+                manager.LoadForEventAsync(eventData).Wait();
             }
 
-            // Load the event data and show
-            await manager.LoadForEventAsync(eventData);
+            window.ShowDialog();
         }
 
         #endregion
@@ -1051,12 +1020,11 @@ namespace Photobooth.Controls
     public class UnifiedBackgroundViewModel : INotifyPropertyChanged
     {
         private bool _isSelected;
+        private bool _isCurrentlyActive;
 
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public string Category { get; set; }
-        public string ThumbnailPath { get; set; }
         public string BackgroundPath { get; set; }
+        public string BackgroundName { get; set; }
+        public string Category { get; set; }
         public bool IsCustom { get; set; }
 
         public bool IsSelected
@@ -1069,9 +1037,19 @@ namespace Photobooth.Controls
             }
         }
 
+        public bool IsCurrentlyActive
+        {
+            get => _isCurrentlyActive;
+            set
+            {
+                _isCurrentlyActive = value;
+                OnPropertyChanged();
+            }
+        }
+
         public event PropertyChangedEventHandler PropertyChanged;
 
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        protected void OnPropertyChanged([CallerMemberName] string propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }

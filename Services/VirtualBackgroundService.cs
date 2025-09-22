@@ -800,6 +800,7 @@ namespace Photobooth.Services
         public string Name { get; set; }
         public string Category { get; set; }
         public string FilePath { get; set; }
+        public string BackgroundPath => FilePath; // Alias for compatibility
         public string ThumbnailPath { get; set; }
         public bool IsDefault { get; set; }
         public Dictionary<string, object> Metadata { get; set; } = new Dictionary<string, object>();

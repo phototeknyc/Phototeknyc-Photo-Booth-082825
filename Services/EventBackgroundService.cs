@@ -4,12 +4,25 @@ using System.Linq;
 using System.Threading.Tasks;
 using CameraControl.Devices;
 using Photobooth.Database;
+using Photobooth.Models;
+using System.IO;
 
 namespace Photobooth.Services
 {
     /// <summary>
+    /// Simple EventBackground class for compatibility
+    /// </summary>
+    public class EventBackground
+    {
+        public string Id { get; set; }
+        public string BackgroundPath { get; set; }
+        public string Name { get; set; }
+        public bool IsSelected { get; set; }
+        public string ThumbnailPath => BackgroundPath; // Same as background path for compatibility
+    }
+    /// <summary>
     /// Service that manages background assignments for events
-    /// Allows organizers to pre-select backgrounds for guest selection
+    /// Now using database for per-event storage with auto-save
     /// </summary>
     public class EventBackgroundService
     {
@@ -45,10 +58,12 @@ namespace Photobooth.Services
 
         #region Private Fields
 
-        private List<EventBackground> _eventBackgrounds;
-        private EventData _currentEvent;
+        private EventBackgroundDatabase _database;
         private VirtualBackgroundService _backgroundService;
-        private Dictionary<string, Models.PhotoPlacementData> _placementDataCache = new Dictionary<string, Models.PhotoPlacementData>();
+        private EventData _currentEvent;
+        private List<EventBackgroundData> _eventBackgrounds;
+        private EventBackgroundSettings _currentSettings;
+        private string _selectedBackgroundPath;
 
         #endregion
 
@@ -57,12 +72,36 @@ namespace Photobooth.Services
         /// <summary>
         /// Gets the backgrounds assigned to the current event
         /// </summary>
-        public List<EventBackground> EventBackgrounds => _eventBackgrounds ?? new List<EventBackground>();
+        public List<EventBackgroundData> EventBackgrounds => _eventBackgrounds ?? new List<EventBackgroundData>();
 
         /// <summary>
         /// Check if event has assigned backgrounds
         /// </summary>
         public bool HasEventBackgrounds => _eventBackgrounds?.Any() == true;
+
+        /// <summary>
+        /// Gets the current event
+        /// </summary>
+        public EventData CurrentEvent => _currentEvent;
+
+        /// <summary>
+        /// Gets the current event settings
+        /// </summary>
+        public EventBackgroundSettings CurrentSettings => _currentSettings;
+
+        /// <summary>
+        /// Gets the currently selected background path
+        /// </summary>
+        public string SelectedBackgroundPath => _selectedBackgroundPath;
+
+        #endregion
+
+        #region Events
+
+        public event EventHandler EventChanged;
+        public event EventHandler BackgroundsChanged;
+        public event EventHandler SettingsChanged;
+        public event EventHandler<string> BackgroundSelected;
 
         #endregion
 
@@ -70,81 +109,11 @@ namespace Photobooth.Services
 
         private void Initialize()
         {
+            _database = new EventBackgroundDatabase();
             _backgroundService = VirtualBackgroundService.Instance;
-            _eventBackgrounds = new List<EventBackground>();
-            _placementDataCache = new Dictionary<string, Models.PhotoPlacementData>();
-            LoadPlacementCacheFromSettings();
+            _eventBackgrounds = new List<EventBackgroundData>();
 
-            // Ensure VirtualBackgroundService is initialized before we use it
-            // This will be done automatically when LoadBackgroundsAsync() is called
-
-            Log.Debug("EventBackgroundService initialized");
-
-            // Note: LoadLastSelectedEventOnStartup is now called explicitly by EventSelectionService
-            // to avoid race conditions with EventSelectionService.CheckAndRestoreSavedEvent()
-        }
-
-        private void LoadPlacementCacheFromSettings()
-        {
-            try
-            {
-                if (!string.IsNullOrEmpty(Properties.Settings.Default.CurrentBackgroundPhotoPosition))
-                {
-                    var savedCache = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, Models.PhotoPlacementData>>(Properties.Settings.Default.CurrentBackgroundPhotoPosition);
-                    if (savedCache != null)
-                    {
-                        _placementDataCache = savedCache;
-                        Log.Debug($"Loaded {_placementDataCache.Count} placement settings from cache");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Failed to load placement cache: {ex.Message}");
-                _placementDataCache = new Dictionary<string, Models.PhotoPlacementData>();
-            }
-        }
-
-        /// <summary>
-        /// Load the last selected event and its backgrounds on application startup
-        /// Public method to be called explicitly by EventSelectionService to avoid race conditions
-        /// </summary>
-        public async Task LoadLastSelectedEventOnStartup()
-        {
-            try
-            {
-                // Check if we have a saved event ID
-                int savedEventId = Properties.Settings.Default.SelectedEventId;
-                if (savedEventId > 0)
-                {
-                    // Load the event from database
-                    var database = new TemplateDatabase();
-                    var eventData = database.GetEvent(savedEventId);
-
-                    if (eventData != null)
-                    {
-                        Log.Debug($"[EventBackgroundService] Loading saved event backgrounds on startup: {eventData.Name}");
-
-                        // Just load the event backgrounds, don't set EventSelectionService.SelectedEvent
-                        // EventSelectionService will handle setting its own SelectedEvent
-                        await LoadEventBackgroundsAsync(eventData);
-
-                        Log.Debug($"[EventBackgroundService] Successfully loaded {_eventBackgrounds.Count} backgrounds for event '{eventData.Name}'");
-                    }
-                    else
-                    {
-                        Log.Debug($"[EventBackgroundService] Saved event ID {savedEventId} not found in database");
-                    }
-                }
-                else
-                {
-                    Log.Debug("[EventBackgroundService] No saved event ID found, starting with no event selected");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"[EventBackgroundService] Failed to load last selected event on startup: {ex.Message}");
-            }
+            Log.Debug("EventBackgroundService initialized with database support");
         }
 
         #endregion
@@ -152,562 +121,522 @@ namespace Photobooth.Services
         #region Event Management
 
         /// <summary>
-        /// Load backgrounds for a specific event
+        /// Load backgrounds and settings for a specific event
         /// </summary>
-        public async Task LoadEventBackgroundsAsync(EventData eventData)
+        public async Task LoadEventAsync(EventData eventData)
         {
             if (eventData == null)
             {
-                Log.Debug("No event provided, using all available backgrounds");
-                await LoadDefaultBackgroundsAsync();
+                Log.Debug("EventBackgroundService: No event provided");
+                _currentEvent = null;
+                _eventBackgrounds.Clear();
+                _currentSettings = null;
+                _selectedBackgroundPath = null;
                 return;
             }
 
-            // Check if we're already loaded for this event
-            if (_currentEvent != null && _currentEvent.Id == eventData.Id && _eventBackgrounds.Any())
-            {
-                Log.Debug($"Event {eventData.Name} already loaded, skipping reload");
-                return;
-            }
-
-            _currentEvent = eventData;
-
-            try
-            {
-                await Task.Run(() =>
-                {
-                    _eventBackgrounds.Clear();
-
-                    // Load from database or settings
-                    var savedBackgrounds = LoadSavedEventBackgrounds(eventData.Id.ToString());
-
-                    if (savedBackgrounds.Any())
-                    {
-                        _eventBackgrounds = savedBackgrounds;
-                        Log.Debug($"Loaded {_eventBackgrounds.Count} backgrounds for event {eventData.Name}");
-
-                        // Restore selected background from settings or use first as default
-                        string selectedBg = Properties.Settings.Default.SelectedVirtualBackground;
-                        if (string.IsNullOrEmpty(selectedBg) || !_eventBackgrounds.Any(b => b.BackgroundPath == selectedBg))
-                        {
-                            // Use first background if no saved selection or saved selection not in list
-                            var firstBg = _eventBackgrounds.FirstOrDefault();
-                            if (firstBg != null && !string.IsNullOrEmpty(firstBg.BackgroundPath))
-                            {
-                                selectedBg = firstBg.BackgroundPath;
-                            }
-                        }
-
-                        if (!string.IsNullOrEmpty(selectedBg))
-                        {
-                            _backgroundService.SetSelectedBackground(selectedBg);
-                            // IMPORTANT: We only save the selected background path
-                            // We do NOT change EnableBackgroundRemoval - that's controlled by user settings
-                            Properties.Settings.Default.SelectedVirtualBackground = selectedBg;
-                            Properties.Settings.Default.Save();
-                            Log.Debug($"Set background to: {selectedBg}");
-                            Log.Debug($"EnableBackgroundRemoval setting preserved as: {Properties.Settings.Default.EnableBackgroundRemoval}");
-
-                            // Load placement data for the selected background
-                            var placementData = GetPhotoPlacementForBackground(selectedBg);
-                            if (placementData != null)
-                            {
-                                Properties.Settings.Default.PhotoPlacementData = placementData.ToJson();
-                                Properties.Settings.Default.Save();
-                                Log.Debug($"Restored photo placement for background: {selectedBg}");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // If no saved backgrounds, load popular defaults
-                        LoadPopularDefaults();
-                        Log.Debug("No saved backgrounds, loaded popular defaults");
-
-                        // Restore selected background from settings or use first as default
-                        string selectedBg = Properties.Settings.Default.SelectedVirtualBackground;
-                        if (string.IsNullOrEmpty(selectedBg) || !_eventBackgrounds.Any(b => b.BackgroundPath == selectedBg))
-                        {
-                            // Use first background if no saved selection
-                            var firstBg = _eventBackgrounds.FirstOrDefault();
-                            if (firstBg != null && !string.IsNullOrEmpty(firstBg.BackgroundPath))
-                            {
-                                selectedBg = firstBg.BackgroundPath;
-                            }
-                        }
-
-                        if (!string.IsNullOrEmpty(selectedBg))
-                        {
-                            _backgroundService.SetSelectedBackground(selectedBg);
-                            // IMPORTANT: We only save the selected background path
-                            // We do NOT change EnableBackgroundRemoval - that's controlled by user settings
-                            Properties.Settings.Default.SelectedVirtualBackground = selectedBg;
-                            Properties.Settings.Default.Save();
-                            Log.Debug($"Set background to: {selectedBg}");
-                            Log.Debug($"EnableBackgroundRemoval setting preserved as: {Properties.Settings.Default.EnableBackgroundRemoval}");
-
-                            // Load placement data for the selected background
-                            var placementData = GetPhotoPlacementForBackground(selectedBg);
-                            if (placementData != null)
-                            {
-                                Properties.Settings.Default.PhotoPlacementData = placementData.ToJson();
-                                Properties.Settings.Default.Save();
-                                Log.Debug($"Restored photo placement for background: {selectedBg}");
-                            }
-                        }
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Failed to load event backgrounds: {ex.Message}");
-                LoadPopularDefaults();
-            }
-        }
-
-        /// <summary>
-        /// Load default backgrounds when no event is selected
-        /// </summary>
-        private async Task LoadDefaultBackgroundsAsync()
-        {
-            await _backgroundService.LoadBackgroundsAsync();
-            LoadPopularDefaults();
-        }
-
-        /// <summary>
-        /// Load popular default backgrounds
-        /// </summary>
-        private void LoadPopularDefaults()
-        {
-            _eventBackgrounds.Clear();
-
-            // Get popular backgrounds from each category
-            var solidBgs = _backgroundService.GetBackgroundsByCategory("Solid").Take(3);
-            var gradientBgs = _backgroundService.GetBackgroundsByCategory("Gradient").Take(2);
-
-            int order = 0;
-            foreach (var bg in solidBgs)
-            {
-                _eventBackgrounds.Add(new EventBackground
-                {
-                    BackgroundId = bg.Id,
-                    BackgroundPath = bg.FilePath,
-                    ThumbnailPath = bg.ThumbnailPath,
-                    Name = bg.Name,
-                    Category = bg.Category,
-                    DisplayOrder = order++,
-                    IsActive = true
-                });
-            }
-
-            foreach (var bg in gradientBgs)
-            {
-                _eventBackgrounds.Add(new EventBackground
-                {
-                    BackgroundId = bg.Id,
-                    BackgroundPath = bg.FilePath,
-                    ThumbnailPath = bg.ThumbnailPath,
-                    Name = bg.Name,
-                    Category = bg.Category,
-                    DisplayOrder = order++,
-                    IsActive = true
-                });
-            }
-        }
-
-        /// <summary>
-        /// Save event background assignments
-        /// </summary>
-        public async Task<bool> SaveEventBackgroundsAsync(EventData eventData, List<string> selectedBackgroundIds)
-        {
             try
             {
                 _currentEvent = eventData;
-                _eventBackgrounds.Clear();
+                Log.Debug($"EventBackgroundService: Loading event '{eventData.Name}' (ID: {eventData.Id})");
 
-                int order = 0;
-                foreach (var bgId in selectedBackgroundIds)
+                // Load settings from database
+                _currentSettings = _database.GetEventSettings(eventData.Id);
+
+                // Load backgrounds from database
+                _eventBackgrounds = _database.GetEventBackgrounds(eventData.Id);
+
+                // Find selected background
+                var selectedBg = _eventBackgrounds.FirstOrDefault(b => b.IsSelected);
+                _selectedBackgroundPath = selectedBg?.BackgroundPath;
+
+                // If no backgrounds in database, load defaults for first time
+                if (!_eventBackgrounds.Any())
                 {
-                    var bg = _backgroundService.GetBackgroundById(bgId);
-                    if (bg != null)
+                    await LoadDefaultBackgroundsAsync();
+                }
+
+                // Apply selected background to VirtualBackgroundService
+                if (!string.IsNullOrEmpty(_selectedBackgroundPath) && File.Exists(_selectedBackgroundPath))
+                {
+                    _backgroundService.SetSelectedBackground(_selectedBackgroundPath);
+
+                    // Apply placement data if available
+                    if (selectedBg?.PhotoPlacementData != null)
                     {
-                        _eventBackgrounds.Add(new EventBackground
-                        {
-                            EventId = eventData.Id.ToString(),
-                            BackgroundId = bg.Id,
-                            BackgroundPath = bg.FilePath,
-                            ThumbnailPath = bg.ThumbnailPath,
-                            Name = bg.Name,
-                            Category = bg.Category,
-                            DisplayOrder = order++,
-                            IsActive = true
-                        });
+                        ApplyPhotoPlacement(selectedBg.PhotoPlacementData);
                     }
                 }
 
-                // Save to database/settings
-                await SaveEventBackgroundsToDatabase(_currentEvent.Id.ToString(), _eventBackgrounds);
+                // Apply settings
+                ApplyEventSettings();
 
-                Log.Debug($"Saved {_eventBackgrounds.Count} backgrounds for event {eventData.Name}");
-                return true;
+                // Notify listeners
+                EventChanged?.Invoke(this, EventArgs.Empty);
+                BackgroundsChanged?.Invoke(this, EventArgs.Empty);
+                SettingsChanged?.Invoke(this, EventArgs.Empty);
+
+                Log.Debug($"EventBackgroundService: Loaded {_eventBackgrounds.Count} backgrounds for event '{eventData.Name}'");
             }
             catch (Exception ex)
             {
-                Log.Error($"Failed to save event backgrounds: {ex.Message}");
-                return false;
+                Log.Error($"EventBackgroundService: Failed to load event: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Load default backgrounds for first-time event setup
+        /// </summary>
+        private async Task LoadDefaultBackgroundsAsync()
+        {
+            if (_currentEvent == null) return;
+
+            try
+            {
+                // Get popular backgrounds from VirtualBackgroundService
+                var popularBackgrounds = GetPopularBackgrounds();
+
+                foreach (var bgPath in popularBackgrounds.Take(6)) // Limit to 6 defaults
+                {
+                    if (File.Exists(bgPath))
+                    {
+                        _database.SaveEventBackground(_currentEvent.Id, bgPath,
+                            Path.GetFileNameWithoutExtension(bgPath),
+                            isSelected: _eventBackgrounds.Count == 0); // Select first one
+                    }
+                }
+
+                // Reload from database
+                _eventBackgrounds = _database.GetEventBackgrounds(_currentEvent.Id);
+
+                Log.Debug($"EventBackgroundService: Loaded {_eventBackgrounds.Count} default backgrounds");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventBackgroundService: Failed to load default backgrounds: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Apply event settings to the application
+        /// </summary>
+        private void ApplyEventSettings()
+        {
+            if (_currentSettings == null) return;
+
+            // Note: We don't modify global Properties.Settings here
+            // The UI should use CurrentSettings to determine behavior
+
+            Log.Debug($"EventBackgroundService: Applied settings for event {_currentEvent?.Id}");
+        }
+
+        #endregion
+
+        #region Background Management
+
+        /// <summary>
+        /// Add a background to the current event (auto-saves)
+        /// </summary>
+        public void AddBackground(string backgroundPath, string backgroundName = null)
+        {
+            if (_currentEvent == null || string.IsNullOrEmpty(backgroundPath)) return;
+
+            try
+            {
+                _database.SaveEventBackground(_currentEvent.Id, backgroundPath, backgroundName);
+
+                // Reload backgrounds
+                _eventBackgrounds = _database.GetEventBackgrounds(_currentEvent.Id);
+
+                BackgroundsChanged?.Invoke(this, EventArgs.Empty);
+
+                Log.Debug($"EventBackgroundService: Added background '{backgroundPath}' to event {_currentEvent.Id}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventBackgroundService: Failed to add background: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Remove a background from the current event (auto-saves)
+        /// </summary>
+        public void RemoveBackground(string backgroundPath)
+        {
+            if (_currentEvent == null || string.IsNullOrEmpty(backgroundPath)) return;
+
+            try
+            {
+                _database.RemoveEventBackground(_currentEvent.Id, backgroundPath);
+
+                // Reload backgrounds
+                _eventBackgrounds = _database.GetEventBackgrounds(_currentEvent.Id);
+
+                // If removed background was selected, select another
+                if (_selectedBackgroundPath == backgroundPath)
+                {
+                    var firstBg = _eventBackgrounds.FirstOrDefault();
+                    if (firstBg != null)
+                    {
+                        SelectBackground(firstBg.BackgroundPath);
+                    }
+                    else
+                    {
+                        _selectedBackgroundPath = null;
+                    }
+                }
+
+                BackgroundsChanged?.Invoke(this, EventArgs.Empty);
+
+                Log.Debug($"EventBackgroundService: Removed background '{backgroundPath}' from event {_currentEvent.Id}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventBackgroundService: Failed to remove background: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Select a background for the current event (auto-saves)
+        /// </summary>
+        public void SelectBackground(string backgroundPath)
+        {
+            if (_currentEvent == null || string.IsNullOrEmpty(backgroundPath)) return;
+
+            try
+            {
+                _database.SetSelectedBackground(_currentEvent.Id, backgroundPath);
+                _selectedBackgroundPath = backgroundPath;
+
+                // Apply to VirtualBackgroundService
+                _backgroundService.SetSelectedBackground(backgroundPath);
+
+                // Reload to get updated data
+                _eventBackgrounds = _database.GetEventBackgrounds(_currentEvent.Id);
+
+                // Apply placement data if available
+                var selectedBg = _eventBackgrounds.FirstOrDefault(b => b.BackgroundPath == backgroundPath);
+                if (selectedBg?.PhotoPlacementData != null)
+                {
+                    ApplyPhotoPlacement(selectedBg.PhotoPlacementData);
+                }
+
+                BackgroundSelected?.Invoke(this, backgroundPath);
+
+                Log.Debug($"EventBackgroundService: Selected background '{backgroundPath}' for event {_currentEvent.Id}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventBackgroundService: Failed to select background: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Update photo placement for current background (auto-saves)
+        /// </summary>
+        public void UpdatePhotoPlacement(PhotoPlacementData placementData)
+        {
+            if (_currentEvent == null || string.IsNullOrEmpty(_selectedBackgroundPath)) return;
+
+            try
+            {
+                _database.UpdatePhotoPlacement(_currentEvent.Id, _selectedBackgroundPath, placementData);
+
+                // Update local cache
+                var bg = _eventBackgrounds.FirstOrDefault(b => b.BackgroundPath == _selectedBackgroundPath);
+                if (bg != null)
+                {
+                    bg.PhotoPlacementData = placementData;
+                }
+
+                Log.Debug($"EventBackgroundService: Updated photo placement for '{_selectedBackgroundPath}'");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventBackgroundService: Failed to update photo placement: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Clear all backgrounds for current event
+        /// </summary>
+        public void ClearAllBackgrounds()
+        {
+            if (_currentEvent == null) return;
+
+            try
+            {
+                _database.ClearEventBackgrounds(_currentEvent.Id);
+                _eventBackgrounds.Clear();
+                _selectedBackgroundPath = null;
+
+                BackgroundsChanged?.Invoke(this, EventArgs.Empty);
+
+                Log.Debug($"EventBackgroundService: Cleared all backgrounds for event {_currentEvent.Id}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventBackgroundService: Failed to clear backgrounds: {ex.Message}");
             }
         }
 
         #endregion
 
-        #region Database Operations
+        #region Settings Management
 
-        private List<EventBackground> LoadSavedEventBackgrounds(string eventId)
+        /// <summary>
+        /// Update event settings (auto-saves)
+        /// </summary>
+        public void UpdateSettings(EventBackgroundSettings settings)
         {
-            var backgrounds = new List<EventBackground>();
+            if (_currentEvent == null || settings == null) return;
 
             try
             {
-                // Load from database
-                var database = new TemplateDatabase();
-                var eventData = database.GetEvent(int.Parse(eventId));
+                settings.EventId = _currentEvent.Id;
+                _database.SaveEventSettings(settings);
+                _currentSettings = settings;
 
-                if (eventData != null)
+                ApplyEventSettings();
+                SettingsChanged?.Invoke(this, EventArgs.Empty);
+
+                Log.Debug($"EventBackgroundService: Updated settings for event {_currentEvent.Id}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventBackgroundService: Failed to update settings: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Update a specific setting (auto-saves)
+        /// </summary>
+        public void UpdateSetting(string settingName, object value)
+        {
+            if (_currentEvent == null || _currentSettings == null) return;
+
+            try
+            {
+                switch (settingName)
                 {
-                    // Load photo placement dictionary from database
-                    Dictionary<string, Models.PhotoPlacementData> placementDictionary = null;
-                    if (!string.IsNullOrEmpty(eventData.PhotoPlacementData))
-                    {
-                        try
-                        {
-                            placementDictionary = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, Models.PhotoPlacementData>>(eventData.PhotoPlacementData);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error($"Failed to parse photo placement data: {ex.Message}");
-                        }
-                    }
-
-                    // Load background IDs from BackgroundSettings or EventBackgroundIds
-                    string savedIds = eventData.BackgroundSettings;
-                    if (string.IsNullOrEmpty(savedIds))
-                    {
-                        savedIds = Properties.Settings.Default.EventBackgroundIds;
-                    }
-
-                    if (!string.IsNullOrEmpty(savedIds))
-                    {
-                        var ids = savedIds.Split(',');
-                        int order = 0;
-
-                        foreach (var id in ids)
-                        {
-                            var bg = _backgroundService.GetBackgroundById(id.Trim());
-                            if (bg != null)
-                            {
-                                var eventBg = new EventBackground
-                                {
-                                    EventId = eventId,
-                                    BackgroundId = bg.Id,
-                                    BackgroundPath = bg.FilePath,
-                                    ThumbnailPath = bg.ThumbnailPath,
-                                    Name = bg.Name,
-                                    Category = bg.Category,
-                                    DisplayOrder = order++,
-                                    IsActive = true
-                                };
-
-                                // Load photo placement for this background if available
-                                if (placementDictionary != null && placementDictionary.ContainsKey(bg.FilePath))
-                                {
-                                    eventBg.PhotoPlacement = placementDictionary[bg.FilePath];
-                                }
-
-                                backgrounds.Add(eventBg);
-                            }
-                        }
-                    }
+                    case "EnableBackgroundRemoval":
+                        _currentSettings.EnableBackgroundRemoval = (bool)value;
+                        break;
+                    case "UseGuestBackgroundPicker":
+                        _currentSettings.UseGuestBackgroundPicker = (bool)value;
+                        break;
+                    case "BackgroundRemovalQuality":
+                        _currentSettings.BackgroundRemovalQuality = (string)value;
+                        break;
+                    case "BackgroundRemovalEdgeRefinement":
+                        _currentSettings.BackgroundRemovalEdgeRefinement = (int)value;
+                        break;
+                    case "DefaultBackgroundPath":
+                        _currentSettings.DefaultBackgroundPath = (string)value;
+                        break;
+                    default:
+                        Log.Debug($"Unknown setting: {settingName}");
+                        return;
                 }
-                else
-                {
-                    // Fallback to settings if event not found in database
-                    var savedIds = Properties.Settings.Default.EventBackgroundIds;
-                    if (!string.IsNullOrEmpty(savedIds))
-                    {
-                        var ids = savedIds.Split(',');
-                        int order = 0;
 
-                        foreach (var id in ids)
-                        {
-                            var bg = _backgroundService.GetBackgroundById(id.Trim());
-                            if (bg != null)
-                            {
-                                backgrounds.Add(new EventBackground
-                                {
-                                    EventId = eventId,
-                                    BackgroundId = bg.Id,
-                                    BackgroundPath = bg.FilePath,
-                                    ThumbnailPath = bg.ThumbnailPath,
-                                    Name = bg.Name,
-                                    Category = bg.Category,
-                                    DisplayOrder = order++,
-                                    IsActive = true
-                                });
-                            }
-                        }
+                _database.SaveEventSettings(_currentSettings);
+                SettingsChanged?.Invoke(this, EventArgs.Empty);
+
+                Log.Debug($"EventBackgroundService: Updated setting '{settingName}' = '{value}' for event {_currentEvent.Id}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventBackgroundService: Failed to update setting '{settingName}': {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Utility Methods
+
+        /// <summary>
+        /// Copy backgrounds from another event
+        /// </summary>
+        public void CopyFromEvent(int sourceEventId)
+        {
+            if (_currentEvent == null) return;
+
+            try
+            {
+                _database.CopyEventBackgrounds(sourceEventId, _currentEvent.Id);
+
+                // Reload
+                _eventBackgrounds = _database.GetEventBackgrounds(_currentEvent.Id);
+                _currentSettings = _database.GetEventSettings(_currentEvent.Id);
+
+                BackgroundsChanged?.Invoke(this, EventArgs.Empty);
+                SettingsChanged?.Invoke(this, EventArgs.Empty);
+
+                Log.Debug($"EventBackgroundService: Copied backgrounds from event {sourceEventId} to {_currentEvent.Id}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventBackgroundService: Failed to copy backgrounds: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Get popular background paths from VirtualBackgroundService
+        /// </summary>
+        private List<string> GetPopularBackgrounds()
+        {
+            var backgrounds = new List<string>();
+
+            try
+            {
+                // Get backgrounds from VirtualBackgroundService's Models/Backgrounds folder
+                string backgroundsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Models", "Backgrounds");
+
+                if (Directory.Exists(backgroundsDir))
+                {
+                    // Popular subfolder
+                    string popularDir = Path.Combine(backgroundsDir, "Popular");
+                    if (Directory.Exists(popularDir))
+                    {
+                        backgrounds.AddRange(Directory.GetFiles(popularDir, "*.jpg"));
+                        backgrounds.AddRange(Directory.GetFiles(popularDir, "*.png"));
+                    }
+
+                    // Also check Custom folder
+                    string customDir = Path.Combine(backgroundsDir, "Custom");
+                    if (Directory.Exists(customDir))
+                    {
+                        backgrounds.AddRange(Directory.GetFiles(customDir, "*.jpg"));
+                        backgrounds.AddRange(Directory.GetFiles(customDir, "*.png"));
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log.Error($"Failed to load saved event backgrounds: {ex.Message}");
+                Log.Error($"Failed to get popular backgrounds: {ex.Message}");
             }
 
             return backgrounds;
         }
 
-        private async Task SaveEventBackgroundsToDatabase(string eventId, List<EventBackground> backgrounds)
+        /// <summary>
+        /// Apply photo placement data to the current template
+        /// </summary>
+        private void ApplyPhotoPlacement(PhotoPlacementData placementData)
         {
+            if (placementData == null) return;
+
             try
             {
-                // Create a dictionary of background paths to photo placement data
-                var placementDictionary = new Dictionary<string, Models.PhotoPlacementData>();
-
-                foreach (var bg in backgrounds)
-                {
-                    if (!string.IsNullOrEmpty(bg.BackgroundPath) && bg.PhotoPlacement != null)
-                    {
-                        placementDictionary[bg.BackgroundPath] = bg.PhotoPlacement;
-                    }
-                }
-
-                // Convert dictionary to JSON for storage
-                string photoPlacementJson = Newtonsoft.Json.JsonConvert.SerializeObject(placementDictionary);
-
-                // Get the current event from database
-                var database = new TemplateDatabase();
-                var eventData = database.GetEvent(int.Parse(eventId));
-
-                if (eventData != null)
-                {
-                    // Update the PhotoPlacementData field with our JSON dictionary
-                    eventData.PhotoPlacementData = photoPlacementJson;
-
-                    // Save background IDs for reference
-                    var backgroundIds = string.Join(",", backgrounds.Select(b => b.BackgroundId));
-                    eventData.BackgroundSettings = backgroundIds;
-
-                    // Update the event in database
-                    database.UpdateEvent(int.Parse(eventId), eventData);
-                }
-
-                // Also save to settings for quick access
-                Properties.Settings.Default.EventBackgroundIds = string.Join(",", backgrounds.Select(b => b.BackgroundId));
+                // Store in Properties.Settings for compatibility
+                Properties.Settings.Default.PhotoPlacementData = placementData.ToJson();
                 Properties.Settings.Default.Save();
 
-                await Task.CompletedTask;
+                Log.Debug("EventBackgroundService: Applied photo placement data");
             }
             catch (Exception ex)
             {
-                Log.Error($"Failed to save event backgrounds to database: {ex.Message}");
-                throw;
+                Log.Error($"Failed to apply photo placement: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Save photo placement data for a specific background
+        /// Check if a background exists for the current event
         /// </summary>
-        public async Task<bool> SavePhotoPlacementForBackground(string backgroundPath, Models.PhotoPlacementData placementData)
+        public bool HasBackground(string backgroundPath)
         {
-            try
-            {
-                // Update in-memory cache for this specific background
-                if (!string.IsNullOrEmpty(backgroundPath))
-                {
-                    _placementDataCache[backgroundPath] = placementData;
-
-                    // Save the entire cache to settings for persistence
-                    var cacheJson = Newtonsoft.Json.JsonConvert.SerializeObject(_placementDataCache);
-                    Properties.Settings.Default.CurrentBackgroundPhotoPosition = cacheJson;
-                    Properties.Settings.Default.Save();
-                }
-
-                // Find the background in our list
-                var eventBg = _eventBackgrounds?.FirstOrDefault(b => b.BackgroundPath == backgroundPath);
-                if (eventBg != null)
-                {
-                    // Update the placement data
-                    eventBg.PhotoPlacement = placementData;
-
-                    // Save to database
-                    if (_currentEvent != null)
-                    {
-                        await SaveEventBackgroundsToDatabase(_currentEvent.Id.ToString(), _eventBackgrounds);
-                    }
-
-                    Log.Debug($"Saved photo placement for background: {backgroundPath}");
-                    return true;
-                }
-
-                // Even if background not in list, we saved to cache
-                Log.Debug($"Saved photo placement to cache for: {backgroundPath}");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Failed to save photo placement: {ex.Message}");
-                return false;
-            }
+            return _eventBackgrounds?.Any(b => b.BackgroundPath == backgroundPath) == true;
         }
 
         /// <summary>
-        /// Get photo placement data for a specific background
+        /// Get placement data for a specific background
         /// </summary>
-        public Models.PhotoPlacementData GetPhotoPlacementForBackground(string backgroundPath)
+        public PhotoPlacementData GetPlacementData(string backgroundPath)
         {
-            try
-            {
-                // First try to get from in-memory cache
-                if (!string.IsNullOrEmpty(backgroundPath) && _placementDataCache.ContainsKey(backgroundPath))
-                {
-                    return _placementDataCache[backgroundPath];
-                }
-
-                // Then try to get from event backgrounds
-                var eventBg = _eventBackgrounds?.FirstOrDefault(b => b.BackgroundPath == backgroundPath);
-                if (eventBg?.PhotoPlacement != null)
-                {
-                    // Add to cache for faster access
-                    _placementDataCache[backgroundPath] = eventBg.PhotoPlacement;
-                    return eventBg.PhotoPlacement;
-                }
-
-                // Try to load cache from settings if not loaded
-                if (!string.IsNullOrEmpty(Properties.Settings.Default.CurrentBackgroundPhotoPosition))
-                {
-                    try
-                    {
-                        var savedCache = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, Models.PhotoPlacementData>>(Properties.Settings.Default.CurrentBackgroundPhotoPosition);
-                        if (savedCache != null)
-                        {
-                            _placementDataCache = savedCache;
-                            if (_placementDataCache.ContainsKey(backgroundPath))
-                            {
-                                return _placementDataCache[backgroundPath];
-                            }
-                        }
-                    }
-                    catch { }
-                }
-
-                return null;
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Failed to get photo placement: {ex.Message}");
-                return null;
-            }
+            var bg = _eventBackgrounds?.FirstOrDefault(b => b.BackgroundPath == backgroundPath);
+            return bg?.PhotoPlacementData;
         }
 
         #endregion
 
-        #region Guest Selection
+        #region Compatibility Methods (for existing code)
 
         /// <summary>
-        /// Get simplified list for guest selection
+        /// Compatibility method - redirects to LoadEventAsync
         /// </summary>
-        public List<GuestBackgroundOption> GetGuestBackgroundOptions()
+        public Task LoadEventBackgroundsAsync(EventData eventData)
         {
-            var options = new List<GuestBackgroundOption>();
-
-            foreach (var bg in _eventBackgrounds.Where(b => b.IsActive).OrderBy(b => b.DisplayOrder))
-            {
-                options.Add(new GuestBackgroundOption
-                {
-                    Id = bg.BackgroundId,
-                    Name = bg.Name,
-                    ThumbnailPath = bg.ThumbnailPath,
-                    BackgroundPath = bg.BackgroundPath
-                });
-            }
-
-            // Always add "No Background" option
-            options.Insert(0, new GuestBackgroundOption
-            {
-                Id = "none",
-                Name = "No Background",
-                ThumbnailPath = null,
-                BackgroundPath = null
-            });
-
-            return options;
+            return LoadEventAsync(eventData);
         }
 
         /// <summary>
-        /// Set the selected background for the session
+        /// Get photo placement data for a background (compatibility)
         /// </summary>
-        public void SelectBackgroundForSession(string backgroundId)
+        public PhotoPlacementData GetPhotoPlacementForBackground(string backgroundPath)
         {
-            if (backgroundId == "none")
+            return GetPlacementData(backgroundPath);
+        }
+
+        /// <summary>
+        /// Save photo placement for a background (compatibility)
+        /// </summary>
+        public void SavePhotoPlacementForBackground(string backgroundPath, PhotoPlacementData placementData)
+        {
+            if (_currentEvent == null || string.IsNullOrEmpty(backgroundPath)) return;
+            _database.UpdatePhotoPlacement(_currentEvent.Id, backgroundPath, placementData);
+        }
+
+        /// <summary>
+        /// Load last selected event on startup (compatibility)
+        /// </summary>
+        public async Task LoadLastSelectedEventOnStartup()
+        {
+            try
             {
-                _backgroundService.SetSelectedBackground(null);
-                // Don't change EnableBackgroundRemoval - that's a user preference independent of background selection
-            }
-            else
-            {
-                var bg = _eventBackgrounds.FirstOrDefault(b => b.BackgroundId == backgroundId);
-                if (bg != null)
+                // Get saved event ID from settings
+                int savedEventId = Properties.Settings.Default.SelectedEventId;
+                if (savedEventId > 0)
                 {
-                    _backgroundService.SetSelectedBackground(bg.BackgroundPath);
-                    // Don't change EnableBackgroundRemoval - that's a user preference independent of background selection
+                    var eventService = new EventService();
+                    var allEvents = eventService.GetAllEvents();
+                    var eventData = allEvents.FirstOrDefault(e => e.Id == savedEventId);
+                    if (eventData != null)
+                    {
+                        await LoadEventAsync(eventData);
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to load last selected event: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Get guest background options (compatibility)
+        /// </summary>
+        public List<EventBackground> GetGuestBackgroundOptions()
+        {
+            if (_eventBackgrounds == null) return new List<EventBackground>();
+
+            // Convert to old EventBackground format for compatibility
+            return _eventBackgrounds.Select(eb => new EventBackground
+            {
+                Id = Guid.NewGuid().ToString(),
+                BackgroundPath = eb.BackgroundPath,
+                Name = eb.BackgroundName ?? Path.GetFileNameWithoutExtension(eb.BackgroundPath),
+                IsSelected = eb.IsSelected
+            }).ToList();
+        }
+
+        /// <summary>
+        /// Select background for session (compatibility)
+        /// </summary>
+        public void SelectBackgroundForSession(string backgroundPath)
+        {
+            SelectBackground(backgroundPath);
         }
 
         #endregion
     }
-
-    #region Data Models
-
-    /// <summary>
-    /// Represents a background assigned to an event
-    /// </summary>
-    public class EventBackground
-    {
-        public string EventId { get; set; }
-        public string BackgroundId { get; set; }
-        public string BackgroundPath { get; set; }
-        public string ThumbnailPath { get; set; }
-        public string Name { get; set; }
-        public string Category { get; set; }
-        public int DisplayOrder { get; set; }
-        public bool IsActive { get; set; }
-
-        /// <summary>
-        /// JSON string containing photo placement data for this background
-        /// </summary>
-        public string PhotoPlacementJson { get; set; }
-
-        /// <summary>
-        /// Gets or sets the photo placement data (deserialized from JSON)
-        /// </summary>
-        public Models.PhotoPlacementData PhotoPlacement
-        {
-            get => string.IsNullOrEmpty(PhotoPlacementJson) ? null : Models.PhotoPlacementData.FromJson(PhotoPlacementJson);
-            set => PhotoPlacementJson = value?.ToJson();
-        }
-    }
-
-    /// <summary>
-    /// Simplified background option for guest selection
-    /// </summary>
-    public class GuestBackgroundOption
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public string ThumbnailPath { get; set; }
-        public string BackgroundPath { get; set; }
-    }
-
-    #endregion
 }

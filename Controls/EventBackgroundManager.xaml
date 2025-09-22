@@ -187,11 +187,25 @@
                                FontSize="24"
                                FontWeight="Bold"
                                Foreground="{StaticResource TextPrimaryBrush}"/>
-                    <TextBlock x:Name="EventNameText"
-                               Text="Manage backgrounds for events and virtual backgrounds"
-                               FontSize="12"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               Margin="0,4,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="Event:"
+                                   FontSize="14"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0"/>
+                        <ComboBox x:Name="EventComboBox"
+                                  MinWidth="250"
+                                  Height="35"
+                                  FontSize="14"
+                                  Background="{StaticResource CardBackgroundBrush}"
+                                  Foreground="{StaticResource TextPrimaryBrush}"
+                                  BorderBrush="{StaticResource BorderBrush}"/>
+                        <TextBlock x:Name="EventNameText"
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="20,0,0,0"/>
+                    </StackPanel>
                 </StackPanel>
 
                 <Button Grid.Column="2"
@@ -237,19 +251,23 @@
                             Content="All Backgrounds"
                             Style="{StaticResource TabButtonStyle}"
                             IsChecked="True"
-                            Checked="Tab_Changed"/>
+                            Tag="All"
+                            Checked="Tab_Checked"/>
                 <RadioButton x:Name="CategoriesTab"
                             Content="By Category"
                             Style="{StaticResource TabButtonStyle}"
-                            Checked="Tab_Changed"/>
-                <RadioButton x:Name="EventTab"
+                            Tag="Category"
+                            Checked="Tab_Checked"/>
+                <RadioButton x:Name="SelectedTab"
                             Content="Event Selection"
                             Style="{StaticResource TabButtonStyle}"
-                            Checked="Tab_Changed"/>
+                            Tag="Selected"
+                            Checked="Tab_Checked"/>
                 <RadioButton x:Name="CustomTab"
                             Content="Custom/Upload"
                             Style="{StaticResource TabButtonStyle}"
-                            Checked="Tab_Changed"/>
+                            Tag="Custom"
+                            Checked="Tab_Checked"/>
             </StackPanel>
         </Border>
 
@@ -263,7 +281,7 @@
             <!-- Left side - Background selection -->
             <Grid Grid.Column="0">
                 <!-- All Backgrounds View -->
-                <Grid x:Name="AllBackgroundsView" Visibility="Visible">
+                <Grid x:Name="AllView" Visibility="Visible">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -376,7 +394,7 @@
             </Grid>
 
             <!-- Categories View -->
-            <Grid x:Name="CategoriesView" Visibility="Collapsed">
+            <Grid x:Name="CategoryView" Visibility="Collapsed">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="200"/>
                     <ColumnDefinition Width="*"/>
@@ -388,7 +406,9 @@
                         BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="0,0,1,0">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel x:Name="CategoryList" Margin="10"/>
+                        <StackPanel x:Name="CategoryButtons" Margin="10">
+                            <!-- Category buttons will be added dynamically -->
+                        </StackPanel>
                     </ScrollViewer>
                 </Border>
 
@@ -442,7 +462,7 @@
             </Grid>
 
             <!-- Event Selection View -->
-            <Grid x:Name="EventSelectionView" Visibility="Collapsed">
+            <Grid x:Name="SelectedView" Visibility="Collapsed">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -538,7 +558,7 @@
             </Grid>
 
             <!-- Custom/Upload View -->
-            <Grid x:Name="CustomUploadView" Visibility="Collapsed">
+            <Grid x:Name="CustomView" Visibility="Collapsed">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -623,8 +643,8 @@
                 </ScrollViewer>
             </Grid>
 
-            <!-- Loading Overlay -->
-            <Grid x:Name="LoadingOverlay"
+            <!-- Loading Overlay (first instance) -->
+            <Grid x:Name="LoadingOverlay1"
                   Visibility="Collapsed"
                   Background="#CC000000">
                 <Border Background="{StaticResource CardBackgroundBrush}"
@@ -706,21 +726,129 @@
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <CheckBox x:Name="EnableGuestPickerCheckbox"
-                              Content="Enable Guest Selection"
-                              IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=UseGuestBackgroundPicker}"
+                    <CheckBox x:Name="EnableBackgroundRemovalCheckBox"
+                              Content="Enable Background Removal"
                               Foreground="{StaticResource TextPrimaryBrush}"
                               VerticalAlignment="Center"
                               Margin="0,0,20,0"
-                              Checked="EnableGuestPicker_Changed"
-                              Unchecked="EnableGuestPicker_Changed"
-                              xmlns:properties="clr-namespace:Photobooth.Properties"/>
+                              Checked="EnableBackgroundRemoval_Changed"
+                              Unchecked="EnableBackgroundRemoval_Changed"/>
 
-                    <!-- Save button removed - auto-saves on selection -->
+                    <CheckBox x:Name="UseGuestPickerCheckBox"
+                              Content="Enable Guest Selection"
+                              Foreground="{StaticResource TextPrimaryBrush}"
+                              VerticalAlignment="Center"
+                              Margin="0,0,20,0"
+                              Checked="UseGuestPicker_Changed"
+                              Unchecked="UseGuestPicker_Changed"/>
+
+                    <TextBlock Text="Quality:"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,5,0"/>
+                    <ComboBox x:Name="QualityComboBox"
+                              MinWidth="100"
+                              Height="30"
+                              VerticalAlignment="Center"
+                              Margin="0,0,20,0"
+                              SelectionChanged="Quality_SelectionChanged">
+                        <ComboBoxItem Tag="Low" Content="Low" IsSelected="True"/>
+                        <ComboBoxItem Tag="Medium" Content="Medium"/>
+                        <ComboBoxItem Tag="High" Content="High"/>
+                    </ComboBox>
+
+                    <Button Content="Copy from Event"
+                            Style="{StaticResource ModernButtonStyle}"
+                            Background="{StaticResource SecondaryAccentBrush}"
+                            Click="CopyFromEvent_Click"
+                            Margin="0,0,10,0"/>
                 </StackPanel>
             </Grid>
         </Border>
             </Grid>
+        </Border>
+
+        <!-- Loading Overlay -->
+        <Grid x:Name="LoadingOverlay" Visibility="Collapsed">
+            <Rectangle Fill="Black" Opacity="0.5"/>
+            <Border Background="{StaticResource CardBackgroundBrush}"
+                    CornerRadius="10"
+                    Padding="30"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="Loading..."
+                               FontSize="20"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               HorizontalAlignment="Center"/>
+                    <ProgressBar IsIndeterminate="True"
+                                 Width="200"
+                                 Height="6"
+                                 Margin="0,15,0,0"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Photo Positioner Overlay -->
+        <Grid x:Name="PhotoPositionerOverlay" Visibility="Collapsed">
+            <Rectangle Fill="Black" Opacity="0.7"/>
+            <Border Background="{StaticResource BackgroundBrush}"
+                    CornerRadius="10"
+                    Padding="20"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="600"
+                    Height="500">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="Photo Positioning"
+                               FontSize="20"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,15"/>
+
+                    <Grid x:Name="PositionerContent" Grid.Row="1">
+                        <!-- Photo positioning controls will be added here -->
+                    </Grid>
+
+                    <StackPanel Grid.Row="2"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Margin="0,15,0,0">
+                        <Button Content="Save Position"
+                                Style="{StaticResource ModernButtonStyle}"
+                                Background="{StaticResource AccentBrush}"
+                                Click="SavePhotoPosition_Click"
+                                Margin="0,0,10,0"/>
+                        <Button Content="Cancel"
+                                Style="{StaticResource ModernButtonStyle}"
+                                Background="{StaticResource DangerBrush}"
+                                Click="CancelPhotoPosition_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Notification Panel -->
+        <Border x:Name="NotificationPanel"
+                Background="{StaticResource AccentBrush}"
+                CornerRadius="5"
+                Padding="15,10"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Margin="0,20,0,0"
+                Visibility="Collapsed">
+            <TextBlock x:Name="NotificationText"
+                       Text="Notification"
+                       FontSize="14"
+                       Foreground="White"/>
         </Border>
     </Grid>
 </UserControl>
