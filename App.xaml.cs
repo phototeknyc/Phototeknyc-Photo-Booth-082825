@@ -32,6 +32,34 @@ namespace Photobooth
 			// Set shutdown mode to close when main window closes
 			this.ShutdownMode = ShutdownMode.OnMainWindowClose;
 
+			// Upgrade user settings from previous version if needed
+			// This preserves user settings across application updates
+			try
+			{
+				// First, try to load settings normally to check their current state
+				var selectedEventId = Photobooth.Properties.Settings.Default.SelectedEventId;
+				var eventSelectionTime = Photobooth.Properties.Settings.Default.EventSelectionTime;
+				var enableBackgroundRemoval = Photobooth.Properties.Settings.Default.EnableBackgroundRemoval;
+
+				System.Diagnostics.Debug.WriteLine($"Current settings before upgrade check:");
+				System.Diagnostics.Debug.WriteLine($"  - SelectedEventId: {selectedEventId}");
+				System.Diagnostics.Debug.WriteLine($"  - EventSelectionTime: {eventSelectionTime}");
+				System.Diagnostics.Debug.WriteLine($"  - EnableBackgroundRemoval: {enableBackgroundRemoval}");
+
+				if (Photobooth.Properties.Settings.Default.UpgradeRequired)
+				{
+					Photobooth.Properties.Settings.Default.Upgrade();
+					Photobooth.Properties.Settings.Default.UpgradeRequired = false;
+					Photobooth.Properties.Settings.Default.Save();
+					System.Diagnostics.Debug.WriteLine("User settings upgraded from previous version");
+				}
+			}
+			catch (Exception upgradeEx)
+			{
+				System.Diagnostics.Debug.WriteLine($"Settings upgrade failed: {upgradeEx.Message}");
+				// Continue with default settings if upgrade fails
+			}
+
 			// Enable DPI awareness for crisp rendering on high-DPI displays
 			if (Environment.OSVersion.Version.Major >= 6)
 			{

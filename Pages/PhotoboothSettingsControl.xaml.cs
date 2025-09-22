@@ -109,6 +109,9 @@ namespace Photobooth.Pages
 
             LoadSettings();
 
+            // Add event handlers for background removal checkboxes to ensure settings are saved
+            InitializeBackgroundRemovalHandlers();
+
             // Initialize Device Triggers
             LoadTriggers();
             RefreshPorts_Click(null, null);
@@ -300,6 +303,32 @@ namespace Photobooth.Pages
                 // Load beauty mode settings
                 beautyModeEnabledCheckBox.IsChecked = Properties.Settings.Default.BeautyModeEnabled;
                 beautyModeIntensitySlider.Value = Properties.Settings.Default.BeautyModeIntensity;
+
+                // Load background removal settings
+                if (EnableBackgroundRemovalCheckbox != null)
+                {
+                    EnableBackgroundRemovalCheckbox.IsChecked = Properties.Settings.Default.EnableBackgroundRemoval;
+                    System.Diagnostics.Debug.WriteLine($"Loaded EnableBackgroundRemoval: {Properties.Settings.Default.EnableBackgroundRemoval}");
+                }
+                if (EnableLiveViewBackgroundRemovalCheckbox != null)
+                {
+                    EnableLiveViewBackgroundRemovalCheckbox.IsChecked = Properties.Settings.Default.EnableLiveViewBackgroundRemoval;
+                    System.Diagnostics.Debug.WriteLine($"Loaded EnableLiveViewBackgroundRemoval: {Properties.Settings.Default.EnableLiveViewBackgroundRemoval}");
+                }
+                if (EnableBackgroundRemovalGPUCheckbox != null)
+                {
+                    EnableBackgroundRemovalGPUCheckbox.IsChecked = Properties.Settings.Default.BackgroundRemovalUseGPU;
+                    System.Diagnostics.Debug.WriteLine($"Loaded BackgroundRemovalUseGPU: {Properties.Settings.Default.BackgroundRemovalUseGPU}");
+                }
+                // Quality and edge refinement controls may not exist in the UI yet
+                // Just log the current settings values
+                System.Diagnostics.Debug.WriteLine($"Loaded BackgroundRemovalQuality: {Properties.Settings.Default.BackgroundRemovalQuality ?? "Balanced"}");
+
+                if (BackgroundRemovalEdgeRefinementSlider != null)
+                {
+                    BackgroundRemovalEdgeRefinementSlider.Value = Properties.Settings.Default.BackgroundRemovalEdgeRefinement;
+                    System.Diagnostics.Debug.WriteLine($"Loaded BackgroundRemovalEdgeRefinement: {Properties.Settings.Default.BackgroundRemovalEdgeRefinement}");
+                }
                 
                 // Load filter settings
                 enableFiltersCheckBox.IsChecked = Properties.Settings.Default.EnableFilters;
@@ -341,10 +370,11 @@ namespace Photobooth.Pages
                 // Load debug logging settings
                 LoadDebugLoggingSettings();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // If settings can't be loaded, use defaults
-                ResetToDefaults();
+                // Don't reset to defaults - this overwrites user settings!
+                // Just log the error and continue with whatever settings are available
+                System.Diagnostics.Debug.WriteLine($"Error loading some settings: {ex.Message}");
             }
         }
 
@@ -362,6 +392,98 @@ namespace Photobooth.Pages
                 retakeTimeoutValueText.Text = $"{(int)retakeTimeoutSlider.Value} seconds";
             if (filterIntensityValueText != null)
                 filterIntensityValueText.Text = $"{(int)filterIntensitySlider.Value}%";
+        }
+
+        private void InitializeBackgroundRemovalHandlers()
+        {
+            // Add event handlers for background removal settings to ensure they save properly
+            if (EnableBackgroundRemovalCheckbox != null)
+            {
+                EnableBackgroundRemovalCheckbox.Checked += (s, e) =>
+                {
+                    Properties.Settings.Default.EnableBackgroundRemoval = true;
+                    Properties.Settings.Default.Save();
+                    System.Diagnostics.Debug.WriteLine("EnableBackgroundRemoval set to true and saved");
+                };
+                EnableBackgroundRemovalCheckbox.Unchecked += (s, e) =>
+                {
+                    Properties.Settings.Default.EnableBackgroundRemoval = false;
+                    Properties.Settings.Default.Save();
+                    System.Diagnostics.Debug.WriteLine("EnableBackgroundRemoval set to false and saved");
+                };
+            }
+
+            if (EnableLiveViewBackgroundRemovalCheckbox != null)
+            {
+                EnableLiveViewBackgroundRemovalCheckbox.Checked += (s, e) =>
+                {
+                    Properties.Settings.Default.EnableLiveViewBackgroundRemoval = true;
+                    Properties.Settings.Default.Save();
+                    System.Diagnostics.Debug.WriteLine("EnableLiveViewBackgroundRemoval set to true and saved");
+                };
+                EnableLiveViewBackgroundRemovalCheckbox.Unchecked += (s, e) =>
+                {
+                    Properties.Settings.Default.EnableLiveViewBackgroundRemoval = false;
+                    Properties.Settings.Default.Save();
+                    System.Diagnostics.Debug.WriteLine("EnableLiveViewBackgroundRemoval set to false and saved");
+                };
+            }
+
+            if (UseGuestBackgroundPickerCheckbox != null)
+            {
+                UseGuestBackgroundPickerCheckbox.Checked += (s, e) =>
+                {
+                    Properties.Settings.Default.UseGuestBackgroundPicker = true;
+                    Properties.Settings.Default.Save();
+                    System.Diagnostics.Debug.WriteLine("UseGuestBackgroundPicker set to true and saved");
+                };
+                UseGuestBackgroundPickerCheckbox.Unchecked += (s, e) =>
+                {
+                    Properties.Settings.Default.UseGuestBackgroundPicker = false;
+                    Properties.Settings.Default.Save();
+                    System.Diagnostics.Debug.WriteLine("UseGuestBackgroundPicker set to false and saved");
+                };
+            }
+
+            if (EnableBackgroundRemovalGPUCheckbox != null)
+            {
+                EnableBackgroundRemovalGPUCheckbox.Checked += (s, e) =>
+                {
+                    Properties.Settings.Default.BackgroundRemovalUseGPU = true;
+                    Properties.Settings.Default.Save();
+                    System.Diagnostics.Debug.WriteLine("BackgroundRemovalUseGPU set to true and saved");
+                };
+                EnableBackgroundRemovalGPUCheckbox.Unchecked += (s, e) =>
+                {
+                    Properties.Settings.Default.BackgroundRemovalUseGPU = false;
+                    Properties.Settings.Default.Save();
+                    System.Diagnostics.Debug.WriteLine("BackgroundRemovalUseGPU set to false and saved");
+                };
+            }
+
+            // Add handlers for ComboBox and Slider changes
+            if (BackgroundRemovalQualityCombo != null)
+            {
+                BackgroundRemovalQualityCombo.SelectionChanged += (s, e) =>
+                {
+                    if (BackgroundRemovalQualityCombo.SelectedItem is ComboBoxItem item)
+                    {
+                        Properties.Settings.Default.BackgroundRemovalQuality = item.Tag?.ToString() ?? "Medium";
+                        Properties.Settings.Default.Save();
+                        System.Diagnostics.Debug.WriteLine($"BackgroundRemovalQuality set to {item.Tag} and saved");
+                    }
+                };
+            }
+
+            if (BackgroundRemovalEdgeRefinementSlider != null)
+            {
+                BackgroundRemovalEdgeRefinementSlider.ValueChanged += (s, e) =>
+                {
+                    Properties.Settings.Default.BackgroundRemovalEdgeRefinement = (int)e.NewValue;
+                    Properties.Settings.Default.Save();
+                    System.Diagnostics.Debug.WriteLine($"BackgroundRemovalEdgeRefinement set to {(int)e.NewValue} and saved");
+                };
+            }
         }
 
         private void CountdownSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

@@ -201,10 +201,12 @@ namespace Photobooth.Services
                         if (!string.IsNullOrEmpty(selectedBg))
                         {
                             _backgroundService.SetSelectedBackground(selectedBg);
-                            Properties.Settings.Default.EnableBackgroundRemoval = true;
+                            // IMPORTANT: We only save the selected background path
+                            // We do NOT change EnableBackgroundRemoval - that's controlled by user settings
                             Properties.Settings.Default.SelectedVirtualBackground = selectedBg;
                             Properties.Settings.Default.Save();
                             Log.Debug($"Set background to: {selectedBg}");
+                            Log.Debug($"EnableBackgroundRemoval setting preserved as: {Properties.Settings.Default.EnableBackgroundRemoval}");
 
                             // Load placement data for the selected background
                             var placementData = GetPhotoPlacementForBackground(selectedBg);
@@ -237,10 +239,12 @@ namespace Photobooth.Services
                         if (!string.IsNullOrEmpty(selectedBg))
                         {
                             _backgroundService.SetSelectedBackground(selectedBg);
-                            Properties.Settings.Default.EnableBackgroundRemoval = true;
+                            // IMPORTANT: We only save the selected background path
+                            // We do NOT change EnableBackgroundRemoval - that's controlled by user settings
                             Properties.Settings.Default.SelectedVirtualBackground = selectedBg;
                             Properties.Settings.Default.Save();
                             Log.Debug($"Set background to: {selectedBg}");
+                            Log.Debug($"EnableBackgroundRemoval setting preserved as: {Properties.Settings.Default.EnableBackgroundRemoval}");
 
                             // Load placement data for the selected background
                             var placementData = GetPhotoPlacementForBackground(selectedBg);
@@ -647,7 +651,7 @@ namespace Photobooth.Services
             if (backgroundId == "none")
             {
                 _backgroundService.SetSelectedBackground(null);
-                Properties.Settings.Default.EnableBackgroundRemoval = false;
+                // Don't change EnableBackgroundRemoval - that's a user preference independent of background selection
             }
             else
             {
@@ -655,7 +659,7 @@ namespace Photobooth.Services
                 if (bg != null)
                 {
                     _backgroundService.SetSelectedBackground(bg.BackgroundPath);
-                    Properties.Settings.Default.EnableBackgroundRemoval = true;
+                    // Don't change EnableBackgroundRemoval - that's a user preference independent of background selection
                 }
             }
         }

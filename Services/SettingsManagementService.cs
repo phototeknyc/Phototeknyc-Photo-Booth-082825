@@ -345,7 +345,9 @@ namespace Photobooth.Services
                     DefaultBackground = Properties.Settings.Default.DefaultVirtualBackground,
                     UseGPU = Properties.Settings.Default.BackgroundRemovalUseGPU
                 };
-                
+
+                Log.Debug($"SettingsManagementService: Loaded background removal settings - Enabled: {_backgroundRemovalSettings.EnableBackgroundRemoval}, LiveView: {_backgroundRemovalSettings.EnableLiveViewRemoval}");
+
                 // Sharing Settings
                 _sharingSettings = new SharingSettings
                 {
@@ -359,8 +361,9 @@ namespace Photobooth.Services
             }
             catch (Exception ex)
             {
-                Log.Error($"SettingsManagementService: Failed to load settings: {ex.Message}");
-                LoadDefaults();
+                Log.Error($"SettingsManagementService: Error during settings load: {ex.Message}");
+                // Don't call LoadDefaults() here - it overwrites user settings!
+                // Settings that failed to load will use their current values or defaults from initialization
             }
         }
         
@@ -512,8 +515,12 @@ namespace Photobooth.Services
                             BackgroundRemoval.EnableBackgroundRemoval = Convert.ToBoolean(value);
                             break;
                         case "EnableLiveViewRemoval":
+                        case "EnableLiveViewBackgroundRemoval":
                             Properties.Settings.Default.EnableLiveViewBackgroundRemoval = Convert.ToBoolean(value);
                             BackgroundRemoval.EnableLiveViewRemoval = Convert.ToBoolean(value);
+                            break;
+                        case "UseGuestBackgroundPicker":
+                            Properties.Settings.Default.UseGuestBackgroundPicker = Convert.ToBoolean(value);
                             break;
                         case "EdgeRefinement":
                         case "BackgroundRemovalEdgeRefinement":

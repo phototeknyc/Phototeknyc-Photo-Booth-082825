@@ -755,33 +755,39 @@ namespace Photobooth.Controls
         {
             try
             {
-                // Save selected background IDs
+                // Save selected background IDs - this preserves the user's background selection
                 var selectedIds = _selectedBackgrounds.Select(b => b.Id).ToList();
                 Properties.Settings.Default.EventBackgroundIds = string.Join(",", selectedIds);
 
-                // Save first selected background as the default
+                // Save first selected background as the default virtual background
+                // This is ONLY for knowing which background to display, not to enable/disable removal
                 if (_selectedBackgrounds.Any())
                 {
                     var firstBackground = _selectedBackgrounds.First();
                     Properties.Settings.Default.SelectedVirtualBackground = firstBackground.BackgroundPath;
-                    Properties.Settings.Default.EnableBackgroundRemoval = true;
+                    // IMPORTANT: We do NOT change EnableBackgroundRemoval here
+                    // That setting is controlled independently by the user
+                    System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Saved selected background: {firstBackground.BackgroundPath}");
                 }
                 else
                 {
                     // Clear selection if no backgrounds selected
                     Properties.Settings.Default.SelectedVirtualBackground = string.Empty;
+                    System.Diagnostics.Debug.WriteLine("[EventBackgroundManager] Cleared background selection");
                 }
 
                 // Save photo placement data if available
                 if (_photoPlacementData != null)
                 {
                     Properties.Settings.Default.PhotoPlacementData = _photoPlacementData.ToJson();
+                    System.Diagnostics.Debug.WriteLine("[EventBackgroundManager] Saved photo placement data");
                 }
 
-                // Save immediately
+                // Save immediately - only the background selection data, not removal settings
                 Properties.Settings.Default.Save();
 
-                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Selections saved immediately to settings");
+                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Background selections saved (IDs: {string.Join(",", selectedIds)})");
+                System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] EnableBackgroundRemoval remains: {Properties.Settings.Default.EnableBackgroundRemoval}");
             }
             catch (Exception ex)
             {

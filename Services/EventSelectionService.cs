@@ -487,10 +487,18 @@ namespace Photobooth.Services
         {
             try
             {
+                // Add detailed logging for debugging
+                Log.Debug("EventSelectionService: CheckAndRestoreSavedEvent called");
+
                 var savedEventId = Properties.Settings.Default.SelectedEventId;
                 var savedTime = Properties.Settings.Default.EventSelectionTime;
 
-                if (savedEventId > 0 && savedTime != DateTime.MinValue)
+                Log.Debug($"EventSelectionService: Settings values - SelectedEventId: {savedEventId}, EventSelectionTime: {savedTime}");
+
+                // Check against the default DateTime value (year 2000)
+                var defaultTime = new DateTime(2000, 1, 1);
+
+                if (savedEventId > 0 && savedTime != DateTime.MinValue && savedTime != defaultTime && savedTime.Year > 2000)
                 {
                     var elapsed = DateTime.Now - savedTime;
                     var expirationTime = TimeSpan.FromHours(5);

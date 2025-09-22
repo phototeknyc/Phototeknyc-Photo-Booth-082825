@@ -175,7 +175,7 @@ namespace Photobooth.Services
                 Properties.Settings.Default.PhotoPlacementData = string.Empty;
                 Properties.Settings.Default.CurrentBackgroundPhotoPosition = string.Empty;
                 Properties.Settings.Default.EventBackgroundIds = string.Empty;
-                Properties.Settings.Default.EnableBackgroundRemoval = false;
+                // Don't change EnableBackgroundRemoval - that's a user preference independent of background selection
                 Properties.Settings.Default.Save();
 
                 Log.Debug("[BackgroundSync] Background settings cleared");

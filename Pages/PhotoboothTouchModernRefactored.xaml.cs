@@ -610,10 +610,10 @@ namespace Photobooth.Pages
             
             // Setup event handlers
             SetupEventHandlers();
-            
-            // Load event/template from static properties
-            LoadInitialEventTemplate();
-            
+
+            // Load event/template from static properties - await to ensure it completes
+            await LoadInitialEventTemplate();
+
             // Update UI
             UpdateUI();
             
@@ -4269,7 +4269,7 @@ namespace Photobooth.Pages
         #endregion
 
         #region Event/Template Management
-        private async void LoadInitialEventTemplate()
+        private async Task LoadInitialEventTemplate()
         {
             Log.Debug("LoadInitialEventTemplate: Starting event/template loading");
 
@@ -4350,9 +4350,9 @@ namespace Photobooth.Pages
                         LoadTemplateForOverlay(_currentTemplate);
                     }
 
-                    // Don't show start button here - let the template selection logic decide
-                    // Single template events will auto-select and show the button
-                    // Multi-template events will show template selection instead
+                    // Show start button since we have both event and template ready
+                    startButtonOverlay.Visibility = Visibility.Visible;
+                    Log.Debug("LoadInitialEventTemplate: Showing start button - event and template ready");
                 }
             }
             else if (_currentTemplate != null)
@@ -4898,6 +4898,14 @@ namespace Photobooth.Pages
             try
             {
                 Log.Debug("=== STARTING PHOTO SESSION USING CLEAN SERVICES ===");
+
+                // Always require event selection if no event is selected
+                if (_currentEvent == null)
+                {
+                    Log.Debug("StartPhotoSession: No event selected - showing event selection overlay");
+                    ShowEventSelectionOverlay();
+                    return;
+                }
 
                 // Check if we should show guest background picker
                 if (Properties.Settings.Default.UseGuestBackgroundPicker &&

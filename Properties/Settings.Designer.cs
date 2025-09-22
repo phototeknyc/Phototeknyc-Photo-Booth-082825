@@ -1825,6 +1825,18 @@ namespace Photobooth.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool RequireEventSelection {
+            get {
+                return ((bool)(this["RequireEventSelection"]));
+            }
+            set {
+                this["RequireEventSelection"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool EnableAutoFocus {
             get {
                 return ((bool)(this["EnableAutoFocus"]));
@@ -2059,6 +2071,18 @@ namespace Photobooth.Properties {
             }
             set {
                 this["CurrentBackgroundPhotoPosition"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool UpgradeRequired {
+            get {
+                return ((bool)(this["UpgradeRequired"]));
+            }
+            set {
+                this["UpgradeRequired"] = value;
             }
         }
     }
