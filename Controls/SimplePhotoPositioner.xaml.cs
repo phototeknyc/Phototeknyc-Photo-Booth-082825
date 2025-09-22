@@ -24,8 +24,11 @@ namespace Photobooth.Controls
         private double _canvasWidth;
         private double _canvasHeight;
         private bool _isUpdatingSlider = false; // Prevent infinite loop
-        private double _defaultAspectRatio = 1.5; // Default 3:2 aspect ratio
+        private double _defaultAspectRatio = 1.5; // Default 3:2 aspect ratio for photos
+        private double _photoAspectRatio = 1.5; // Actual camera photo aspect ratio (set separately)
         private Rect _backgroundBounds; // Actual background image display bounds
+        private double _backgroundImageWidth = 0; // Actual background image pixel width
+        private double _backgroundImageHeight = 0; // Actual background image pixel height
 
         public event EventHandler<PhotoPlacementData> PositionChanged;
 
@@ -49,6 +52,28 @@ namespace Photobooth.Controls
                     LockAspectRatio.IsEnabled = false; // Disable to prevent unchecking
                 }
             };
+        }
+
+        /// <summary>
+        /// Set the photo aspect ratio (from camera/captured photos)
+        /// </summary>
+        public void SetPhotoAspectRatio(double aspectRatio)
+        {
+            if (aspectRatio > 0)
+            {
+                _photoAspectRatio = aspectRatio;
+                _defaultAspectRatio = aspectRatio;
+
+                // Update photo zone if it exists
+                if (PhotoZone != null && _canvasWidth > 0)
+                {
+                    // Maintain current width, adjust height for new aspect ratio
+                    var currentWidth = PhotoZone.Width;
+                    PhotoZone.Height = currentWidth / _defaultAspectRatio;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[SimplePhotoPositioner] Photo aspect ratio set to: {aspectRatio:F3}");
+            }
         }
 
         /// <summary>
@@ -80,10 +105,15 @@ namespace Photobooth.Controls
                     BackgroundImage.Source = bitmapImage;
                     System.Diagnostics.Debug.WriteLine($"[SimplePhotoPositioner] Background image set successfully");
 
-                    // Calculate aspect ratio from the background image
+                    // DO NOT change the photo aspect ratio based on background image!
+                    // The photo aspect ratio should come from the camera/captured photos
                     if (bitmapImage.PixelWidth > 0 && bitmapImage.PixelHeight > 0)
                     {
-                        _defaultAspectRatio = (double)bitmapImage.PixelWidth / bitmapImage.PixelHeight;
+                        // Store the actual background image dimensions
+                        _backgroundImageWidth = bitmapImage.PixelWidth;
+                        _backgroundImageHeight = bitmapImage.PixelHeight;
+
+                        System.Diagnostics.Debug.WriteLine($"[SimplePhotoPositioner] Background image dimensions: {_backgroundImageWidth}x{_backgroundImageHeight}");
 
                         // Calculate actual background display bounds
                         CalculateBackgroundBounds();
@@ -133,8 +163,8 @@ namespace Photobooth.Controls
                 return;
             }
 
-            // Calculate how the image fits with Stretch="Uniform"
-            var imageAspect = _defaultAspectRatio;
+            // Calculate how the background image fits with Stretch="Uniform"
+            var imageAspect = (double)imageSource.PixelWidth / imageSource.PixelHeight;
             var canvasAspect = canvasWidth / canvasHeight;
 
             double displayWidth, displayHeight;
@@ -156,6 +186,11 @@ namespace Photobooth.Controls
             }
 
             _backgroundBounds = new Rect(offsetX, offsetY, displayWidth, displayHeight);
+
+            System.Diagnostics.Debug.WriteLine($"[SimplePhotoPositioner] CalculateBackgroundBounds:");
+            System.Diagnostics.Debug.WriteLine($"  Canvas: {canvasWidth:F1} x {canvasHeight:F1}");
+            System.Diagnostics.Debug.WriteLine($"  Image: {imageSource.PixelWidth} x {imageSource.PixelHeight}");
+            System.Diagnostics.Debug.WriteLine($"  Background bounds: X={offsetX:F1}, Y={offsetY:F1}, W={displayWidth:F1}, H={displayHeight:F1}");
         }
 
         /// <summary>
@@ -201,7 +236,8 @@ namespace Photobooth.Controls
 
             // Update slider to match
             _isUpdatingSlider = true;
-            SizeSlider.Value = zoneWidth / PositioningCanvas.ActualWidth;
+            double referenceWidth = _backgroundBounds.Width > 0 ? _backgroundBounds.Width : PositioningCanvas.ActualWidth;
+            SizeSlider.Value = zoneWidth / referenceWidth;
             _isUpdatingSlider = false;
         }
 
@@ -228,9 +264,41 @@ namespace Photobooth.Controls
 
             var zone = _placementData.PlacementZones[0];
 
-            // Calculate relative positions (0-1)
-            if (_canvasWidth > 0 && _canvasHeight > 0 && PhotoZone != null)
+            // Calculate relative positions (0-1) based on the actual background display area
+            if (_backgroundBounds.Width > 0 && _backgroundBounds.Height > 0 && PhotoZone != null)
             {
+                var left = Canvas.GetLeft(PhotoZone);
+                var top = Canvas.GetTop(PhotoZone);
+
+                // Handle NaN values
+                if (double.IsNaN(left)) left = 0;
+                if (double.IsNaN(top)) top = 0;
+
+                System.Diagnostics.Debug.WriteLine($"[SimplePhotoPositioner] GetPlacementData calculations:");
+                System.Diagnostics.Debug.WriteLine($"  PhotoZone position: Left={left:F1}, Top={top:F1}");
+                System.Diagnostics.Debug.WriteLine($"  PhotoZone size: Width={PhotoZone.Width:F1}, Height={PhotoZone.Height:F1}");
+                System.Diagnostics.Debug.WriteLine($"  Background bounds: X={_backgroundBounds.X:F1}, Y={_backgroundBounds.Y:F1}, W={_backgroundBounds.Width:F1}, H={_backgroundBounds.Height:F1}");
+
+                // Calculate position relative to the background display bounds
+                // This accounts for letterboxing when the background doesn't fill the canvas
+                zone.X = (left - _backgroundBounds.X) / _backgroundBounds.Width;
+                zone.Y = (top - _backgroundBounds.Y) / _backgroundBounds.Height;
+                zone.Width = PhotoZone.Width / _backgroundBounds.Width;
+                zone.Height = PhotoZone.Height / _backgroundBounds.Height;
+
+                System.Diagnostics.Debug.WriteLine($"  Calculated zone: X={zone.X:F3}, Y={zone.Y:F3}, Width={zone.Width:F3}, Height={zone.Height:F3}");
+
+                // Clamp values to valid range
+                zone.X = Math.Max(0, Math.Min(1, zone.X));
+                zone.Y = Math.Max(0, Math.Min(1, zone.Y));
+                zone.Width = Math.Max(0.1, Math.Min(1, zone.Width));
+                zone.Height = Math.Max(0.1, Math.Min(1, zone.Height));
+
+                System.Diagnostics.Debug.WriteLine($"  Clamped zone: X={zone.X:F3}, Y={zone.Y:F3}, Width={zone.Width:F3}, Height={zone.Height:F3}");
+            }
+            else if (_canvasWidth > 0 && _canvasHeight > 0 && PhotoZone != null)
+            {
+                // Fallback to canvas dimensions if background bounds not available
                 var left = Canvas.GetLeft(PhotoZone);
                 var top = Canvas.GetTop(PhotoZone);
 
@@ -261,6 +329,10 @@ namespace Photobooth.Controls
             _placementData.MaintainAspectRatio = true;
             _placementData.DefaultAspectRatio = _defaultAspectRatio; // Store the aspect ratio
 
+            // Store background dimensions for proper scaling during application
+            _placementData.BackgroundWidth = _backgroundImageWidth > 0 ? _backgroundImageWidth : _canvasWidth;
+            _placementData.BackgroundHeight = _backgroundImageHeight > 0 ? _backgroundImageHeight : _canvasHeight;
+
             return _placementData;
         }
 
@@ -281,30 +353,48 @@ namespace Photobooth.Controls
 
                 var zone = data.PlacementZones[0];
 
-                // Apply to UI
-                if (_canvasWidth > 0 && _canvasHeight > 0)
+                // Apply to UI - use background bounds if available
+                double referenceWidth, referenceHeight, offsetX = 0, offsetY = 0;
+
+                if (_backgroundBounds.Width > 0 && _backgroundBounds.Height > 0)
                 {
-                    var left = zone.X * _canvasWidth;
-                    var top = zone.Y * _canvasHeight;
-                    var width = zone.Width * _canvasWidth;
-                    var height = zone.Height * _canvasHeight;
-
-                    // Always maintain aspect ratio
-                    if (data.MaintainAspectRatio != false) // Default to true
-                    {
-                        height = width / _defaultAspectRatio;
-                    }
-
-                    Canvas.SetLeft(PhotoZone, left);
-                    Canvas.SetTop(PhotoZone, top);
-                    PhotoZone.Width = width;
-                    PhotoZone.Height = height;
-
-                    // Update slider without triggering event
-                    _isUpdatingSlider = true;
-                    SizeSlider.Value = zone.Width;
-                    _isUpdatingSlider = false;
+                    // Use actual background display bounds
+                    referenceWidth = _backgroundBounds.Width;
+                    referenceHeight = _backgroundBounds.Height;
+                    offsetX = _backgroundBounds.X;
+                    offsetY = _backgroundBounds.Y;
                 }
+                else if (_canvasWidth > 0 && _canvasHeight > 0)
+                {
+                    // Fallback to canvas dimensions
+                    referenceWidth = _canvasWidth;
+                    referenceHeight = _canvasHeight;
+                }
+                else
+                {
+                    return; // Can't apply without dimensions
+                }
+
+                var left = zone.X * referenceWidth + offsetX;
+                var top = zone.Y * referenceHeight + offsetY;
+                var width = zone.Width * referenceWidth;
+                var height = zone.Height * referenceHeight;
+
+                // Always maintain aspect ratio
+                if (data.MaintainAspectRatio != false) // Default to true
+                {
+                    height = width / _defaultAspectRatio;
+                }
+
+                Canvas.SetLeft(PhotoZone, left);
+                Canvas.SetTop(PhotoZone, top);
+                PhotoZone.Width = width;
+                PhotoZone.Height = height;
+
+                // Update slider without triggering event
+                _isUpdatingSlider = true;
+                SizeSlider.Value = zone.Width;
+                _isUpdatingSlider = false;
             }
         }
 
@@ -572,12 +662,18 @@ namespace Photobooth.Controls
             _isUpdatingSlider = true;
             try
             {
-                var newWidth = PositioningCanvas.ActualWidth * e.NewValue;
+                // Use background bounds if available, otherwise use canvas dimensions
+                double referenceWidth = _backgroundBounds.Width > 0 ? _backgroundBounds.Width : PositioningCanvas.ActualWidth;
+
+                var newWidth = referenceWidth * e.NewValue;
                 var newHeight = newWidth / _defaultAspectRatio; // Always maintain default aspect ratio
 
-                // Constrain to canvas size
-                newWidth = Math.Min(newWidth, _canvasWidth);
-                newHeight = Math.Min(newHeight, _canvasHeight);
+                // Constrain to background bounds or canvas size
+                double maxWidth = _backgroundBounds.Width > 0 ? _backgroundBounds.Width : _canvasWidth;
+                double maxHeight = _backgroundBounds.Height > 0 ? _backgroundBounds.Height : _canvasHeight;
+
+                newWidth = Math.Min(newWidth, maxWidth);
+                newHeight = Math.Min(newHeight, maxHeight);
 
                 // If we hit a boundary, recalculate to maintain aspect ratio
                 if (LockAspectRatio.IsChecked == true)

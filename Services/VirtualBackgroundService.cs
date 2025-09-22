@@ -353,22 +353,33 @@ namespace Photobooth.Services
                         graphics.DrawImage(background, 0, 0, result.Width, result.Height);
 
                         // Check if we have positioning data
-                        if (placementData != null && placementData.PlacementZones != null)
+                        if (placementData != null && placementData.PlacementZones != null && placementData.PlacementZones.Count > 0)
                         {
-                            var zone = placementData.PlacementZones.FirstOrDefault(z => z.PhotoIndex == photoIndex && z.IsEnabled);
+                            // For single photo scenarios (photo index 0), use the first zone regardless of PhotoIndex setting
+                            var zone = placementData.PlacementZones.FirstOrDefault(z => z.IsEnabled);
+
+                            // Fallback to any zone if none are explicitly enabled
+                            if (zone == null && placementData.PlacementZones.Count > 0)
+                            {
+                                zone = placementData.PlacementZones[0];
+                            }
+
                             if (zone != null)
                             {
+                                Log.Debug($"[VirtualBackgroundService] Using zone for positioning - X:{zone.X:F3}, Y:{zone.Y:F3}, W:{zone.Width:F3}, H:{zone.Height:F3}");
                                 // Apply photo with positioning
                                 ApplyPhotoWithPositioning(graphics, foreground, mask, zone, result.Width, result.Height);
                             }
                             else
                             {
+                                Log.Debug($"[VirtualBackgroundService] No enabled zone found, using default centered placement");
                                 // No zone for this photo index, use default centered placement
                                 ApplyForegroundWithMask(graphics, foreground, mask);
                             }
                         }
                         else
                         {
+                            Log.Debug($"[VirtualBackgroundService] No positioning data available (null or empty), using default full-frame placement");
                             // No positioning data, use default full-frame placement
                             ApplyForegroundWithMask(graphics, foreground, mask);
                         }
@@ -399,49 +410,100 @@ namespace Photobooth.Services
             Log.Debug($"[VirtualBackgroundService] Applying photo with positioning:");
             Log.Debug($"  Zone: X={zone.X:F3}, Y={zone.Y:F3}, Width={zone.Width:F3}, Height={zone.Height:F3}");
             Log.Debug($"  Canvas: Width={canvasWidth}, Height={canvasHeight}");
+            Log.Debug($"  Original photo: Width={foreground.Width}, Height={foreground.Height}");
 
             // Calculate actual position and size
-            int x = (int)(zone.X * canvasWidth);
-            int y = (int)(zone.Y * canvasHeight);
-            int width = (int)(zone.Width * canvasWidth);
-            int height = (int)(zone.Height * canvasHeight);
+            int zoneX = (int)(zone.X * canvasWidth);
+            int zoneY = (int)(zone.Y * canvasHeight);
+            int zoneWidth = (int)(zone.Width * canvasWidth);
+            int zoneHeight = (int)(zone.Height * canvasHeight);
 
-            Log.Debug($"  Calculated position: X={x}, Y={y}, Width={width}, Height={height}");
+            // Calculate aspect ratios
+            float zoneAspect = (float)zoneWidth / zoneHeight;
+            float photoAspect = (float)foreground.Width / foreground.Height;
 
-            // Create resized versions of foreground and mask
-            using (var resizedForeground = new Bitmap(foreground, width, height))
-            using (var resizedMask = new Bitmap(mask, width, height))
+            Log.Debug($"  Zone aspect: {zoneAspect:F3}, Photo aspect: {photoAspect:F3}");
+
+            // For virtual background with positioning, we should FIT the photo into the zone
+            // without cropping off important parts (like the head)
+            Rectangle sourceRect;
+            Rectangle destRect;
+
+            // Always use the full source image to avoid cropping heads
+            sourceRect = new Rectangle(0, 0, foreground.Width, foreground.Height);
+
+            // Calculate destination to fit within zone while maintaining aspect ratio
+            if (photoAspect > zoneAspect)
             {
-                // Save current state
-                var state = graphics.Save();
+                // Photo is wider than zone - fit to width
+                int fitHeight = (int)(zoneWidth / photoAspect);
+                int yOffset = (zoneHeight - fitHeight) / 2; // Center vertically
+                destRect = new Rectangle(zoneX, zoneY + yOffset, zoneWidth, fitHeight);
+                Log.Debug($"  Photo wider than zone - fitting to width");
+            }
+            else
+            {
+                // Photo is taller than zone - fit to height
+                int fitWidth = (int)(zoneHeight * photoAspect);
+                int xOffset = (zoneWidth - fitWidth) / 2; // Center horizontally
+                destRect = new Rectangle(zoneX + xOffset, zoneY, fitWidth, zoneHeight);
+                Log.Debug($"  Photo taller than zone - fitting to height");
+            }
 
-                // Apply rotation if needed
-                if (Math.Abs(zone.Rotation) > 0.01)
+            Log.Debug($"  Source rect: X={sourceRect.X}, Y={sourceRect.Y}, Width={sourceRect.Width}, Height={sourceRect.Height}");
+            Log.Debug($"  Dest rect: X={destRect.X}, Y={destRect.Y}, Width={destRect.Width}, Height={destRect.Height}");
+
+            // Create cropped versions of foreground and mask
+            using (var croppedForeground = new Bitmap(sourceRect.Width, sourceRect.Height))
+            using (var croppedMask = new Bitmap(sourceRect.Width, sourceRect.Height))
+            {
+                // Crop the foreground and mask to the source rectangle
+                using (var g = Graphics.FromImage(croppedForeground))
                 {
-                    // Calculate center point for rotation
-                    float centerX = x + width / 2f;
-                    float centerY = y + height / 2f;
-
-                    // Rotate around center
-                    graphics.TranslateTransform(centerX, centerY);
-                    graphics.RotateTransform((float)zone.Rotation);
-                    graphics.TranslateTransform(-centerX, -centerY);
+                    g.DrawImage(foreground, new Rectangle(0, 0, sourceRect.Width, sourceRect.Height),
+                                sourceRect, GraphicsUnit.Pixel);
+                }
+                using (var g = Graphics.FromImage(croppedMask))
+                {
+                    g.DrawImage(mask, new Rectangle(0, 0, sourceRect.Width, sourceRect.Height),
+                                sourceRect, GraphicsUnit.Pixel);
                 }
 
-                // Apply border/frame if configured
-                if (zone.BorderSettings != null && zone.BorderSettings.ShowBorder)
+                // Now resize the cropped images to fit the zone
+                using (var resizedForeground = new Bitmap(croppedForeground, destRect.Width, destRect.Height))
+                using (var resizedMask = new Bitmap(croppedMask, destRect.Width, destRect.Height))
                 {
-                    ApplyPhotoBorder(graphics, x, y, width, height, zone.BorderSettings);
-                }
+                    // Save current state
+                    var state = graphics.Save();
 
-                // Draw the photo with mask at the specified position
-                using (var photoWithAlpha = ApplyMaskToImage(resizedForeground, resizedMask))
-                {
-                    graphics.DrawImage(photoWithAlpha, x, y);
-                }
+                    // Apply rotation if needed
+                    if (Math.Abs(zone.Rotation) > 0.01)
+                    {
+                        // Calculate center point for rotation
+                        float centerX = destRect.X + destRect.Width / 2f;
+                        float centerY = destRect.Y + destRect.Height / 2f;
 
-                // Restore graphics state
-                graphics.Restore(state);
+                        // Rotate around center
+                        graphics.TranslateTransform(centerX, centerY);
+                        graphics.RotateTransform((float)zone.Rotation);
+                        graphics.TranslateTransform(-centerX, -centerY);
+                    }
+
+                    // Apply border/frame if configured
+                    if (zone.BorderSettings != null && zone.BorderSettings.ShowBorder)
+                    {
+                        ApplyPhotoBorder(graphics, destRect.X, destRect.Y, destRect.Width, destRect.Height, zone.BorderSettings);
+                    }
+
+                    // Draw the photo with mask at the specified position
+                    using (var photoWithAlpha = ApplyMaskToImage(resizedForeground, resizedMask))
+                    {
+                        graphics.DrawImage(photoWithAlpha, destRect.X, destRect.Y);
+                    }
+
+                    // Restore graphics state
+                    graphics.Restore(state);
+                }
             }
         }
 

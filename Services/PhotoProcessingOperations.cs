@@ -342,24 +342,41 @@ namespace Photobooth.Services
                 {
                     using (var photo = System.Drawing.Image.FromFile(photoPath))
                     {
-                        // Calculate source rectangle to maintain aspect ratio
-                        Rectangle sourceRect;
-                        float destAspect = (float)destRect.Width / destRect.Height;
-                        float photoAspect = (float)photo.Width / photo.Height;
+                        // Check if virtual background is enabled and this photo already has it applied
+                        bool hasVirtualBackground = Properties.Settings.Default.EnableBackgroundRemoval &&
+                                                   !string.IsNullOrEmpty(VirtualBackgroundService.Instance.GetDefaultBackgroundPath()) &&
+                                                   File.Exists(VirtualBackgroundService.Instance.GetDefaultBackgroundPath());
 
-                        if (photoAspect > destAspect)
+                        Rectangle sourceRect;
+
+                        if (hasVirtualBackground)
                         {
-                            // Photo is wider - crop width
-                            int cropWidth = (int)(photo.Height * destAspect);
-                            int xOffset = (photo.Width - cropWidth) / 2;
-                            sourceRect = new Rectangle(xOffset, 0, cropWidth, photo.Height);
+                            // Photo already has virtual background with positioning applied
+                            // Use the entire image without cropping to preserve the positioning
+                            Log.Debug($"Photo has virtual background - using full image without cropping");
+                            sourceRect = new Rectangle(0, 0, photo.Width, photo.Height);
                         }
                         else
                         {
-                            // Photo is taller - crop height
-                            int cropHeight = (int)(photo.Width / destAspect);
-                            int yOffset = (photo.Height - cropHeight) / 2;
-                            sourceRect = new Rectangle(0, yOffset, photo.Width, cropHeight);
+                            // Normal photo without virtual background - apply standard cropping
+                            // Calculate source rectangle to maintain aspect ratio
+                            float destAspect = (float)destRect.Width / destRect.Height;
+                            float photoAspect = (float)photo.Width / photo.Height;
+
+                            if (photoAspect > destAspect)
+                            {
+                                // Photo is wider - crop width
+                                int cropWidth = (int)(photo.Height * destAspect);
+                                int xOffset = (photo.Width - cropWidth) / 2;
+                                sourceRect = new Rectangle(xOffset, 0, cropWidth, photo.Height);
+                            }
+                            else
+                            {
+                                // Photo is taller - crop height
+                                int cropHeight = (int)(photo.Width / destAspect);
+                                int yOffset = (photo.Height - cropHeight) / 2;
+                                sourceRect = new Rectangle(0, yOffset, photo.Width, cropHeight);
+                            }
                         }
 
                         // Draw shadow if enabled

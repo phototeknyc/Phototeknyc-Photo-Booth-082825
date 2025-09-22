@@ -562,19 +562,51 @@ namespace Photobooth.Services
         /// </summary>
         public PhotoPlacementData GetPlacementData(string backgroundPath)
         {
-            var bg = _eventBackgrounds?.FirstOrDefault(b => b.BackgroundPath == backgroundPath);
+            Log.Debug($"[EventBackgroundService.GetPlacementData] Looking for placement data for path: '{backgroundPath}'");
+
+            if (_eventBackgrounds == null || _eventBackgrounds.Count == 0)
+            {
+                Log.Debug($"[EventBackgroundService.GetPlacementData] No event backgrounds loaded");
+                return null;
+            }
+
+            // Log all available backgrounds for debugging
+            Log.Debug($"[EventBackgroundService.GetPlacementData] Available backgrounds ({_eventBackgrounds.Count}):");
+            foreach (var availableBg in _eventBackgrounds)
+            {
+                Log.Debug($"  - Path: '{availableBg.BackgroundPath}', HasPlacement: {availableBg.PhotoPlacementData != null}");
+            }
+
+            // Try exact match first
+            var bg = _eventBackgrounds.FirstOrDefault(b => b.BackgroundPath == backgroundPath);
+
+            // If not found, try matching by filename only (in case of path differences)
+            if (bg == null && !string.IsNullOrEmpty(backgroundPath))
+            {
+                var fileName = Path.GetFileName(backgroundPath);
+                bg = _eventBackgrounds.FirstOrDefault(b => Path.GetFileName(b.BackgroundPath) == fileName);
+                if (bg != null)
+                {
+                    Log.Debug($"[EventBackgroundService.GetPlacementData] Found background by filename match: '{fileName}'");
+                }
+            }
+
             var placementData = bg?.PhotoPlacementData;
 
             if (placementData != null && placementData.PlacementZones != null && placementData.PlacementZones.Count > 0)
             {
                 var zone = placementData.PlacementZones[0];
-                Log.Debug($"[EventBackgroundService] Retrieved placement data for '{Path.GetFileName(backgroundPath)}':");
+                Log.Debug($"[EventBackgroundService.GetPlacementData] Retrieved placement data for '{Path.GetFileName(backgroundPath)}':");
                 Log.Debug($"  Zone: X={zone.X:F3}, Y={zone.Y:F3}, Width={zone.Width:F3}, Height={zone.Height:F3}");
                 Log.Debug($"  MaintainAspectRatio={placementData.MaintainAspectRatio}, DefaultAspectRatio={placementData.DefaultAspectRatio}");
             }
             else
             {
-                Log.Debug($"[EventBackgroundService] No placement data found for '{Path.GetFileName(backgroundPath)}'");
+                Log.Debug($"[EventBackgroundService.GetPlacementData] No placement data found for '{Path.GetFileName(backgroundPath)}'");
+                if (bg != null)
+                {
+                    Log.Debug($"[EventBackgroundService.GetPlacementData] Background found but no placement data attached");
+                }
             }
 
             return placementData;

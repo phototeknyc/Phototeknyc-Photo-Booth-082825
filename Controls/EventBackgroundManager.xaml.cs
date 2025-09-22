@@ -10,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Controls.Primitives;
 using CameraControl.Devices;
 using Microsoft.Win32;
@@ -526,6 +527,18 @@ namespace Photobooth.Controls
                 {
                     Log.Debug($"[EventBackgroundManager] Background file exists: {backgroundPath}");
                     PhotoPositioner.SetBackground(backgroundPath);
+
+                    // Set the photo aspect ratio based on camera settings
+                    // Default to 3:2 (1.5) which is typical for most cameras
+                    // Canon cameras typically use 3:2 aspect ratio
+                    double cameraAspectRatio = 1.5; // 3:2 aspect ratio
+
+                    // Try to determine from camera settings or configuration
+                    // For Canon EOS Rebel T6, it's 3:2 (2592x1728 = 1.5)
+                    // This could be made configurable in settings if needed
+
+                    Log.Debug($"[EventBackgroundManager] Using camera aspect ratio: {cameraAspectRatio:F3} (3:2)");
+                    PhotoPositioner.SetPhotoAspectRatio(cameraAspectRatio);
                 }
                 else
                 {
@@ -1184,6 +1197,7 @@ namespace Photobooth.Controls
         private bool _isCurrentlyActive;
         private string _backgroundPath;
         private string _backgroundName;
+        private BitmapSource _thumbnailSource;
 
         public string BackgroundPath
         {
@@ -1192,10 +1206,11 @@ namespace Photobooth.Controls
             {
                 _backgroundPath = value;
                 OnPropertyChanged();
-                // Auto-generate thumbnail path from background path
+                // Auto-generate thumbnail source from background path
                 if (!string.IsNullOrEmpty(value))
                 {
-                    ThumbnailPath = value; // For now, use the same path
+                    ThumbnailPath = value; // Keep the path for compatibility
+                    LoadThumbnailSource(value);
                 }
             }
         }
@@ -1215,6 +1230,17 @@ namespace Photobooth.Controls
         public string Id => BackgroundPath; // Use path as ID
         public string ThumbnailPath { get; private set; }
         public string Name => BackgroundName ?? System.IO.Path.GetFileNameWithoutExtension(BackgroundPath ?? "");
+
+        // Non-locking image source for display
+        public BitmapSource ThumbnailSource
+        {
+            get => _thumbnailSource;
+            set
+            {
+                _thumbnailSource = value;
+                OnPropertyChanged();
+            }
+        }
 
         public string Category { get; set; }
         public bool IsCustom { get; set; }
@@ -1244,6 +1270,35 @@ namespace Photobooth.Controls
         protected void OnPropertyChanged([CallerMemberName] string propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        private void LoadThumbnailSource(string imagePath)
+        {
+            try
+            {
+                if (!File.Exists(imagePath))
+                {
+                    ThumbnailSource = null;
+                    return;
+                }
+
+                // Load image into memory without locking the file
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                bitmap.UriSource = new Uri(imagePath, UriKind.Absolute);
+                bitmap.DecodePixelWidth = 200; // Thumbnail size
+                bitmap.EndInit();
+                bitmap.Freeze(); // Make it cross-thread accessible
+
+                ThumbnailSource = bitmap;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Failed to load thumbnail for {imagePath}: {ex.Message}");
+                ThumbnailSource = null;
+            }
         }
     }
 

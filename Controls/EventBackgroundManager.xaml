@@ -361,7 +361,7 @@
                                         Tag="{Binding Id}"
                                         MouseLeftButtonDown="BackgroundItem_Click">
                                     <Grid>
-                                        <Image Source="{Binding ThumbnailPath}"
+                                        <Image Source="{Binding ThumbnailSource}"
                                                Stretch="UniformToFill"/>
                                         <Border Background="#CC000000"
                                                 VerticalAlignment="Bottom"
@@ -429,7 +429,7 @@
                                         Tag="{Binding Id}"
                                         MouseLeftButtonDown="BackgroundItem_Click">
                                     <Grid>
-                                        <Image Source="{Binding ThumbnailPath}"
+                                        <Image Source="{Binding ThumbnailSource}"
                                                Stretch="UniformToFill"/>
                                         <Border Background="#CC000000"
                                                 VerticalAlignment="Bottom"
@@ -516,7 +516,7 @@
                                         Tag="{Binding Id}"
                                         MouseLeftButtonDown="BackgroundItem_Click">
                                     <Grid>
-                                        <Image Source="{Binding ThumbnailPath}"
+                                        <Image Source="{Binding ThumbnailSource}"
                                                Stretch="UniformToFill"/>
                                         <Border Background="#CC000000"
                                                 VerticalAlignment="Bottom"
@@ -619,7 +619,7 @@
                                 <Border Style="{StaticResource BackgroundItemStyle}"
                                         Tag="{Binding Id}">
                                     <Grid>
-                                        <Image Source="{Binding ThumbnailPath}"
+                                        <Image Source="{Binding ThumbnailSource}"
                                                Stretch="UniformToFill"/>
                                         <Border Background="#CC000000"
                                                 VerticalAlignment="Bottom"
