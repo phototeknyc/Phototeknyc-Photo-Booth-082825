@@ -17,12 +17,8 @@ namespace Photobooth.Services
         {
             try
             {
-                // First ensure we preserve the current event selection
-                var currentEvent = EventSelectionService.Instance.SelectedEvent;
-                if (currentEvent != null)
-                {
-                    Log.Debug($"[BackgroundSync] Preserving event selection: {currentEvent.Name}");
-                }
+                // Don't access EventSelectionService here as it might not be initialized yet
+                // The event selection is handled separately in LoadInitialEventTemplate
 
                 // Sync background removal enabled state
                 var backgroundRemovalEnabled = Properties.Settings.Default.EnableBackgroundRemoval;

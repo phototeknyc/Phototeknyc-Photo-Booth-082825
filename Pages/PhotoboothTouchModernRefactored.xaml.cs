@@ -4273,17 +4273,19 @@ namespace Photobooth.Pages
         {
             Log.Debug("LoadInitialEventTemplate: Starting event/template loading");
 
-            // Sync all background settings from Properties.Settings
-            BackgroundSettingsSyncService.SyncAllBackgroundSettings();
-            Log.Debug("LoadInitialEventTemplate: Synced background settings");
-
             // Ensure EventBackgroundService is instantiated before EventSelectionService
             // This prevents any race conditions in initialization
             var eventBackgroundService = Services.EventBackgroundService.Instance;
             Log.Debug("LoadInitialEventTemplate: EventBackgroundService instantiated");
 
-            // First check if there's a saved event that hasn't expired
+            // FIRST: Check if there's a saved event that hasn't expired
+            // This MUST happen BEFORE syncing background settings
             await EventSelectionService.Instance.CheckAndRestoreSavedEvent();
+
+            // THEN: Sync all background settings from Properties.Settings
+            // This is done AFTER restoring the event to avoid any conflicts
+            BackgroundSettingsSyncService.SyncAllBackgroundSettings();
+            Log.Debug("LoadInitialEventTemplate: Synced background settings");
 
             // If a saved event was restored, use it
             if (EventSelectionService.Instance.SelectedEvent != null)
