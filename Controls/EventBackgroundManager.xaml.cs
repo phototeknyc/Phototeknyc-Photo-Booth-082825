@@ -58,12 +58,14 @@ namespace Photobooth.Controls
 
         public EventBackgroundManager()
         {
-            InitializeComponent();
+            // Initialize collections BEFORE InitializeComponent to avoid null references
             _allBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
             _selectedBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
             _customBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
             _filteredBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
             _events = new ObservableCollection<EventData>();
+
+            InitializeComponent();
 
             // Handle Loaded event to ensure proper initialization
             this.Loaded += EventBackgroundManager_Loaded;
@@ -262,6 +264,12 @@ namespace Photobooth.Controls
 
         private void RefreshBackgroundLists()
         {
+            // Ensure collections are initialized
+            if (_allBackgrounds == null || _selectedBackgrounds == null || _customBackgrounds == null)
+            {
+                return;
+            }
+
             _allBackgrounds.Clear();
             _selectedBackgrounds.Clear();
             _customBackgrounds.Clear();
@@ -660,6 +668,12 @@ namespace Photobooth.Controls
 
         private void Tab_Checked(object sender, RoutedEventArgs e)
         {
+            // Skip if not fully initialized
+            if (!this.IsLoaded)
+            {
+                return;
+            }
+
             if (sender is RadioButton radioButton)
             {
                 ShowView(radioButton.Tag?.ToString() ?? "All");
@@ -697,6 +711,12 @@ namespace Photobooth.Controls
 
         private void ApplyFilter()
         {
+            // Ensure collections are initialized
+            if (_filteredBackgrounds == null || _allBackgrounds == null)
+            {
+                return;
+            }
+
             _filteredBackgrounds.Clear();
 
             var filtered = _allBackgrounds.AsEnumerable();
