@@ -113,9 +113,9 @@ namespace Photobooth.Services
                 Directory.CreateDirectory(_modelsFolder);
             }
 
-            // Set legacy model paths for backward compatibility
-            _captureModelPath = Path.Combine(_modelsFolder, "u2net.onnx");
-            _liveViewModelPath = Path.Combine(_modelsFolder, "u2netp.onnx");
+            // Set MODNet model path
+            _captureModelPath = Path.Combine(_modelsFolder, "modnet.onnx");
+            _liveViewModelPath = _captureModelPath; // Use same model for live view
         }
 
         #endregion
@@ -148,114 +148,46 @@ namespace Photobooth.Services
                             return false;
                         }
 
-                        Debug.WriteLine($"[BackgroundRemoval] InitializeAsync - Checking for models...");
-
-                        // Get quality setting from properties
-                        var qualityString = Properties.Settings.Default.BackgroundRemovalQuality;
-                        BackgroundRemovalQuality quality = BackgroundRemovalQuality.Medium;
-
-                        Debug.WriteLine($"[BackgroundRemoval] Quality string from settings: '{qualityString}'");
-
-                        switch (qualityString?.ToLower())
-                        {
-                            case "fast":
-                            case "low":
-                                quality = BackgroundRemovalQuality.Low;
-                                break;
-                            case "balanced":
-                            case "medium":
-                                quality = BackgroundRemovalQuality.Medium;
-                                break;
-                            case "quality":
-                            case "high":
-                                quality = BackgroundRemovalQuality.High;
-                                break;
-                        }
+                        Debug.WriteLine($"[BackgroundRemoval] InitializeAsync - Checking for MODNet model...");
 
                         // Check if MODNet is available
                         var modnetPath = _modelManager.GetModelPath(BackgroundRemovalModelManager.ModelType.MODNet);
                         Debug.WriteLine($"[BackgroundRemoval] MODNet path: {modnetPath}");
                         Debug.WriteLine($"[BackgroundRemoval] MODNet exists: {File.Exists(modnetPath)}");
 
-                        // Try to load the best available model based on quality
-                        var recommendedModel = _modelManager.GetRecommendedModel(quality);
-                        var availableModels = _modelManager.GetAvailableModels();
-
-                        Debug.WriteLine($"[BackgroundRemoval] Quality setting: {quality}");
-                        Debug.WriteLine($"[BackgroundRemoval] Recommended model: {recommendedModel}");
-                        Debug.WriteLine($"[BackgroundRemoval] Available models: {string.Join(", ", availableModels)}");
-
-                        // Load capture model
+                        // Load MODNet model (only model we use)
                         bool captureModelLoaded = false;
-
-                        // Try recommended model first
-                        if (recommendedModel != default(BackgroundRemovalModelManager.ModelType))
+                        try
                         {
-                            try
-                            {
-                                var modelInfo = _modelManager.GetModelInfo(recommendedModel);
-                                Debug.WriteLine($"[BackgroundRemoval] Loading recommended model: {modelInfo.Name} ({modelInfo.Description})");
+                            var modelInfo = _modelManager.GetModelInfo(BackgroundRemovalModelManager.ModelType.MODNet);
+                            Debug.WriteLine($"[BackgroundRemoval] Loading MODNet model ({modelInfo.Description})");
 
-                                bool useGPU = Properties.Settings.Default.BackgroundRemovalUseGPU;
-                                _captureSession = _modelManager.LoadModel(recommendedModel, useGPU);
-                                _currentCaptureModel = recommendedModel;
-                                captureModelLoaded = true;
+                            bool useGPU = Properties.Settings.Default.BackgroundRemovalUseGPU;
+                            _captureSession = _modelManager.LoadModel(BackgroundRemovalModelManager.ModelType.MODNet, useGPU);
+                            _currentCaptureModel = BackgroundRemovalModelManager.ModelType.MODNet;
+                            captureModelLoaded = true;
 
-                                Debug.WriteLine($"[BackgroundRemoval] ✓ {modelInfo.Name} loaded successfully (Speed: {modelInfo.SpeedMultiplier}x)");
-                                Log.Info($"[BackgroundRemoval] Using {modelInfo.Name} model for capture");
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"[BackgroundRemoval] Failed to load {recommendedModel}: {ex.Message}");
-                            }
+                            Debug.WriteLine($"[BackgroundRemoval] ✓ MODNet loaded successfully (Speed: {modelInfo.SpeedMultiplier}x)");
+                            Log.Info($"[BackgroundRemoval] Using MODNet model for background removal");
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[BackgroundRemoval] Failed to load MODNet: {ex.Message}");
+                            Log.Error($"Failed to load MODNet model: {ex.Message}");
                         }
 
-                        // Fallback to legacy U2Net if recommended model failed
-                        if (!captureModelLoaded && File.Exists(_captureModelPath))
+                        if (!captureModelLoaded)
                         {
-                            try
-                            {
-                                Debug.WriteLine("[BackgroundRemoval] Falling back to legacy U2Net model...");
-                                var sessionOptions = GetSessionOptions(useGPU: false);
-                                _captureSession = new InferenceSession(_captureModelPath, sessionOptions);
-                                _currentCaptureModel = BackgroundRemovalModelManager.ModelType.U2Net;
-                                captureModelLoaded = true;
-                                Debug.WriteLine("[BackgroundRemoval] ✓ Legacy U2Net model loaded");
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"[BackgroundRemoval] ✗ Failed to load legacy model: {ex.Message}");
-                                Log.Error($"Failed to load capture model: {ex.Message}");
-                            }
+                            Debug.WriteLine("[BackgroundRemoval] Failed to load MODNet model - background removal unavailable");
+                            Log.Error("Failed to load background removal model");
+                            return false;
                         }
 
-                        // Load live view model (prefer lighter models)
-                        if (availableModels.Contains(BackgroundRemovalModelManager.ModelType.PPHumanSeg))
-                        {
-                            try
-                            {
-                                _liveViewSession = _modelManager.LoadModel(BackgroundRemovalModelManager.ModelType.PPHumanSeg, false);
-                                _currentLiveViewModel = BackgroundRemovalModelManager.ModelType.PPHumanSeg;
-                                Log.Debug("Ultra-fast PP-HumanSeg model loaded for live view");
-                            }
-                            catch { }
-                        }
-                        else if (File.Exists(_liveViewModelPath))
-                        {
-                            try
-                            {
-                                var sessionOptions = GetSessionOptions(useGPU: false, isLiveView: true);
-                                _liveViewSession = new InferenceSession(_liveViewModelPath, sessionOptions);
-                                _currentLiveViewModel = BackgroundRemovalModelManager.ModelType.U2NetP;
-                                Log.Debug("Legacy U2NetP model loaded for live view");
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.Error($"Failed to load live view model: {ex.Message}");
-                            }
-                        }
+                        // Use same MODNet model for live view
+                        _liveViewSession = _captureSession;
+                        _currentLiveViewModel = BackgroundRemovalModelManager.ModelType.MODNet;
 
-                        _isInitialized = true;
+                        _isInitialized = captureModelLoaded;
                         Debug.WriteLine($"[BackgroundRemoval] Initialization complete - Capture session: {(_captureSession != null ? "Loaded" : "Not loaded")}");
                         Debug.WriteLine($"[BackgroundRemoval] Initialization complete - Live view session: {(_liveViewSession != null ? "Loaded" : "Not loaded")}");
                         Log.Debug("BackgroundRemovalService initialized");
@@ -542,22 +474,9 @@ namespace Photobooth.Services
                 modelWidth = (int)inputShape[2];
             }
 
-            // Use model-specific sizes if we know the current model
-            if (_currentCaptureModel == BackgroundRemovalModelManager.ModelType.MODNet)
-            {
-                modelWidth = 512;
-                modelHeight = 512;
-            }
-            else if (_currentCaptureModel == BackgroundRemovalModelManager.ModelType.PPHumanSeg)
-            {
-                modelWidth = 192;
-                modelHeight = 192;
-            }
-            else if (_currentCaptureModel == BackgroundRemovalModelManager.ModelType.SelfieSegmentation)
-            {
-                modelWidth = 256;
-                modelHeight = 256;
-            }
+            // MODNet uses 512x512 input
+            modelWidth = 512;
+            modelHeight = 512;
 
             // Validate dimensions
             if (modelWidth <= 0 || modelHeight <= 0)
@@ -621,28 +540,9 @@ namespace Photobooth.Services
             var height = image.Height;
             var tensor = new DenseTensor<float>(new[] { 1, 3, height, width });
 
-            // Get normalization parameters based on current model
-            float[] mean = { 0.485f, 0.456f, 0.406f };  // Default ImageNet normalization
-            float[] std = { 0.229f, 0.224f, 0.225f };
-
-            if (_currentCaptureModel == BackgroundRemovalModelManager.ModelType.MODNet)
-            {
-                // MODNet uses different normalization
-                mean = new[] { 0.5f, 0.5f, 0.5f };
-                std = new[] { 0.5f, 0.5f, 0.5f };
-            }
-            else if (_currentCaptureModel == BackgroundRemovalModelManager.ModelType.PPHumanSeg)
-            {
-                // PP-HumanSeg also uses 0.5/0.5 normalization
-                mean = new[] { 0.5f, 0.5f, 0.5f };
-                std = new[] { 0.5f, 0.5f, 0.5f };
-            }
-            else if (_currentCaptureModel == BackgroundRemovalModelManager.ModelType.SelfieSegmentation)
-            {
-                // MediaPipe models typically don't use normalization
-                mean = new[] { 0.0f, 0.0f, 0.0f };
-                std = new[] { 1.0f, 1.0f, 1.0f };
-            }
+            // MODNet normalization parameters
+            float[] mean = { 0.5f, 0.5f, 0.5f };
+            float[] std = { 0.5f, 0.5f, 0.5f };
 
             // Access pixel data
             image.ProcessPixelRows(accessor =>

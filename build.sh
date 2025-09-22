@@ -90,8 +90,8 @@ if [ $BUILD_RESULT -eq 0 ]; then
         echo "    Place ffmpeg.exe in the project root or bin/Debug folder"
     fi
 
-    # Copy ONNX models for background removal
-    echo "Copying ONNX models for background removal..."
+    # Copy MODNet model for background removal
+    echo "Copying MODNet model for background removal..."
     MODELS_SOURCE_DIR="Models/BackgroundRemoval"
     MODELS_DEST_DIR="$BIN_DIR/Models/BackgroundRemoval"
 
@@ -101,48 +101,19 @@ if [ $BUILD_RESULT -eq 0 ]; then
         echo "  Created models directory: $MODELS_DEST_DIR"
     fi
 
-    # Copy all ONNX models for background removal
-    MODEL_COUNT=0
-    for model_file in "$MODELS_SOURCE_DIR"/*.onnx; do
-        if [ -f "$model_file" ]; then
-            filename=$(basename "$model_file")
-            cp "$model_file" "$MODELS_DEST_DIR/" 2>/dev/null || echo "Warning: Could not copy $filename"
+    # Copy only MODNet model (the only model we use)
+    MODNET_SOURCE="$MODELS_SOURCE_DIR/modnet.onnx"
+    if [ -f "$MODNET_SOURCE" ]; then
+        cp "$MODNET_SOURCE" "$MODELS_DEST_DIR/" 2>/dev/null || echo "Warning: Could not copy modnet.onnx"
 
-            # Get file size in MB
-            size_bytes=$(stat -c%s "$model_file" 2>/dev/null || stat -f%z "$model_file" 2>/dev/null)
-            size_mb=$((size_bytes / 1048576))
+        # Get file size in MB
+        size_bytes=$(stat -c%s "$MODNET_SOURCE" 2>/dev/null || stat -f%z "$MODNET_SOURCE" 2>/dev/null)
+        size_mb=$((size_bytes / 1048576))
 
-            # Special messages for known models
-            case "$filename" in
-                "u2net.onnx")
-                    echo "  ✓ u2net.onnx copied ($size_mb MB)"
-                    ;;
-                "u2netp.onnx")
-                    echo "  ✓ u2netp.onnx copied ($size_mb MB)"
-                    ;;
-                "modnet.onnx")
-                    echo "  ✓ modnet.onnx copied ($size_mb MB) - Fast human segmentation"
-                    ;;
-                "pp_humanseg_lite.onnx")
-                    echo "  ✓ pp_humanseg_lite.onnx copied ($size_mb MB) - Ultra-fast"
-                    ;;
-                "rmbg-1.4.onnx")
-                    echo "  ✓ rmbg-1.4.onnx copied ($size_mb MB) - Modern AI"
-                    ;;
-                "selfie_segmentation.onnx")
-                    echo "  ✓ selfie_segmentation.onnx copied ($size_mb MB) - Portrait optimized"
-                    ;;
-                *)
-                    echo "  ✓ $filename copied ($size_mb MB)"
-                    ;;
-            esac
-            MODEL_COUNT=$((MODEL_COUNT + 1))
-        fi
-    done
-
-    if [ $MODEL_COUNT -eq 0 ]; then
-        echo "  ⚠ No ONNX models found in $MODELS_SOURCE_DIR"
-        echo "    Background removal will use fallback method"
+        echo "  ✓ modnet.onnx copied ($size_mb MB) - Fast human segmentation"
+    else
+        echo "  ⚠ modnet.onnx not found in $MODELS_SOURCE_DIR"
+        echo "    Background removal features will not work without this model"
     fi
 
     echo ""
