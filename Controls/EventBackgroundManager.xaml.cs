@@ -349,9 +349,11 @@ namespace Photobooth.Controls
 
         #region Background Selection (Auto-Save)
 
-        private void BackgroundItem_Click(object sender, RoutedEventArgs e)
+        private void BackgroundItem_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is Button button && button.DataContext is UnifiedBackgroundViewModel viewModel)
+            // Handle clicks from both Button and Border elements
+            FrameworkElement element = sender as FrameworkElement;
+            if (element?.DataContext is UnifiedBackgroundViewModel viewModel)
             {
                 if (_currentEvent == null)
                 {
@@ -478,9 +480,10 @@ namespace Photobooth.Controls
             _autoSaveTimer.Start();
         }
 
-        private void PhotoPositioner_PositionChanged(object sender, EventArgs e)
+        private void PhotoPositioner_PositionChanged(object sender, PhotoPlacementData e)
         {
             // Handle position change from the SimplePhotoPositioner control
+            _currentPlacementData = e;
             OnPlacementDataChanged();
         }
 
