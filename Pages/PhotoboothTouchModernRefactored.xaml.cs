@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -78,6 +79,9 @@ namespace Photobooth.Pages
     /// </summary>
     public partial class PhotoboothTouchModernRefactored : Page
     {
+        // P/Invoke for deleting HBitmap handle to prevent memory leaks
+        [DllImport("gdi32.dll")]
+        private static extern bool DeleteObject(IntPtr hObject);
         #region Services - Clean Architecture (Follow the rules above!)
         // Core services - these do all the heavy lifting
         private Services.PhotoboothSessionService _sessionService;
@@ -3826,12 +3830,19 @@ namespace Photobooth.Pages
                     _currentFps = _fpsFrameCount / elapsed;
                     _fpsFrameCount = 0;
                     _lastFpsUpdate = now;
-                    
-                    // Log actual FPS periodically
-                    if (_recordingFrameCounter % 300 == 0) // Every 10 seconds at 30fps
+
+                    // Log actual FPS every second for debugging
+                    Log.Debug($"[LIVE VIEW FPS] Current: {_currentFps:F1} FPS (Target: {Properties.Settings.Default.LiveViewFrameRate} FPS)");
+
+                    // Update UI with FPS if status text is available
+                    Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        Log.Debug($"Live view actual FPS: {_currentFps:F1}");
-                    }
+                        if (debugFpsText != null)
+                        {
+                            debugFpsText.Text = $"FPS: {_currentFps:F1}";
+                            debugFpsText.Visibility = Visibility.Visible;
+                        }
+                    }));
                 }
                 
                 // Check if video recording is active FIRST - always allow live view during recording
@@ -3907,68 +3918,91 @@ namespace Photobooth.Pages
 
         private void DisplayLiveView(byte[] imageData)
         {
+            var startTime = DateTime.Now;
             try
             {
                 // Check if we're recording for debug purposes
                 var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
                 bool isVideoRecording = videoCoordinator.IsRecording;
-                
+
+                // Use System.Drawing.Bitmap for better performance (same as working project)
                 using (var ms = new MemoryStream(imageData))
+                using (var bitmap = new System.Drawing.Bitmap(ms))
                 {
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.StreamSource = ms;
-                    bitmap.EndInit();
-                    bitmap.Freeze();
-                    
-                    if (isVideoRecording && _recordingFrameCounter % 100 == 0)
+                    // Convert to BitmapSource using GetHbitmap - much faster
+                    var hBitmap = bitmap.GetHbitmap();
+                    try
                     {
-                        Log.Debug($"[RECORDING] DisplayLiveView: Bitmap {bitmap.PixelWidth}x{bitmap.PixelHeight}");
-                    }
-                    
-                    if (liveViewImage != null)
-                    {
-                        liveViewImage.Source = bitmap;
+                        var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
+                            hBitmap,
+                            IntPtr.Zero,
+                            Int32Rect.Empty,
+                            BitmapSizeOptions.FromEmptyOptions());
 
-                        // Ensure background is hidden when we have live view image
-                        if (idleBackgroundImage?.Visibility == Visibility.Visible)
+                        bitmapSource.Freeze();
+
+                        if (isVideoRecording && _recordingFrameCounter % 100 == 0)
                         {
-                            idleBackgroundImage.Visibility = Visibility.Collapsed;
+                            Log.Debug($"[RECORDING] DisplayLiveView: Bitmap {bitmap.Width}x{bitmap.Height}");
                         }
 
-                        // Update template overlay if needed (only during live view, not when displaying captured photos)
-                        if (_showTemplateOverlay && !_isDisplayingCapturedPhoto && !_isDisplayingSessionResult)
+                        if (liveViewImage != null)
                         {
-                            UpdateTemplateOverlay(bitmap.PixelWidth, bitmap.PixelHeight);
-                        }
-                        else if (_isDisplayingCapturedPhoto || _isDisplayingSessionResult)
-                        {
-                            // Hide overlay when showing captured photos or session results
-                            if (templateOverlayCanvas != null)
+                            liveViewImage.Source = bitmapSource;
+
+                            // Ensure background is hidden when we have live view image
+                            if (idleBackgroundImage?.Visibility == Visibility.Visible)
                             {
-                                templateOverlayCanvas.Children.Clear();
+                                idleBackgroundImage.Visibility = Visibility.Collapsed;
+                            }
+
+                            // Update template overlay if needed (only during live view, not when displaying captured photos)
+                            if (_showTemplateOverlay && !_isDisplayingCapturedPhoto && !_isDisplayingSessionResult)
+                            {
+                                UpdateTemplateOverlay(bitmap.Width, bitmap.Height);
+                            }
+                            else if (_isDisplayingCapturedPhoto || _isDisplayingSessionResult)
+                            {
+                                // Hide overlay when showing captured photos or session results
+                                if (templateOverlayCanvas != null)
+                                {
+                                    templateOverlayCanvas.Children.Clear();
+                                }
+                            }
+
+                            if (isVideoRecording && _recordingFrameCounter % 60 == 0)
+                            {
+                                Log.Debug($"[RECORDING] DisplayLiveView: Set liveViewImage.Source to new bitmap - UI should be showing live camera feed");
+
+                                // Force UI update
+                                liveViewImage.InvalidateVisual();
+                                Log.Debug($"[RECORDING] DisplayLiveView: Called InvalidateVisual() to force UI update");
                             }
                         }
-
-                        if (isVideoRecording && _recordingFrameCounter % 60 == 0)
+                        else if (isVideoRecording)
                         {
-                            Log.Debug($"[RECORDING] DisplayLiveView: Set liveViewImage.Source to new bitmap - UI should be showing live camera feed");
-
-                            // Force UI update
-                            liveViewImage.InvalidateVisual();
-                            Log.Debug($"[RECORDING] DisplayLiveView: Called InvalidateVisual() to force UI update");
+                            Log.Debug($"[RECORDING] ERROR: liveViewImage is NULL - cannot display!");
                         }
                     }
-                    else if (isVideoRecording)
+                    finally
                     {
-                        Log.Debug($"[RECORDING] ERROR: liveViewImage is NULL - cannot display!");
+                        // IMPORTANT: Delete the HBitmap to prevent memory leak
+                        DeleteObject(hBitmap);
                     }
                 }
             }
             catch (Exception ex)
             {
                 Log.Error($"DisplayLiveView error: {ex.Message}");
+            }
+            finally
+            {
+                // Log performance metrics periodically
+                if (_fpsFrameCount % 30 == 0) // Every 30 frames
+                {
+                    var processingTime = (DateTime.Now - startTime).TotalMilliseconds;
+                    Log.Debug($"[PERFORMANCE] DisplayLiveView processing time: {processingTime:F1}ms");
+                }
             }
         }
 

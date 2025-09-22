@@ -299,6 +299,22 @@
                         </Border>
                     </Grid>
 
+                    <!-- FPS Debug Display -->
+                    <Border x:Name="debugFpsBorder"
+                            Background="#CC000000"
+                            CornerRadius="4"
+                            Padding="8,4"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Margin="10"
+                            Visibility="Visible">
+                        <TextBlock x:Name="debugFpsText"
+                                   Text="FPS: 0.0"
+                                   Foreground="#FFFF00"
+                                   FontSize="14"
+                                   FontWeight="Bold"/>
+                    </Border>
+
                     <!-- Centered Start Button -->
                     <Border x:Name="startButtonOverlay"
                             Width="300"
