@@ -478,6 +478,12 @@ namespace Photobooth.Controls
             _autoSaveTimer.Start();
         }
 
+        private void PhotoPositioner_PositionChanged(object sender, EventArgs e)
+        {
+            // Handle position change from the SimplePhotoPositioner control
+            OnPlacementDataChanged();
+        }
+
         private void AutoSaveTimer_Tick(object sender, EventArgs e)
         {
             _autoSaveTimer.Stop();
