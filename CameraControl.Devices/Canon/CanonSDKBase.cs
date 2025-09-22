@@ -51,6 +51,8 @@ namespace CameraControl.Devices.Canon
     public class CanonSDKBase : BaseMTPCamera
     {
         private EosLiveImageEventArgs _liveViewImageData = null;
+        private DateTime _lastLiveViewDownload = DateTime.MinValue;
+        private const int MIN_DOWNLOAD_INTERVAL_MS = 30; // Limit to ~33 FPS max
         private bool _recording = false;
 
         public EosCamera Camera = null;
@@ -1599,15 +1601,29 @@ namespace CameraControl.Devices.Canon
 
         public override LiveViewData GetLiveViewImage()
         {
-
                 LiveViewData viewData = new LiveViewData();
-                if (Monitor.TryEnter(Locker, 10))
+
+                // Rate limit downloads to prevent overwhelming the camera
+                var now = DateTime.Now;
+                var elapsed = (now - _lastLiveViewDownload).TotalMilliseconds;
+                bool shouldDownload = elapsed >= MIN_DOWNLOAD_INTERVAL_MS;
+
+                // Try to enter with minimal timeout for faster response
+                if (Monitor.TryEnter(Locker, shouldDownload ? 10 : 1))
                 {
                     try
                     {
                         if (Camera == null)
                             return viewData;
-                        Camera.DownloadEvf();
+
+                        // Only download new frame if enough time has passed
+                        if (shouldDownload)
+                        {
+                            Camera.DownloadEvf();
+                            _lastLiveViewDownload = now;
+                        }
+
+                        // Return cached data even if we didn't download a new frame
                         if (_liveViewImageData != null)
                         {
                             //DeviceReady();
@@ -1635,6 +1651,24 @@ namespace CameraControl.Devices.Canon
                     {
                         Monitor.Exit(Locker);
                     }
+                }
+                else if (_liveViewImageData != null)
+                {
+                    // If we couldn't get the lock, return last cached frame
+                    viewData.HaveFocusData = true;
+                    viewData.ImageDataPosition = 0;
+                    viewData.ImageData = _liveViewImageData.ImageData;
+                    viewData.ImageHeight = _liveViewImageData.ImageSize.Height;
+                    viewData.ImageWidth = _liveViewImageData.ImageSize.Width;
+                    viewData.LiveViewImageHeight = 100;
+                    viewData.LiveViewImageWidth = 100;
+                    viewData.FocusX = _liveViewImageData.ZommBounds.X +
+                                      (_liveViewImageData.ZommBounds.Width / 2);
+                    viewData.FocusY = _liveViewImageData.ZommBounds.Y +
+                                      (_liveViewImageData.ZommBounds.Height / 2);
+                    viewData.FocusFrameXSize = _liveViewImageData.ZommBounds.Width;
+                    viewData.FocusFrameYSize = _liveViewImageData.ZommBounds.Height;
+                    viewData.MovieIsRecording = _recording;
                 }
             return viewData;
         }

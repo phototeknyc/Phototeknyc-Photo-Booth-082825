@@ -130,6 +130,12 @@ namespace Photobooth.Pages
         private DateTime _lastFpsUpdate = DateTime.Now;
         private int _fpsFrameCount = 0;
         private double _currentFps = 0;
+
+        // Optimized live view service
+        private Services.OptimizedLiveViewService _optimizedLiveView;
+
+        // Template overlay performance toggle
+        private bool _disableTemplateOverlay = false;
         
         private void SetDisplayingSessionResult(bool value)
         {
@@ -1350,6 +1356,9 @@ namespace Photobooth.Pages
                 // Start live view if idle live view is enabled and not already started
                 if (!_liveViewTimer.IsEnabled && Properties.Settings.Default.EnableIdleLiveView)
                 {
+                    // Try to use optimized live view for better performance
+                    StartOptimizedLiveView(cameraDevice);
+
                     cameraDevice?.StartLiveView();
                     _liveViewTimer.Start();
                     UpdateIdleBackgroundVisibility(); // Hide background when live view starts
@@ -1424,6 +1433,9 @@ namespace Photobooth.Pages
                 // Ensure live view is running for the session (needed for capture)
                 if (DeviceManager?.SelectedCameraDevice != null && !_liveViewTimer.IsEnabled)
                 {
+                    // Try to use optimized live view for better performance
+                    StartOptimizedLiveView(DeviceManager.SelectedCameraDevice);
+
                     DeviceManager.SelectedCameraDevice.StartLiveView();
                     _liveViewTimer.Start();
                     UpdateIdleBackgroundVisibility(); // Hide background when live view starts
@@ -3821,6 +3833,56 @@ namespace Photobooth.Pages
         {
             try
             {
+                // Check if optimized live view is available and running
+                if (_optimizedLiveView != null && _optimizedLiveView.IsRunning)
+                {
+                    // Use optimized service for better performance
+                    var frame = _optimizedLiveView.GetNextFrame();
+                    if (frame != null)
+                    {
+                        // Don't update live view if we're displaying a captured photo or session is complete
+                        var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
+                        bool isVideoRecording = videoCoordinator.IsRecording;
+
+                        if (!isVideoRecording && (_isDisplayingCapturedPhoto || _isDisplayingSessionResult))
+                        {
+                            return;
+                        }
+
+                        liveViewImage.Source = frame;
+
+                        // Ensure background is hidden when we have live view image
+                        if (idleBackgroundImage?.Visibility == Visibility.Visible)
+                        {
+                            idleBackgroundImage.Visibility = Visibility.Collapsed;
+                        }
+
+                        // Update template overlay if needed - this stays the same!
+                        if (!_disableTemplateOverlay && _showTemplateOverlay && !_isDisplayingCapturedPhoto && !_isDisplayingSessionResult)
+                        {
+                            UpdateTemplateOverlay(frame.PixelWidth, frame.PixelHeight);
+                        }
+                        else if (_isDisplayingCapturedPhoto || _isDisplayingSessionResult)
+                        {
+                            // Hide overlay when showing captured photos or session results
+                            if (templateOverlayCanvas != null)
+                            {
+                                templateOverlayCanvas.Children.Clear();
+                            }
+                        }
+
+                        // Update FPS from optimized service
+                        _currentFps = _optimizedLiveView.ProcessFPS;
+                        if (debugFpsText != null)
+                        {
+                            debugFpsText.Text = $"FPS: {_currentFps:F1} (Q:{_optimizedLiveView.QueuedFrames})";
+                            debugFpsText.Visibility = Visibility.Visible;
+                        }
+                    }
+                    return; // Skip standard processing
+                }
+
+                // Standard live view processing (fallback)
                 // Update FPS counter
                 _fpsFrameCount++;
                 var now = DateTime.Now;
@@ -3844,26 +3906,26 @@ namespace Photobooth.Pages
                         }
                     }));
                 }
-                
+
                 // Check if video recording is active FIRST - always allow live view during recording
-                var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
-                bool isVideoRecording = videoCoordinator.IsRecording;
-                
+                var videoCoordinator2 = Services.VideoRecordingCoordinatorService.Instance;
+                bool isVideoRecording2 = videoCoordinator2.IsRecording;
+
                 // Don't update live view if we're displaying a captured photo or session is complete
                 // BUT always allow live view during video recording
-                if (!isVideoRecording && (_isDisplayingCapturedPhoto || _isDisplayingSessionResult))
+                if (!isVideoRecording2 && (_isDisplayingCapturedPhoto || _isDisplayingSessionResult))
                 {
                     return;
                 }
-                
+
                 var device = DeviceManager?.SelectedCameraDevice;
                 if (device?.IsConnected == true)
                 {
                     // Track frames during recording for logging purposes
-                    if (isVideoRecording)
+                    if (isVideoRecording2)
                     {
                         _recordingFrameCounter++;
-                        
+
                         if (_recordingFrameCounter % 180 == 0) // Log every ~6 seconds at 30fps
                         {
                             Log.Debug($"[RECORDING] LiveViewTimer_Tick: Processing live view frame during recording (FPS: {_currentFps:F1})");
@@ -3873,7 +3935,7 @@ namespace Photobooth.Pages
                     {
                         _recordingFrameCounter = 0;
                     }
-                    
+
                     LiveViewData liveViewData = null;
                     try
                     {
@@ -3881,30 +3943,30 @@ namespace Photobooth.Pages
                     }
                     catch (Exception ex)
                     {
-                        if (isVideoRecording && _recordingFrameCounter % 60 == 0)
+                        if (isVideoRecording2 && _recordingFrameCounter % 60 == 0)
                         {
                             Log.Debug($"[RECORDING] GetLiveViewImage exception: {ex.Message}");
                         }
                     }
-                    
+
                     // Minimal logging during recording to reduce overhead
-                    if (isVideoRecording && _recordingFrameCounter % 100 == 0) // Log every ~10 seconds
+                    if (isVideoRecording2 && _recordingFrameCounter % 100 == 0) // Log every ~10 seconds
                     {
                         if (liveViewData?.ImageData != null && liveViewData.ImageData.Length > 0)
                         {
                             Log.Debug($"[RECORDING] Live view active: {liveViewData.ImageData.Length} bytes");
                         }
                     }
-                    
+
                     if (liveViewData?.ImageData != null && liveViewData.ImageData.Length > 0)
                     {
                         DisplayLiveView(liveViewData.ImageData);
-                        if (isVideoRecording && _recordingFrameCounter % 100 == 0)
+                        if (isVideoRecording2 && _recordingFrameCounter % 100 == 0)
                         {
                             Log.Debug("[RECORDING] DisplayLiveView called successfully");
                         }
                     }
-                    else if (isVideoRecording && _recordingFrameCounter % 60 == 0)
+                    else if (isVideoRecording2 && _recordingFrameCounter % 60 == 0)
                     {
                         Log.Debug("[RECORDING] No live view data to display during video recording");
                     }
@@ -3957,7 +4019,7 @@ namespace Photobooth.Pages
                             }
 
                             // Update template overlay if needed (only during live view, not when displaying captured photos)
-                            if (_showTemplateOverlay && !_isDisplayingCapturedPhoto && !_isDisplayingSessionResult)
+                            if (!_disableTemplateOverlay && _showTemplateOverlay && !_isDisplayingCapturedPhoto && !_isDisplayingSessionResult)
                             {
                                 UpdateTemplateOverlay(bitmap.Width, bitmap.Height);
                             }
@@ -4005,6 +4067,76 @@ namespace Photobooth.Pages
                 }
             }
         }
+
+        #region Optimized Live View
+
+        /// <summary>
+        /// Start optimized live view service for better performance
+        /// </summary>
+        private void StartOptimizedLiveView(ICameraDevice camera)
+        {
+            try
+            {
+                if (_optimizedLiveView == null)
+                {
+                    _optimizedLiveView = Services.OptimizedLiveViewService.Instance;
+                    _optimizedLiveView.FrameReady += OnOptimizedFrameReady;
+                    _optimizedLiveView.StatusUpdate += OnOptimizedStatusUpdate;
+                }
+
+                if (!_optimizedLiveView.IsRunning && camera != null)
+                {
+                    _optimizedLiveView.Start(camera);
+                    Log.Debug("Started optimized live view service");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Failed to start optimized live view: {ex.Message}");
+                // Fall back to standard live view
+            }
+        }
+
+        /// <summary>
+        /// Stop optimized live view service
+        /// </summary>
+        private void StopOptimizedLiveView()
+        {
+            try
+            {
+                if (_optimizedLiveView?.IsRunning == true)
+                {
+                    _optimizedLiveView.Stop();
+                    Log.Debug("Stopped optimized live view service");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Error stopping optimized live view: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handle optimized frame ready events
+        /// </summary>
+        private void OnOptimizedFrameReady(object sender, System.Windows.Media.Imaging.BitmapSource frame)
+        {
+            // Frame is handled in LiveViewTimer_Tick to maintain sync with template overlay
+        }
+
+        /// <summary>
+        /// Handle optimized status updates
+        /// </summary>
+        private void OnOptimizedStatusUpdate(object sender, string status)
+        {
+            // Log performance status
+            if (DateTime.Now.Second % 5 == 0)
+            {
+                Log.Debug($"[OPTIMIZED LIVE VIEW] {status}");
+            }
+        }
+
+        #endregion
 
         #region Camera Rotation
 
@@ -6341,6 +6473,29 @@ namespace Photobooth.Pages
                 ToggleTemplateOverlay();
                 e.Handled = true;
                 Log.Debug($"Template overlay toggled: {_showTemplateOverlay}");
+                return;
+            }
+
+            // Toggle template overlay performance mode with Ctrl+T (disable for testing FPS)
+            if (e.Key == Key.T && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                _disableTemplateOverlay = !_disableTemplateOverlay;
+                e.Handled = true;
+
+                // Clear overlay if we're disabling it
+                if (_disableTemplateOverlay && templateOverlayCanvas != null)
+                {
+                    templateOverlayCanvas.Children.Clear();
+                }
+
+                Log.Debug($"Template overlay DISABLED for performance testing: {_disableTemplateOverlay}");
+
+                // Show status to user
+                if (debugFpsText != null)
+                {
+                    string status = _disableTemplateOverlay ? "Template Overlay: DISABLED" : "Template Overlay: ENABLED";
+                    debugFpsText.Text = $"FPS: {_currentFps:F1} - {status}";
+                }
                 return;
             }
 
