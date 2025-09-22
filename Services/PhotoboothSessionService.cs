@@ -271,15 +271,25 @@ namespace Photobooth.Services
                         {
                             // Get selected background (if any)
                             string selectedBackground = virtualBgService.GetDefaultBackgroundPath();
+                            Log.Debug($"PhotoboothSessionService: GetDefaultBackgroundPath returned: '{selectedBackground}'");
+                            Log.Debug($"PhotoboothSessionService: File exists check: {(!string.IsNullOrEmpty(selectedBackground) ? File.Exists(selectedBackground).ToString() : "path is empty")}");
 
                             // Apply virtual background if one is selected
-                            if (!string.IsNullOrEmpty(selectedBackground))
+                            if (!string.IsNullOrEmpty(selectedBackground) && File.Exists(selectedBackground))
                             {
                                 string outputFolder = Path.GetDirectoryName(processedPhotoPath);
 
                                 // Get photo placement data for this background
                                 var placementData = EventBackgroundService.Instance.GetPhotoPlacementForBackground(selectedBackground);
-                                if (placementData == null)
+
+                                if (placementData != null && placementData.PlacementZones != null && placementData.PlacementZones.Count > 0)
+                                {
+                                    var zone = placementData.PlacementZones[0];
+                                    Log.Debug($"[PhotoboothSessionService] Using placement data from EventBackgroundService:");
+                                    Log.Debug($"  Zone: X={zone.X:F3}, Y={zone.Y:F3}, Width={zone.Width:F3}, Height={zone.Height:F3}");
+                                    Log.Debug($"  MaintainAspectRatio={placementData.MaintainAspectRatio}, DefaultAspectRatio={placementData.DefaultAspectRatio}");
+                                }
+                                else if (placementData == null)
                                 {
                                     // Try to get from settings if not in event service
                                     var savedPlacementJson = Properties.Settings.Default.PhotoPlacementData;
@@ -288,11 +298,19 @@ namespace Photobooth.Services
                                         try
                                         {
                                             placementData = Models.PhotoPlacementData.FromJson(savedPlacementJson);
+                                            if (placementData != null)
+                                            {
+                                                Log.Debug("[PhotoboothSessionService] Using placement data from Settings");
+                                            }
                                         }
                                         catch
                                         {
                                             Log.Debug("Could not parse saved placement data");
                                         }
+                                    }
+                                    else
+                                    {
+                                        Log.Debug("[PhotoboothSessionService] No placement data available");
                                     }
                                 }
 

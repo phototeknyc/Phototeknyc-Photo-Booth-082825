@@ -34,9 +34,21 @@ namespace Photobooth.Controls
             InitializeComponent();
             _placementData = new PhotoPlacementData
             {
+                MaintainAspectRatio = true, // Always maintain aspect ratio
+                DefaultAspectRatio = _defaultAspectRatio,
                 PlacementZones = new List<PhotoPlacementZone>()
             };
             _touchPoints = new Dictionary<int, Point>();
+
+            // Always lock aspect ratio for background removal workflow
+            this.Loaded += (sender, e) =>
+            {
+                if (LockAspectRatio != null)
+                {
+                    LockAspectRatio.IsChecked = true;
+                    LockAspectRatio.IsEnabled = false; // Disable to prevent unchecking
+                }
+            };
         }
 
         /// <summary>
@@ -48,20 +60,25 @@ namespace Photobooth.Controls
             {
                 if (!string.IsNullOrEmpty(imagePath))
                 {
+                    System.Diagnostics.Debug.WriteLine($"[SimplePhotoPositioner] SetBackground called with: {imagePath}");
+
                     // Try to load as absolute path first
                     Uri imageUri;
                     if (System.IO.File.Exists(imagePath))
                     {
+                        System.Diagnostics.Debug.WriteLine($"[SimplePhotoPositioner] Loading as absolute path: {imagePath}");
                         imageUri = new Uri(imagePath, UriKind.Absolute);
                     }
                     else
                     {
+                        System.Diagnostics.Debug.WriteLine($"[SimplePhotoPositioner] File not found, trying as relative path: {imagePath}");
                         // Try as relative path
                         imageUri = new Uri(imagePath, UriKind.Relative);
                     }
 
                     var bitmapImage = new BitmapImage(imageUri);
                     BackgroundImage.Source = bitmapImage;
+                    System.Diagnostics.Debug.WriteLine($"[SimplePhotoPositioner] Background image set successfully");
 
                     // Calculate aspect ratio from the background image
                     if (bitmapImage.PixelWidth > 0 && bitmapImage.PixelHeight > 0)
@@ -238,6 +255,11 @@ namespace Photobooth.Controls
             zone.Name = "Photo Area";
             zone.PhotoIndex = 0;
             zone.IsEnabled = true;
+            zone.Rotation = 0; // No rotation in simple mode
+
+            // Always maintain aspect ratio for background removal workflow
+            _placementData.MaintainAspectRatio = true;
+            _placementData.DefaultAspectRatio = _defaultAspectRatio; // Store the aspect ratio
 
             return _placementData;
         }
@@ -250,15 +272,38 @@ namespace Photobooth.Controls
             if (data != null && data.PlacementZones != null && data.PlacementZones.Count > 0)
             {
                 _placementData = data;
+
+                // Use the aspect ratio from the data if available
+                if (data.DefaultAspectRatio > 0)
+                {
+                    _defaultAspectRatio = data.DefaultAspectRatio;
+                }
+
                 var zone = data.PlacementZones[0];
 
                 // Apply to UI
                 if (_canvasWidth > 0 && _canvasHeight > 0)
                 {
-                    Canvas.SetLeft(PhotoZone, zone.X * _canvasWidth);
-                    Canvas.SetTop(PhotoZone, zone.Y * _canvasHeight);
-                    PhotoZone.Width = zone.Width * _canvasWidth;
-                    PhotoZone.Height = zone.Height * _canvasHeight;
+                    var left = zone.X * _canvasWidth;
+                    var top = zone.Y * _canvasHeight;
+                    var width = zone.Width * _canvasWidth;
+                    var height = zone.Height * _canvasHeight;
+
+                    // Always maintain aspect ratio
+                    if (data.MaintainAspectRatio != false) // Default to true
+                    {
+                        height = width / _defaultAspectRatio;
+                    }
+
+                    Canvas.SetLeft(PhotoZone, left);
+                    Canvas.SetTop(PhotoZone, top);
+                    PhotoZone.Width = width;
+                    PhotoZone.Height = height;
+
+                    // Update slider without triggering event
+                    _isUpdatingSlider = true;
+                    SizeSlider.Value = zone.Width;
+                    _isUpdatingSlider = false;
                 }
             }
         }

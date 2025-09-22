@@ -395,11 +395,18 @@ namespace Photobooth.Services
         /// </summary>
         private void ApplyPhotoWithPositioning(Graphics graphics, Bitmap foreground, Bitmap mask, PhotoPlacementZone zone, int canvasWidth, int canvasHeight)
         {
+            // Log placement data for debugging
+            Log.Debug($"[VirtualBackgroundService] Applying photo with positioning:");
+            Log.Debug($"  Zone: X={zone.X:F3}, Y={zone.Y:F3}, Width={zone.Width:F3}, Height={zone.Height:F3}");
+            Log.Debug($"  Canvas: Width={canvasWidth}, Height={canvasHeight}");
+
             // Calculate actual position and size
             int x = (int)(zone.X * canvasWidth);
             int y = (int)(zone.Y * canvasHeight);
             int width = (int)(zone.Width * canvasWidth);
             int height = (int)(zone.Height * canvasHeight);
+
+            Log.Debug($"  Calculated position: X={x}, Y={y}, Width={width}, Height={height}");
 
             // Create resized versions of foreground and mask
             using (var resizedForeground = new Bitmap(foreground, width, height))
@@ -676,20 +683,51 @@ namespace Photobooth.Services
             // Return selected background if set
             if (!string.IsNullOrEmpty(_selectedBackgroundPath))
             {
+                Log.Debug($"VirtualBackgroundService: Using selected background path: {_selectedBackgroundPath}");
                 return _selectedBackgroundPath;
             }
 
             // Otherwise check settings
             if (!string.IsNullOrEmpty(Properties.Settings.Default.DefaultVirtualBackground))
             {
-                _selectedBackgroundPath = Properties.Settings.Default.DefaultVirtualBackground;
-                return _selectedBackgroundPath;
+                var defaultValue = Properties.Settings.Default.DefaultVirtualBackground;
+                Log.Debug($"VirtualBackgroundService: DefaultVirtualBackground from settings: {defaultValue}");
+
+                // Check if it's a GUID (background ID) or a file path
+                if (Guid.TryParse(defaultValue, out _))
+                {
+                    // It's a GUID, look up the background by ID
+                    Log.Debug($"VirtualBackgroundService: Detected GUID in DefaultVirtualBackground, looking up by ID: {defaultValue}");
+                    var background = GetBackgroundById(defaultValue);
+                    if (background != null)
+                    {
+                        _selectedBackgroundPath = background.FilePath;
+                        Log.Debug($"VirtualBackgroundService: Found background with ID {defaultValue}, file path: {background.FilePath}");
+                        // Update settings to store the file path instead of ID
+                        Properties.Settings.Default.DefaultVirtualBackground = background.FilePath;
+                        Properties.Settings.Default.Save();
+                        return background.FilePath;
+                    }
+                    else
+                    {
+                        Log.Debug($"VirtualBackgroundService: Warning - Could not find background with ID: {defaultValue}");
+                    }
+                }
+                else
+                {
+                    // It's a file path
+                    _selectedBackgroundPath = defaultValue;
+                    Log.Debug($"VirtualBackgroundService: Using file path from settings: {_selectedBackgroundPath}");
+                    return _selectedBackgroundPath;
+                }
             }
 
             // Return first solid white background as default
             var solidBackgrounds = GetBackgroundsByCategory("Solid");
             var white = solidBackgrounds.FirstOrDefault(b => b.Name.Contains("White"));
-            return white?.FilePath ?? "";
+            var defaultPath = white?.FilePath ?? "";
+            Log.Debug($"VirtualBackgroundService: Using default white background: {defaultPath}");
+            return defaultPath;
         }
 
         public void SetSelectedBackground(string backgroundPath)

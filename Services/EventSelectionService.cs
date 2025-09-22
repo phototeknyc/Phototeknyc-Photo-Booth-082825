@@ -89,6 +89,19 @@ namespace Photobooth.Services
                     Properties.Settings.Default.SelectedEventId = value.Id;
                     Properties.Settings.Default.Save();
 
+                    // Load the event into EventBackgroundService for background removal
+                    Task.Run(async () => {
+                        try
+                        {
+                            await EventBackgroundService.Instance.LoadEventAsync(value);
+                            Log.Debug($"Loaded event {value.Name} into EventBackgroundService");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error($"Failed to load event into EventBackgroundService: {ex.Message}");
+                        }
+                    });
+
                     // Only update selection time if this is a new selection (not restoring from settings)
                     if (!_isRestoringFromSettings)
                     {

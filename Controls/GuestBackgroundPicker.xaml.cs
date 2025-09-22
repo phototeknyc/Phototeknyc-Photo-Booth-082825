@@ -130,8 +130,8 @@ namespace Photobooth.Controls
             _selectedBackground = background;
             _selectedBackground.IsSelected = true;
 
-            // Apply selection to service
-            _eventBackgroundService.SelectBackgroundForSession(background.Id);
+            // Apply selection to service - pass the file path, not the ID
+            _eventBackgroundService.SelectBackgroundForSession(background.BackgroundPath);
 
             Log.Debug($"Guest selected background: {background.Name}");
         }

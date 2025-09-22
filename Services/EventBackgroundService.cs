@@ -340,6 +340,15 @@ namespace Photobooth.Services
 
             try
             {
+                // Log the placement data being saved
+                if (placementData != null && placementData.PlacementZones != null && placementData.PlacementZones.Count > 0)
+                {
+                    var zone = placementData.PlacementZones[0];
+                    Log.Debug($"[EventBackgroundService] Saving placement data for '{Path.GetFileName(_selectedBackgroundPath)}':");
+                    Log.Debug($"  Zone: X={zone.X:F3}, Y={zone.Y:F3}, Width={zone.Width:F3}, Height={zone.Height:F3}");
+                    Log.Debug($"  MaintainAspectRatio={placementData.MaintainAspectRatio}, DefaultAspectRatio={placementData.DefaultAspectRatio}");
+                }
+
                 _database.UpdatePhotoPlacement(_currentEvent.Id, _selectedBackgroundPath, placementData);
 
                 // Update local cache
@@ -554,7 +563,21 @@ namespace Photobooth.Services
         public PhotoPlacementData GetPlacementData(string backgroundPath)
         {
             var bg = _eventBackgrounds?.FirstOrDefault(b => b.BackgroundPath == backgroundPath);
-            return bg?.PhotoPlacementData;
+            var placementData = bg?.PhotoPlacementData;
+
+            if (placementData != null && placementData.PlacementZones != null && placementData.PlacementZones.Count > 0)
+            {
+                var zone = placementData.PlacementZones[0];
+                Log.Debug($"[EventBackgroundService] Retrieved placement data for '{Path.GetFileName(backgroundPath)}':");
+                Log.Debug($"  Zone: X={zone.X:F3}, Y={zone.Y:F3}, Width={zone.Width:F3}, Height={zone.Height:F3}");
+                Log.Debug($"  MaintainAspectRatio={placementData.MaintainAspectRatio}, DefaultAspectRatio={placementData.DefaultAspectRatio}");
+            }
+            else
+            {
+                Log.Debug($"[EventBackgroundService] No placement data found for '{Path.GetFileName(backgroundPath)}'");
+            }
+
+            return placementData;
         }
 
         #endregion

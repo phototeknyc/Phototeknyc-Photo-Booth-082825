@@ -58,19 +58,36 @@ namespace Photobooth.Controls
 
         public EventBackgroundManager()
         {
-            // Initialize collections BEFORE InitializeComponent to avoid null references
-            _allBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
-            _selectedBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
-            _customBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
-            _filteredBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
-            _events = new ObservableCollection<EventData>();
+            try
+            {
+                Log.Debug("[EventBackgroundManager] Constructor started");
 
-            InitializeComponent();
+                // Initialize collections BEFORE InitializeComponent to avoid null references
+                _allBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
+                _selectedBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
+                _customBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
+                _filteredBackgrounds = new ObservableCollection<UnifiedBackgroundViewModel>();
+                _events = new ObservableCollection<EventData>();
 
-            // Handle Loaded event to ensure proper initialization
-            this.Loaded += EventBackgroundManager_Loaded;
+                Log.Debug("[EventBackgroundManager] Collections initialized, calling InitializeComponent");
 
-            Initialize();
+                InitializeComponent();
+
+                Log.Debug("[EventBackgroundManager] InitializeComponent completed");
+
+                // Handle Loaded event to ensure proper initialization
+                this.Loaded += EventBackgroundManager_Loaded;
+
+                Initialize();
+
+                Log.Debug("[EventBackgroundManager] Constructor completed successfully");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[EventBackgroundManager] Constructor error: {ex.Message}\n{ex.StackTrace}");
+                MessageBox.Show($"Error initializing Background Manager: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                throw;
+            }
         }
 
         private void EventBackgroundManager_Loaded(object sender, RoutedEventArgs e)
@@ -91,28 +108,44 @@ namespace Photobooth.Controls
 
         private void Initialize()
         {
-            _eventBackgroundService = EventBackgroundService.Instance;
-            _virtualBackgroundService = VirtualBackgroundService.Instance;
-            _eventService = new EventService();
+            try
+            {
+                Log.Debug("[EventBackgroundManager] Initialize started");
 
-            // Subscribe to service events
-            _eventBackgroundService.BackgroundsChanged += OnBackgroundsChanged;
-            _eventBackgroundService.SettingsChanged += OnSettingsChanged;
-            _eventBackgroundService.BackgroundSelected += OnBackgroundSelected;
+                _eventBackgroundService = EventBackgroundService.Instance;
+                _virtualBackgroundService = VirtualBackgroundService.Instance;
+                _eventService = new EventService();
 
-            // Initialize auto-save timer (saves placement data after 500ms of inactivity)
-            _autoSaveTimer = new DispatcherTimer();
-            _autoSaveTimer.Interval = TimeSpan.FromMilliseconds(500);
-            _autoSaveTimer.Tick += AutoSaveTimer_Tick;
+                Log.Debug("[EventBackgroundManager] Services initialized");
 
-            // Set ItemsSource (with null checks)
-            if (AllBackgroundsList != null) AllBackgroundsList.ItemsSource = _filteredBackgrounds;
-            if (CategoryBackgroundsList != null) CategoryBackgroundsList.ItemsSource = _filteredBackgrounds;
-            if (SelectedBackgroundsList != null) SelectedBackgroundsList.ItemsSource = _selectedBackgrounds;
-            if (CustomBackgroundsList != null) CustomBackgroundsList.ItemsSource = _customBackgrounds;
+                // Subscribe to service events
+                _eventBackgroundService.BackgroundsChanged += OnBackgroundsChanged;
+                _eventBackgroundService.SettingsChanged += OnSettingsChanged;
+                _eventBackgroundService.BackgroundSelected += OnBackgroundSelected;
 
-            // Add event selection UI if not present
-            AddEventSelectionUI();
+                // Initialize auto-save timer (saves placement data after 500ms of inactivity)
+                _autoSaveTimer = new DispatcherTimer();
+                _autoSaveTimer.Interval = TimeSpan.FromMilliseconds(500);
+                _autoSaveTimer.Tick += AutoSaveTimer_Tick;
+
+                // Set ItemsSource (with null checks)
+                if (AllBackgroundsList != null) AllBackgroundsList.ItemsSource = _filteredBackgrounds;
+                if (CategoryBackgroundsList != null) CategoryBackgroundsList.ItemsSource = _filteredBackgrounds;
+                if (SelectedBackgroundsList != null) SelectedBackgroundsList.ItemsSource = _selectedBackgrounds;
+                if (CustomBackgroundsList != null) CustomBackgroundsList.ItemsSource = _customBackgrounds;
+
+                Log.Debug($"[EventBackgroundManager] ItemsSources set - AllBackgroundsList: {AllBackgroundsList != null}, CategoryBackgroundsList: {CategoryBackgroundsList != null}");
+
+                // Add event selection UI if not present
+                AddEventSelectionUI();
+
+                Log.Debug("[EventBackgroundManager] Initialize completed");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[EventBackgroundManager] Initialize error: {ex.Message}\n{ex.StackTrace}");
+                throw;
+            }
         }
 
         private void AddEventSelectionUI()
@@ -185,7 +218,23 @@ namespace Photobooth.Controls
 
         private void OnBackgroundSelected(object sender, string backgroundPath)
         {
-            Dispatcher.Invoke(() => UpdateSelectedBackground(backgroundPath));
+            Dispatcher.Invoke(() => {
+                UpdateSelectedBackground(backgroundPath);
+
+                // Update the photo positioner preview with the selected background
+                if (PhotoPositioner != null && !string.IsNullOrEmpty(backgroundPath))
+                {
+                    Log.Debug($"[EventBackgroundManager] Setting background on PhotoPositioner: {backgroundPath}");
+                    PhotoPositioner.SetBackground(backgroundPath);
+
+                    // Load placement data for this background
+                    var placementData = _eventBackgroundService.GetPlacementData(backgroundPath);
+                    if (placementData != null && placementData.PlacementZones != null && placementData.PlacementZones.Count > 0)
+                    {
+                        PhotoPositioner.SetPlacementData(placementData);
+                    }
+                }
+            });
         }
 
         #endregion
@@ -212,13 +261,15 @@ namespace Photobooth.Controls
 
                 _currentEvent = eventData;
 
-                // Update UI
-                if (EventNameText != null)
+                // Update UI on UI thread
+                await Dispatcher.InvokeAsync(() =>
                 {
-                    EventNameText.Text = $"Event: {eventData.Name}";
-                }
-
-                ShowLoading(true);
+                    if (EventNameText != null)
+                    {
+                        EventNameText.Text = $"Event: {eventData.Name}";
+                    }
+                    ShowLoading(true);
+                });
 
                 // Load all available backgrounds first
                 await _virtualBackgroundService.LoadBackgroundsAsync();
@@ -226,17 +277,35 @@ namespace Photobooth.Controls
                 // Load event-specific data from database
                 await _eventBackgroundService.LoadEventAsync(eventData);
 
-                // Refresh UI lists
-                RefreshBackgroundLists();
-                UpdateSettingsUI();
-
-                // Update event dropdown selection
-                if (EventComboBox != null && EventComboBox.SelectedItem != eventData)
+                // Refresh UI lists on UI thread
+                await Dispatcher.InvokeAsync(() =>
                 {
-                    EventComboBox.SelectedItem = _events.FirstOrDefault(e => e.Id == eventData.Id);
-                }
+                    RefreshBackgroundLists();
+                    UpdateSettingsUI();
 
-                ShowLoading(false);
+                    // Update event dropdown selection
+                    if (EventComboBox != null && EventComboBox.SelectedItem != eventData)
+                    {
+                        EventComboBox.SelectedItem = _events.FirstOrDefault(e => e.Id == eventData.Id);
+                    }
+
+                    // Set the selected background in the photo positioner preview
+                    var selectedBackground = _eventBackgroundService.SelectedBackgroundPath;
+                    if (PhotoPositioner != null && !string.IsNullOrEmpty(selectedBackground))
+                    {
+                        Log.Debug($"[EventBackgroundManager] Setting initial background on PhotoPositioner: {selectedBackground}");
+                        PhotoPositioner.SetBackground(selectedBackground);
+
+                        // Load placement data for this background
+                        var placementData = _eventBackgroundService.GetPlacementData(selectedBackground);
+                        if (placementData != null && placementData.PlacementZones != null && placementData.PlacementZones.Count > 0)
+                        {
+                            PhotoPositioner.SetPlacementData(placementData);
+                        }
+                    }
+
+                    ShowLoading(false);
+                });
 
                 // Fire event changed
                 EventChanged?.Invoke(this, EventArgs.Empty);
@@ -246,16 +315,19 @@ namespace Photobooth.Controls
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[EventBackgroundManager] Error loading event: {ex.Message}");
-                ShowLoading(false);
-                ShowError($"Failed to load event: {ex.Message}");
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    ShowLoading(false);
+                    ShowError($"Failed to load event: {ex.Message}");
+                });
             }
             finally
             {
                 _isLoadingEvent = false;
             }
 
-            // Show the overlay
-            Show();
+            // Show the overlay on UI thread
+            await Dispatcher.InvokeAsync(() => Show());
         }
 
         #endregion
@@ -436,24 +508,46 @@ namespace Photobooth.Controls
 
         private void ShowPhotoPositioner(string backgroundPath)
         {
+            Log.Debug($"[EventBackgroundManager] ShowPhotoPositioner called with path: {backgroundPath}");
+
             // Show photo positioner overlay
             PhotoPositionerOverlay.Visibility = Visibility.Visible;
 
             // Load current placement data
             _currentPlacementData = _eventBackgroundService.GetPlacementData(backgroundPath) ?? new PhotoPlacementData();
 
-            // Set up the positioning UI
-            // TODO: Implement the actual positioning UI
-
-            // For now, show a placeholder
-            PositionerContent.Children.Clear();
-            PositionerContent.Children.Add(new TextBlock
+            // Set background image on the PhotoPositioner control
+            if (PhotoPositioner != null && !string.IsNullOrEmpty(backgroundPath))
             {
-                Text = "Photo Positioning UI\n(To be implemented)",
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 24
-            });
+                Log.Debug($"[EventBackgroundManager] Setting background on PhotoPositioner: {backgroundPath}");
+
+                // Check if file exists
+                if (System.IO.File.Exists(backgroundPath))
+                {
+                    Log.Debug($"[EventBackgroundManager] Background file exists: {backgroundPath}");
+                    PhotoPositioner.SetBackground(backgroundPath);
+                }
+                else
+                {
+                    Log.Error($"[EventBackgroundManager] Background file not found: {backgroundPath}");
+                }
+
+                // Set placement data if available
+                if (_currentPlacementData != null && _currentPlacementData.PlacementZones != null && _currentPlacementData.PlacementZones.Count > 0)
+                {
+                    PhotoPositioner.SetPlacementData(_currentPlacementData);
+                }
+            }
+            else
+            {
+                Log.Debug($"[EventBackgroundManager] PhotoPositioner is null: {PhotoPositioner == null}, backgroundPath empty: {string.IsNullOrEmpty(backgroundPath)}");
+            }
+
+            // Clear any placeholder content (the PhotoPositioner control handles the UI now)
+            if (PositionerContent != null)
+            {
+                PositionerContent.Children.Clear();
+            }
         }
 
         private void SavePhotoPosition_Click(object sender, RoutedEventArgs e)
@@ -826,6 +920,13 @@ namespace Photobooth.Controls
             {
                 this.Visibility = Visibility.Collapsed;
                 Closed?.Invoke(this, EventArgs.Empty);
+
+                // Close the parent window if this control is in one
+                var parentWindow = Window.GetWindow(this);
+                if (parentWindow != null && parentWindow.GetType().Name != "MainWindow")
+                {
+                    parentWindow.Close();
+                }
             };
 
             this.BeginAnimation(OpacityProperty, animation);
@@ -1015,40 +1116,61 @@ namespace Photobooth.Controls
 
         public static void ShowInWindow(Window owner, EventData eventData = null)
         {
-            // Static method for compatibility - creates instance in a window
-            var manager = new EventBackgroundManager();
-            ShowInternal(owner, eventData, manager);
+            try
+            {
+                Log.Debug("[EventBackgroundManager] ShowInWindow called");
+
+                // Static method for compatibility - creates instance in a window
+                var manager = new EventBackgroundManager();
+
+                // Create and show window synchronously, load data asynchronously
+                var window = new Window
+                {
+                    Title = "Background Manager",
+                    Content = manager,
+                    Owner = owner,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                    Width = 1200,
+                    Height = 800,
+                    WindowStyle = WindowStyle.None,
+                    AllowsTransparency = true,
+                    Background = new SolidColorBrush(Color.FromArgb(230, 45, 45, 48)) // Semi-transparent dark background
+                };
+
+                // Show the manager control itself
+                manager.Show();
+
+                // Load event data asynchronously without blocking
+                if (eventData != null)
+                {
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await manager.LoadForEventAsync(eventData);
+                            Log.Debug($"[EventBackgroundManager] Loaded for event: {eventData.Name}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error($"[EventBackgroundManager] Error loading event: {ex.Message}");
+                        }
+                    });
+                }
+
+                Log.Debug("[EventBackgroundManager] Showing window dialog");
+                window.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[EventBackgroundManager] ShowInWindow error: {ex.Message}\n{ex.StackTrace}");
+                MessageBox.Show($"Error opening Background Manager: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         // Overload with different parameter order for compatibility
         public static void ShowInWindow(EventData eventData, Window owner)
         {
-            // Static method for compatibility - creates instance in a window
-            var manager = new EventBackgroundManager();
-            ShowInternal(owner, eventData, manager);
-        }
-
-        private static void ShowInternal(Window owner, EventData eventData, EventBackgroundManager manager)
-        {
-            var window = new Window
-            {
-                Title = "Background Manager",
-                Content = manager,
-                Owner = owner,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Width = 1200,
-                Height = 800,
-                WindowStyle = WindowStyle.None,
-                AllowsTransparency = true,
-                Background = Brushes.Transparent
-            };
-
-            if (eventData != null)
-            {
-                manager.LoadForEventAsync(eventData).Wait();
-            }
-
-            window.ShowDialog();
+            ShowInWindow(owner, eventData);
         }
 
         #endregion
@@ -1060,9 +1182,40 @@ namespace Photobooth.Controls
     {
         private bool _isSelected;
         private bool _isCurrentlyActive;
+        private string _backgroundPath;
+        private string _backgroundName;
 
-        public string BackgroundPath { get; set; }
-        public string BackgroundName { get; set; }
+        public string BackgroundPath
+        {
+            get => _backgroundPath;
+            set
+            {
+                _backgroundPath = value;
+                OnPropertyChanged();
+                // Auto-generate thumbnail path from background path
+                if (!string.IsNullOrEmpty(value))
+                {
+                    ThumbnailPath = value; // For now, use the same path
+                }
+            }
+        }
+
+        public string BackgroundName
+        {
+            get => _backgroundName;
+            set
+            {
+                _backgroundName = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(Name)); // Also notify Name property
+            }
+        }
+
+        // Aliases for XAML binding compatibility
+        public string Id => BackgroundPath; // Use path as ID
+        public string ThumbnailPath { get; private set; }
+        public string Name => BackgroundName ?? System.IO.Path.GetFileNameWithoutExtension(BackgroundPath ?? "");
+
         public string Category { get; set; }
         public bool IsCustom { get; set; }
 
