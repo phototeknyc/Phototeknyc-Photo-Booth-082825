@@ -405,7 +405,7 @@
       <Value Profile="(Default)">0</Value>
     </Setting>
     <Setting Name="EventSelectionTime" Type="System.DateTime" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">01/01/2000 00:00:00</Value>
     </Setting>
     <Setting Name="RequireEventSelection" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">True</Value>

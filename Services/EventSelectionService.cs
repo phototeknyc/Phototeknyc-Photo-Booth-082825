@@ -89,6 +89,21 @@ namespace Photobooth.Services
                     Properties.Settings.Default.SelectedEventId = value.Id;
                     Properties.Settings.Default.Save();
 
+                    // Verify the save worked
+                    var savedId = Properties.Settings.Default.SelectedEventId;
+                    Log.Debug($"EventSelectionService: Saved EventId {value.Id} to settings, readback value: {savedId}");
+
+                    if (savedId != value.Id)
+                    {
+                        Log.Error($"EventSelectionService: Settings save failed! Expected {value.Id}, got {savedId}");
+                        // Try again with explicit reload
+                        Properties.Settings.Default.Reload();
+                        Properties.Settings.Default.SelectedEventId = value.Id;
+                        Properties.Settings.Default.Save();
+                        savedId = Properties.Settings.Default.SelectedEventId;
+                        Log.Debug($"EventSelectionService: Retry save - readback value: {savedId}");
+                    }
+
                     // Load the event into EventBackgroundService for background removal
                     Task.Run(async () => {
                         try
@@ -485,7 +500,15 @@ namespace Photobooth.Services
             {
                 Properties.Settings.Default.EventSelectionTime = _eventSelectionTime;
                 Properties.Settings.Default.Save();
-                Log.Debug($"EventSelectionService: Saved event selection time: {_eventSelectionTime}");
+
+                // Verify the save worked
+                var savedTime = Properties.Settings.Default.EventSelectionTime;
+                Log.Debug($"EventSelectionService: Saved event selection time: {_eventSelectionTime}, readback: {savedTime}");
+
+                if (savedTime != _eventSelectionTime)
+                {
+                    Log.Error($"EventSelectionService: Time save failed! Expected {_eventSelectionTime}, got {savedTime}");
+                }
             }
             catch (Exception ex)
             {
@@ -503,10 +526,13 @@ namespace Photobooth.Services
                 // Add detailed logging for debugging
                 Log.Debug("EventSelectionService: CheckAndRestoreSavedEvent called");
 
+                // Force a reload to ensure we get the latest saved values
+                Properties.Settings.Default.Reload();
+
                 var savedEventId = Properties.Settings.Default.SelectedEventId;
                 var savedTime = Properties.Settings.Default.EventSelectionTime;
 
-                Log.Debug($"EventSelectionService: Settings values - SelectedEventId: {savedEventId}, EventSelectionTime: {savedTime}");
+                Log.Debug($"EventSelectionService: Settings values after reload - SelectedEventId: {savedEventId}, EventSelectionTime: {savedTime}");
 
                 // Check against the default DateTime value (year 2000)
                 var defaultTime = new DateTime(2000, 1, 1);
