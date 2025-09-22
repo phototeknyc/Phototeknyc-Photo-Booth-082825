@@ -103,11 +103,11 @@ namespace Photobooth.Controls
             _autoSaveTimer.Interval = TimeSpan.FromMilliseconds(500);
             _autoSaveTimer.Tick += AutoSaveTimer_Tick;
 
-            // Set ItemsSource
-            AllBackgroundsList.ItemsSource = _filteredBackgrounds;
-            CategoryBackgroundsList.ItemsSource = _filteredBackgrounds;
-            SelectedBackgroundsList.ItemsSource = _selectedBackgrounds;
-            CustomBackgroundsList.ItemsSource = _customBackgrounds;
+            // Set ItemsSource (with null checks)
+            if (AllBackgroundsList != null) AllBackgroundsList.ItemsSource = _filteredBackgrounds;
+            if (CategoryBackgroundsList != null) CategoryBackgroundsList.ItemsSource = _filteredBackgrounds;
+            if (SelectedBackgroundsList != null) SelectedBackgroundsList.ItemsSource = _selectedBackgrounds;
+            if (CustomBackgroundsList != null) CustomBackgroundsList.ItemsSource = _customBackgrounds;
 
             // Add event selection UI if not present
             AddEventSelectionUI();
@@ -120,6 +120,7 @@ namespace Photobooth.Controls
             {
                 EventComboBox.ItemsSource = _events;
                 EventComboBox.DisplayMemberPath = "Name";
+                EventComboBox.SelectionChanged -= EventComboBox_SelectionChanged; // Remove first to avoid duplicate
                 EventComboBox.SelectionChanged += EventComboBox_SelectionChanged;
             }
         }
@@ -136,14 +137,17 @@ namespace Photobooth.Controls
                 }
 
                 // Select current event if already set
-                if (_currentEvent != null)
+                if (EventComboBox != null)
                 {
-                    EventComboBox.SelectedItem = _events.FirstOrDefault(e => e.Id == _currentEvent.Id);
-                }
-                else if (_events.Any())
-                {
-                    // Auto-select first event
-                    EventComboBox.SelectedIndex = 0;
+                    if (_currentEvent != null)
+                    {
+                        EventComboBox.SelectedItem = _events.FirstOrDefault(e => e.Id == _currentEvent.Id);
+                    }
+                    else if (_events.Any())
+                    {
+                        // Auto-select first event
+                        EventComboBox.SelectedIndex = 0;
+                    }
                 }
             }
             catch (Exception ex)
@@ -627,27 +631,27 @@ namespace Photobooth.Controls
 
         private void ShowView(string viewName)
         {
-            // Hide all views
-            AllView.Visibility = Visibility.Collapsed;
-            CategoryView.Visibility = Visibility.Collapsed;
-            SelectedView.Visibility = Visibility.Collapsed;
-            CustomView.Visibility = Visibility.Collapsed;
+            // Hide all views (with null checks)
+            if (AllView != null) AllView.Visibility = Visibility.Collapsed;
+            if (CategoryView != null) CategoryView.Visibility = Visibility.Collapsed;
+            if (SelectedView != null) SelectedView.Visibility = Visibility.Collapsed;
+            if (CustomView != null) CustomView.Visibility = Visibility.Collapsed;
 
             // Show selected view
             switch (viewName)
             {
                 case "All":
-                    AllView.Visibility = Visibility.Visible;
+                    if (AllView != null) AllView.Visibility = Visibility.Visible;
                     _currentCategory = "All";
                     break;
                 case "Category":
-                    CategoryView.Visibility = Visibility.Visible;
+                    if (CategoryView != null) CategoryView.Visibility = Visibility.Visible;
                     break;
                 case "Selected":
-                    SelectedView.Visibility = Visibility.Visible;
+                    if (SelectedView != null) SelectedView.Visibility = Visibility.Visible;
                     break;
                 case "Custom":
-                    CustomView.Visibility = Visibility.Visible;
+                    if (CustomView != null) CustomView.Visibility = Visibility.Visible;
                     break;
             }
 
@@ -684,8 +688,11 @@ namespace Photobooth.Controls
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            _searchText = SearchBox.Text?.ToLower() ?? string.Empty;
-            ApplyFilter();
+            if (SearchBox != null)
+            {
+                _searchText = SearchBox.Text?.ToLower() ?? string.Empty;
+                ApplyFilter();
+            }
         }
 
         private void ApplyFilter()
@@ -901,7 +908,10 @@ namespace Photobooth.Controls
 
         private void ClearSearch_Click(object sender, RoutedEventArgs e)
         {
-            SearchBox.Text = string.Empty;
+            if (SearchBox != null)
+            {
+                SearchBox.Text = string.Empty;
+            }
         }
 
         private void UploadButton_Click(object sender, RoutedEventArgs e)
