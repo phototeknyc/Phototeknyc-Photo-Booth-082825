@@ -147,6 +147,18 @@ namespace Photobooth.Services
                     System.Threading.Thread.Sleep(100); // Brief pause to ensure cleanup
                 }
 
+                // Refresh the event selection timer when starting a new session
+                // This ensures the event doesn't expire while taking photos
+                try
+                {
+                    EventSelectionService.Instance.RefreshEventSelection();
+                    Log.Debug("PhotoboothSessionService: Refreshed event selection timer on session start");
+                }
+                catch (Exception refreshEx)
+                {
+                    Log.Debug($"PhotoboothSessionService: Could not refresh event selection: {refreshEx.Message}");
+                }
+
                 // Initialize session
                 _currentEvent = eventData;
                 _currentTemplate = templateData;

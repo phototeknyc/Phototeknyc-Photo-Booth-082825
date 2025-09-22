@@ -714,6 +714,39 @@ namespace Photobooth.Services
 
             return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
         }
+
+        /// <summary>
+        /// Refresh the event selection time to prevent expiration during active use
+        /// This resets the 5-hour timer from the current time
+        /// </summary>
+        public void RefreshEventSelection()
+        {
+            if (SelectedEvent == null)
+            {
+                Log.Debug("EventSelectionService: No event selected to refresh");
+                return;
+            }
+
+            try
+            {
+                Log.Debug($"EventSelectionService: Refreshing event selection for '{SelectedEvent.Name}'");
+
+                // Update the selection time to now
+                _eventSelectionTime = DateTime.Now;
+                SaveEventSelectionTime();
+
+                // Restart the 5-hour timer
+                _eventExpirationTimer.Stop();
+                _eventExpirationTimer.Interval = 5 * 60 * 60 * 1000; // 5 hours
+                _eventExpirationTimer.Start();
+
+                Log.Debug($"EventSelectionService: Event selection refreshed, timer reset to 5 hours from {_eventSelectionTime}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to refresh event selection: {ex.Message}");
+            }
+        }
         
         /// <summary>
         /// Duplicate an event with all its templates

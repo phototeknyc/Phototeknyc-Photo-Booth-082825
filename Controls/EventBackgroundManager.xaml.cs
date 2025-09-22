@@ -101,6 +101,18 @@ namespace Photobooth.Controls
             {
                 ShowView("All");
             }
+
+            // Refresh the event selection timer whenever this control is loaded
+            // This ensures the event doesn't expire while the user is actively using it
+            try
+            {
+                EventSelectionService.Instance.RefreshEventSelection();
+                Log.Debug("[EventBackgroundManager] Refreshed event selection timer on load");
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"[EventBackgroundManager] Could not refresh event selection: {ex.Message}");
+            }
         }
 
         #endregion
