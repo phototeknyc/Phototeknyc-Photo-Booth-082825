@@ -23,6 +23,7 @@ namespace Photobooth.Services
         public event EventHandler PhotoDisplayCompleted;
         public event EventHandler<WorkflowErrorEventArgs> WorkflowError;
         public event EventHandler<StatusEventArgs> StatusChanged;
+        public event EventHandler PhotographerIdleCapture; // Fired when shutter pressed while idle in photographer mode
         #endregion
 
         #region Services
@@ -68,7 +69,7 @@ namespace Photobooth.Services
         private void SetupCameraEventHandler()
         {
             // Create a persistent handler for camera photo capture
-            _cameraCaptureHandler = (sender, args) =>
+            _cameraCaptureHandler = async (sender, args) =>
             {
                 // Allow settings/test captures to be ignored by workflow
                 var sessionMgr = CameraSessionManager.Instance;
@@ -82,20 +83,42 @@ namespace Photobooth.Services
                 Log.Debug("===== CAMERA PHOTO CAPTURED EVENT FIRED =====");
                 Log.Debug($"PhotoboothWorkflowService: Photo captured by camera - File: {args?.FileName}");
                 Log.Debug($"PhotoboothWorkflowService: File exists: {System.IO.File.Exists(args?.FileName)}");
+
+                // Check if we're in photographer mode and no session is active (idle capture)
+                bool photographerMode = Properties.Settings.Default.PhotographerMode;
+                if (photographerMode && !_sessionService.IsSessionActive && !_isCapturing)
+                {
+                    Log.Debug("PhotoboothWorkflowService: Photographer mode idle capture detected - starting new session");
+
+                    // Fire event to notify UI to start a session
+                    PhotographerIdleCapture?.Invoke(this, EventArgs.Empty);
+
+                    // Don't process this capture - let the session start properly
+                    // The photographer will need to press again for the first photo
+                    return;
+                }
+
                 OnCaptureCompleted(args);
             };
         }
         
-        private void EnsureCameraEventSubscription()
+        public void EnsureCameraEventSubscription()
         {
             var camera = CurrentCamera;
+            Log.Debug($"PhotoboothWorkflowService: EnsureCameraEventSubscription called - Camera: {camera?.DeviceName ?? "null"}, Handler: {(_cameraCaptureHandler != null ? "SET" : "NULL")}");
+
             if (camera != null && _cameraCaptureHandler != null)
             {
                 // Remove any existing subscription to avoid duplicates
                 camera.PhotoCaptured -= _cameraCaptureHandler;
                 // Subscribe to capture events
                 camera.PhotoCaptured += _cameraCaptureHandler;
-                Log.Debug("PhotoboothWorkflowService: Ensured camera PhotoCaptured event subscription");
+                Log.Debug($"PhotoboothWorkflowService: Successfully subscribed to {camera.DeviceName} PhotoCaptured event");
+                Log.Debug($"PhotoboothWorkflowService: Photographer mode: {Properties.Settings.Default.PhotographerMode}, Session active: {_sessionService?.IsSessionActive ?? false}");
+            }
+            else
+            {
+                Log.Error($"PhotoboothWorkflowService: Cannot subscribe - Camera: {(camera == null ? "null" : "exists")}, Handler: {(_cameraCaptureHandler == null ? "null" : "exists")}");
             }
         }
 
@@ -129,18 +152,18 @@ namespace Photobooth.Services
                 Log.Debug("===== STARTING PHOTO CAPTURE WORKFLOW =====");
                 Log.Debug($"PhotoboothWorkflowService: Camera = {camera?.DeviceName}, Connected = {camera?.IsConnected}");
                 Log.Debug($"PhotoboothWorkflowService: Session Active = {_sessionService.IsSessionActive}");
-                
+
                 // Check if video mode should be started (first photo of session only)
                 // This happens when video mode was previously enabled but the service was restarted
                 var videoModeService = VideoModeLiveViewService.Instance;
-                
-                // Note: We don't auto-start video mode here anymore as it should be 
+
+                // Note: We don't auto-start video mode here anymore as it should be
                 // explicitly enabled through settings or UI controls before starting a session
-                
+
                 // Ensure we're subscribed to camera events
                 Log.Debug("PhotoboothWorkflowService: Ensuring camera event subscription...");
                 EnsureCameraEventSubscription();
-                
+
                 _isCapturing = true;
                 StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Preparing capture..." });
 
@@ -152,7 +175,7 @@ namespace Photobooth.Services
                     // In photographer mode, wait for manual trigger
                     Log.Debug("PhotoboothWorkflowService: Photographer mode - waiting for manual trigger");
                     StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Press camera trigger when ready" });
-                    
+
                     // Don't capture here - wait for the trigger to fire PhotoCaptured event
                     // The _cameraCaptureHandler will process it when trigger is pressed
                     // Just keep the workflow active and waiting
@@ -564,29 +587,33 @@ namespace Photobooth.Services
                     
                     // Check if photographer mode is enabled
                     bool photographerMode = Properties.Settings.Default.PhotographerMode;
-                    
-                    if (photographerMode && _sessionService.CurrentPhotoIndex > 0)
+
+                    if (photographerMode)
                     {
-                        // In photographer mode after first photo, wait for manual trigger
+                        // In photographer mode, always wait for manual trigger for all photos
                         Log.Debug("PhotoboothWorkflowService: Photographer mode - waiting for manual trigger");
-                        StatusChanged?.Invoke(this, new StatusEventArgs 
-                        { 
+                        StatusChanged?.Invoke(this, new StatusEventArgs
+                        {
                             Status = $"Ready for photo {_sessionService.CurrentPhotoIndex + 1} of {_sessionService.TotalPhotosRequired} - Press camera trigger when ready"
                         });
+
+                        // Set the workflow ready for next capture but don't start countdown
+                        _isCapturing = true;
+                        Log.Debug("PhotoboothWorkflowService: Ready for photographer to trigger next capture");
                         // Don't auto-continue - wait for manual trigger
                     }
                     else
                     {
                         // Auto-continue to next photo
                         Log.Debug("PhotoboothWorkflowService: Starting next photo capture");
-                        StatusChanged?.Invoke(this, new StatusEventArgs 
-                        { 
+                        StatusChanged?.Invoke(this, new StatusEventArgs
+                        {
                             Status = $"Preparing for photo {_sessionService.CurrentPhotoIndex + 1} of {_sessionService.TotalPhotosRequired}..."
                         });
-                        
+
                         // Small delay before starting next countdown
                         await Task.Delay(1000);
-                        
+
                         // Start the next photo capture with countdown
                         await StartPhotoCaptureWorkflowAsync();
                     }
@@ -649,6 +676,13 @@ namespace Photobooth.Services
         {
             try
             {
+                // NO live view in photographer mode - it blocks the shutter button
+                if (Properties.Settings.Default.PhotographerMode)
+                {
+                    Log.Debug("PhotoboothWorkflowService: NOT resuming live view - photographer mode enabled");
+                    return;
+                }
+
                 var videoModeService = VideoModeLiveViewService.Instance;
                 var dualSettingsService = DualCameraSettingsService.Instance;
 
@@ -698,8 +732,8 @@ namespace Photobooth.Services
             catch (Exception ex)
             {
                 Log.Error($"PhotoboothWorkflowService: Error resuming live view: {ex.Message}");
-                // Only fallback to normal live view if we're in a session or idle live view is enabled
-                if (_sessionService.IsSessionActive || Properties.Settings.Default.EnableIdleLiveView)
+                // Only fallback to normal live view if NOT in photographer mode and (we're in a session or idle live view is enabled)
+                if (!Properties.Settings.Default.PhotographerMode && (_sessionService.IsSessionActive || Properties.Settings.Default.EnableIdleLiveView))
                 {
                     CurrentCamera?.StartLiveView();
                 }

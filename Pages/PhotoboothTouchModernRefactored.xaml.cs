@@ -626,7 +626,14 @@ namespace Photobooth.Pages
 
             // Update UI
             UpdateUI();
-            
+
+            // Ensure workflow service is subscribed if in photographer mode
+            if (Properties.Settings.Default.PhotographerMode && DeviceManager?.SelectedCameraDevice != null)
+            {
+                _workflowService?.EnsureCameraEventSubscription();
+                Log.Debug("Page_Loaded: Ensured workflow service camera subscription for photographer mode");
+            }
+
             // Show the START button
             _uiService?.ShowStartButton();
 
@@ -849,6 +856,7 @@ namespace Photobooth.Pages
                 _workflowService.PhotoDisplayCompleted += OnServicePhotoDisplayCompleted;
                 _workflowService.WorkflowError += OnServiceWorkflowError;
                 _workflowService.StatusChanged += OnServiceStatusChanged;
+                _workflowService.PhotographerIdleCapture += OnPhotographerModeIdleCapture;
             }
             
             if (_uiService != null)
@@ -1008,6 +1016,7 @@ namespace Photobooth.Pages
                 _workflowService.PhotoDisplayCompleted -= OnServicePhotoDisplayCompleted;
                 _workflowService.WorkflowError -= OnServiceWorkflowError;
                 _workflowService.StatusChanged -= OnServiceStatusChanged;
+                _workflowService.PhotographerIdleCapture -= OnPhotographerModeIdleCapture;
             }
             
             if (_uiService != null)
@@ -1342,7 +1351,7 @@ namespace Photobooth.Pages
         {
             Log.Debug($"DeviceManager_CameraConnected: {cameraDevice?.DeviceName}");
             // Update UI on main thread
-            Dispatcher.BeginInvoke(new Action(() => 
+            Dispatcher.BeginInvoke(new Action(() =>
             {
                 // Stop reconnect timer if it's running
                 if (_isReconnecting && _cameraReconnectTimer != null)
@@ -1351,10 +1360,29 @@ namespace Photobooth.Pages
                     _isReconnecting = false;
                     Log.Debug("Stopped camera reconnect timer - camera is now connected");
                 }
-                
+
                 UpdateCameraStatus($"Connected: {cameraDevice.DeviceName}");
-                // Start live view if idle live view is enabled and not already started
-                if (!_liveViewTimer.IsEnabled && Properties.Settings.Default.EnableIdleLiveView)
+
+                // Ensure workflow service is subscribed to camera events for photographer mode
+                if (Properties.Settings.Default.PhotographerMode)
+                {
+                    _workflowService?.EnsureCameraEventSubscription();
+                    Log.Debug("DeviceManager_CameraConnected: Ensured workflow service camera subscription for photographer mode");
+
+                    // NO live view in photographer mode - it blocks the shutter button
+                    try
+                    {
+                        cameraDevice?.StopLiveView();
+                        _liveViewTimer.Stop();
+                        Log.Debug("DeviceManager_CameraConnected: Stopped live view for photographer mode");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"DeviceManager_CameraConnected: Error stopping live view: {ex.Message}");
+                    }
+                }
+                // Start live view if idle live view is enabled AND NOT in photographer mode
+                else if (!_liveViewTimer.IsEnabled && Properties.Settings.Default.EnableIdleLiveView)
                 {
                     // Try to use optimized live view for better performance
                     StartOptimizedLiveView(cameraDevice);
@@ -2030,6 +2058,17 @@ namespace Photobooth.Pages
             Dispatcher.Invoke(() =>
             {
                 _uiService.UpdateStatus(e.Status);
+            });
+        }
+
+        private void OnPhotographerModeIdleCapture(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                Log.Debug("OnPhotographerModeIdleCapture: Photographer pressed shutter while idle - starting session");
+
+                // Start a photo session when photographer presses shutter button while idle
+                StartPhotoSession();
             });
         }
         
@@ -2953,10 +2992,17 @@ namespace Photobooth.Pages
                 // Hide stop button when session is cleared
                 if (stopSessionButton != null) stopSessionButton.Visibility = Visibility.Collapsed;
                 
-                // Restart live view based on idle setting (but not if displaying session results)
+                // Restart live view based on idle setting (but NOT in photographer mode or if displaying session results)
                 if (DeviceManager?.SelectedCameraDevice != null)
                 {
-                    if (Properties.Settings.Default.EnableIdleLiveView && !_isDisplayingSessionResult)
+                    if (Properties.Settings.Default.PhotographerMode)
+                    {
+                        // NO live view in photographer mode ever
+                        Log.Debug("NOT restarting live view after session clear - photographer mode enabled");
+                        _liveViewTimer?.Stop();
+                        UpdateIdleBackgroundVisibility(); // Show background when no live view
+                    }
+                    else if (Properties.Settings.Default.EnableIdleLiveView && !_isDisplayingSessionResult)
                     {
                         DeviceManager.SelectedCameraDevice.StartLiveView();
                         _liveViewTimer?.Start();
@@ -3213,11 +3259,16 @@ namespace Photobooth.Pages
                     Log.Debug("Showed start button");
                 }
 
-                // Resume live view only if idle live view is enabled
-                if (_liveViewTimer != null && !_liveViewTimer.IsEnabled && Properties.Settings.Default.EnableIdleLiveView)
+                // Resume live view only if idle live view is enabled AND NOT in photographer mode
+                if (_liveViewTimer != null && !_liveViewTimer.IsEnabled && Properties.Settings.Default.EnableIdleLiveView && !Properties.Settings.Default.PhotographerMode)
                 {
                     Log.Debug("Resuming live view after force clear (idle live view enabled)");
                     _liveViewTimer.Start();
+                    UpdateIdleBackgroundVisibility(); // Update background visibility
+                }
+                else if (Properties.Settings.Default.PhotographerMode)
+                {
+                    Log.Debug("NOT resuming live view after force clear - photographer mode enabled");
                     UpdateIdleBackgroundVisibility(); // Update background visibility
                 }
                 else if (!Properties.Settings.Default.EnableIdleLiveView)
@@ -3780,10 +3831,27 @@ namespace Photobooth.Pages
                     if (device.IsConnected)
                     {
                         UpdateCameraStatus($"Connected: {device.DeviceName}");
-                        
-                        // Start live view only if idle live view is explicitly enabled
-                        // Video module will start its own live view when needed
-                        if (Properties.Settings.Default.EnableIdleLiveView)
+
+                        // Ensure workflow service is subscribed to camera events for photographer mode
+                        if (Properties.Settings.Default.PhotographerMode)
+                        {
+                            _workflowService?.EnsureCameraEventSubscription();
+                            Log.Debug("InitializeCamera: Ensured workflow service camera subscription for photographer mode");
+
+                            // NO live view in photographer mode - it blocks the shutter button
+                            try
+                            {
+                                device.StopLiveView();
+                                _liveViewTimer.Stop();
+                                Log.Debug("InitializeCamera: Stopped live view for photographer mode");
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Debug($"InitializeCamera: Error stopping live view: {ex.Message}");
+                            }
+                        }
+                        // Start live view only if idle live view is enabled AND NOT in photographer mode
+                        else if (Properties.Settings.Default.EnableIdleLiveView)
                         {
                             device.StartLiveView();
                             _liveViewTimer.Start();
@@ -5062,6 +5130,15 @@ namespace Photobooth.Pages
         private void StartButton_Click(object sender, RoutedEventArgs e)
         {
             Log.Debug("StartButton_Click: Button clicked");
+
+            // In photographer mode, don't allow touch to start - only shutter button
+            if (Properties.Settings.Default.PhotographerMode)
+            {
+                Log.Debug("StartButton_Click: Photographer mode enabled - ignoring touch start");
+                _uiService?.UpdateStatus("Press camera shutter button to start");
+                return;
+            }
+
             StartPhotoSession();
         }
 
@@ -6106,8 +6183,34 @@ namespace Photobooth.Pages
 
         private void UpdateUI()
         {
-            UpdateCameraStatus(DeviceManager?.SelectedCameraDevice?.IsConnected == true ? 
+            UpdateCameraStatus(DeviceManager?.SelectedCameraDevice?.IsConnected == true ?
                 "Connected" : "Disconnected");
+
+            // Update start button appearance for photographer mode
+            UpdateStartButtonForPhotographerMode();
+        }
+
+        private void UpdateStartButtonForPhotographerMode()
+        {
+            if (startButtonOverlay != null && startButtonTextLine1 != null && startButtonTextLine2 != null)
+            {
+                if (Properties.Settings.Default.PhotographerMode)
+                {
+                    // Photographer mode - change text and color
+                    startButtonTextLine1.Text = "PRESS SHUTTER";
+                    startButtonTextLine2.Text = "TO START";
+                    startButtonOverlay.Background = new SolidColorBrush(Color.FromArgb(204, 255, 152, 0)); // Orange with transparency
+                    Log.Debug("Updated start button for photographer mode");
+                }
+                else
+                {
+                    // Normal mode
+                    startButtonTextLine1.Text = "TOUCH TO";
+                    startButtonTextLine2.Text = "START";
+                    startButtonOverlay.Background = new SolidColorBrush(Color.FromArgb(204, 76, 175, 80)); // Green with transparency
+                    Log.Debug("Updated start button for normal mode");
+                }
+            }
         }
 
         private void UpdateCameraStatus(string status)
@@ -6207,13 +6310,17 @@ namespace Photobooth.Pages
             // Legacy UI updates for elements not yet in service
             photosContainer.Children.Clear();
             
-            // Restart live view only if idle live view is enabled and not displaying session results
-            if (!_isDisplayingSessionResult && Properties.Settings.Default.EnableIdleLiveView)
+            // Restart live view only if idle live view is enabled, NOT in photographer mode, and not displaying session results
+            if (!_isDisplayingSessionResult && Properties.Settings.Default.EnableIdleLiveView && !Properties.Settings.Default.PhotographerMode)
             {
                 DeviceManager?.SelectedCameraDevice?.StartLiveView();
                 _liveViewTimer.Start();
                 UpdateIdleBackgroundVisibility(); // Update background visibility
                 Log.Debug("Live view restarted in ResetForNewSession (idle live view enabled)");
+            }
+            else if (Properties.Settings.Default.PhotographerMode)
+            {
+                Log.Debug("NOT restarting live view in ResetForNewSession - photographer mode enabled");
             }
             else if (_isDisplayingSessionResult)
             {
@@ -7081,11 +7188,15 @@ namespace Photobooth.Pages
             if (photosContainer != null)
                 photosContainer.Children.Clear();
             
-            // Resume live view only if idle live view is enabled
-            if (DeviceManager?.SelectedCameraDevice != null && Properties.Settings.Default.EnableIdleLiveView)
+            // Resume live view only if idle live view is enabled AND NOT in photographer mode
+            if (DeviceManager?.SelectedCameraDevice != null && Properties.Settings.Default.EnableIdleLiveView && !Properties.Settings.Default.PhotographerMode)
             {
                 DeviceManager.SelectedCameraDevice.StartLiveView();
                 Log.Debug("Live view restarted after clearing current session (idle live view enabled)");
+            }
+            else if (Properties.Settings.Default.PhotographerMode)
+            {
+                Log.Debug("NOT restarting live view after clearing current session - photographer mode enabled");
             }
             else
             {
@@ -7100,13 +7211,17 @@ namespace Photobooth.Pages
             // Use the centralized ExitGalleryMode method which keeps gallery browser visible
             ExitGalleryMode();
             
-            // Resume live view if idle live view is enabled
-            if (DeviceManager?.SelectedCameraDevice != null && Properties.Settings.Default.EnableIdleLiveView)
+            // Resume live view if idle live view is enabled AND NOT in photographer mode
+            if (DeviceManager?.SelectedCameraDevice != null && Properties.Settings.Default.EnableIdleLiveView && !Properties.Settings.Default.PhotographerMode)
             {
                 DeviceManager.SelectedCameraDevice.StartLiveView();
                 _liveViewTimer.Start();
                 UpdateIdleBackgroundVisibility(); // Update background visibility
                 Log.Debug("Live view restarted after exiting gallery (idle live view enabled)");
+            }
+            else if (Properties.Settings.Default.PhotographerMode)
+            {
+                Log.Debug("NOT restarting live view after exiting gallery - photographer mode enabled");
             }
             else
             {

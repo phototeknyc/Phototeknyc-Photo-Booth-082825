@@ -163,12 +163,12 @@ namespace Photobooth.Controls
             {
                 LoadCameraSettings();
                 _isInitialized = true;
-                
-                // Start live view when control loads
+
+                // Start live view when control loads (but NOT in photographer mode)
                 var sessionManager = CameraSessionManager.Instance;
                 _currentCamera = sessionManager?.DeviceManager?.SelectedCameraDevice;
-                
-                if (_currentCamera != null)
+
+                if (_currentCamera != null && !Properties.Settings.Default.PhotographerMode)
                 {
                     StartLiveView();
                     
@@ -281,10 +281,10 @@ namespace Photobooth.Controls
             
             if (isVisible)
             {
-                // Start live view when showing
+                // Start live view when showing (but NOT in photographer mode)
                 var sessionManager = CameraSessionManager.Instance;
                 _currentCamera = sessionManager?.DeviceManager?.SelectedCameraDevice;
-                if (_currentCamera != null)
+                if (_currentCamera != null && !Properties.Settings.Default.PhotographerMode)
                 {
                     StartLiveView();
                 }
@@ -367,6 +367,18 @@ namespace Photobooth.Controls
                 if (_currentCamera == null)
                     return;
 
+                // NO live view in photographer mode - it blocks the shutter button
+                bool photographerMode = Properties.Settings.Default.PhotographerMode;
+                System.Diagnostics.Debug.WriteLine($"[CameraSettingsOverlay] Photographer mode check: {photographerMode}");
+                if (photographerMode)
+                {
+                    System.Diagnostics.Debug.WriteLine("[CameraSettingsOverlay] NOT starting live view - photographer mode enabled");
+                    PreviewPlaceholder.Visibility = Visibility.Visible;
+                    LiveViewImage.Visibility = Visibility.Collapsed;
+                    LiveViewStatus.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
                 // Check if camera supports live view
                 if (!_currentCamera.GetCapability(CapabilityEnum.LiveView))
                 {
@@ -381,7 +393,7 @@ namespace Photobooth.Controls
                 _currentCamera.StartLiveView();
                 _isLiveViewActive = true;
                 _liveViewTimer.Start();
-                
+
                 System.Diagnostics.Debug.WriteLine("[CameraSettingsOverlay] Live view started");
             }
             catch (Exception ex)

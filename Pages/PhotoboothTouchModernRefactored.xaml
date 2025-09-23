@@ -330,14 +330,16 @@
                             <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="5" Opacity="0.5"/>
                         </Border.Effect>
                         <Grid>
-                            <TextBlock Text="TOUCH TO"
+                            <TextBlock x:Name="startButtonTextLine1"
+                                       Text="TOUCH TO"
                                        FontSize="32"
                                        FontWeight="Bold"
                                        Foreground="White"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
                                        Margin="0,-50,0,0"/>
-                            <TextBlock Text="START"
+                            <TextBlock x:Name="startButtonTextLine2"
+                                       Text="START"
                                        FontSize="48"
                                        FontWeight="Bold"
                                        Foreground="White"

@@ -122,19 +122,27 @@ namespace Photobooth.Services
                 {
                     try
                     {
-                        // Only start live view if it's not already active
-                        // This prevents conflicts with the UI live view timer
-                        var liveViewData = _currentCamera.GetLiveViewImage();
-                        bool isLiveViewRunning = liveViewData?.IsLiveViewRunning == true;
-                        
-                        if (!isLiveViewRunning)
+                        // NO live view in photographer mode - it blocks the shutter button
+                        if (Properties.Settings.Default.PhotographerMode)
                         {
-                            _currentCamera.StartLiveView();
-                            DebugService.LogDebug("VideoModeLiveView: Live view started for video recording");
+                            DebugService.LogDebug("VideoModeLiveView: NOT starting live view - photographer mode enabled");
                         }
                         else
                         {
-                            DebugService.LogDebug("VideoModeLiveView: Live view already running - using existing stream");
+                            // Only start live view if it's not already active
+                            // This prevents conflicts with the UI live view timer
+                            var liveViewData = _currentCamera.GetLiveViewImage();
+                            bool isLiveViewRunning = liveViewData?.IsLiveViewRunning == true;
+
+                            if (!isLiveViewRunning)
+                            {
+                                _currentCamera.StartLiveView();
+                                DebugService.LogDebug("VideoModeLiveView: Live view started for video recording");
+                            }
+                            else
+                            {
+                                DebugService.LogDebug("VideoModeLiveView: Live view already running - using existing stream");
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -269,11 +277,15 @@ namespace Photobooth.Services
                     _isVideoModeActive = true;
                     IsEnabled = true; // Important: Ensure IsEnabled is set when resuming
                     
-                    // Restart live view
-                    if (_currentCamera.GetCapability(CapabilityEnum.LiveView))
+                    // Restart live view (but NOT in photographer mode)
+                    if (_currentCamera.GetCapability(CapabilityEnum.LiveView) && !Properties.Settings.Default.PhotographerMode)
                     {
                         _currentCamera.StartLiveView();
                         _isLiveViewRunning = true;
+                    }
+                    else if (Properties.Settings.Default.PhotographerMode)
+                    {
+                        DebugService.LogDebug("VideoModeLiveView: NOT restarting live view - photographer mode enabled");
                     }
                     
                     // Reapply video mode settings
