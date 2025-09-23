@@ -182,12 +182,12 @@ namespace Photobooth.Services
             // Fall back to database placeholders
             if (_placeholderItems != null && _placeholderItems.Count > 0 && currentTemplate != null)
             {
-                DebugService.LogDebug($"Using database placeholders: {_placeholderItems.Count} items, photo index: {photoIndex}");
+                // DebugService.LogDebug($"Using database placeholders: {_placeholderItems.Count} items, photo index: {photoIndex}");
 
                 if (photoIndex < _placeholderItems.Count)
                 {
                     var placeholder = _placeholderItems[photoIndex];
-                    DebugService.LogDebug($"Returning placeholder {photoIndex}: Position({placeholder.X}, {placeholder.Y}) Size({placeholder.Width}x{placeholder.Height})");
+                    // DebugService.LogDebug($"Returning placeholder {photoIndex}: Position({placeholder.X}, {placeholder.Y}) Size({placeholder.Width}x{placeholder.Height})");
                     return new PlaceholderOverlayData
                     {
                         X = placeholder.X,

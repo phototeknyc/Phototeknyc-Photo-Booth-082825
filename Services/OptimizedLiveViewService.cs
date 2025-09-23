@@ -348,7 +348,7 @@ namespace Photobooth.Services
                 _lastFpsUpdate = now;
 
                 var status = $"Capture: {_captureFps:F1} FPS, Process: {_processFps:F1} FPS, Queue: {_frameQueue.Count}";
-                DebugService.LogDebug($"[OPTIMIZED LIVE VIEW] {status}");
+                // DebugService.LogDebug($"[OPTIMIZED LIVE VIEW] {status}");
                 StatusUpdate?.Invoke(this, status);
             }
         }

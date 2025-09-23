@@ -133,9 +133,10 @@ namespace Photobooth.Services
                 {
                     // Clear the saved event ID and time
                     Properties.Settings.Default.SelectedEventId = 0;
-                    Properties.Settings.Default.EventSelectionTime = DateTime.MinValue;
+                    // Use the default value from settings (year 2000) instead of MinValue
+                    Properties.Settings.Default.EventSelectionTime = new DateTime(2000, 1, 1);
                     Properties.Settings.Default.Save();
-                    _eventSelectionTime = DateTime.MinValue;
+                    _eventSelectionTime = new DateTime(2000, 1, 1);
                 }
             }
         }
@@ -534,10 +535,20 @@ namespace Photobooth.Services
 
                 Log.Debug($"EventSelectionService: Settings values after reload - SelectedEventId: {savedEventId}, EventSelectionTime: {savedTime}");
 
+                // If EventSelectionTime is at its default (MinValue or year 2000), but we have a saved event,
+                // assume it was just selected and set the time to now
+                if (savedEventId > 0 && (savedTime == DateTime.MinValue || savedTime.Year <= 2000))
+                {
+                    Log.Debug($"EventSelectionService: Detected saved event {savedEventId} with invalid/default time, setting to current time");
+                    savedTime = DateTime.Now;
+                    _eventSelectionTime = savedTime;
+                    SaveEventSelectionTime();
+                }
+
                 // Check against the default DateTime value (year 2000)
                 var defaultTime = new DateTime(2000, 1, 1);
 
-                if (savedEventId > 0 && savedTime != DateTime.MinValue && savedTime != defaultTime && savedTime.Year > 2000)
+                if (savedEventId > 0 && savedTime.Year > 2000)
                 {
                     var elapsed = DateTime.Now - savedTime;
                     var expirationTime = TimeSpan.FromHours(5);
@@ -617,8 +628,10 @@ namespace Photobooth.Services
         private void ClearSavedEventSelection()
         {
             Properties.Settings.Default.SelectedEventId = 0;
-            Properties.Settings.Default.EventSelectionTime = DateTime.MinValue;
+            // Use the default value from settings (year 2000) instead of MinValue
+            Properties.Settings.Default.EventSelectionTime = new DateTime(2000, 1, 1);
             Properties.Settings.Default.Save();
+            Log.Debug("EventSelectionService: Cleared saved event selection");
         }
 
         /// <summary>
