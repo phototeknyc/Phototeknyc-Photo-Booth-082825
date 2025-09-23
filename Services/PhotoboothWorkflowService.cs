@@ -40,6 +40,7 @@ namespace Photobooth.Services
         private bool _isCapturing;
         private bool _isCountdownActive;
         private PhotoCapturedEventHandler _cameraCaptureHandler;
+        private PhotoCapturedEventArgs _photographerInitialCapture; // Store first capture in photographer mode
         #endregion
 
         #region Properties
@@ -88,13 +89,19 @@ namespace Photobooth.Services
                 bool photographerMode = Properties.Settings.Default.PhotographerMode;
                 if (photographerMode && !_sessionService.IsSessionActive && !_isCapturing)
                 {
-                    Log.Debug("PhotoboothWorkflowService: Photographer mode idle capture detected - starting new session");
+                    Log.Debug("PhotoboothWorkflowService: Photographer mode idle capture detected - storing and starting session");
+
+                    // Store this capture to process as the first photo
+                    _photographerInitialCapture = args;
+                    Log.Debug($"PhotoboothWorkflowService: Stored initial capture: {args?.FileName}");
+
+                    // Mark as capturing so we don't handle multiple triggers
+                    _isCapturing = true;
 
                     // Fire event to notify UI to start a session
                     PhotographerIdleCapture?.Invoke(this, EventArgs.Empty);
 
-                    // Don't process this capture - let the session start properly
-                    // The photographer will need to press again for the first photo
+                    // The stored capture will be processed when StartPhotoCaptureWorkflowAsync is called
                     return;
                 }
 
@@ -130,7 +137,7 @@ namespace Photobooth.Services
         {
             try
             {
-                if (_isCapturing)
+                if (_isCapturing && _photographerInitialCapture == null)
                 {
                     Log.Debug("PhotoboothWorkflowService: Capture already in progress");
                     return false;
@@ -139,6 +146,8 @@ namespace Photobooth.Services
                 if (!_sessionService.IsSessionActive)
                 {
                     StatusChanged?.Invoke(this, new StatusEventArgs { Status = "No active session" });
+                    _isCapturing = false; // Reset if we set it in photographer mode
+                    _photographerInitialCapture = null; // Clear any stored capture
                     return false;
                 }
 
@@ -146,6 +155,8 @@ namespace Photobooth.Services
                 if (camera?.IsConnected != true)
                 {
                     StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Camera not connected" });
+                    _isCapturing = false; // Reset if we set it in photographer mode
+                    _photographerInitialCapture = null; // Clear any stored capture
                     return false;
                 }
 
@@ -172,13 +183,27 @@ namespace Photobooth.Services
 
                 if (photographerMode)
                 {
-                    // In photographer mode, wait for manual trigger
-                    Log.Debug("PhotoboothWorkflowService: Photographer mode - waiting for manual trigger");
-                    StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Press camera trigger when ready" });
+                    // Check if we have a stored initial capture to process
+                    if (_photographerInitialCapture != null)
+                    {
+                        Log.Debug($"PhotoboothWorkflowService: Processing stored initial capture: {_photographerInitialCapture.FileName}");
+                        var initialCapture = _photographerInitialCapture;
+                        _photographerInitialCapture = null; // Clear it
 
-                    // Don't capture here - wait for the trigger to fire PhotoCaptured event
-                    // The _cameraCaptureHandler will process it when trigger is pressed
-                    // Just keep the workflow active and waiting
+                        // Process the initial capture immediately
+                        StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Processing first photo..." });
+                        OnCaptureCompleted(initialCapture);
+                    }
+                    else
+                    {
+                        // In photographer mode, wait for manual trigger for subsequent photos
+                        Log.Debug("PhotoboothWorkflowService: Photographer mode - waiting for manual trigger");
+                        StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Press camera trigger when ready" });
+
+                        // Don't capture here - wait for the trigger to fire PhotoCaptured event
+                        // The _cameraCaptureHandler will process it when trigger is pressed
+                        // Just keep the workflow active and waiting
+                    }
                 }
                 else
                 {
@@ -193,6 +218,7 @@ namespace Photobooth.Services
                 Log.Error($"PhotoboothWorkflowService: Failed to start capture workflow: {ex.Message}");
                 WorkflowError?.Invoke(this, new WorkflowErrorEventArgs { Error = ex, Operation = "StartCaptureWorkflow" });
                 _isCapturing = false;
+                _photographerInitialCapture = null; // Clear any stored capture on error
                 return false;
             }
         }
@@ -750,11 +776,12 @@ namespace Photobooth.Services
                 
                 // Stop countdown timer
                 _countdownTimer?.Stop();
-                
+
                 // Reset workflow state
                 _isCapturing = false;
                 _isCountdownActive = false;
                 _countdownValue = 0;
+                _photographerInitialCapture = null; // Clear any stored capture
                 
                 // Stop any active camera operations
                 if (CurrentCamera != null && CurrentCamera.IsConnected)
