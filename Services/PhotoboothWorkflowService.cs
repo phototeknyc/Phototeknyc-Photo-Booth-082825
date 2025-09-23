@@ -677,9 +677,16 @@ namespace Photobooth.Services
                 }
                 else if (!videoModeService.IsEnabled)
                 {
-                    // Normal live view resume when video mode is not enabled
-                    Log.Debug("PhotoboothWorkflowService: Resuming normal live view (video mode not enabled)");
-                    CurrentCamera?.StartLiveView();
+                    // Only resume normal live view if we're in an active session OR idle live view is enabled
+                    if (_sessionService.IsSessionActive || Properties.Settings.Default.EnableIdleLiveView)
+                    {
+                        Log.Debug("PhotoboothWorkflowService: Resuming normal live view");
+                        CurrentCamera?.StartLiveView();
+                    }
+                    else
+                    {
+                        Log.Debug("PhotoboothWorkflowService: Not resuming live view - idle live view is disabled and no active session");
+                    }
                 }
                 else
                 {
@@ -691,8 +698,11 @@ namespace Photobooth.Services
             catch (Exception ex)
             {
                 Log.Error($"PhotoboothWorkflowService: Error resuming live view: {ex.Message}");
-                // Fallback to normal live view on error
-                CurrentCamera?.StartLiveView();
+                // Only fallback to normal live view if we're in a session or idle live view is enabled
+                if (_sessionService.IsSessionActive || Properties.Settings.Default.EnableIdleLiveView)
+                {
+                    CurrentCamera?.StartLiveView();
+                }
             }
         }
         #endregion

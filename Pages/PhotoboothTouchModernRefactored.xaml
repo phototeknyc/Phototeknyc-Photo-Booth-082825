@@ -299,7 +299,7 @@
                         </Border>
                     </Grid>
 
-                    <!-- FPS Debug Display -->
+                    <!-- FPS Debug Display (Hidden by default) -->
                     <Border x:Name="debugFpsBorder"
                             Background="#CC000000"
                             CornerRadius="4"
@@ -307,7 +307,7 @@
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
                             Margin="10"
-                            Visibility="Visible">
+                            Visibility="Collapsed">
                         <TextBlock x:Name="debugFpsText"
                                    Text="FPS: 0.0"
                                    Foreground="#FFFF00"

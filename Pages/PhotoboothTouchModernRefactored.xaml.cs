@@ -3213,11 +3213,16 @@ namespace Photobooth.Pages
                     Log.Debug("Showed start button");
                 }
 
-                // Resume live view
-                if (_liveViewTimer != null && !_liveViewTimer.IsEnabled)
+                // Resume live view only if idle live view is enabled
+                if (_liveViewTimer != null && !_liveViewTimer.IsEnabled && Properties.Settings.Default.EnableIdleLiveView)
                 {
-                    Log.Debug("Resuming live view after force clear");
+                    Log.Debug("Resuming live view after force clear (idle live view enabled)");
                     _liveViewTimer.Start();
+                    UpdateIdleBackgroundVisibility(); // Update background visibility
+                }
+                else if (!Properties.Settings.Default.EnableIdleLiveView)
+                {
+                    Log.Debug("NOT resuming live view after force clear - idle live view disabled");
                     UpdateIdleBackgroundVisibility(); // Update background visibility
                 }
 
@@ -3776,21 +3781,18 @@ namespace Photobooth.Pages
                     {
                         UpdateCameraStatus($"Connected: {device.DeviceName}");
                         
-                        // Start live view if idle live view is enabled OR if video recording is supported
-                        var modulesConfig = PhotoboothModulesConfig.Instance;
-                        bool shouldStartLiveView = Properties.Settings.Default.EnableIdleLiveView || 
-                                                 modulesConfig.VideoEnabled;
-                        
-                        if (shouldStartLiveView)
+                        // Start live view only if idle live view is explicitly enabled
+                        // Video module will start its own live view when needed
+                        if (Properties.Settings.Default.EnableIdleLiveView)
                         {
                             device.StartLiveView();
                             _liveViewTimer.Start();
                             UpdateIdleBackgroundVisibility(); // Hide background when live view starts
-                            Log.Debug($"InitializeCamera: Started live view (IdleLiveView: {Properties.Settings.Default.EnableIdleLiveView}, VideoModule: {modulesConfig.VideoEnabled})");
+                            Log.Debug($"InitializeCamera: Started idle live view");
                         }
                         else
                         {
-                            Log.Debug("InitializeCamera: Live view disabled - both idle and video disabled");
+                            Log.Debug("InitializeCamera: Idle live view disabled, not starting");
                         }
                     }
                 }
@@ -3894,17 +3896,18 @@ namespace Photobooth.Pages
                     _lastFpsUpdate = now;
 
                     // Log actual FPS every second for debugging
-                    Log.Debug($"[LIVE VIEW FPS] Current: {_currentFps:F1} FPS (Target: {Properties.Settings.Default.LiveViewFrameRate} FPS)");
+                    // Log.Debug($"[LIVE VIEW FPS] Current: {_currentFps:F1} FPS (Target: {Properties.Settings.Default.LiveViewFrameRate} FPS)");
 
-                    // Update UI with FPS if status text is available
-                    Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        if (debugFpsText != null)
-                        {
-                            debugFpsText.Text = $"FPS: {_currentFps:F1}";
-                            debugFpsText.Visibility = Visibility.Visible;
-                        }
-                    }));
+                    // FPS display disabled to reduce UI overhead
+                    // Uncomment to enable FPS display
+                    // Dispatcher.BeginInvoke(new Action(() =>
+                    // {
+                    //     if (debugFpsText != null)
+                    //     {
+                    //         debugFpsText.Text = $"FPS: {_currentFps:F1}";
+                    //         debugFpsText.Visibility = Visibility.Visible;
+                    //     }
+                    // }));
                 }
 
                 // Check if video recording is active FIRST - always allow live view during recording
@@ -4063,7 +4066,7 @@ namespace Photobooth.Pages
                 if (_fpsFrameCount % 30 == 0) // Every 30 frames
                 {
                     var processingTime = (DateTime.Now - startTime).TotalMilliseconds;
-                    Log.Debug($"[PERFORMANCE] DisplayLiveView processing time: {processingTime:F1}ms");
+                    // Log.Debug($"[PERFORMANCE] DisplayLiveView processing time: {processingTime:F1}ms");
                 }
             }
         }
@@ -4130,10 +4133,11 @@ namespace Photobooth.Pages
         private void OnOptimizedStatusUpdate(object sender, string status)
         {
             // Log performance status
-            if (DateTime.Now.Second % 5 == 0)
-            {
-                Log.Debug($"[OPTIMIZED LIVE VIEW] {status}");
-            }
+            // Comment out to reduce debug spam
+            // if (DateTime.Now.Second % 5 == 0)
+            // {
+            //     Log.Debug($"[OPTIMIZED LIVE VIEW] {status}");
+            // }
         }
 
         #endregion
@@ -4242,7 +4246,7 @@ namespace Photobooth.Pages
         {
             if (templateOverlayCanvas == null)
             {
-                Log.Debug("UpdateTemplateOverlay: templateOverlayCanvas is null");
+                // Log.Debug("UpdateTemplateOverlay: templateOverlayCanvas is null");
                 return;
             }
 
@@ -4253,7 +4257,7 @@ namespace Photobooth.Pages
             }
             else
             {
-                Log.Debug("UpdateTemplateOverlay: No current template to display");
+                // Log.Debug("UpdateTemplateOverlay: No current template to display");
             }
         }
 
@@ -4317,7 +4321,7 @@ namespace Photobooth.Pages
                     overlayX = (displayWidth - overlayWidth) / 2;
                     overlayY = (displayHeight - overlayHeight) / 2;
 
-                    Log.Debug($"Placeholder overlay: Display({displayWidth:F0}x{displayHeight:F0}) Placeholder({placeholderData.Width:F0}x{placeholderData.Height:F0}) Overlay({overlayWidth:F0}x{overlayHeight:F0}) at ({overlayX:F0},{overlayY:F0})");
+                    // Log.Debug($"Placeholder overlay: Display({displayWidth:F0}x{displayHeight:F0}) Placeholder({placeholderData.Width:F0}x{placeholderData.Height:F0}) Overlay({overlayWidth:F0}x{overlayHeight:F0}) at ({overlayX:F0},{overlayY:F0})");
 
                     // Create a darkened area outside the placeholder
                     // First, add a semi-transparent black rectangle covering the entire canvas
@@ -6203,17 +6207,21 @@ namespace Photobooth.Pages
             // Legacy UI updates for elements not yet in service
             photosContainer.Children.Clear();
             
-            // Restart live view (but not if displaying session results)
-            if (!_isDisplayingSessionResult)
+            // Restart live view only if idle live view is enabled and not displaying session results
+            if (!_isDisplayingSessionResult && Properties.Settings.Default.EnableIdleLiveView)
             {
                 DeviceManager?.SelectedCameraDevice?.StartLiveView();
                 _liveViewTimer.Start();
                 UpdateIdleBackgroundVisibility(); // Update background visibility
-                Log.Debug("Live view restarted in ResetForNewSession");
+                Log.Debug("Live view restarted in ResetForNewSession (idle live view enabled)");
+            }
+            else if (_isDisplayingSessionResult)
+            {
+                Log.Debug("★★★ NOT restarting live view in ResetForNewSession - session result displayed");
             }
             else
             {
-                Log.Debug("★★★ NOT restarting live view in ResetForNewSession - session result displayed");
+                Log.Debug("NOT restarting live view in ResetForNewSession - idle live view disabled");
             }
         }
 
@@ -7073,12 +7081,17 @@ namespace Photobooth.Pages
             if (photosContainer != null)
                 photosContainer.Children.Clear();
             
-            // Resume live view
-            if (DeviceManager?.SelectedCameraDevice != null)
+            // Resume live view only if idle live view is enabled
+            if (DeviceManager?.SelectedCameraDevice != null && Properties.Settings.Default.EnableIdleLiveView)
             {
                 DeviceManager.SelectedCameraDevice.StartLiveView();
+                Log.Debug("Live view restarted after clearing current session (idle live view enabled)");
             }
-            
+            else
+            {
+                Log.Debug("NOT restarting live view after clearing current session - idle live view disabled");
+            }
+
             _uiService.UpdateStatus("Ready for new session");
         }
         
@@ -7087,12 +7100,17 @@ namespace Photobooth.Pages
             // Use the centralized ExitGalleryMode method which keeps gallery browser visible
             ExitGalleryMode();
             
-            // Resume live view if enabled
+            // Resume live view if idle live view is enabled
             if (DeviceManager?.SelectedCameraDevice != null && Properties.Settings.Default.EnableIdleLiveView)
             {
                 DeviceManager.SelectedCameraDevice.StartLiveView();
                 _liveViewTimer.Start();
                 UpdateIdleBackgroundVisibility(); // Update background visibility
+                Log.Debug("Live view restarted after exiting gallery (idle live view enabled)");
+            }
+            else
+            {
+                Log.Debug("NOT restarting live view after exiting gallery - idle live view disabled");
             }
             
             // Show start button
