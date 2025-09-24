@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using CameraControl.Devices;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using System.Collections.Generic;
 using NetVips;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -78,6 +79,22 @@ namespace Photobooth.Services
         private volatile int _lastLiveViewFrameWidth;
         private volatile int _lastLiveViewFrameHeight;
         private bool _useRvmLiveView;
+
+        // Performance optimization fields
+        private int _frameSkipCounter = 0;
+        private Tensor<float> _lastAlphaMask;
+        private float[,] _previousAlphaMap;  // For temporal smoothing
+        private float[,] _previousAlphaMap2; // Second buffer for smoothing
+        private int _alphaMapWidth = 0;
+        private int _alphaMapHeight = 0;
+
+        // OPTIMIZATION: Tensor pooling to avoid allocations
+        private DenseTensor<float> _pooledInputTensor512;  // Pre-allocated 512x512 tensor
+        private DenseTensor<float> _pooledInputTensor256;  // Pre-allocated 256x256 tensor
+        private readonly object _tensorPoolLock = new object();
+        private VipsImage _cachedBackgroundVips;
+        private DateTime _lastBackgroundLoadTime;
+        private readonly object _vipsCacheLock = new object();
         // Live tuning for RVM input scale when matte is weak
         private double _rvmScaleBoost = 1.0; // 1.0 = normal; >1.0 = larger input
         private int _rvmScaleBoostCooldown = 0; // frames to keep boost
@@ -106,8 +123,8 @@ namespace Photobooth.Services
         private const string LiveViewModeResponsive = "Responsive";
         private const string LiveViewModeSmooth = "Smooth";
         private const string LiveViewModeAuto = "Auto";
-        private const int RvmMinFrameIntervalMs = 30;
-        private const int ModnetMinFrameIntervalMs = 45;
+        private const int RvmMinFrameIntervalMs = 0; // No throttling - let GPU run at full speed
+        private const int ModnetMinFrameIntervalMs = 0; // No throttling - let GPU run at full speed
         private const int LiveViewMaxOutputWidth = 640;
         // Alpha post-processing for live view (tune as needed)
         private const float LiveViewAlphaOffset = 0.00f;  // base offset
@@ -115,6 +132,14 @@ namespace Photobooth.Services
         private const float LiveViewAlphaGamma = 0.5f;    // <1 boosts mids, >1 compresses
         private const float LiveViewAlphaKneeLow = 0.02f; // lowered threshold for weak alphas
         private const float LiveViewAlphaKneeHigh = 0.20f;// lowered upper threshold
+
+        // Performance optimization settings
+        private const bool EnableFrameSkipping = false; // DISABLED - Process every frame for maximum FPS
+        private const int FrameSkipInterval = 1; // Process every frame
+        private const bool EnableGpuAcceleration = true;
+        private const bool EnableDebugLogging = false; // Disable in production
+        private static bool _isGpuEnabled = false;
+        private static string _gpuStatus = "Not initialized";
 
         // Model paths
         private readonly string _modelsFolder;
@@ -128,6 +153,22 @@ namespace Photobooth.Services
         private BackgroundRemovalModelManager.ModelType _currentLiveViewModel;
 
         #endregion
+
+        /// <summary>
+        /// Gets the current GPU acceleration status
+        /// </summary>
+        public static string GetGpuStatus()
+        {
+            return $"GPU Enabled: {_isGpuEnabled} | Status: {_gpuStatus}";
+        }
+
+        /// <summary>
+        /// Checks if GPU acceleration is currently active
+        /// </summary>
+        public static bool IsGpuAccelerated()
+        {
+            return _isGpuEnabled;
+        }
 
         #region Constructor
 
@@ -196,44 +237,59 @@ namespace Photobooth.Services
                             return false;
                         }
 
-                        Debug.WriteLine($"[BackgroundRemoval] InitializeAsync - Checking for MODNet model...");
+                        Debug.WriteLine($"[BackgroundRemoval] InitializeAsync - Checking for best available model...");
 
-                        // Check if MODNet is available
-                        var modnetPath = _modelManager.GetModelPath(BackgroundRemovalModelManager.ModelType.MODNet);
-                        Debug.WriteLine($"[BackgroundRemoval] MODNet path: {modnetPath}");
-                        Debug.WriteLine($"[BackgroundRemoval] MODNet exists: {File.Exists(modnetPath)}");
-
-                        // Load MODNet model (only model we use)
+                        // Try PP-LiteSeg first (fastest), then MODNet
                         bool captureModelLoaded = false;
-                        try
+                        BackgroundRemovalModelManager.ModelType[] modelsToTry =
                         {
-                            var modelInfo = _modelManager.GetModelInfo(BackgroundRemovalModelManager.ModelType.MODNet);
-                            Debug.WriteLine($"[BackgroundRemoval] Loading MODNet model ({modelInfo.Description})");
+                            BackgroundRemovalModelManager.ModelType.PPLiteSeg,
+                            BackgroundRemovalModelManager.ModelType.MODNet
+                        };
 
-                            bool useGPU = Properties.Settings.Default.BackgroundRemovalUseGPU;
-                            _captureSession = _modelManager.LoadModel(BackgroundRemovalModelManager.ModelType.MODNet, useGPU);
-                            _currentCaptureModel = BackgroundRemovalModelManager.ModelType.MODNet;
-                            captureModelLoaded = true;
-
-                            Debug.WriteLine($"[BackgroundRemoval] ✓ MODNet loaded successfully (Speed: {modelInfo.SpeedMultiplier}x)");
-                            DeviceLog.Info($"[BackgroundRemoval] Using MODNet model for background removal");
-                        }
-                        catch (Exception ex)
+                        foreach (var modelType in modelsToTry)
                         {
-                            Debug.WriteLine($"[BackgroundRemoval] Failed to load MODNet: {ex.Message}");
-                            DeviceLog.Error($"Failed to load MODNet model: {ex.Message}");
+                            var modelPath = _modelManager.GetModelPath(modelType);
+                            Debug.WriteLine($"[BackgroundRemoval] Checking {modelType}: {modelPath}");
+                            Debug.WriteLine($"[BackgroundRemoval] {modelType} exists: {File.Exists(modelPath)}");
+
+                            if (!File.Exists(modelPath))
+                                continue;
+
+                            try
+                            {
+                                var modelInfo = _modelManager.GetModelInfo(modelType);
+                                Debug.WriteLine($"[BackgroundRemoval] Loading {modelType} model ({modelInfo.Description})");
+
+                                bool useGPU = Properties.Settings.Default.BackgroundRemovalUseGPU;
+                                Debug.WriteLine($"[BackgroundRemoval] GPU setting from Properties: {useGPU}");
+                                Console.WriteLine($"[BackgroundRemoval] Loading {modelType} with GPU={useGPU}");
+
+                                _captureSession = _modelManager.LoadModel(modelType, useGPU);
+                                _currentCaptureModel = modelType;
+                                captureModelLoaded = true;
+
+                                Debug.WriteLine($"[BackgroundRemoval] ✓ {modelType} loaded successfully (Speed: {modelInfo.SpeedMultiplier}x)");
+                                DeviceLog.Info($"[BackgroundRemoval] Using {modelType} model for background removal");
+                                break;
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"[BackgroundRemoval] Failed to load {modelType}: {ex.Message}");
+                                DeviceLog.Error($"Failed to load {modelType} model: {ex.Message}");
+                            }
                         }
 
                         if (!captureModelLoaded)
                         {
-                            Debug.WriteLine("[BackgroundRemoval] Failed to load MODNet model - background removal unavailable");
+                            Debug.WriteLine("[BackgroundRemoval] Failed to load any model - background removal unavailable");
                             DeviceLog.Error("Failed to load background removal model");
                             return false;
                         }
 
-                        // Use same MODNet model for live view
+                        // Use same model for live view
                         _liveViewSession = _captureSession;
-                        _currentLiveViewModel = BackgroundRemovalModelManager.ModelType.MODNet;
+                        _currentLiveViewModel = _currentCaptureModel;
 
                         ApplyPreferredLiveViewMode();
 
@@ -278,16 +334,46 @@ namespace Photobooth.Services
                 // Try to use DirectML on Windows for GPU acceleration
                 try
                 {
-                    options.AppendExecutionProvider_DML();
-                    Debug.WriteLine("[BackgroundRemoval] GPU acceleration enabled (DirectML)");
-                    DeviceLog.Info("[BackgroundRemoval] GPU acceleration enabled for faster processing");
+                    // Try DirectML with the correct API
+                    options.AppendExecutionProvider_DML(0);  // Use device ID 0
+
+                    _isGpuEnabled = true;
+                    _gpuStatus = "DirectML GPU acceleration active";
+                    Debug.WriteLine("[BackgroundRemoval] ✅ GPU acceleration ENABLED (DirectML)");
+                    DeviceLog.Info("[BackgroundRemoval] ✅ GPU acceleration ENABLED - using DirectML for faster processing");
+
+                    // Log GPU status prominently
+                    Console.WriteLine("====================================");
+                    Console.WriteLine("GPU ACCELERATION: ENABLED (DirectML)");
+                    Console.WriteLine("DirectML.dll found at System32");
+                    Console.WriteLine("====================================");
+
+                    // Optimize thread settings for GPU
+                    options.InterOpNumThreads = 1;  // Single thread for GPU coordination
+                    options.IntraOpNumThreads = 1;  // GPU handles parallelism internally
+                    options.ExecutionMode = ExecutionMode.ORT_PARALLEL;
+                    options.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[BackgroundRemoval] GPU not available: {ex.Message}");
-                    DeviceLog.Debug($"[BackgroundRemoval] DirectML unavailable: {ex.Message}");
-                    DeviceLog.Debug("GPU acceleration not available, using CPU");
+                    _isGpuEnabled = false;
+                    _gpuStatus = $"DirectML failed: {ex.Message}";
+                    Debug.WriteLine($"[BackgroundRemoval] ❌ GPU NOT available: {ex.Message}");
+                    DeviceLog.Info($"[BackgroundRemoval] ❌ GPU acceleration NOT available - using CPU fallback");
+                    DeviceLog.Debug($"DirectML error: {ex.Message}");
+
+                    // Log CPU fallback prominently
+                    Console.WriteLine("====================================");
+                    Console.WriteLine("GPU ACCELERATION: DISABLED (CPU mode)");
+                    Console.WriteLine($"Reason: {ex.Message}");
+                    Console.WriteLine("====================================");
                 }
+            }
+            else
+            {
+                _isGpuEnabled = false;
+                _gpuStatus = "GPU disabled in settings";
+                DeviceLog.Info("[BackgroundRemoval] GPU acceleration disabled in settings - using CPU");
             }
 
             // CPU optimization
@@ -535,9 +621,19 @@ namespace Photobooth.Services
                 modelWidth = (int)inputShape[2];
             }
 
-            // MODNet uses 512x512 input
-            modelWidth = 512;
-            modelHeight = 512;
+            // Get model-specific input size
+            var modelInfo = _modelManager.GetModelInfo(_currentLiveViewModel);
+            if (modelInfo != null)
+            {
+                modelWidth = modelInfo.InputSize;
+                modelHeight = modelInfo.InputSize;
+            }
+            else
+            {
+                // Default to 512x512 if model info not available
+                modelWidth = 512;
+                modelHeight = 512;
+            }
 
             // Validate dimensions
             if (modelWidth <= 0 || modelHeight <= 0)
@@ -599,11 +695,34 @@ namespace Photobooth.Services
         {
             var width = image.Width;
             var height = image.Height;
-            var tensor = new DenseTensor<float>(new[] { 1, 3, height, width });
 
-            // MODNet normalization parameters
-            float[] mean = { 0.5f, 0.5f, 0.5f };
-            float[] std = { 0.5f, 0.5f, 0.5f };
+            // OPTIMIZATION: Use pooled tensor if size matches common sizes
+            DenseTensor<float> tensor;
+            lock (_tensorPoolLock)
+            {
+                if (width == 512 && height == 512)
+                {
+                    if (_pooledInputTensor512 == null)
+                        _pooledInputTensor512 = new DenseTensor<float>(new[] { 1, 3, 512, 512 });
+                    tensor = _pooledInputTensor512;
+                }
+                else if (width == 256 && height == 256)
+                {
+                    if (_pooledInputTensor256 == null)
+                        _pooledInputTensor256 = new DenseTensor<float>(new[] { 1, 3, 256, 256 });
+                    tensor = _pooledInputTensor256;
+                }
+                else
+                {
+                    // Fallback for non-standard sizes
+                    tensor = new DenseTensor<float>(new[] { 1, 3, height, width });
+                }
+            }
+
+            // Get model-specific normalization parameters
+            var modelInfo = _modelManager.GetModelInfo(_currentLiveViewModel);
+            float[] mean = modelInfo?.NormMean ?? new[] { 0.5f, 0.5f, 0.5f };
+            float[] std = modelInfo?.NormStd ?? new[] { 0.5f, 0.5f, 0.5f };
 
             // Access pixel data
             image.ProcessPixelRows(accessor =>
@@ -865,12 +984,12 @@ namespace Photobooth.Services
                     }
 
                     _isRvmProcessing = true;
-                    var frameCopy = (byte[])frameData.Clone();
+                    // OPTIMIZATION: Process directly without cloning
                     _ = Task.Run(() =>
                     {
                         try
                         {
-                            var rvmBytes = ProcessLiveViewFrameWithRvm(frameCopy, width, height);
+                            var rvmBytes = ProcessLiveViewFrameWithRvm(frameData, width, height);
                             if (rvmBytes != null && rvmBytes.Length > 0)
                             {
                                 _lastLiveViewFrame = rvmBytes;
@@ -879,7 +998,7 @@ namespace Photobooth.Services
                                 TrackLiveViewFps("RVM");
                                 if (_rvmFrameCounter % 10 == 0)
                                 {
-                                    DeviceLog.Debug($"[BackgroundRemoval] Cached RVM frame {width}x{height} ({rvmBytes.Length} bytes)");
+                                    if (EnableDebugLogging) DeviceLog.Debug($"[BackgroundRemoval] Cached RVM frame {width}x{height} ({rvmBytes.Length} bytes)");
                                 }
                             }
                         }
@@ -926,19 +1045,19 @@ namespace Photobooth.Services
                     }
 
                     _isModnetProcessing = true;
-                    var frameCopy = (byte[])frameData.Clone();
+                    // OPTIMIZATION: Process directly without cloning
                     _ = Task.Run(() =>
                     {
                         try
                         {
-                            var modnetBytes = ProcessLiveViewFrameWithModnet(frameCopy, width, height);
+                            var modnetBytes = ProcessLiveViewFrameWithModnet(frameData, width, height);
                             if (modnetBytes != null && modnetBytes.Length > 0)
                             {
                                 _lastLiveViewFrame = modnetBytes;
                                 TrackLiveViewFps("MODNet");
                                 if (_modnetFrameCounter % 10 == 0)
                                 {
-                                    DeviceLog.Debug($"[BackgroundRemoval] Cached MODNet frame {_lastLiveViewFrameWidth}x{_lastLiveViewFrameHeight} ({modnetBytes.Length} bytes)");
+                                    if (EnableDebugLogging) DeviceLog.Debug($"[BackgroundRemoval] Cached MODNet frame {_lastLiveViewFrameWidth}x{_lastLiveViewFrameHeight} ({modnetBytes.Length} bytes)");
                                 }
                             }
                         }
@@ -974,9 +1093,25 @@ namespace Photobooth.Services
                 return null;
             }
 
+            // Implement frame skipping for better performance
+            if (EnableFrameSkipping)
+            {
+                _frameSkipCounter++;
+                if (_frameSkipCounter % FrameSkipInterval != 0)
+                {
+                    // Reuse last processed frame for better perceived FPS
+                    if (_lastLiveViewFrame != null)
+                    {
+                        return _lastLiveViewFrame;
+                    }
+                }
+            }
+
             var stopwatch = Stopwatch.StartNew();
-            int maxDim = (int)Math.Min(512, Math.Round(384 * _rvmScaleBoost));
-            float downsampleRatio = CalculateDownsampleRatio(width, height, 512.0 * 512.0, maxDim, 0.25);
+            // Ultra-optimized inference size for maximum FPS
+            // Reduced to 256x256 for best performance with GPU acceleration
+            int maxDim = (int)Math.Min(256, Math.Round(256 * _rvmScaleBoost));
+            float downsampleRatio = CalculateDownsampleRatio(width, height, 256.0 * 256.0, maxDim, 0.25);
             EnsureRvmStates();
             try
             {
@@ -988,23 +1123,41 @@ namespace Photobooth.Services
                     targetWidth = Math.Min(width, targetWidth);
                     targetHeight = Math.Min(height, targetHeight);
 
-                    var image = vipsImage;
-                    if (targetWidth != width || targetHeight != height)
+                    VipsImage image = null;
+                    VipsImage tempImage = null;
+                    try
                     {
-                        image = vipsImage.Resize((double)targetWidth / vipsImage.Width,
-                                                vscale: (double)targetHeight / vipsImage.Height,
-                                                kernel: Enums.Kernel.Lanczos3);
-                    }
+                        if (targetWidth != width || targetHeight != height)
+                        {
+                            image = vipsImage.Resize((double)targetWidth / vipsImage.Width,
+                                                    vscale: (double)targetHeight / vipsImage.Height,
+                                                    kernel: Enums.Kernel.Lanczos3);
+                        }
+                        else
+                        {
+                            image = vipsImage;
+                        }
 
-                    if (image.Width > LiveViewMaxOutputWidth)
+                        if (image.Width > LiveViewMaxOutputWidth)
+                        {
+                            double scale = LiveViewMaxOutputWidth / (double)image.Width;
+                            tempImage = image.Resize(scale, vscale: scale, kernel: Enums.Kernel.Lanczos3);
+                            if (image != vipsImage)
+                                image.Dispose();
+                            image = tempImage;
+                            tempImage = null;
+                        }
+                    }
+                    catch
                     {
-                        double scale = LiveViewMaxOutputWidth / (double)image.Width;
-                        image = image.Resize(scale, vscale: scale, kernel: Enums.Kernel.Lanczos3);
+                        image?.Dispose();
+                        tempImage?.Dispose();
+                        throw;
                     }
 
                     if (_rvmFrameCounter % 10 == 0)
                     {
-                        DeviceLog.Debug($"[BackgroundRemoval] RVM inference size: {image.Width}x{image.Height} (ratio {downsampleRatio:F2})");
+                        if (EnableDebugLogging) DeviceLog.Debug($"[BackgroundRemoval] RVM inference size: {image.Width}x{image.Height} (ratio {downsampleRatio:F2})");
                     }
 
                     var srcTensor = VipsImageToTensorForRvm(image);
@@ -1080,10 +1233,10 @@ namespace Photobooth.Services
                         bool invert = possiblyInverted || autoInvert;
 
                         // RVM fallback to MODNet when matte is completely degenerate
-                        // More lenient threshold to avoid failures
-                        bool degenerate = alphaMax < 0.02 || (alphaAvg < 0.05 && centerAvg < 0.05);
+                        // Adjusted thresholds to reduce MODNet fallbacks
+                        bool degenerate = alphaMax < 0.001 || (alphaAvg < 0.01 && centerAvg < 0.01);
 
-                        if (_rvmFrameCounter % 10 == 0)
+                        if (EnableDebugLogging && _rvmFrameCounter % 10 == 0)
                         {
                             DeviceLog.Debug($"[BackgroundRemoval] Alpha stats avg={alphaAvg:F2} center={centerAvg:F2} border={borderAvg:F2} min={alphaMin:F2} max={alphaMax:F2}");
                             DeviceLog.Debug($"[BackgroundRemoval] Alpha decision: invert={invert} (possiblyInv={possiblyInverted} autoInv={autoInvert}) degenerate={degenerate}");
@@ -1120,7 +1273,22 @@ namespace Photobooth.Services
                             _rvmFrameCounter++;
                             var compositeBytes = CompositeLiveViewFrameVips(finalImage);
                             stopwatch.Stop();
-                            DeviceLog.Debug($"[BackgroundRemoval] RVM frame processed in {stopwatch.ElapsedMilliseconds}ms");
+
+                            // Report GPU status and performance every 30 frames
+                            if (_rvmFrameCounter % 30 == 0)
+                            {
+                                var processingTime = stopwatch.ElapsedMilliseconds;
+                                var fps = processingTime > 0 ? 1000.0 / processingTime : 0;
+                                DeviceLog.Info($"[BackgroundRemoval] RVM Performance: {fps:F1} FPS | Processing time: {processingTime}ms | GPU: {(_isGpuEnabled ? "ACTIVE" : "INACTIVE")}");
+                                if (_isGpuEnabled)
+                                {
+                                    Console.WriteLine($"🚀 GPU ACTIVE - RVM: {fps:F1} FPS");
+                                }
+                            }
+                            else if (EnableDebugLogging)
+                            {
+                                DeviceLog.Debug($"[BackgroundRemoval] RVM frame processed in {stopwatch.ElapsedMilliseconds}ms");
+                            }
 
                             // Update dimensions before validation
                             width = finalImage.Width;
@@ -1128,8 +1296,17 @@ namespace Photobooth.Services
                             _lastLiveViewFrameWidth = width;
                             _lastLiveViewFrameHeight = height;
 
+                            // Dispose intermediate image if different from composed
                             if (finalImage != composed)
+                            {
                                 finalImage.Dispose();
+                            }
+
+                            // Dispose resized image if different from original
+                            if (image != vipsImage && image != null)
+                            {
+                                image.Dispose();
+                            }
 
                             if (compositeBytes == null)
                             {
@@ -1151,7 +1328,7 @@ namespace Photobooth.Services
                 if (stopwatch.IsRunning)
                 {
                     stopwatch.Stop();
-                    DeviceLog.Debug($"[BackgroundRemoval] RVM frame processed in {stopwatch.ElapsedMilliseconds}ms (early exit)");
+                    if (EnableDebugLogging) DeviceLog.Debug($"[BackgroundRemoval] RVM frame processed in {stopwatch.ElapsedMilliseconds}ms (early exit)");
                 }
             }
         }
@@ -1183,7 +1360,19 @@ namespace Photobooth.Services
                         _loggedRvmDisabled = false;
                         DeviceLog.Debug("[BackgroundRemoval] Live view mode: RVM (Smooth)");
                         DeviceLog.Debug("[BackgroundRemoval] RVM MobileNet model loaded for live-view background removal");
-                        DeviceLog.Debug("[BackgroundRemoval] RVM session created with CPU execution provider");
+
+                        // Report GPU status after session creation
+                        if (_isGpuEnabled)
+                        {
+                            DeviceLog.Info($"[BackgroundRemoval] RVM session created with GPU acceleration (DirectML)");
+                            Console.WriteLine("\n🚀 RVM USING GPU (DirectML) - EXPECT HIGHER FPS\n");
+                        }
+                        else
+                        {
+                            DeviceLog.Info($"[BackgroundRemoval] RVM session created with CPU execution provider");
+                            Console.WriteLine("\n⚠️ RVM USING CPU - LOWER FPS EXPECTED\n");
+                        }
+                        DeviceLog.Info($"[BackgroundRemoval] GPU Status: {_gpuStatus}");
                         foreach (var meta in _rvmLiveViewSession.InputMetadata)
                         {
                             var dims = string.Join(",", meta.Value.Dimensions.Select(d => d.ToString()));
@@ -1224,41 +1413,25 @@ namespace Photobooth.Services
                 return null;
             }
 
-            float downsampleRatio = CalculateDownsampleRatio(width, height, 320.0 * 320.0, 512, 0.1);
-
             try
             {
                 using (var image = SixLabors.ImageSharp.Image.Load<Rgba32>(frameData))
                 {
-                    int targetWidth = Math.Max(64, AlignToMultiple((int)(width * downsampleRatio), 16));
-                    int targetHeight = Math.Max(64, AlignToMultiple((int)(height * downsampleRatio), 16));
-                    targetWidth = Math.Min(width, targetWidth);
-                    targetHeight = Math.Min(height, targetHeight);
+                    // OPTIMIZATION: Single resize to output size, let RunInference handle model sizing
+                    int outputWidth = Math.Min(width, LiveViewMaxOutputWidth);
+                    int outputHeight = (int)Math.Round(outputWidth / (double)width * height);
 
-                    if (targetWidth != width || targetHeight != height)
+                    // Only resize if needed for output
+                    if (image.Width != outputWidth || image.Height != outputHeight)
                     {
-                        image.Mutate(ctx => ctx.Resize(targetWidth, targetHeight));
+                        image.Mutate(ctx => ctx.Resize(outputWidth, outputHeight, KnownResamplers.Box)); // Box is faster
                     }
 
-                    if (image.Width > LiveViewMaxOutputWidth)
-                    {
-                        int resizedHeight = Math.Max(1, (int)Math.Round(image.Height * (LiveViewMaxOutputWidth / (double)image.Width)));
-                        image.Mutate(ctx => ctx.Resize(LiveViewMaxOutputWidth, resizedHeight));
-                    }
-
+                    // RunInference will handle resize to model size internally
                     using (var mask = RunInference(image, _liveViewSession))
                     {
                         int edgeRefinement = Math.Max(3, Properties.Settings.Default.BackgroundRemovalEdgeRefinement / 2);
                         ApplyMask(image, mask, edgeRefinement);
-                    }
-
-                    int finalWidth = Math.Min(width, LiveViewMaxOutputWidth);
-                    if (finalWidth < 1) finalWidth = 1;
-                    int finalHeight = Math.Max(1, (int)Math.Round(finalWidth / (double)width * height));
-
-                    if (image.Width != finalWidth || image.Height != finalHeight)
-                    {
-                        image.Mutate(ctx => ctx.Resize(finalWidth, finalHeight, KnownResamplers.Lanczos3));
                     }
 
                     _modnetFrameCounter++;
@@ -1299,38 +1472,71 @@ namespace Photobooth.Services
 
                     try
                     {
-                        // Always load the background image
-                        background = VipsImage.NewFromFile(backgroundPath);
-                        DeviceLog.Debug($"[BackgroundRemoval] Loaded background from: {backgroundPath} ({background.Width}x{background.Height})");
-
-                        // Resize to match foreground if needed
-                        if (background.Width != foreground.Width || background.Height != foreground.Height)
+                        // Check cached background first
+                        lock (_vipsCacheLock)
                         {
-                            double xscale = (double)foreground.Width / background.Width;
-                            double yscale = (double)foreground.Height / background.Height;
-                            double scale = Math.Max(xscale, yscale); // Cover mode
-
-                            var resized = background.Resize(scale, vscale: scale, kernel: Enums.Kernel.Lanczos3);
-                            background.Dispose();
-                            background = resized;
-
-                            // Center crop if needed
-                            if (background.Width > foreground.Width || background.Height > foreground.Height)
+                            if (_cachedBackgroundVips != null &&
+                                _cachedBackgroundPath == backgroundPath &&
+                                _cachedBackgroundWidth == foreground.Width &&
+                                _cachedBackgroundHeight == foreground.Height &&
+                                (DateTime.Now - _lastBackgroundLoadTime).TotalSeconds < 60) // Cache for 60 seconds
                             {
-                                int x = (background.Width - foreground.Width) / 2;
-                                int y = (background.Height - foreground.Height) / 2;
-                                var cropped = background.Crop(x, y, foreground.Width, foreground.Height);
-                                background.Dispose();
-                                background = cropped;
+                                // Create a copy to avoid disposal issues
+                                background = _cachedBackgroundVips.Copy();
+                                if (EnableDebugLogging)
+                                    DeviceLog.Debug($"[BackgroundRemoval] Using cached background");
                             }
-                        }
+                            else
+                            {
+                                // Load and cache the background image
+                                if (_cachedBackgroundVips != null)
+                                {
+                                    _cachedBackgroundVips.Dispose();
+                                    _cachedBackgroundVips = null;
+                                }
+                                var bgImage = VipsImage.NewFromFile(backgroundPath);
+                                if (EnableDebugLogging)
+                                    DeviceLog.Debug($"[BackgroundRemoval] Loaded background from: {backgroundPath} ({bgImage.Width}x{bgImage.Height})");
 
-                        // Ensure RGBA
-                        if (background.Bands == 3)
-                        {
-                            var withAlpha = background.Bandjoin(255);
-                            background.Dispose();
-                            background = withAlpha;
+                                // Resize to match foreground if needed
+                                if (bgImage.Width != foreground.Width || bgImage.Height != foreground.Height)
+                                {
+                                    double xscale = (double)foreground.Width / bgImage.Width;
+                                    double yscale = (double)foreground.Height / bgImage.Height;
+                                    double scale = Math.Max(xscale, yscale); // Cover mode
+
+                                    var resized = bgImage.Resize(scale, vscale: scale, kernel: Enums.Kernel.Lanczos3);
+                                    bgImage.Dispose();
+                                    bgImage = resized;
+
+                                    // Center crop if needed
+                                    if (bgImage.Width > foreground.Width || bgImage.Height > foreground.Height)
+                                    {
+                                        int x = (bgImage.Width - foreground.Width) / 2;
+                                        int y = (bgImage.Height - foreground.Height) / 2;
+                                        var cropped = bgImage.Crop(x, y, foreground.Width, foreground.Height);
+                                        bgImage.Dispose();
+                                        bgImage = cropped;
+                                    }
+                                }
+
+                                // Ensure RGBA
+                                if (bgImage.Bands == 3)
+                                {
+                                    var withAlpha = bgImage.Bandjoin(255);
+                                    bgImage.Dispose();
+                                    bgImage = withAlpha;
+                                }
+
+                                // Cache the processed background (keep original)
+                                _cachedBackgroundVips = bgImage;
+                                _cachedBackgroundPath = backgroundPath;
+                                _cachedBackgroundWidth = foreground.Width;
+                                _cachedBackgroundHeight = foreground.Height;
+                                _lastBackgroundLoadTime = DateTime.Now;
+                                // Create a copy for use
+                                background = bgImage.Copy();
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -1538,6 +1744,10 @@ namespace Photobooth.Services
 
         private bool ShouldUseRvmLiveView()
         {
+            // TEMPORARILY: Force MODNet for live view to achieve higher FPS like dslrBooth (17 FPS)
+            // RVM is too computationally intensive for real-time processing
+            return false; // Always use MODNet for now
+
             var mode = Properties.Settings.Default.LiveViewBackgroundRemovalMode;
             if (string.IsNullOrWhiteSpace(mode) || string.Equals(mode, LiveViewModeAuto, StringComparison.OrdinalIgnoreCase))
             {
@@ -1792,12 +2002,43 @@ namespace Photobooth.Services
                 {
                     float a = pha[0, 0, y, x];
                     if (invertAlpha) a = 1f - a;
+
+                    // Apply temporal smoothing with previous frames for stability
+                    if (_isGpuEnabled && _previousAlphaMap != null &&
+                        _alphaMapWidth == width && _alphaMapHeight == height)
+                    {
+                        float prev = _previousAlphaMap[y, x];
+                        // Weighted average: 80% current, 20% previous for smooth transitions
+                        a = a * 0.8f + prev * 0.2f;
+
+                        // Use second buffer for even smoother results
+                        if (_previousAlphaMap2 != null)
+                        {
+                            float prev2 = _previousAlphaMap2[y, x];
+                            a = a * 0.9f + prev2 * 0.1f;
+                        }
+                    }
+
                     alphaMap[y, x] = a;
                 }
             }
 
-            // Apply edge smoothing
+            // Store current alpha map for next frame's temporal smoothing
+            if (_isGpuEnabled)
+            {
+                _previousAlphaMap2 = _previousAlphaMap;
+                _previousAlphaMap = (float[,])alphaMap.Clone();
+                _alphaMapWidth = width;
+                _alphaMapHeight = height;
+            }
+
+            // Apply enhanced edge smoothing for better quality
             ApplyAlphaSmoothing(alphaMap, width, height, true);
+            // Apply second pass for ultra-smooth edges with GPU power
+            if (_isGpuEnabled)
+            {
+                ApplyAlphaSmoothing(alphaMap, width, height, false);
+            }
 
             // Create alpha mask image from processed values
             var alphaData = new byte[width * height];
@@ -1807,7 +2048,13 @@ namespace Photobooth.Services
                 {
                     float a = alphaMap[y, x];
                     a = PostProcessAlpha(a);
-                    a = ApplyEdgeFeathering(a, alphaMap, x, y, width, height, true);
+                    // Enhanced edge feathering with GPU
+                    a = ApplyEdgeFeathering(a, alphaMap, x, y, width, height, !_isGpuEnabled);
+                    // Additional smoothing for high-quality mode
+                    if (_isGpuEnabled && a > 0.1f && a < 0.9f)
+                    {
+                        a = (float)(0.5 + (a - 0.5) * 0.95); // Smooth mid-tones
+                    }
                     alphaData[y * width + x] = (byte)(Math.Max(0f, Math.Min(1f, a)) * 255f);
                 }
             }

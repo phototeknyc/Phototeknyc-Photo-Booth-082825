@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 using ImageMagick;
 using CameraControl.Devices.Classes;
 
@@ -27,8 +28,29 @@ namespace Photobooth.Services
             ResourceLimits.Throttle = 100; // Use full CPU
             // Set memory and performance limits for faster processing
             ResourceLimits.Memory = 2L * 1024 * 1024 * 1024; // 2GB memory limit
-            ResourceLimits.Area = 128L * 1024 * 1024; // 128MB area limit  
+            ResourceLimits.Area = 128L * 1024 * 1024; // 128MB area limit
             ResourceLimits.Disk = 1L * 1024 * 1024 * 1024; // 1GB disk limit
+
+            // ENABLE GPU ACCELERATION via OpenCL for faster image processing
+            try
+            {
+                OpenCL.IsEnabled = true; // Enable OpenCL GPU acceleration
+                if (OpenCL.IsEnabled)
+                {
+                    Debug.WriteLine("[PhotoFilterServiceMagick] ✅ GPU acceleration ENABLED via OpenCL");
+                    Debug.WriteLine("[PhotoFilterServiceMagick] OpenCL GPU acceleration enabled for image processing");
+
+                    // Log OpenCL device info
+                    foreach (var device in OpenCL.Devices)
+                    {
+                        Debug.WriteLine($"[PhotoFilterServiceMagick] OpenCL Device: {device.Name} - Type: {device.DeviceType}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[PhotoFilterServiceMagick] OpenCL GPU not available: {ex.Message}");
+            }
         }
 
         public string ApplyFilterToFile(string inputPath, string outputPath, FilterType filterType, float intensity = 1.0f)

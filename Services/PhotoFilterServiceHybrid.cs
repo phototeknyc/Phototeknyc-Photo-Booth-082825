@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -36,8 +37,23 @@ namespace Photobooth.Services
                 ResourceLimits.Throttle = 100;
                 // Set more aggressive memory and performance limits for faster processing
                 ResourceLimits.Memory = 2L * 1024 * 1024 * 1024; // 2GB memory limit
-                ResourceLimits.Area = 128L * 1024 * 1024; // 128MB area limit  
+                ResourceLimits.Area = 128L * 1024 * 1024; // 128MB area limit
                 ResourceLimits.Disk = 1L * 1024 * 1024 * 1024; // 1GB disk limit
+
+                // ENABLE GPU ACCELERATION via OpenCL
+                try
+                {
+                    OpenCL.IsEnabled = true;
+                    if (OpenCL.IsEnabled)
+                    {
+                        Debug.WriteLine("[PhotoFilterServiceHybrid] ✅ GPU acceleration ENABLED via OpenCL");
+                        Debug.WriteLine("[PhotoFilterServiceHybrid] OpenCL GPU acceleration enabled");
+                    }
+                }
+                catch
+                {
+                    // OpenCL not available, continue with CPU
+                }
                 useMagick = true;
             }
             catch

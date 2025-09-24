@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Microsoft.ML.OnnxRuntime;
@@ -35,7 +36,8 @@ namespace Photobooth.Services
 
         public enum ModelType
         {
-            MODNet          // ~25MB - fast, optimized for humans
+            MODNet,         // ~25MB - fast, optimized for humans
+            PPLiteSeg       // ~32MB - ultra-fast, lightweight segmentation
         }
 
         public class ModelInfo
@@ -59,13 +61,26 @@ namespace Photobooth.Services
                 Name = "MODNet",
                 FileName = "modnet.onnx",
                 Description = "Fast, optimized for humans",
-                InputSize = 512,
+                InputSize = 320,  // REDUCED from 512 for better performance
                 SpeedMultiplier = 4.0f,
                 RequiresNormalization = true,
                 NormMean = new[] { 0.5f, 0.5f, 0.5f },
                 NormStd = new[] { 0.5f, 0.5f, 0.5f },
                 InputName = "input",
                 OutputName = "output"
+            },
+            [ModelType.PPLiteSeg] = new ModelInfo
+            {
+                Name = "PP-LiteSeg",
+                FileName = "pp_liteseg.onnx",
+                Description = "Ultra-fast lightweight segmentation",
+                InputSize = 512,
+                SpeedMultiplier = 6.0f,  // Even faster than MODNet
+                RequiresNormalization = true,
+                NormMean = new[] { 0.5f, 0.5f, 0.5f },
+                NormStd = new[] { 0.5f, 0.5f, 0.5f },
+                InputName = "x",  // PP-LiteSeg uses 'x' as input name
+                OutputName = "save_infer_model/scale_0.tmp_1"  // PP-LiteSeg output name
             }
         };
 
@@ -74,8 +89,13 @@ namespace Photobooth.Services
         /// </summary>
         public ModelType GetRecommendedModel(BackgroundRemovalQuality quality)
         {
-            // Always use MODNet regardless of quality setting
-            // It's fast and optimized for human subjects
+            // Check if PP-LiteSeg is available first - it's the fastest
+            if (IsModelAvailable(ModelType.PPLiteSeg))
+            {
+                return ModelType.PPLiteSeg;
+            }
+
+            // Fallback to MODNet if PP-LiteSeg not available
             return ModelType.MODNet;
         }
 
@@ -138,6 +158,9 @@ namespace Photobooth.Services
                 throw new FileNotFoundException($"Model file not found: {modelPath}");
             }
 
+            Debug.WriteLine($"[BackgroundRemovalModelManager] LoadModel called - Model: {modelType}, UseGPU: {useGPU}");
+            Console.WriteLine($"[BackgroundRemovalModelManager] LoadModel - Model: {modelType}, GPU requested: {useGPU}");
+
             var sessionOptions = new SessionOptions();
             sessionOptions.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
 
@@ -145,12 +168,21 @@ namespace Photobooth.Services
             {
                 try
                 {
-                    sessionOptions.AppendExecutionProvider_DML();
+                    Debug.WriteLine("[BackgroundRemovalModelManager] Attempting to add DirectML provider...");
+                    sessionOptions.AppendExecutionProvider_DML(0);  // Use device ID 0 for default GPU
+                    Debug.WriteLine("[BackgroundRemovalModelManager] ✅ DirectML GPU provider added successfully");
+                    Console.WriteLine("[BackgroundRemovalModelManager] ✅ GPU ACCELERATION ENABLED via DirectML");
                 }
-                catch
+                catch (Exception ex)
                 {
                     // GPU not available, fallback to CPU
+                    Debug.WriteLine($"[BackgroundRemovalModelManager] ❌ DirectML not available, using CPU: {ex.Message}");
+                    Console.WriteLine($"[BackgroundRemovalModelManager] ❌ GPU NOT AVAILABLE - Using CPU fallback");
                 }
+            }
+            else
+            {
+                Debug.WriteLine("[BackgroundRemovalModelManager] GPU not requested, using CPU");
             }
 
             // Set memory pattern for optimization
