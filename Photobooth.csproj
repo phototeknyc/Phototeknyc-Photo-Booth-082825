@@ -77,6 +77,9 @@
     <Reference Include="Microsoft.Xaml.Behaviors, Version=1.1.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>packages\Microsoft.Xaml.Behaviors.Wpf.1.1.31\lib\net45\Microsoft.Xaml.Behaviors.dll</HintPath>
     </Reference>
+    <Reference Include="NetVips, Version=3.1.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>packages\NetVips.3.1.0\lib\net452\NetVips.dll</HintPath>
+    </Reference>
     <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
@@ -900,7 +903,6 @@
     <Analyzer Include="packages\AWSSDK.S3.4.0.0\analyzers\dotnet\cs\SharedAnalysisCode.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  
   <!-- Also copy ffmpeg.exe to a subfolder 'ffmpeg' under the output directory -->
   <Target Name="CopyFFmpegToSubfolder" AfterTargets="Build">
     <PropertyGroup>
@@ -910,10 +912,7 @@
       <_FFmpegRoot Include="$(_TargetDir)ffmpeg.exe" />
     </ItemGroup>
     <MakeDir Directories="$(_TargetDir)ffmpeg" Condition="Exists('$(_TargetDir)')" />
-    <Copy SourceFiles="@(_FFmpegRoot)"
-          DestinationFolder="$(_TargetDir)ffmpeg\"
-          SkipUnchangedFiles="true"
-          Condition="Exists('%(_FFmpegRoot.Identity)')" />
+    <Copy SourceFiles="@(_FFmpegRoot)" DestinationFolder="$(_TargetDir)ffmpeg\" SkipUnchangedFiles="true" Condition="Exists('%(_FFmpegRoot.Identity)')" />
     <Message Text="ffmpeg.exe copied to $(_TargetDir)ffmpeg\" Importance="low" />
   </Target>
   <!-- Copy SQLite native libraries if available -->
@@ -936,6 +935,7 @@
     <Error Condition="!Exists('packages\Magick.NET-Q16-AnyCPU.13.5.0\build\netstandard20\Magick.NET-Q16-AnyCPU.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Magick.NET-Q16-AnyCPU.13.5.0\build\netstandard20\Magick.NET-Q16-AnyCPU.targets'))" />
     <Error Condition="!Exists('packages\SQLite.3.13.0\build\net45\SQLite.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\SQLite.3.13.0\build\net45\SQLite.props'))" />
     <Error Condition="!Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets'))" />
+    <Error Condition="!Exists('packages\NetVips.Native.win-x64.8.14.5\build\net45\NetVips.Native.win-x64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\NetVips.Native.win-x64.8.14.5\build\net45\NetVips.Native.win-x64.targets'))" />
   </Target>
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
   <PropertyGroup>
@@ -951,4 +951,5 @@
       xcopy /Y "$(ProjectDir)WebApiClient.html" "$(TargetDir)" 2&gt;nul || echo WebApiClient.html copied
     </PostBuildEvent>
   </PropertyGroup>
+  <Import Project="packages\NetVips.Native.win-x64.8.14.5\build\net45\NetVips.Native.win-x64.targets" Condition="Exists('packages\NetVips.Native.win-x64.8.14.5\build\net45\NetVips.Native.win-x64.targets')" />
 </Project>

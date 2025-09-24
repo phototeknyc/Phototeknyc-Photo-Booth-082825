@@ -475,6 +475,19 @@ namespace Photobooth.Pages
                 };
             }
 
+            if (LiveViewBackgroundRemovalModeCombo != null)
+            {
+                LiveViewBackgroundRemovalModeCombo.SelectionChanged += (s, e) =>
+                {
+                    if (LiveViewBackgroundRemovalModeCombo.SelectedItem is ComboBoxItem item)
+                    {
+                        Properties.Settings.Default.LiveViewBackgroundRemovalMode = item.Tag?.ToString() ?? "Responsive";
+                        Properties.Settings.Default.Save();
+                        System.Diagnostics.Debug.WriteLine($"LiveViewBackgroundRemovalMode set to {item.Tag} and saved");
+                    }
+                };
+            }
+
             if (BackgroundRemovalEdgeRefinementSlider != null)
             {
                 BackgroundRemovalEdgeRefinementSlider.ValueChanged += (s, e) =>

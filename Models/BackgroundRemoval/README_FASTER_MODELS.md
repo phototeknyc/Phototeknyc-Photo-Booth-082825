@@ -34,6 +34,13 @@
 - **Quality**: Good for portraits/selfies
 - **How to use**: Export from TFLite model
 
+### 5. Robust Video Matting (RVM) MobileNetV3 *(Live View Stream)*
+**Download**: https://github.com/PeterL1n/RobustVideoMatting/releases
+- **File**: `rvm_mobilenetv3_fp32.onnx` (~11 MB)
+- **Speed**: Real-time with temporal smoothing (keeps hair and edges stable)
+- **Quality**: Excellent for video/live preview; maintains temporal consistency
+- **How to use**: Download ONNX release and drop into `Models/BackgroundRemoval/`
+
 ## Installation Instructions
 
 1. **Download the model** you want from the links above
@@ -60,6 +67,7 @@ The app now includes a `BackgroundRemovalModelManager` that:
 | PP-HumanSeg | <1 MB | 15x | Basic | Speed critical |
 | RMBG-1.4 | 15-40 MB | 3x | Very Good | Modern AI |
 | SelfieSegmentation | 5-10 MB | 8x | Good | Portraits |
+| RVM MobileNet | 11 MB | 5x | Excellent (Video) | Live preview |
 
 ## Quick Start with MODNet (Recommended)
 

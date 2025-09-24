@@ -9,10 +9,13 @@ using System.Threading.Tasks;
 using CameraControl.Devices;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using NetVips;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using VipsImage = NetVips.Image;
 using Image = System.Drawing.Image;
+using DeviceLog = CameraControl.Devices.Log;
 
 namespace Photobooth.Services
 {
@@ -67,18 +70,57 @@ namespace Photobooth.Services
         #region Private Fields
 
         private InferenceSession _captureSession;  // High-quality model for photo capture
-        private InferenceSession _liveViewSession; // Lightweight model for live view
+        private InferenceSession _liveViewSession; // Lightweight model for live view (fallback)
+        private InferenceSession _rvmLiveViewSession; // RVM MobileNet for live view streaming
         private bool _isInitialized;
         private readonly object _sessionLock = new object();
-        private readonly int _liveViewFrameSkip = 2; // Process every 3rd frame
-        private int _frameCounter = 0;
-        private byte[] _lastMask;
-        private DateTime _lastProcessTime = DateTime.MinValue;
+        private volatile byte[] _lastLiveViewFrame;
+        private volatile int _lastLiveViewFrameWidth;
+        private volatile int _lastLiveViewFrameHeight;
+        private bool _useRvmLiveView;
+        // Live tuning for RVM input scale when matte is weak
+        private double _rvmScaleBoost = 1.0; // 1.0 = normal; >1.0 = larger input
+        private int _rvmScaleBoostCooldown = 0; // frames to keep boost
+        private DenseTensor<float> _r1State;
+        private DenseTensor<float> _r2State;
+        private DenseTensor<float> _r3State;
+        private DenseTensor<float> _r4State;
+        private int _rvmFrameCounter;
+        private bool _loggedRvmDisabled;
+        private volatile bool _isRvmProcessing;
+        private volatile bool _isModnetProcessing;
+        private int _modnetFrameCounter;
+        private readonly object _backgroundCacheLock = new object();
+        private SixLabors.ImageSharp.Image<Rgba32> _cachedBackgroundImage;
+        private string _cachedBackgroundPath;
+        private int _cachedBackgroundWidth;
+        private int _cachedBackgroundHeight;
+        private long _lastRvmProcessTicks;
+        private long _lastModnetProcessTicks;
+        private long _lastFpsLogTicks;
+        private int _fpsFrameCount;
+        private string _fpsMode;
+        private readonly object _fpsLock = new object();
+        private bool? _lastDesiredRvm;
+
+        private const string LiveViewModeResponsive = "Responsive";
+        private const string LiveViewModeSmooth = "Smooth";
+        private const string LiveViewModeAuto = "Auto";
+        private const int RvmMinFrameIntervalMs = 30;
+        private const int ModnetMinFrameIntervalMs = 45;
+        private const int LiveViewMaxOutputWidth = 640;
+        // Alpha post-processing for live view (tune as needed)
+        private const float LiveViewAlphaOffset = 0.00f;  // base offset
+        private const float LiveViewAlphaGain = 2.5f;     // reduced gain for weak alphas
+        private const float LiveViewAlphaGamma = 0.5f;    // <1 boosts mids, >1 compresses
+        private const float LiveViewAlphaKneeLow = 0.02f; // lowered threshold for weak alphas
+        private const float LiveViewAlphaKneeHigh = 0.20f;// lowered upper threshold
 
         // Model paths
         private readonly string _modelsFolder;
         private readonly string _captureModelPath;
         private readonly string _liveViewModelPath;
+        private readonly string _rvmModelPath;
 
         // Model manager for flexible model switching
         private BackgroundRemovalModelManager _modelManager;
@@ -104,7 +146,12 @@ namespace Photobooth.Services
 
                 // Log available models
                 var availableModels = _modelManager.GetAvailableModels();
-                Debug.WriteLine($"[BackgroundRemoval] Available models: {string.Join(", ", availableModels)}");
+                        var availableNames = availableModels.Select(m => m.ToString()).ToList();
+                        if (File.Exists(_rvmModelPath) && !availableNames.Contains("RVM"))
+                        {
+                            availableNames.Add("RVM");
+                        }
+                        Debug.WriteLine($"[BackgroundRemoval] Available models: {string.Join(", ", availableNames)}");
             }
 
             // Ensure models folder exists
@@ -116,6 +163,7 @@ namespace Photobooth.Services
             // Set MODNet model path
             _captureModelPath = Path.Combine(_modelsFolder, "modnet.onnx");
             _liveViewModelPath = _captureModelPath; // Use same model for live view
+            _rvmModelPath = Path.Combine(_modelsFolder, "rvm_mobilenetv3_fp32.onnx");
         }
 
         #endregion
@@ -168,18 +216,18 @@ namespace Photobooth.Services
                             captureModelLoaded = true;
 
                             Debug.WriteLine($"[BackgroundRemoval] ✓ MODNet loaded successfully (Speed: {modelInfo.SpeedMultiplier}x)");
-                            Log.Info($"[BackgroundRemoval] Using MODNet model for background removal");
+                            DeviceLog.Info($"[BackgroundRemoval] Using MODNet model for background removal");
                         }
                         catch (Exception ex)
                         {
                             Debug.WriteLine($"[BackgroundRemoval] Failed to load MODNet: {ex.Message}");
-                            Log.Error($"Failed to load MODNet model: {ex.Message}");
+                            DeviceLog.Error($"Failed to load MODNet model: {ex.Message}");
                         }
 
                         if (!captureModelLoaded)
                         {
                             Debug.WriteLine("[BackgroundRemoval] Failed to load MODNet model - background removal unavailable");
-                            Log.Error("Failed to load background removal model");
+                            DeviceLog.Error("Failed to load background removal model");
                             return false;
                         }
 
@@ -187,23 +235,35 @@ namespace Photobooth.Services
                         _liveViewSession = _captureSession;
                         _currentLiveViewModel = BackgroundRemovalModelManager.ModelType.MODNet;
 
+                        ApplyPreferredLiveViewMode();
+
+                        if (ShouldUseRvmLiveView())
+                        {
+                            InitializeRvmLiveViewSession();
+                        }
+                        else
+                        {
+                            _useRvmLiveView = false;
+                            DeviceLog.Debug("[BackgroundRemoval] Live view mode set to Responsive - using MODNet.");
+                        }
+
                         _isInitialized = captureModelLoaded;
                         Debug.WriteLine($"[BackgroundRemoval] Initialization complete - Capture session: {(_captureSession != null ? "Loaded" : "Not loaded")}");
                         Debug.WriteLine($"[BackgroundRemoval] Initialization complete - Live view session: {(_liveViewSession != null ? "Loaded" : "Not loaded")}");
-                        Log.Debug("BackgroundRemovalService initialized");
+                        DeviceLog.Debug("BackgroundRemovalService initialized");
                         return true;
                     }
                 });
             }
             catch (Exception ex)
             {
-                Log.Error($"Failed to initialize BackgroundRemovalService: {ex.Message}");
+                DeviceLog.Error($"Failed to initialize BackgroundRemovalService: {ex.Message}");
                 Debug.WriteLine($"[BackgroundRemoval] Initialization failed: {ex.Message}");
                 return false;
             }
         }
 
-        private SessionOptions GetSessionOptions(bool useGPU = false, bool isLiveView = false)
+        private SessionOptions GetSessionOptions(bool? useGPUOverride = null, bool isLiveView = false)
         {
             var options = new SessionOptions();
             options.GraphOptimizationLevel = isLiveView
@@ -211,7 +271,7 @@ namespace Photobooth.Services
                 : GraphOptimizationLevel.ORT_ENABLE_EXTENDED;
 
             // Check if GPU acceleration is enabled in settings
-            bool tryGPU = useGPU || Properties.Settings.Default.BackgroundRemovalUseGPU;
+            bool tryGPU = useGPUOverride ?? Properties.Settings.Default.BackgroundRemovalUseGPU;
 
             if (tryGPU)
             {
@@ -220,12 +280,13 @@ namespace Photobooth.Services
                 {
                     options.AppendExecutionProvider_DML();
                     Debug.WriteLine("[BackgroundRemoval] GPU acceleration enabled (DirectML)");
-                    Log.Info("[BackgroundRemoval] GPU acceleration enabled for faster processing");
+                    DeviceLog.Info("[BackgroundRemoval] GPU acceleration enabled for faster processing");
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"[BackgroundRemoval] GPU not available: {ex.Message}");
-                    Log.Debug("GPU acceleration not available, using CPU");
+                    DeviceLog.Debug($"[BackgroundRemoval] DirectML unavailable: {ex.Message}");
+                    DeviceLog.Debug("GPU acceleration not available, using CPU");
                 }
             }
 
@@ -266,7 +327,7 @@ namespace Photobooth.Services
         public async Task<BackgroundRemovalResult> RemoveBackgroundAsync(string imagePath, BackgroundRemovalQuality quality = BackgroundRemovalQuality.Medium)
         {
             Debug.WriteLine($"[BackgroundRemoval] RemoveBackgroundAsync started - ImagePath: {imagePath}, Quality: {quality}");
-            Log.Info($"[BackgroundRemoval] Processing image: {Path.GetFileName(imagePath)} with quality: {quality}");
+            DeviceLog.Info($"[BackgroundRemoval] Processing image: {Path.GetFileName(imagePath)} with quality: {quality}");
 
             // Ensure initialization is complete
             if (!_isInitialized)
@@ -283,7 +344,7 @@ namespace Photobooth.Services
             // Get edge refinement setting
             int edgeRefinement = Properties.Settings.Default.BackgroundRemovalEdgeRefinement;
             Debug.WriteLine($"[BackgroundRemoval] Edge refinement setting: {edgeRefinement}");
-            Log.Info($"[BackgroundRemoval] Using edge refinement level: {edgeRefinement}");
+            DeviceLog.Info($"[BackgroundRemoval] Using edge refinement level: {edgeRefinement}");
 
             if (_captureSession == null)
             {
@@ -346,7 +407,7 @@ namespace Photobooth.Services
                             var maskSw = Stopwatch.StartNew();
                             ApplyMask(image, mask, edgeRefinement);
                             Debug.WriteLine($"[BackgroundRemoval] Mask application completed in {maskSw.ElapsedMilliseconds}ms");
-                            Log.Info($"[BackgroundRemoval] Mask applied successfully in {maskSw.ElapsedMilliseconds}ms");
+                            DeviceLog.Info($"[BackgroundRemoval] Mask applied successfully in {maskSw.ElapsedMilliseconds}ms");
 
                             // Save results
                             var resultFolder = Path.Combine(Path.GetDirectoryName(imagePath), "BackgroundRemoved");
@@ -382,7 +443,7 @@ namespace Photobooth.Services
             }
             catch (Exception ex)
             {
-                Log.Error($"Background removal failed: {ex.Message}");
+                DeviceLog.Error($"Background removal failed: {ex.Message}");
                 return new BackgroundRemovalResult
                 {
                     Success = false,
@@ -595,7 +656,7 @@ namespace Photobooth.Services
             if (image.Width != mask.Width || image.Height != mask.Height)
             {
                 Debug.WriteLine($"[BackgroundRemoval] ApplyMask dimension mismatch - Image: {image.Width}x{image.Height}, Mask: {mask.Width}x{mask.Height}");
-                Log.Error($"[BackgroundRemoval] Dimension mismatch in ApplyMask - Image: {image.Width}x{image.Height}, Mask: {mask.Width}x{mask.Height}");
+                DeviceLog.Error($"[BackgroundRemoval] Dimension mismatch in ApplyMask - Image: {image.Width}x{image.Height}, Mask: {mask.Width}x{mask.Height}");
 
                 // Try to recover by resizing the mask
                 Debug.WriteLine($"[BackgroundRemoval] Attempting to recover by resizing mask to match image");
@@ -614,7 +675,7 @@ namespace Photobooth.Services
             }
 
             Debug.WriteLine($"[BackgroundRemoval] ApplyMask started - EdgeRefinement: {edgeRefinement}, Image: {image.Width}x{image.Height}");
-            Log.Info($"[BackgroundRemoval] ApplyMask - EdgeRefinement: {edgeRefinement}, Dimensions: {image.Width}x{image.Height}");
+            DeviceLog.Info($"[BackgroundRemoval] ApplyMask - EdgeRefinement: {edgeRefinement}, Dimensions: {image.Width}x{image.Height}");
 
             // Calculate feather radius based on edge refinement setting (0-100 scale)
             int featherRadius = Math.Max(1, (edgeRefinement * 5) / 100); // 1-5 pixel feather
@@ -670,7 +731,7 @@ namespace Photobooth.Services
 
             // Log pixel statistics
             Debug.WriteLine($"[BackgroundRemoval] Pixel statistics - Edge: {edgePixelCount}, Transparent: {transparentPixelCount}, Opaque: {opaquePixelCount}");
-            Log.Info($"[BackgroundRemoval] Processed {edgePixelCount} edge pixels with color decontamination");
+            DeviceLog.Info($"[BackgroundRemoval] Processed {edgePixelCount} edge pixels with color decontamination");
             Debug.WriteLine($"[BackgroundRemoval] ApplyMask completed - Total pixels: {image.Width * image.Height}");
         }
 
@@ -750,37 +811,1261 @@ namespace Photobooth.Services
 
         #region Live View Processing
 
-        public async Task<byte[]> ProcessLiveViewFrameAsync(byte[] frameData, int width, int height)
+        public Task<byte[]> ProcessLiveViewFrameAsync(byte[] frameData, int width, int height)
         {
-            // Skip frames for performance
-            _frameCounter++;
-            if (_frameCounter % (_liveViewFrameSkip + 1) != 0)
+            if (frameData == null || frameData.Length == 0)
             {
-                // Return cached result if available
-                return _lastMask != null ? ApplyCachedMask(frameData) : frameData;
+                return Task.FromResult(frameData);
             }
 
-            if (!_isInitialized || _liveViewSession == null)
-                return frameData;
+            if (!Properties.Settings.Default.EnableBackgroundRemoval ||
+                !Properties.Settings.Default.EnableLiveViewBackgroundRemoval)
+            {
+                return Task.FromResult(frameData);
+            }
 
+            if (!_isInitialized)
+            {
+                var initialized = EnsureInitializedAsync().GetAwaiter().GetResult();
+                if (!initialized)
+                {
+                    return Task.FromResult(frameData);
+                }
+            }
+
+            var desiredRvm = ShouldUseRvmLiveView();
+            if (_lastDesiredRvm != desiredRvm)
+            {
+                DeviceLog.Debug($"[BackgroundRemoval] Requested live view mode: {(desiredRvm ? "RVM" : "MODNet")}");
+                _lastDesiredRvm = desiredRvm;
+            }
+            if (desiredRvm && !_useRvmLiveView)
+            {
+                InitializeRvmLiveViewSession();
+            }
+            else if (!desiredRvm && _useRvmLiveView)
+            {
+                _useRvmLiveView = false;
+                _rvmLiveViewSession?.Dispose();
+                _rvmLiveViewSession = null;
+                _isRvmProcessing = false;
+                _lastLiveViewFrame = null;
+                _loggedRvmDisabled = false;
+                DeviceLog.Debug("[BackgroundRemoval] Live view mode switched to Responsive - using MODNet.");
+            }
+
+            if (_useRvmLiveView && _rvmLiveViewSession != null)
+            {
+                if (!_isRvmProcessing)
+                {
+                    if (!ShouldProcessFrame(ref _lastRvmProcessTicks, RvmMinFrameIntervalMs))
+                    {
+                        var cached = _lastLiveViewFrame;
+                        return Task.FromResult(cached ?? frameData);
+                    }
+
+                    _isRvmProcessing = true;
+                    var frameCopy = (byte[])frameData.Clone();
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            var rvmBytes = ProcessLiveViewFrameWithRvm(frameCopy, width, height);
+                            if (rvmBytes != null && rvmBytes.Length > 0)
+                            {
+                                _lastLiveViewFrame = rvmBytes;
+                                // Update dimensions for async path - they should be set in ProcessLiveViewFrameWithRvm
+                                // but we'll use the passed-in width/height for the log
+                                TrackLiveViewFps("RVM");
+                                if (_rvmFrameCounter % 10 == 0)
+                                {
+                                    DeviceLog.Debug($"[BackgroundRemoval] Cached RVM frame {width}x{height} ({rvmBytes.Length} bytes)");
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            DeviceLog.Debug($"RVM live view processing failed, falling back to MODNet: {ex.Message}");
+                        }
+                        finally
+                        {
+                            _isRvmProcessing = false;
+                        }
+                    });
+                }
+
+                var latest = _lastLiveViewFrame;
+                if (latest == null)
+                {
+                    _lastLiveViewFrameWidth = 0;
+                    _lastLiveViewFrameHeight = 0;
+                    return Task.FromResult(frameData);
+                }
+
+                return Task.FromResult(latest);
+            }
+
+            if (!_isInitialized)
+            {
+                // Ensure core services are ready
+                var initialized = EnsureInitializedAsync().GetAwaiter().GetResult();
+                if (!initialized)
+                {
+                    return Task.FromResult(frameData);
+                }
+            }
+
+            if (_liveViewSession != null)
+            {
+                if (!_isModnetProcessing)
+                {
+                    if (!ShouldProcessFrame(ref _lastModnetProcessTicks, ModnetMinFrameIntervalMs))
+                    {
+                        var cached = _lastLiveViewFrame;
+                        return Task.FromResult(cached ?? frameData);
+                    }
+
+                    _isModnetProcessing = true;
+                    var frameCopy = (byte[])frameData.Clone();
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            var modnetBytes = ProcessLiveViewFrameWithModnet(frameCopy, width, height);
+                            if (modnetBytes != null && modnetBytes.Length > 0)
+                            {
+                                _lastLiveViewFrame = modnetBytes;
+                                TrackLiveViewFps("MODNet");
+                                if (_modnetFrameCounter % 10 == 0)
+                                {
+                                    DeviceLog.Debug($"[BackgroundRemoval] Cached MODNet frame {_lastLiveViewFrameWidth}x{_lastLiveViewFrameHeight} ({modnetBytes.Length} bytes)");
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            DeviceLog.Debug($"MODNet live view processing failed: {ex.Message}");
+                        }
+                        finally
+                        {
+                            _isModnetProcessing = false;
+                        }
+                    });
+                }
+
+                var latest = _lastLiveViewFrame;
+                if (latest == null)
+                {
+                    _lastLiveViewFrameWidth = 0;
+                    _lastLiveViewFrameHeight = 0;
+                    return Task.FromResult(frameData);
+                }
+
+                return Task.FromResult(latest);
+            }
+
+            return Task.FromResult(frameData);
+        }
+
+        private byte[] ProcessLiveViewFrameWithRvm(byte[] frameData, int width, int height)
+        {
+            if (_rvmLiveViewSession == null)
+            {
+                return null;
+            }
+
+            var stopwatch = Stopwatch.StartNew();
+            int maxDim = (int)Math.Min(512, Math.Round(384 * _rvmScaleBoost));
+            float downsampleRatio = CalculateDownsampleRatio(width, height, 512.0 * 512.0, maxDim, 0.25);
+            EnsureRvmStates();
             try
             {
-                // Simple processing for live view - just return original for now
-                // Full implementation would process with lightweight model
-                return frameData;
+                // Use NetVips for faster image processing
+                using (var vipsImage = VipsImage.NewFromBuffer(frameData))
+                {
+                    int targetWidth = Math.Max(64, AlignToMultiple((int)(width * downsampleRatio), 16));
+                    int targetHeight = Math.Max(64, AlignToMultiple((int)(height * downsampleRatio), 16));
+                    targetWidth = Math.Min(width, targetWidth);
+                    targetHeight = Math.Min(height, targetHeight);
+
+                    var image = vipsImage;
+                    if (targetWidth != width || targetHeight != height)
+                    {
+                        image = vipsImage.Resize((double)targetWidth / vipsImage.Width,
+                                                vscale: (double)targetHeight / vipsImage.Height,
+                                                kernel: Enums.Kernel.Lanczos3);
+                    }
+
+                    if (image.Width > LiveViewMaxOutputWidth)
+                    {
+                        double scale = LiveViewMaxOutputWidth / (double)image.Width;
+                        image = image.Resize(scale, vscale: scale, kernel: Enums.Kernel.Lanczos3);
+                    }
+
+                    if (_rvmFrameCounter % 10 == 0)
+                    {
+                        DeviceLog.Debug($"[BackgroundRemoval] RVM inference size: {image.Width}x{image.Height} (ratio {downsampleRatio:F2})");
+                    }
+
+                    var srcTensor = VipsImageToTensorForRvm(image);
+
+                    var inputs = new List<NamedOnnxValue>
+                    {
+                        NamedOnnxValue.CreateFromTensor("src", srcTensor),
+                        NamedOnnxValue.CreateFromTensor("r1i", _r1State),
+                        NamedOnnxValue.CreateFromTensor("r2i", _r2State),
+                        NamedOnnxValue.CreateFromTensor("r3i", _r3State),
+                        NamedOnnxValue.CreateFromTensor("r4i", _r4State),
+                        NamedOnnxValue.CreateFromTensor("downsample_ratio", new DenseTensor<float>(new[] { downsampleRatio }, new[] { 1 }))
+                    };
+
+                    using (var results = _rvmLiveViewSession.Run(inputs))
+                    {
+                        var fgrTensor = results.FirstOrDefault(r => r.Name.Equals("fgr", StringComparison.OrdinalIgnoreCase))?.AsTensor<float>();
+                        var phaTensor = results.FirstOrDefault(r => r.Name.Equals("pha", StringComparison.OrdinalIgnoreCase))?.AsTensor<float>();
+                        var r1Out = results.FirstOrDefault(r => r.Name.Equals("r1o", StringComparison.OrdinalIgnoreCase))?.AsTensor<float>();
+                        var r2Out = results.FirstOrDefault(r => r.Name.Equals("r2o", StringComparison.OrdinalIgnoreCase))?.AsTensor<float>();
+                        var r3Out = results.FirstOrDefault(r => r.Name.Equals("r3o", StringComparison.OrdinalIgnoreCase))?.AsTensor<float>();
+                        var r4Out = results.FirstOrDefault(r => r.Name.Equals("r4o", StringComparison.OrdinalIgnoreCase))?.AsTensor<float>();
+
+                        if (fgrTensor == null || phaTensor == null)
+                        {
+                            DeviceLog.Debug("RVM live view inference returned null foreground or alpha tensor");
+                            return null;
+                        }
+
+                        // Quick alpha statistics to detect inversions or degenerate output
+                        double alphaSum = 0; double alphaMin = 1, alphaMax = 0;
+                        int aH = (int)phaTensor.Dimensions[2];
+                        int aW = (int)phaTensor.Dimensions[3];
+                        int sampleStrideY = Math.Max(1, aH / 32);
+                        int sampleStrideX = Math.Max(1, aW / 32);
+                        int sampleCount = 0;
+                        for (int yy = 0; yy < aH; yy += sampleStrideY)
+                        {
+                            for (int xx = 0; xx < aW; xx += sampleStrideX)
+                            {
+                                float a = phaTensor[0, 0, yy, xx];
+                                alphaSum += a;
+                                if (a < alphaMin) alphaMin = a;
+                                if (a > alphaMax) alphaMax = a;
+                                sampleCount++;
+                            }
+                        }
+                        double alphaAvg = sampleCount > 0 ? alphaSum / sampleCount : 0;
+
+                        // Compute center vs border averages to decide inversion robustly
+                        double centerSum = 0; int centerCount = 0;
+                        double borderSum = 0; int borderCount = 0;
+                        int cx0 = (int)(aW * 0.25), cx1 = (int)(aW * 0.75);
+                        int cy0 = (int)(aH * 0.25), cy1 = (int)(aH * 0.75);
+                        for (int yy = 0; yy < aH; yy += sampleStrideY)
+                        {
+                            for (int xx = 0; xx < aW; xx += sampleStrideX)
+                            {
+                                float aval = phaTensor[0, 0, yy, xx];
+                                bool inCenter = (xx >= cx0 && xx <= cx1 && yy >= cy0 && yy <= cy1);
+                                if (inCenter) { centerSum += aval; centerCount++; }
+                                else { borderSum += aval; borderCount++; }
+                            }
+                        }
+                        double centerAvg = centerCount > 0 ? centerSum / centerCount : alphaAvg;
+                        double borderAvg = borderCount > 0 ? borderSum / borderCount : alphaAvg;
+
+                        // Check if alpha might be inverted (subject is dark, background is bright)
+                        bool possiblyInverted = centerAvg < 0.15 && borderAvg > centerAvg * 1.5;
+
+                        // Try auto-detection: if overall alpha is very low, likely needs inversion
+                        bool autoInvert = alphaAvg < 0.15 && alphaMax > 0.5;
+                        bool invert = possiblyInverted || autoInvert;
+
+                        // RVM fallback to MODNet when matte is completely degenerate
+                        // More lenient threshold to avoid failures
+                        bool degenerate = alphaMax < 0.02 || (alphaAvg < 0.05 && centerAvg < 0.05);
+
+                        if (_rvmFrameCounter % 10 == 0)
+                        {
+                            DeviceLog.Debug($"[BackgroundRemoval] Alpha stats avg={alphaAvg:F2} center={centerAvg:F2} border={borderAvg:F2} min={alphaMin:F2} max={alphaMax:F2}");
+                            DeviceLog.Debug($"[BackgroundRemoval] Alpha decision: invert={invert} (possiblyInv={possiblyInverted} autoInv={autoInvert}) degenerate={degenerate}");
+                        }
+
+                        UpdateRvmStates(r1Out, r2Out, r3Out, r4Out);
+
+                        if (degenerate)
+                        {
+                            _rvmScaleBoost = Math.Min(2.0, _rvmScaleBoost * 1.25);
+                            _rvmScaleBoostCooldown = 30; // keep boost for ~30 frames
+                            DeviceLog.Debug("[BackgroundRemoval] RVM matte degenerate; falling back to MODNet for this frame");
+                            return ProcessLiveViewFrameWithModnet(frameData, width, height);
+                        }
+                        else
+                        {
+                            if (_rvmScaleBoostCooldown > 0) _rvmScaleBoostCooldown--;
+                            else _rvmScaleBoost = Math.Max(1.0, _rvmScaleBoost * 0.95);
+                        }
+
+                        using (var composed = BuildForegroundFromVips(image, phaTensor, invert))
+                        {
+                            int finalWidth = Math.Min(width, LiveViewMaxOutputWidth);
+                            if (finalWidth < 1) finalWidth = 1;
+                            int finalHeight = Math.Max(1, (int)Math.Round(finalWidth / (double)width * height));
+
+                            var finalImage = composed;
+                            if (composed.Width != finalWidth || composed.Height != finalHeight)
+                            {
+                                double scale = (double)finalWidth / composed.Width;
+                                finalImage = composed.Resize(scale, vscale: (double)finalHeight / composed.Height, kernel: Enums.Kernel.Lanczos3);
+                            }
+
+                            _rvmFrameCounter++;
+                            var compositeBytes = CompositeLiveViewFrameVips(finalImage);
+                            stopwatch.Stop();
+                            DeviceLog.Debug($"[BackgroundRemoval] RVM frame processed in {stopwatch.ElapsedMilliseconds}ms");
+
+                            // Update dimensions before validation
+                            width = finalImage.Width;
+                            height = finalImage.Height;
+                            _lastLiveViewFrameWidth = width;
+                            _lastLiveViewFrameHeight = height;
+
+                            if (finalImage != composed)
+                                finalImage.Dispose();
+
+                            if (compositeBytes == null)
+                            {
+                                _lastLiveViewFrameWidth = 0;
+                                _lastLiveViewFrameHeight = 0;
+                                return frameData;
+                            }
+
+                            // Don't validate JPEG byte count as it's compressed
+                            // Just return the JPEG bytes
+                            _lastLiveViewFrame = compositeBytes;
+                            return compositeBytes;
+                    }
+                }
             }
-            catch (Exception ex)
+            }
+            finally
             {
-                Log.Debug($"Live view processing error: {ex.Message}");
-                return frameData;
+                if (stopwatch.IsRunning)
+                {
+                    stopwatch.Stop();
+                    DeviceLog.Debug($"[BackgroundRemoval] RVM frame processed in {stopwatch.ElapsedMilliseconds}ms (early exit)");
+                }
             }
         }
 
-        private byte[] ApplyCachedMask(byte[] frameData)
+        private void InitializeRvmLiveViewSession()
         {
-            // Apply previously calculated mask to new frame
-            // This is a placeholder - real implementation would blend the mask
-            return frameData;
+            lock (_sessionLock)
+            {
+                if (_rvmLiveViewSession != null)
+                {
+                    return;
+                }
+
+                if (!ShouldUseRvmLiveView())
+                {
+                    _useRvmLiveView = false;
+                    return;
+                }
+
+                try
+                {
+                    DeviceLog.Debug($"[BackgroundRemoval] Checking for RVM model at {_rvmModelPath}");
+                    if (File.Exists(_rvmModelPath))
+                    {
+                        var rvmOptions = GetSessionOptions(useGPUOverride: true, isLiveView: true);
+                        _rvmLiveViewSession = new InferenceSession(_rvmModelPath, rvmOptions);
+                        _useRvmLiveView = true;
+                        _rvmFrameCounter = 0;
+                        _loggedRvmDisabled = false;
+                        DeviceLog.Debug("[BackgroundRemoval] Live view mode: RVM (Smooth)");
+                        DeviceLog.Debug("[BackgroundRemoval] RVM MobileNet model loaded for live-view background removal");
+                        DeviceLog.Debug("[BackgroundRemoval] RVM session created with CPU execution provider");
+                        foreach (var meta in _rvmLiveViewSession.InputMetadata)
+                        {
+                            var dims = string.Join(",", meta.Value.Dimensions.Select(d => d.ToString()));
+                            DeviceLog.Debug($"[BackgroundRemoval] RVM input: {meta.Key} -> [{dims}] type={meta.Value.ElementType}");
+                        }
+                        foreach (var meta in _rvmLiveViewSession.OutputMetadata)
+                        {
+                            var dims = string.Join(",", meta.Value.Dimensions.Select(d => d.ToString()));
+                            DeviceLog.Debug($"[BackgroundRemoval] RVM output: {meta.Key} -> [{dims}] type={meta.Value.ElementType}");
+                        }
+                    }
+                    else
+                    {
+                        _useRvmLiveView = false;
+                        DeviceLog.Debug("[BackgroundRemoval] Live view mode: MODNet (Responsive)");
+                        DeviceLog.Debug("[BackgroundRemoval] RVM MobileNet model not found, falling back to MODNet for live view.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _useRvmLiveView = false;
+                    _loggedRvmDisabled = false;
+                    _rvmLiveViewSession?.Dispose();
+                    _rvmLiveViewSession = null;
+                    DeviceLog.Error($"Failed to load RVM MobileNet model: {ex.Message}");
+                }
+                finally
+                {
+                    DeviceLog.Debug($"[BackgroundRemoval] RVM live view enabled: {_useRvmLiveView}");
+                }
+            }
+        }
+
+        private byte[] ProcessLiveViewFrameWithModnet(byte[] frameData, int width, int height)
+        {
+            if (_liveViewSession == null)
+            {
+                return null;
+            }
+
+            float downsampleRatio = CalculateDownsampleRatio(width, height, 320.0 * 320.0, 512, 0.1);
+
+            try
+            {
+                using (var image = SixLabors.ImageSharp.Image.Load<Rgba32>(frameData))
+                {
+                    int targetWidth = Math.Max(64, AlignToMultiple((int)(width * downsampleRatio), 16));
+                    int targetHeight = Math.Max(64, AlignToMultiple((int)(height * downsampleRatio), 16));
+                    targetWidth = Math.Min(width, targetWidth);
+                    targetHeight = Math.Min(height, targetHeight);
+
+                    if (targetWidth != width || targetHeight != height)
+                    {
+                        image.Mutate(ctx => ctx.Resize(targetWidth, targetHeight));
+                    }
+
+                    if (image.Width > LiveViewMaxOutputWidth)
+                    {
+                        int resizedHeight = Math.Max(1, (int)Math.Round(image.Height * (LiveViewMaxOutputWidth / (double)image.Width)));
+                        image.Mutate(ctx => ctx.Resize(LiveViewMaxOutputWidth, resizedHeight));
+                    }
+
+                    using (var mask = RunInference(image, _liveViewSession))
+                    {
+                        int edgeRefinement = Math.Max(3, Properties.Settings.Default.BackgroundRemovalEdgeRefinement / 2);
+                        ApplyMask(image, mask, edgeRefinement);
+                    }
+
+                    int finalWidth = Math.Min(width, LiveViewMaxOutputWidth);
+                    if (finalWidth < 1) finalWidth = 1;
+                    int finalHeight = Math.Max(1, (int)Math.Round(finalWidth / (double)width * height));
+
+                    if (image.Width != finalWidth || image.Height != finalHeight)
+                    {
+                        image.Mutate(ctx => ctx.Resize(finalWidth, finalHeight, KnownResamplers.Lanczos3));
+                    }
+
+                    _modnetFrameCounter++;
+                    var composed = CompositeLiveViewFrame(image);
+                    if (composed == null)
+                    {
+                        _lastLiveViewFrameWidth = 0;
+                        _lastLiveViewFrameHeight = 0;
+                        return frameData;
+                    }
+
+                    width = image.Width;
+                    height = image.Height;
+                    return composed;
+                }
+            }
+            catch (Exception ex)
+            {
+                DeviceLog.Debug($"MODNet live view processing failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        private byte[] CompositeLiveViewFrameVips(VipsImage foreground)
+        {
+            if (foreground == null)
+                return null;
+
+            try
+            {
+                // Get background path from VirtualBackgroundService
+                string backgroundPath = VirtualBackgroundService.Instance?.GetDefaultBackgroundPath();
+
+                // Composite with background if enabled and available
+                if (!string.IsNullOrEmpty(backgroundPath) && File.Exists(backgroundPath))
+                {
+                    VipsImage background = null;
+
+                    try
+                    {
+                        // Always load the background image
+                        background = VipsImage.NewFromFile(backgroundPath);
+                        DeviceLog.Debug($"[BackgroundRemoval] Loaded background from: {backgroundPath} ({background.Width}x{background.Height})");
+
+                        // Resize to match foreground if needed
+                        if (background.Width != foreground.Width || background.Height != foreground.Height)
+                        {
+                            double xscale = (double)foreground.Width / background.Width;
+                            double yscale = (double)foreground.Height / background.Height;
+                            double scale = Math.Max(xscale, yscale); // Cover mode
+
+                            var resized = background.Resize(scale, vscale: scale, kernel: Enums.Kernel.Lanczos3);
+                            background.Dispose();
+                            background = resized;
+
+                            // Center crop if needed
+                            if (background.Width > foreground.Width || background.Height > foreground.Height)
+                            {
+                                int x = (background.Width - foreground.Width) / 2;
+                                int y = (background.Height - foreground.Height) / 2;
+                                var cropped = background.Crop(x, y, foreground.Width, foreground.Height);
+                                background.Dispose();
+                                background = cropped;
+                            }
+                        }
+
+                        // Ensure RGBA
+                        if (background.Bands == 3)
+                        {
+                            var withAlpha = background.Bandjoin(255);
+                            background.Dispose();
+                            background = withAlpha;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        DeviceLog.Debug($"[BackgroundRemoval] Failed to load background: {ex.Message}");
+                    }
+
+                    if (background != null)
+                    {
+                        DeviceLog.Debug($"[BackgroundRemoval] Compositing foreground ({foreground.Width}x{foreground.Height}, bands={foreground.Bands}) over background ({background.Width}x{background.Height}, bands={background.Bands})");
+
+                        // In NetVips, composite takes [background, overlay1, overlay2, ...] with mode
+                        // We want to composite foreground OVER background
+                        var images = new[] { foreground };
+                        var modes = new[] { Enums.BlendMode.Over };
+                        var result = background.Composite(images, modes);
+
+                        var jpegBytes = result.JpegsaveBuffer(q: 90);
+                        background.Dispose();
+                        result.Dispose();
+                        DeviceLog.Debug($"[BackgroundRemoval] Composite successful, JPEG size: {jpegBytes.Length} bytes");
+                        return jpegBytes;
+                    }
+                }
+
+                // No background, just export foreground as JPEG
+                if (foreground.Bands == 4)
+                {
+                    // Convert RGBA to RGB with white background for JPEG
+                    var white = VipsImage.Black(foreground.Width, foreground.Height, bands: 3) + 255;
+                    var composited = white.Composite(foreground, Enums.BlendMode.Over);
+                    var jpegBytes = composited.JpegsaveBuffer(q: 90);
+                    white.Dispose();
+                    composited.Dispose();
+                    return jpegBytes;
+                }
+                else
+                {
+                    return foreground.JpegsaveBuffer(q: 90);
+                }
+            }
+            catch (Exception ex)
+            {
+                DeviceLog.Debug($"[BackgroundRemoval] CompositeLiveViewFrameVips failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        private byte[] CompositeLiveViewFrame(SixLabors.ImageSharp.Image<Rgba32> foreground)
+        {
+            if (foreground == null)
+            {
+                return null;
+            }
+
+            int width = foreground.Width;
+            int height = foreground.Height;
+            if (width == 0 || height == 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                using (var background = GetCachedBackground(width, height))
+                {
+                    background.Mutate(ctx => ctx.DrawImage(foreground, 1f));
+
+                    var rgba = new byte[width * height * 4];
+                    background.CopyPixelDataTo(rgba);
+
+                    for (int i = 0; i < rgba.Length; i += 4)
+                    {
+                        byte r = rgba[i];
+                        rgba[i] = rgba[i + 2];
+                        rgba[i + 2] = r;
+                    }
+
+                    _lastLiveViewFrameWidth = width;
+                    _lastLiveViewFrameHeight = height;
+                    return rgba;
+                }
+            }
+            catch (Exception ex)
+            {
+                DeviceLog.Debug($"Live view background composite error: {ex.Message}");
+                return null;
+            }
+        }
+
+        private SixLabors.ImageSharp.Image<Rgba32> GetCachedBackground(int width, int height)
+        {
+            if (width <= 0) width = 1;
+            if (height <= 0) height = 1;
+
+            string backgroundPath = VirtualBackgroundService.Instance.GetDefaultBackgroundPath();
+
+            lock (_backgroundCacheLock)
+            {
+                if (string.IsNullOrWhiteSpace(backgroundPath) || !File.Exists(backgroundPath))
+                {
+                    return new SixLabors.ImageSharp.Image<Rgba32>(width, height, new Rgba32(30, 30, 30));
+                }
+
+                bool needsReload = _cachedBackgroundImage == null ||
+                                   !string.Equals(_cachedBackgroundPath, backgroundPath, StringComparison.OrdinalIgnoreCase) ||
+                                   _cachedBackgroundWidth != width ||
+                                   _cachedBackgroundHeight != height;
+
+                if (needsReload)
+                {
+                    _cachedBackgroundImage?.Dispose();
+                    _cachedBackgroundImage = LoadBackgroundWithNetVips(backgroundPath, width, height);
+                    _cachedBackgroundPath = backgroundPath;
+                    _cachedBackgroundWidth = width;
+                    _cachedBackgroundHeight = height;
+                }
+
+                return _cachedBackgroundImage?.Clone() ?? new SixLabors.ImageSharp.Image<Rgba32>(width, height, new Rgba32(30, 30, 30));
+            }
+        }
+
+        private SixLabors.ImageSharp.Image<Rgba32> LoadBackgroundWithNetVips(string path, int width, int height)
+        {
+            int safeWidth = Math.Max(1, width);
+            int safeHeight = Math.Max(1, height);
+            try
+            {
+                using (var source = VipsImage.NewFromFile(path, access: NetVips.Enums.Access.Sequential))
+                using (var resized = ResizeBackground(source, safeWidth, safeHeight))
+                {
+                    if (resized == null)
+                    {
+                        return new SixLabors.ImageSharp.Image<Rgba32>(safeWidth, safeHeight, new Rgba32(30, 30, 30));
+                    }
+
+                    var buffer = resized.WriteToBuffer(".png");
+                    using (var ms = new MemoryStream(buffer))
+                    {
+                        return SixLabors.ImageSharp.Image.Load<Rgba32>(ms);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DeviceLog.Debug($"[BackgroundRemoval] NetVips resize failed for '{path}': {ex.Message}");
+                return new SixLabors.ImageSharp.Image<Rgba32>(safeWidth, safeHeight, new Rgba32(30, 30, 30));
+            }
+        }
+
+        private static VipsImage ResizeBackground(VipsImage source, int width, int height)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            int safeWidth = Math.Max(1, width);
+            int safeHeight = Math.Max(1, height);
+
+            double scale = Math.Max((double)safeWidth / Math.Max(1, source.Width), (double)safeHeight / Math.Max(1, source.Height));
+            if (scale <= 0)
+            {
+                scale = 1;
+            }
+
+            var scaled = source.Resize(scale, kernel: NetVips.Enums.Kernel.Lanczos3);
+
+            if (scaled.Width != safeWidth || scaled.Height != safeHeight)
+            {
+                int cropWidth = Math.Min(safeWidth, scaled.Width);
+                int cropHeight = Math.Min(safeHeight, scaled.Height);
+                int left = Math.Max(0, (scaled.Width - cropWidth) / 2);
+                int top = Math.Max(0, (scaled.Height - cropHeight) / 2);
+
+                var cropped = scaled.ExtractArea(left, top, cropWidth, cropHeight);
+                scaled.Dispose();
+                scaled = cropped;
+
+                if (scaled.Width != safeWidth || scaled.Height != safeHeight)
+                {
+                    var embedded = scaled.Embed(0, 0, safeWidth, safeHeight, extend: NetVips.Enums.Extend.Copy);
+                    scaled.Dispose();
+                    scaled = embedded;
+                }
+            }
+
+            return scaled;
+        }
+
+        private float CalculateDownsampleRatio(int width, int height, double referenceArea, int maxDimension, double minRatio = 0.1)
+        {
+            if (width <= 0 || height <= 0)
+            {
+                return 1f;
+            }
+
+            double area = Math.Max(1, width * height);
+            double downsample = Math.Sqrt(referenceArea / area);
+            double limit = Math.Min(1.0, maxDimension / (double)Math.Max(width, height));
+            downsample = Math.Min(downsample, limit);
+            downsample = Math.Max(minRatio, downsample);
+            return (float)Math.Round(downsample, 3, MidpointRounding.AwayFromZero);
+        }
+
+        private bool ShouldUseRvmLiveView()
+        {
+            var mode = Properties.Settings.Default.LiveViewBackgroundRemovalMode;
+            if (string.IsNullOrWhiteSpace(mode) || string.Equals(mode, LiveViewModeAuto, StringComparison.OrdinalIgnoreCase))
+            {
+                return File.Exists(_rvmModelPath);
+            }
+
+            if (string.Equals(mode, LiveViewModeSmooth, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!File.Exists(_rvmModelPath))
+            {
+                return false;
+            }
+
+            // If RVM exists but mode is still responsive, honour manual override but log once
+            if (!_loggedRvmDisabled)
+            {
+                DeviceLog.Debug("[BackgroundRemoval] RVM model detected but live view mode is set to Responsive. Switching to Smooth for better quality.");
+            }
+            Properties.Settings.Default.LiveViewBackgroundRemovalMode = LiveViewModeSmooth;
+            Properties.Settings.Default.Save();
+            return true;
+        }
+
+        private void ApplyPreferredLiveViewMode()
+        {
+            bool rvmAvailable = File.Exists(_rvmModelPath);
+            var current = Properties.Settings.Default.LiveViewBackgroundRemovalMode;
+
+            if (rvmAvailable)
+            {
+                if (!string.Equals(current, LiveViewModeSmooth, StringComparison.OrdinalIgnoreCase))
+                {
+                    Properties.Settings.Default.LiveViewBackgroundRemovalMode = LiveViewModeSmooth;
+                    Properties.Settings.Default.Save();
+                    DeviceLog.Debug("[BackgroundRemoval] RVM model detected - defaulting live view mode to Smooth.");
+                }
+            }
+            else
+            {
+                if (string.Equals(current, LiveViewModeSmooth, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(current, LiveViewModeAuto, StringComparison.OrdinalIgnoreCase))
+                {
+                    Properties.Settings.Default.LiveViewBackgroundRemovalMode = LiveViewModeResponsive;
+                    Properties.Settings.Default.Save();
+                    DeviceLog.Debug("[BackgroundRemoval] RVM model missing - reverting live view mode to Responsive.");
+                }
+            }
+        }
+
+        public bool TryGetLatestFrameInfo(out int width, out int height)
+        {
+            width = _lastLiveViewFrameWidth;
+            height = _lastLiveViewFrameHeight;
+            return _lastLiveViewFrame != null && width > 0 && height > 0;
+        }
+
+        private int AlignToMultiple(int value, int multiple)
+        {
+            if (multiple <= 1)
+                return Math.Max(1, value);
+            return Math.Max(multiple, ((value + multiple - 1) / multiple) * multiple);
+        }
+
+        private void EnsureRvmStates()
+        {
+            if (_r1State == null)
+            {
+                _r1State = CreateZeroStateTensor(1, 16, 1, 1);
+            }
+            if (_r2State == null)
+            {
+                _r2State = CreateZeroStateTensor(1, 20, 1, 1);
+            }
+            if (_r3State == null)
+            {
+                _r3State = CreateZeroStateTensor(1, 40, 1, 1);
+            }
+            if (_r4State == null)
+            {
+                _r4State = CreateZeroStateTensor(1, 64, 1, 1);
+            }
+        }
+
+        private DenseTensor<float> VipsImageToTensorForRvm(VipsImage image)
+        {
+            int width = image.Width;
+            int height = image.Height;
+            var tensor = new DenseTensor<float>(new[] { 1, 3, height, width });
+
+            // Ensure RGB format
+            if (image.Bands == 4)
+            {
+                image = image.ExtractBand(0, n: 3);
+            }
+            else if (image.Bands == 1)
+            {
+                image = image.Bandjoin(new[] { image, image });
+            }
+
+            // Use simpler normalization for better alpha detection
+            const float meanR = 0.5f, meanG = 0.5f, meanB = 0.5f;
+            const float stdR = 0.5f, stdG = 0.5f, stdB = 0.5f;
+
+            // Get pixel data efficiently
+            var pixels = image.WriteToMemory();
+            int stride = width * 3; // RGB
+
+            unsafe
+            {
+                fixed (byte* pPixels = pixels)
+                {
+                    for (int y = 0; y < height; y++)
+                    {
+                        byte* row = pPixels + y * stride;
+                        for (int x = 0; x < width; x++)
+                        {
+                            int idx = x * 3;
+                            tensor[0, 0, y, x] = (row[idx] / 255f - meanR) / stdR;     // R
+                            tensor[0, 1, y, x] = (row[idx + 1] / 255f - meanG) / stdG; // G
+                            tensor[0, 2, y, x] = (row[idx + 2] / 255f - meanB) / stdB; // B
+                        }
+                    }
+                }
+            }
+            return tensor;
+        }
+
+        private DenseTensor<float> ImageToTensorForRvm(SixLabors.ImageSharp.Image<Rgba32> image)
+        {
+            int width = image.Width;
+            int height = image.Height;
+            var tensor = new DenseTensor<float>(new[] { 1, 3, height, width });
+            // Use simpler normalization for better alpha detection
+            const float meanR = 0.5f, meanG = 0.5f, meanB = 0.5f;
+            const float stdR = 0.5f, stdG = 0.5f, stdB = 0.5f;
+            image.ProcessPixelRows(accessor =>
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    var row = accessor.GetRowSpan(y);
+                    for (int x = 0; x < width; x++)
+                    {
+                        var pixel = row[x];
+                        float r = pixel.R / 255f;
+                        float g = pixel.G / 255f;
+                        float b = pixel.B / 255f;
+                        tensor[0, 0, y, x] = (r - meanR) / stdR;
+                        tensor[0, 1, y, x] = (g - meanG) / stdG;
+                        tensor[0, 2, y, x] = (b - meanB) / stdB;
+                    }
+                }
+            });
+
+            return tensor;
+        }
+
+        private DenseTensor<float> CreateZeroStateTensor(int d0, int d1, int d2, int d3)
+        {
+            return new DenseTensor<float>(new[] { d0, d1, d2, d3 });
+        }
+
+        private void UpdateRvmStates(Tensor<float> r1Out, Tensor<float> r2Out, Tensor<float> r3Out, Tensor<float> r4Out)
+        {
+            if (r1Out != null) _r1State = CloneTensor(r1Out);
+            if (r2Out != null) _r2State = CloneTensor(r2Out);
+            if (r3Out != null) _r3State = CloneTensor(r3Out);
+            if (r4Out != null) _r4State = CloneTensor(r4Out);
+        }
+
+        private DenseTensor<float> CloneTensor(Tensor<float> tensor)
+        {
+            var dimsSpan = tensor.Dimensions;
+            var dims = new int[dimsSpan.Length];
+            for (int i = 0; i < dimsSpan.Length; i++)
+            {
+                dims[i] = dimsSpan[i];
+            }
+            var data = tensor.ToArray();
+            return new DenseTensor<float>(data, dims);
+        }
+
+        private SixLabors.ImageSharp.Image<Rgba32> CreateImageFromRvmOutput(Tensor<float> fgr, Tensor<float> pha, bool invertAlpha = false)
+        {
+            int height = (int)fgr.Dimensions[2];
+            int width = (int)fgr.Dimensions[3];
+            var image = new SixLabors.ImageSharp.Image<Rgba32>(width, height);
+
+            image.ProcessPixelRows(accessor =>
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    var row = accessor.GetRowSpan(y);
+                    for (int x = 0; x < width; x++)
+                    {
+                        float r = fgr[0, 0, y, x];
+                        float g = fgr[0, 1, y, x];
+                        float b = fgr[0, 2, y, x];
+                        float alpha = pha[0, 0, y, x];
+                        if (invertAlpha)
+                        {
+                            alpha = 1f - alpha;
+                        }
+
+                        alpha = PostProcessAlpha(alpha);
+
+                        float alphaClamped = Math.Max(0f, Math.Min(1f, alpha));
+                        float rClamped = Math.Max(0f, Math.Min(1f, r));
+                        float gClamped = Math.Max(0f, Math.Min(1f, g));
+                        float bClamped = Math.Max(0f, Math.Min(1f, b));
+
+                        byte aByte = (byte)(alphaClamped * 255f);
+                        byte rByte = (byte)(rClamped * 255f);
+                        byte gByte = (byte)(gClamped * 255f);
+                        byte bByte = (byte)(bClamped * 255f);
+
+                        row[x] = new Rgba32(rByte, gByte, bByte, aByte);
+                    }
+                }
+            });
+
+            return image;
+        }
+
+        private VipsImage BuildForegroundFromVips(VipsImage original, Tensor<float> pha, bool invertAlpha)
+        {
+            int height = (int)pha.Dimensions[2];
+            int width = (int)pha.Dimensions[3];
+
+            // Ensure original matches mask size
+            var baseImage = original;
+            if (original.Width != width || original.Height != height)
+            {
+                double xscale = (double)width / original.Width;
+                double yscale = (double)height / original.Height;
+                baseImage = original.Resize(xscale, vscale: yscale, kernel: Enums.Kernel.Lanczos3);
+            }
+
+            // Ensure RGBA format
+            if (baseImage.Bands == 3)
+            {
+                baseImage = baseImage.Bandjoin(255); // Add alpha channel
+            }
+
+            // Create alpha mask array with smoothing
+            var alphaMap = new float[height, width];
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    float a = pha[0, 0, y, x];
+                    if (invertAlpha) a = 1f - a;
+                    alphaMap[y, x] = a;
+                }
+            }
+
+            // Apply edge smoothing
+            ApplyAlphaSmoothing(alphaMap, width, height, true);
+
+            // Create alpha mask image from processed values
+            var alphaData = new byte[width * height];
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    float a = alphaMap[y, x];
+                    a = PostProcessAlpha(a);
+                    a = ApplyEdgeFeathering(a, alphaMap, x, y, width, height, true);
+                    alphaData[y * width + x] = (byte)(Math.Max(0f, Math.Min(1f, a)) * 255f);
+                }
+            }
+
+            // Create alpha mask as single-band image
+            var alphaMask = VipsImage.NewFromMemory(alphaData, width, height, 1, Enums.BandFormat.Uchar);
+
+            // Replace alpha channel with our mask
+            var rgb = baseImage.ExtractBand(0, n: 3);
+            var result = rgb.Bandjoin(alphaMask);
+
+            if (baseImage != original)
+                baseImage.Dispose();
+
+            return result;
+        }
+
+        private SixLabors.ImageSharp.Image<Rgba32> BuildForegroundFromOriginal(SixLabors.ImageSharp.Image<Rgba32> original, Tensor<float> pha, bool invertAlpha)
+        {
+            int height = (int)pha.Dimensions[2];
+            int width = (int)pha.Dimensions[3];
+
+            // Ensure original matches mask size
+            var baseImage = original;
+            bool resized = false;
+            if (original.Width != width || original.Height != height)
+            {
+                baseImage = original.Clone(ctx => ctx.Resize(width, height, KnownResamplers.Lanczos3));
+                resized = true;
+            }
+
+            // First pass: extract raw alpha values and apply smoothing
+            var alphaMap = new float[height, width];
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    float a = pha[0, 0, y, x];
+                    if (invertAlpha) a = 1f - a;
+                    alphaMap[y, x] = a;
+                }
+            }
+
+            // Apply light edge smoothing for live view (heavy smoothing disabled for performance)
+            ApplyAlphaSmoothing(alphaMap, width, height, true);
+
+            var image = new SixLabors.ImageSharp.Image<Rgba32>(width, height);
+            baseImage.ProcessPixelRows(image, (srcAccessor, dstAccessor) =>
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    var srcRow = srcAccessor.GetRowSpan(y);
+                    var dstRow = dstAccessor.GetRowSpan(y);
+                    for (int x = 0; x < width; x++)
+                    {
+                        var srcPix = srcRow[x];
+                        float a = alphaMap[y, x];
+                        a = PostProcessAlpha(a);
+
+                        // Apply light edge feathering for live view
+                        a = ApplyEdgeFeathering(a, alphaMap, x, y, width, height, true);
+
+                        byte A = (byte)(Math.Max(0f, Math.Min(1f, a)) * 255f);
+                        dstRow[x] = new Rgba32(srcPix.R, srcPix.G, srcPix.B, A);
+                    }
+                }
+            });
+
+            if (resized)
+            {
+                baseImage.Dispose();
+            }
+            return image;
+        }
+
+        private void ApplyAlphaSmoothing(float[,] alphaMap, int width, int height, bool isLiveView = false)
+        {
+            // Skip heavy smoothing for live view to improve performance
+            if (isLiveView)
+            {
+                // Just do a very light 3-pixel box blur for live view
+                float[,] temp = new float[height, width];
+                Array.Copy(alphaMap, temp, height * width);
+
+                for (int y = 1; y < height - 1; y += 2)  // Skip every other row for speed
+                {
+                    for (int x = 1; x < width - 1; x += 2)  // Skip every other column
+                    {
+                        float original = temp[y, x];
+                        if (original > 0.1f && original < 0.9f)
+                        {
+                            // Simple average of immediate neighbors
+                            alphaMap[y, x] = (temp[y, x] * 2f +
+                                            temp[y-1, x] + temp[y+1, x] +
+                                            temp[y, x-1] + temp[y, x+1]) / 6f;
+                        }
+                    }
+                }
+                return;
+            }
+
+            // Full smoothing for captured photos only
+            float[,] smoothed = new float[height, width];
+            float[] kernel = { 0.0625f, 0.125f, 0.0625f, 0.125f, 0.25f, 0.125f, 0.0625f, 0.125f, 0.0625f };
+
+            for (int y = 1; y < height - 1; y++)
+            {
+                for (int x = 1; x < width - 1; x++)
+                {
+                    float sum = 0;
+                    int ki = 0;
+                    for (int dy = -1; dy <= 1; dy++)
+                    {
+                        for (int dx = -1; dx <= 1; dx++)
+                        {
+                            sum += alphaMap[y + dy, x + dx] * kernel[ki++];
+                        }
+                    }
+                    smoothed[y, x] = sum;
+                }
+            }
+
+            // Copy smoothed values back, preserving edges
+            for (int y = 1; y < height - 1; y++)
+            {
+                for (int x = 1; x < width - 1; x++)
+                {
+                    // Only smooth if we're near an edge (alpha between 0.1 and 0.9)
+                    float original = alphaMap[y, x];
+                    if (original > 0.05f && original < 0.95f)
+                    {
+                        alphaMap[y, x] = smoothed[y, x];
+                    }
+                }
+            }
+        }
+
+        private float ApplyEdgeFeathering(float alpha, float[,] alphaMap, int x, int y, int width, int height, bool isLiveView = false)
+        {
+            // Skip feathering for live view to improve performance
+            if (isLiveView)
+            {
+                // Just apply simple threshold
+                if (alpha < 0.05f) return 0f;
+                if (alpha > 0.95f) return 1f;
+                return alpha;
+            }
+
+            // Full feathering for captured photos only
+            if (alpha < 0.1f || alpha > 0.9f)
+                return alpha;
+
+            float edgeStrength = 0;
+            int samples = 0;
+
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    if (nx >= 0 && nx < width && ny >= 0 && ny < height)
+                    {
+                        float diff = Math.Abs(alpha - alphaMap[ny, nx]);
+                        edgeStrength += diff;
+                        samples++;
+                    }
+                }
+            }
+
+            if (samples > 0)
+            {
+                edgeStrength /= samples;
+
+                if (edgeStrength > 0.2f)
+                {
+                    float t = (alpha - 0.3f) / 0.4f;
+                    t = Math.Max(0, Math.Min(1, t));
+                    alpha = t * t * (3f - 2f * t);
+                }
+            }
+
+            return alpha;
+        }
+
+        private float PostProcessAlpha(float a)
+        {
+            // Fast path for live view processing
+            return PostProcessAlphaFast(a);
+        }
+
+        private float PostProcessAlphaFast(float a)
+        {
+            // Simplified alpha processing for live view performance
+            // Quick thresholds
+            if (a < 0.01f) return 0f;
+            if (a > 0.9f) return 1f;
+
+            // Boost weak alphas with simple scaling
+            if (a < 0.15f)
+            {
+                a = a * 6f;  // Simple multiplier instead of pow
+                if (a > 1f) a = 1f;
+            }
+            else if (a < LiveViewAlphaKneeLow)
+            {
+                return 0f;
+            }
+            else if (a > LiveViewAlphaKneeHigh)
+            {
+                return 1f;
+            }
+            else
+            {
+                // Simple linear interpolation for mid-range
+                float t = (a - LiveViewAlphaKneeLow) / (LiveViewAlphaKneeHigh - LiveViewAlphaKneeLow);
+                a = t * LiveViewAlphaGain;
+            }
+
+            return Math.Max(0f, Math.Min(1f, a));
+        }
+
+        private float PostProcessAlphaHighQuality(float a)
+        {
+            // Full quality processing for captured photos
+            if (a < 0.005f) return 0f;
+
+            if (a < 0.15f)
+            {
+                a = (float)Math.Pow(a * 8f, 0.45f);
+                a = Math.Min(1f, a * 1.8f);
+            }
+            else if (a <= LiveViewAlphaKneeLow)
+            {
+                return 0f;
+            }
+            else if (a >= LiveViewAlphaKneeHigh)
+            {
+                return 0.95f + (a - LiveViewAlphaKneeHigh) * 0.05f;
+            }
+            else
+            {
+                float t = (a - LiveViewAlphaKneeLow) / (LiveViewAlphaKneeHigh - LiveViewAlphaKneeLow);
+                t = Math.Max(0f, Math.Min(1f, t));
+                t = t * t * (3f - 2f * t);
+                t = (float)Math.Pow(t, LiveViewAlphaGamma);
+                a = t * LiveViewAlphaGain + LiveViewAlphaOffset;
+            }
+
+            if (a > 0.05f && a < 0.95f)
+            {
+                float s = (a - 0.5f) * 2f;
+                s = s / (1f + Math.Abs(s) * 0.2f);
+                a = (s + 1f) * 0.5f;
+            }
+
+            return Math.Max(0f, Math.Min(1f, a));
         }
 
         #endregion
@@ -831,8 +2116,84 @@ namespace Photobooth.Services
         {
             _captureSession?.Dispose();
             _liveViewSession?.Dispose();
+            _rvmLiveViewSession?.Dispose();
             _isInitialized = false;
-            Log.Debug("BackgroundRemovalService disposed");
+            _useRvmLiveView = false;
+            _r1State = null;
+            _r2State = null;
+            _r3State = null;
+            _r4State = null;
+            _isRvmProcessing = false;
+            _isModnetProcessing = false;
+            _lastLiveViewFrame = null;
+            _lastLiveViewFrameWidth = 0;
+            _lastLiveViewFrameHeight = 0;
+            _modnetFrameCounter = 0;
+            _rvmFrameCounter = 0;
+            _lastRvmProcessTicks = 0;
+            _lastModnetProcessTicks = 0;
+            _lastFpsLogTicks = 0;
+            _fpsFrameCount = 0;
+            _fpsMode = null;
+            _lastDesiredRvm = null;
+            lock (_backgroundCacheLock)
+            {
+                _cachedBackgroundImage?.Dispose();
+                _cachedBackgroundImage = null;
+                _cachedBackgroundPath = null;
+                _cachedBackgroundWidth = 0;
+                _cachedBackgroundHeight = 0;
+            }
+            DeviceLog.Debug("BackgroundRemovalService disposed");
+        }
+
+        private bool ShouldProcessFrame(ref long lastTicks, int minIntervalMs)
+        {
+            long now = Stopwatch.GetTimestamp();
+            if (lastTicks == 0)
+            {
+                lastTicks = now;
+                return true;
+            }
+
+            double elapsedMs = (now - lastTicks) * 1000.0 / Stopwatch.Frequency;
+            if (elapsedMs >= minIntervalMs)
+            {
+                lastTicks = now;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void TrackLiveViewFps(string mode)
+        {
+            lock (_fpsLock)
+            {
+                if (!string.Equals(_fpsMode, mode, StringComparison.OrdinalIgnoreCase))
+                {
+                    _fpsMode = mode;
+                    _fpsFrameCount = 0;
+                    _lastFpsLogTicks = 0;
+                }
+
+                _fpsFrameCount++;
+                long now = Stopwatch.GetTimestamp();
+                if (_lastFpsLogTicks == 0)
+                {
+                    _lastFpsLogTicks = now;
+                    return;
+                }
+
+                double elapsedMs = (now - _lastFpsLogTicks) * 1000.0 / Stopwatch.Frequency;
+                if (elapsedMs >= 1000)
+                {
+                    double fps = _fpsFrameCount * 1000.0 / elapsedMs;
+                    DeviceLog.Debug($"[BackgroundRemoval] Live view ({mode}) FPS: {fps:F1} over {elapsedMs:F0}ms");
+                    _fpsFrameCount = 0;
+                    _lastFpsLogTicks = now;
+                }
+            }
         }
 
         #endregion

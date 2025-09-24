@@ -446,6 +446,9 @@
     <Setting Name="BackgroundRemovalQuality" Type="System.String" Scope="User">
       <Value Profile="(Default)">Fast</Value>
     </Setting>
+    <Setting Name="LiveViewBackgroundRemovalMode" Type="System.String" Scope="User">
+      <Value Profile="(Default)">Responsive</Value>
+    </Setting>
     <Setting Name="BackgroundRemovalEdgeRefinement" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">0</Value>
     </Setting>

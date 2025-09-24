@@ -19,6 +19,11 @@ $models = @(
         Name = "u2netp.onnx"
         Url = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx"
         Description = "Lightweight U2-Net model for live view processing"
+    },
+    @{
+        Name = "rvm_mobilenetv3_fp32.onnx"
+        Url = "https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0.0/rvm_mobilenetv3_fp32.onnx"
+        Description = "Robust Video Matting (MobileNetV3) model for streaming live-view background removal"
     }
 )
 

@@ -56,29 +56,79 @@ namespace Photobooth.Services
             {
                 throw new ArgumentNullException(nameof(eventArgs));
             }
-            
+
             try
             {
                 // Generate file path with proper event-based folder structure
                 string fileName = GeneratePhotoPathWithEvent(eventArgs.FileName, eventData);
-                
+
                 // Transfer file from camera
                 TransferPhotoFromCamera(eventArgs, fileName);
-                
+
                 // Release camera resources
                 ReleaseCamera(eventArgs);
-                
+
                 // Update tracking
                 UpdatePhotoTracking(fileName);
-                
+
                 // Save to database
                 SavePhotoToDatabase(fileName);
-                
+
                 return fileName;
             }
             catch (Exception ex)
             {
                 Log.Error($"PhotoCaptureService: Failed to process photo: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Process a pre-transferred photo (for photographer mode)
+        /// </summary>
+        public string ProcessPreTransferredPhoto(string sourcePath, EventData eventData)
+        {
+            if (string.IsNullOrEmpty(sourcePath))
+            {
+                throw new ArgumentNullException(nameof(sourcePath));
+            }
+
+            if (!File.Exists(sourcePath))
+            {
+                throw new FileNotFoundException($"Pre-transferred file not found: {sourcePath}");
+            }
+
+            try
+            {
+                // Generate file path with proper event-based folder structure
+                string originalFileName = Path.GetFileName(sourcePath);
+                string fileName = GeneratePhotoPathWithEvent(originalFileName, eventData);
+
+                Log.Debug($"PhotoCaptureService: Processing pre-transferred photo from {sourcePath} to {fileName}");
+
+                // Copy the pre-transferred file to the proper location
+                File.Copy(sourcePath, fileName, true);
+
+                // Verify file was created
+                if (!File.Exists(fileName))
+                {
+                    throw new FileNotFoundException("Failed to copy pre-transferred file", fileName);
+                }
+
+                var fileInfo = new FileInfo(fileName);
+                Log.Debug($"PhotoCaptureService: Pre-transferred file copied successfully - Size: {fileInfo.Length} bytes");
+
+                // Update tracking
+                UpdatePhotoTracking(fileName);
+
+                // Save to database
+                SavePhotoToDatabase(fileName);
+
+                return fileName;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"PhotoCaptureService: Failed to process pre-transferred photo: {ex.Message}");
                 throw;
             }
         }

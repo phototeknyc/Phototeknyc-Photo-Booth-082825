@@ -209,7 +209,9 @@ namespace Photobooth.Services
         /// <summary>
         /// Process a captured photo and advance session
         /// </summary>
-        public async Task<bool> ProcessCapturedPhotoAsync(PhotoCapturedEventArgs photoEventArgs)
+        /// <param name="photoEventArgs">The photo capture event arguments</param>
+        /// <param name="preTransferredPath">Optional: path to already-transferred file (for photographer mode)</param>
+        public async Task<bool> ProcessCapturedPhotoAsync(PhotoCapturedEventArgs photoEventArgs, string preTransferredPath = null)
         {
             try
             {
@@ -221,9 +223,9 @@ namespace Photobooth.Services
                 // Check if this is a retake
                 bool isRetake = _photoCaptureService.IsRetakingPhoto && _photoCaptureService.PhotoIndexToRetake >= 0;
                 int retakeIndex = _photoCaptureService.PhotoIndexToRetake;
-                
+
                 Log.Debug($"PhotoboothSessionService: Retake check - IsRetaking={_photoCaptureService.IsRetakingPhoto}, Index={_photoCaptureService.PhotoIndexToRetake}");
-                
+
                 if (isRetake)
                 {
                     Log.Debug($"PhotoboothSessionService: Processing RETAKE for photo {retakeIndex + 1}");
@@ -236,7 +238,18 @@ namespace Photobooth.Services
                 }
 
                 // Use PhotoCaptureService to process the photo with event context for proper folder structure
-                string processedPhotoPath = _photoCaptureService.ProcessCapturedPhoto(photoEventArgs, _currentEvent);
+                string processedPhotoPath;
+
+                // If we have a pre-transferred file (photographer mode), use it directly
+                if (!string.IsNullOrEmpty(preTransferredPath) && File.Exists(preTransferredPath))
+                {
+                    Log.Debug($"PhotoboothSessionService: Using pre-transferred file: {preTransferredPath}");
+                    processedPhotoPath = _photoCaptureService.ProcessPreTransferredPhoto(preTransferredPath, _currentEvent);
+                }
+                else
+                {
+                    processedPhotoPath = _photoCaptureService.ProcessCapturedPhoto(photoEventArgs, _currentEvent);
+                }
 
                 if (string.IsNullOrEmpty(processedPhotoPath))
                 {

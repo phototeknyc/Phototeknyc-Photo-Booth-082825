@@ -40,7 +40,7 @@ namespace Photobooth.Services
         private bool _isCapturing;
         private bool _isCountdownActive;
         private PhotoCapturedEventHandler _cameraCaptureHandler;
-        private PhotoCapturedEventArgs _photographerInitialCapture; // Store first capture in photographer mode
+        private string _photographerInitialCapturePath; // Store path of first transferred photo in photographer mode
         #endregion
 
         #region Properties
@@ -89,20 +89,67 @@ namespace Photobooth.Services
                 bool photographerMode = Properties.Settings.Default.PhotographerMode;
                 if (photographerMode && !_sessionService.IsSessionActive && !_isCapturing)
                 {
-                    Log.Debug("PhotoboothWorkflowService: Photographer mode idle capture detected - storing and starting session");
+                    Log.Debug("PhotoboothWorkflowService: Photographer mode idle capture detected - transferring and storing file");
 
-                    // Store this capture to process as the first photo
-                    _photographerInitialCapture = args;
-                    Log.Debug($"PhotoboothWorkflowService: Stored initial capture: {args?.FileName}");
+                    // Transfer the photo immediately and store the path
+                    try
+                    {
+                        // Generate a unique filename for the initial capture
+                        string tempFileName = Path.Combine(
+                            Path.GetTempPath(),
+                            $"photographer_initial_{DateTime.Now:yyyyMMdd_HHmmss}_{args?.FileName ?? "photo.jpg"}"
+                        );
 
-                    // Mark as capturing so we don't handle multiple triggers
-                    _isCapturing = true;
+                        Log.Debug($"PhotoboothWorkflowService: Transferring initial capture to: {tempFileName}");
 
-                    // Fire event to notify UI to start a session
-                    PhotographerIdleCapture?.Invoke(this, EventArgs.Empty);
+                        // Transfer the file from camera
+                        if (args?.CameraDevice != null && args?.Handle != null)
+                        {
+                            args.CameraDevice.TransferFile(args.Handle, tempFileName);
 
-                    // The stored capture will be processed when StartPhotoCaptureWorkflowAsync is called
-                    return;
+                            // Release camera resources after transfer
+                            try
+                            {
+                                args.CameraDevice.ReleaseResurce(args.Handle);
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Debug($"PhotoboothWorkflowService: Failed to release camera resource: {ex.Message}");
+                            }
+
+                            // Verify file was created
+                            if (File.Exists(tempFileName))
+                            {
+                                _photographerInitialCapturePath = tempFileName;
+                                Log.Debug($"PhotoboothWorkflowService: Initial capture transferred successfully: {tempFileName}");
+
+                                // Mark as capturing so we don't handle multiple triggers
+                                _isCapturing = true;
+
+                                // Fire event to notify UI to start a session
+                                PhotographerIdleCapture?.Invoke(this, EventArgs.Empty);
+
+                                // The stored capture will be processed when StartPhotoCaptureWorkflowAsync is called
+                                return;
+                            }
+                            else
+                            {
+                                Log.Error("PhotoboothWorkflowService: Initial capture file was not created after transfer");
+                            }
+                        }
+                        else
+                        {
+                            Log.Error($"PhotoboothWorkflowService: Cannot transfer - CameraDevice: {args?.CameraDevice != null}, Handle: {args?.Handle != null}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"PhotoboothWorkflowService: Failed to transfer initial capture: {ex.Message}");
+                        // Continue to normal processing on error
+                    }
+
+                    // If we got here, transfer failed - just process normally
+                    Log.Debug("PhotoboothWorkflowService: Initial capture transfer failed, processing normally");
                 }
 
                 OnCaptureCompleted(args);
@@ -137,7 +184,7 @@ namespace Photobooth.Services
         {
             try
             {
-                if (_isCapturing && _photographerInitialCapture == null)
+                if (_isCapturing && string.IsNullOrEmpty(_photographerInitialCapturePath))
                 {
                     Log.Debug("PhotoboothWorkflowService: Capture already in progress");
                     return false;
@@ -147,7 +194,7 @@ namespace Photobooth.Services
                 {
                     StatusChanged?.Invoke(this, new StatusEventArgs { Status = "No active session" });
                     _isCapturing = false; // Reset if we set it in photographer mode
-                    _photographerInitialCapture = null; // Clear any stored capture
+                    ClearPhotographerInitialCapture(); // Clear any stored capture
                     return false;
                 }
 
@@ -156,7 +203,7 @@ namespace Photobooth.Services
                 {
                     StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Camera not connected" });
                     _isCapturing = false; // Reset if we set it in photographer mode
-                    _photographerInitialCapture = null; // Clear any stored capture
+                    ClearPhotographerInitialCapture(); // Clear any stored capture
                     return false;
                 }
 
@@ -184,15 +231,70 @@ namespace Photobooth.Services
                 if (photographerMode)
                 {
                     // Check if we have a stored initial capture to process
-                    if (_photographerInitialCapture != null)
+                    if (!string.IsNullOrEmpty(_photographerInitialCapturePath) && File.Exists(_photographerInitialCapturePath))
                     {
-                        Log.Debug($"PhotoboothWorkflowService: Processing stored initial capture: {_photographerInitialCapture.FileName}");
-                        var initialCapture = _photographerInitialCapture;
-                        _photographerInitialCapture = null; // Clear it
+                        Log.Debug($"PhotoboothWorkflowService: Processing stored initial capture: {_photographerInitialCapturePath}");
+                        string capturedPath = _photographerInitialCapturePath;
+                        _photographerInitialCapturePath = null; // Clear it
+
+                        // Create PhotoCapturedEventArgs for the already-transferred file
+                        var args = new PhotoCapturedEventArgs
+                        {
+                            FileName = Path.GetFileName(capturedPath),
+                            CameraDevice = camera,
+                            Handle = null // No handle needed, file is already transferred
+                        };
 
                         // Process the initial capture immediately
                         StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Processing first photo..." });
-                        OnCaptureCompleted(initialCapture);
+
+                        // Since the file is already transferred, we can process it directly
+                        // Pass the actual file path through a temporary override
+                        Log.Debug($"PhotoboothWorkflowService: Processing pre-transferred file at: {capturedPath}");
+
+                        // Call session service directly with the pre-transferred file
+                        bool success = await _sessionService.ProcessCapturedPhotoAsync(args, capturedPath);
+
+                        if (success)
+                        {
+                            Log.Debug("★★★ PhotoboothWorkflowService: Initial photo processed successfully ★★★");
+
+                            // Get the actual processed photo path from the session
+                            var capturedPaths = _sessionService.CapturedPhotoPaths;
+                            if (capturedPaths != null && capturedPaths.Count > 0)
+                            {
+                                string processedPhotoPath = capturedPaths[capturedPaths.Count - 1];
+                                Log.Debug($"PhotoboothWorkflowService: Using processed photo path for display: {processedPhotoPath}");
+
+                                // Display the photo
+                                _isCapturing = false;
+                                if (!string.IsNullOrEmpty(processedPhotoPath) && System.IO.File.Exists(processedPhotoPath))
+                                {
+                                    Log.Debug($"PhotoboothWorkflowService: Calling DisplayCapturedPhotoAsync with processed path: {processedPhotoPath}");
+                                    await DisplayCapturedPhotoAsync(processedPhotoPath);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Log.Error("★★★ PhotoboothWorkflowService: Failed to process initial captured photo ★★★");
+                            StatusChanged?.Invoke(this, new StatusEventArgs { Status = "Photo processing failed" });
+                            _isCapturing = false;
+                        }
+
+                        // Clean up the temp file
+                        try
+                        {
+                            if (File.Exists(capturedPath))
+                            {
+                                File.Delete(capturedPath);
+                                Log.Debug($"PhotoboothWorkflowService: Cleaned up temp file: {capturedPath}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Debug($"PhotoboothWorkflowService: Failed to clean up temp file: {ex.Message}");
+                        }
                     }
                     else
                     {
@@ -218,7 +320,7 @@ namespace Photobooth.Services
                 Log.Error($"PhotoboothWorkflowService: Failed to start capture workflow: {ex.Message}");
                 WorkflowError?.Invoke(this, new WorkflowErrorEventArgs { Error = ex, Operation = "StartCaptureWorkflow" });
                 _isCapturing = false;
-                _photographerInitialCapture = null; // Clear any stored capture on error
+                ClearPhotographerInitialCapture(); // Clear any stored capture on error
                 return false;
             }
         }
@@ -781,7 +883,7 @@ namespace Photobooth.Services
                 _isCapturing = false;
                 _isCountdownActive = false;
                 _countdownValue = 0;
-                _photographerInitialCapture = null; // Clear any stored capture
+                ClearPhotographerInitialCapture(); // Clear any stored capture
                 
                 // Stop any active camera operations
                 if (CurrentCamera != null && CurrentCamera.IsConnected)
@@ -818,6 +920,30 @@ namespace Photobooth.Services
             {
                 _sessionService.PhotoProcessed -= OnSessionPhotoProcessed;
                 _sessionService.SessionCompleted -= OnSessionCompleted;
+            }
+        }
+
+        /// <summary>
+        /// Clear any stored photographer initial capture
+        /// </summary>
+        private void ClearPhotographerInitialCapture()
+        {
+            if (!string.IsNullOrEmpty(_photographerInitialCapturePath))
+            {
+                try
+                {
+                    if (File.Exists(_photographerInitialCapturePath))
+                    {
+                        File.Delete(_photographerInitialCapturePath);
+                        Log.Debug($"PhotoboothWorkflowService: Deleted initial capture temp file: {_photographerInitialCapturePath}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"PhotoboothWorkflowService: Failed to delete initial capture temp file: {ex.Message}");
+                }
+
+                _photographerInitialCapturePath = null;
             }
         }
         #endregion

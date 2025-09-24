@@ -20,6 +20,7 @@ namespace Photobooth.ViewModels
 {
     public class PhotoboothTouchModernViewModel : INotifyPropertyChanged
     {
+        private readonly bool _useWorkflowPhotographerMode;
         private ModuleManager _moduleManager;
         private CameraDeviceManager _deviceManager;
         private ICameraDevice _selectedCamera;
@@ -197,8 +198,9 @@ namespace Photobooth.ViewModels
         public ICommand ClearSessionCommand { get; private set; }
         public ICommand OpenSettingsCommand { get; private set; }
         
-        public PhotoboothTouchModernViewModel()
+        public PhotoboothTouchModernViewModel(bool useWorkflowPhotographerMode = false)
         {
+            _useWorkflowPhotographerMode = useWorkflowPhotographerMode;
             InitializeViewModel();
             InitializeCommands();
             InitializeModules();
@@ -224,7 +226,7 @@ namespace Photobooth.ViewModels
             StatusMessage = "Initializing cameras...";
             
             // Subscribe to device manager events for photographer mode
-            if (_deviceManager != null && Properties.Settings.Default.PhotographerMode)
+            if (_deviceManager != null && Properties.Settings.Default.PhotographerMode && !_useWorkflowPhotographerMode)
             {
                 Log.Debug($"PhotoboothTouchModernViewModel: Enabling photographer mode - subscribing to PhotoCaptured event");
                 _deviceManager.PhotoCaptured += OnPhotographerModeCapture;
@@ -516,7 +518,7 @@ namespace Photobooth.ViewModels
             if (Properties.Settings.Default.PhotographerMode)
             {
                 Log.Debug($"PhotoboothTouchModernViewModel: Setting up photographer mode for {_selectedCamera.DeviceName}");
-                
+
                 try
                 {
                     // Configure camera for photographer mode
@@ -529,11 +531,14 @@ namespace Photobooth.ViewModels
                     
                     // Ensure CaptureInSdRam is false for all cameras
                     _selectedCamera.CaptureInSdRam = false;
-                    
-                    // Subscribe directly to camera's PhotoCaptured event
-                    _selectedCamera.PhotoCaptured += OnPhotographerModeCapture;
-                    Log.Debug("PhotoboothTouchModernViewModel: Subscribed to camera PhotoCaptured event for photographer mode");
-                    
+
+                    if (!_useWorkflowPhotographerMode)
+                    {
+                        // Subscribe directly to camera's PhotoCaptured event when handling locally
+                        _selectedCamera.PhotoCaptured += OnPhotographerModeCapture;
+                        Log.Debug("PhotoboothTouchModernViewModel: Subscribed to camera PhotoCaptured event for photographer mode");
+                    }
+
                     StatusMessage = "Photographer mode enabled - camera button will capture photos";
                 }
                 catch (Exception ex)
@@ -652,9 +657,15 @@ namespace Photobooth.ViewModels
         
         private async void OnPhotographerModeCapture(object sender, PhotoCapturedEventArgs e)
         {
+            if (_useWorkflowPhotographerMode)
+            {
+                Log.Debug("PhotoboothTouchModernViewModel: Photographer mode handled by workflow service - skipping local capture handling");
+                return;
+            }
+
             // Handle photo captured by camera's physical button in photographer mode
             if (!Properties.Settings.Default.PhotographerMode) return;
-            
+
             // Run the entire handler on a background thread to avoid blocking the camera
             await Task.Run(async () =>
             {

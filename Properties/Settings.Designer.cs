@@ -1980,6 +1980,18 @@ namespace Photobooth.Properties {
 
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Responsive")]
+        public string LiveViewBackgroundRemovalMode {
+            get {
+                return ((string)(this["LiveViewBackgroundRemovalMode"]));
+            }
+            set {
+                this["LiveViewBackgroundRemovalMode"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("0")]
         public int BackgroundRemovalEdgeRefinement {
             get {

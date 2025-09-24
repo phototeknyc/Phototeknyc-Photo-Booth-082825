@@ -10,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Runtime.InteropServices;
 using System.Windows.Threading;
 using CameraControl.Devices;
 using CameraControl.Devices.Classes;
@@ -133,6 +134,10 @@ namespace Photobooth.Pages
 
         // Optimized live view service
         private Services.OptimizedLiveViewService _optimizedLiveView;
+        private WriteableBitmap _liveViewBitmap;
+        private BackgroundRemovalService _backgroundRemovalService;
+        private VirtualBackgroundService _virtualBackgroundService;
+        private bool _isLiveViewFrameProcessing;
 
         // Template overlay performance toggle
         private bool _disableTemplateOverlay = false;
@@ -151,8 +156,12 @@ namespace Photobooth.Pages
                 }
             }
         }
+
+        private bool IsLiveViewBackgroundRemovalEnabled =>
+            Properties.Settings.Default.EnableBackgroundRemoval &&
+            Properties.Settings.Default.EnableLiveViewBackgroundRemoval;
         private ShareResult _currentShareResult;
-        
+
         // Event/Template state for UI display only
         private EventData _currentEvent;
         private TemplateData _currentTemplate;
@@ -242,6 +251,21 @@ namespace Photobooth.Pages
             _templateOverlayService = new Services.TemplateOverlayService();
             _shareService = CloudShareProvider.GetShareService();
             _sessionManager = new SessionManager();
+
+            _backgroundRemovalService = BackgroundRemovalService.Instance;
+            _virtualBackgroundService = VirtualBackgroundService.Instance;
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await _virtualBackgroundService.LoadBackgroundsAsync();
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"VirtualBackgroundService preload failed: {ex.Message}");
+                }
+            });
 
             // Initialize BackgroundSelectionService with container
             BackgroundSelectionService.Instance.SetOverlayContainer(MainGrid);
@@ -580,7 +604,7 @@ namespace Photobooth.Pages
             // Create ViewModel after services are initialized
             if (_viewModel == null)
             {
-                _viewModel = new PhotoboothTouchModernViewModel();
+                _viewModel = new PhotoboothTouchModernViewModel(useWorkflowPhotographerMode: true);
                 _viewModel.DeviceManager = _cameraManager.DeviceManager;
                 DataContext = _viewModel;
             }
@@ -3899,12 +3923,12 @@ namespace Photobooth.Pages
             }
         }
 
-        private void LiveViewTimer_Tick(object sender, EventArgs e)
+        private async void LiveViewTimer_Tick(object sender, EventArgs e)
         {
             try
             {
                 // Check if optimized live view is available and running
-                if (_optimizedLiveView != null && _optimizedLiveView.IsRunning)
+                if (_optimizedLiveView != null && _optimizedLiveView.IsRunning && !IsLiveViewBackgroundRemovalEnabled)
                 {
                     // Use optimized service for better performance
                     var frame = _optimizedLiveView.GetNextFrame();
@@ -3988,6 +4012,11 @@ namespace Photobooth.Pages
                 {
                     return;
                 }
+                else if (IsLiveViewBackgroundRemovalEnabled && _optimizedLiveView?.IsRunning == true)
+                {
+                    Log.Debug("Stopping optimized live view - background removal enabled");
+                    _optimizedLiveView.Stop();
+                }
 
                 var device = DeviceManager?.SelectedCameraDevice;
                 if (device?.IsConnected == true)
@@ -4031,7 +4060,7 @@ namespace Photobooth.Pages
 
                     if (liveViewData?.ImageData != null && liveViewData.ImageData.Length > 0)
                     {
-                        DisplayLiveView(liveViewData.ImageData);
+                        await DisplayLiveViewAsync(liveViewData);
                         if (isVideoRecording2 && _recordingFrameCounter % 100 == 0)
                         {
                             Log.Debug("[RECORDING] DisplayLiveView called successfully");
@@ -4049,20 +4078,86 @@ namespace Photobooth.Pages
             }
         }
 
-        private void DisplayLiveView(byte[] imageData)
+        private async Task DisplayLiveViewAsync(LiveViewData liveViewData)
         {
+            if (liveViewData?.ImageData == null || liveViewData.ImageData.Length == 0)
+            {
+                return;
+            }
+
+            if (_isLiveViewFrameProcessing)
+            {
+                return;
+            }
+
+            _isLiveViewFrameProcessing = true;
             var startTime = DateTime.Now;
+
             try
             {
-                // Check if we're recording for debug purposes
+                byte[] frameBytes = liveViewData.ImageData;
+
+                if (IsLiveViewBackgroundRemovalEnabled && _backgroundRemovalService != null)
+                {
+                    try
+                    {
+                        frameBytes = await _backgroundRemovalService.ProcessLiveViewFrameAsync(
+                            frameBytes,
+                            liveViewData.ImageWidth,
+                            liveViewData.ImageHeight);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"Live view background removal failed: {ex.Message}");
+                        frameBytes = liveViewData.ImageData;
+                    }
+                }
+
+                if (IsLiveViewBackgroundRemovalEnabled && _backgroundRemovalService != null &&
+                    _backgroundRemovalService.TryGetLatestFrameInfo(out int processedWidth, out int processedHeight) &&
+                    frameBytes != null && processedWidth > 0 && processedHeight > 0 &&
+                    frameBytes.Length == processedWidth * processedHeight * 4)
+                {
+                    if (_liveViewBitmap == null ||
+                        _liveViewBitmap.PixelWidth != processedWidth ||
+                        _liveViewBitmap.PixelHeight != processedHeight)
+                    {
+                        _liveViewBitmap = new WriteableBitmap(processedWidth, processedHeight, 96, 96, PixelFormats.Bgra32, null);
+                    }
+
+                    _liveViewBitmap.Lock();
+                    Marshal.Copy(frameBytes, 0, _liveViewBitmap.BackBuffer, frameBytes.Length);
+                    _liveViewBitmap.AddDirtyRect(new Int32Rect(0, 0, processedWidth, processedHeight));
+                    _liveViewBitmap.Unlock();
+
+                    if (liveViewImage != null)
+                    {
+                        liveViewImage.Source = _liveViewBitmap;
+
+                        if (idleBackgroundImage?.Visibility == Visibility.Visible)
+                        {
+                            idleBackgroundImage.Visibility = Visibility.Collapsed;
+                        }
+
+                        if (!_disableTemplateOverlay && _showTemplateOverlay && !_isDisplayingCapturedPhoto && !_isDisplayingSessionResult)
+                        {
+                            UpdateTemplateOverlay(processedWidth, processedHeight);
+                        }
+                        else if (_isDisplayingCapturedPhoto || _isDisplayingSessionResult)
+                        {
+                            templateOverlayCanvas?.Children.Clear();
+                        }
+                    }
+
+                    return;
+                }
+
                 var videoCoordinator = Services.VideoRecordingCoordinatorService.Instance;
                 bool isVideoRecording = videoCoordinator.IsRecording;
 
-                // Use System.Drawing.Bitmap for better performance (same as working project)
-                using (var ms = new MemoryStream(imageData))
+                using (var ms = new MemoryStream(frameBytes))
                 using (var bitmap = new System.Drawing.Bitmap(ms))
                 {
-                    // Convert to BitmapSource using GetHbitmap - much faster
                     var hBitmap = bitmap.GetHbitmap();
                     try
                     {
@@ -4074,42 +4169,28 @@ namespace Photobooth.Pages
 
                         bitmapSource.Freeze();
 
-                        if (isVideoRecording && _recordingFrameCounter % 100 == 0)
-                        {
-                            Log.Debug($"[RECORDING] DisplayLiveView: Bitmap {bitmap.Width}x{bitmap.Height}");
-                        }
-
                         if (liveViewImage != null)
                         {
+                            _liveViewBitmap = null;
                             liveViewImage.Source = bitmapSource;
 
-                            // Ensure background is hidden when we have live view image
                             if (idleBackgroundImage?.Visibility == Visibility.Visible)
                             {
                                 idleBackgroundImage.Visibility = Visibility.Collapsed;
                             }
 
-                            // Update template overlay if needed (only during live view, not when displaying captured photos)
                             if (!_disableTemplateOverlay && _showTemplateOverlay && !_isDisplayingCapturedPhoto && !_isDisplayingSessionResult)
                             {
                                 UpdateTemplateOverlay(bitmap.Width, bitmap.Height);
                             }
                             else if (_isDisplayingCapturedPhoto || _isDisplayingSessionResult)
                             {
-                                // Hide overlay when showing captured photos or session results
-                                if (templateOverlayCanvas != null)
-                                {
-                                    templateOverlayCanvas.Children.Clear();
-                                }
+                                templateOverlayCanvas?.Children.Clear();
                             }
 
                             if (isVideoRecording && _recordingFrameCounter % 60 == 0)
                             {
-                                Log.Debug($"[RECORDING] DisplayLiveView: Set liveViewImage.Source to new bitmap - UI should be showing live camera feed");
-
-                                // Force UI update
                                 liveViewImage.InvalidateVisual();
-                                Log.Debug($"[RECORDING] DisplayLiveView: Called InvalidateVisual() to force UI update");
                             }
                         }
                         else if (isVideoRecording)
@@ -4119,7 +4200,6 @@ namespace Photobooth.Pages
                     }
                     finally
                     {
-                        // IMPORTANT: Delete the HBitmap to prevent memory leak
                         DeleteObject(hBitmap);
                     }
                 }
@@ -4130,12 +4210,13 @@ namespace Photobooth.Pages
             }
             finally
             {
-                // Log performance metrics periodically
-                if (_fpsFrameCount % 30 == 0) // Every 30 frames
+                if (_fpsFrameCount % 30 == 0)
                 {
                     var processingTime = (DateTime.Now - startTime).TotalMilliseconds;
                     // Log.Debug($"[PERFORMANCE] DisplayLiveView processing time: {processingTime:F1}ms");
                 }
+
+                _isLiveViewFrameProcessing = false;
             }
         }
 
@@ -4148,6 +4229,12 @@ namespace Photobooth.Pages
         {
             try
             {
+                if (IsLiveViewBackgroundRemovalEnabled)
+                {
+                    Log.Debug("Skipping optimized live view start - background removal enabled");
+                    return;
+                }
+
                 if (_optimizedLiveView == null)
                 {
                     _optimizedLiveView = Services.OptimizedLiveViewService.Instance;
