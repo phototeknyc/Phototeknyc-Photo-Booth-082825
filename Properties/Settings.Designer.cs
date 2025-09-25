@@ -2097,5 +2097,29 @@ namespace Photobooth.Properties {
                 this["UpgradeRequired"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool EnableAITransformation {
+            get {
+                return ((bool)(this["EnableAITransformation"]));
+            }
+            set {
+                this["EnableAITransformation"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string ReplicateAPIToken {
+            get {
+                return ((string)(this["ReplicateAPIToken"]));
+            }
+            set {
+                this["ReplicateAPIToken"] = value;
+            }
+        }
     }
 }

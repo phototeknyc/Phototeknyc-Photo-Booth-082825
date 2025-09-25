@@ -1,0 +1,844 @@
+<UserControl x:Class="Photobooth.Controls.AITransformationOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:Photobooth.Controls"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="1200">
+
+    <UserControl.Resources>
+        <!-- Value Converter for ThumbnailPath -->
+        <local:ThumbnailPathConverter x:Key="ThumbnailPathConverter"/>
+
+        <!-- Dark Theme Colors matching SettingsOverlay -->
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#CC000000"/>
+        <SolidColorBrush x:Key="SecondaryBackgroundBrush" Color="#2A2A2A"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#4CAF50"/>
+        <SolidColorBrush x:Key="AccentSecondaryBrush" Color="#66BB6A"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E4E6EB"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B0B3B8"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#404040"/>
+
+        <!-- Touch-friendly Button Style -->
+        <Style x:Key="TouchButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="60"/>
+            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="Padding" Value="20,12"/>
+            <Setter Property="Margin" Value="8"/>
+            <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#353535"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#404040"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Category Card Style matching SettingsOverlay -->
+        <Style x:Key="CategoryCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="#2A2A2A"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#353535"/>
+                    <Setter Property="BorderBrush" Value="#4CAF50"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Template Card Style matching SettingsOverlay theme -->
+        <Style x:Key="TemplateCardStyle" TargetType="Border">
+            <Setter Property="Width" Value="180"/>
+            <Setter Property="Height" Value="Auto"/>
+            <Setter Property="MinHeight" Value="240"/>
+            <Setter Property="Background" Value="#2A2A2A"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Margin" Value="10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#353535"/>
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect Color="#4CAF50"
+                                            BlurRadius="20"
+                                            ShadowDepth="0"
+                                            Opacity="0.4"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Progress Bar Style matching SettingsOverlay theme -->
+        <Style x:Key="ModernProgressBarStyle" TargetType="ProgressBar">
+            <Setter Property="Height" Value="8"/>
+            <Setter Property="Background" Value="#404040"/>
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Grid>
+                            <Border Background="{TemplateBinding Background}"
+                                    CornerRadius="4"/>
+                            <Border x:Name="PART_Indicator"
+                                    HorizontalAlignment="Left"
+                                    CornerRadius="4">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#4CAF50" Offset="0"/>
+                                        <GradientStop Color="#66BB6A" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Main Overlay Container -->
+    <Grid x:Name="MainOverlay"
+          Background="#CC000000"
+          Visibility="Collapsed">
+
+        <!-- Animation -->
+        <Grid.Triggers>
+            <EventTrigger RoutedEvent="Grid.Loaded">
+                <BeginStoryboard>
+                    <Storyboard>
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                         From="0" To="1" Duration="0:0:0.3"/>
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+        </Grid.Triggers>
+
+        <!-- Content Panel matching SettingsOverlay -->
+        <Border Background="#2D2D30"
+                CornerRadius="20"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Margin="30,20,30,20">
+            <Border.Effect>
+                <DropShadowEffect Color="Black"
+                                  BlurRadius="25"
+                                  ShadowDepth="10"
+                                  Opacity="0.7"/>
+            </Border.Effect>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>  <!-- Header -->
+                    <RowDefinition Height="Auto"/>  <!-- Management Settings Panel -->
+                    <RowDefinition Height="*"/>     <!-- Main Content -->
+                    <RowDefinition Height="Auto"/>  <!-- Footer -->
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <Border Grid.Row="0"
+                        Background="#202020"
+                        CornerRadius="20,20,0,0"
+                        Padding="30,25">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock x:Name="HeaderTitle"
+                                     Text="AI PHOTO TRANSFORMATION"
+                                     FontSize="24"
+                                     FontWeight="Bold"
+                                     Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock x:Name="HeaderSubtitle"
+                                     Text="Select a transformation style to apply to your photo"
+                                     FontSize="14"
+                                     Foreground="{StaticResource TextSecondaryBrush}"
+                                     Margin="0,5,0,0"/>
+                        </StackPanel>
+
+                        <!-- Management Mode Toggle -->
+                        <ToggleButton Grid.Column="1"
+                                x:Name="ManagementModeToggle"
+                                Width="120" Height="35"
+                                Margin="0,0,10,0"
+                                Background="{StaticResource AccentSecondaryBrush}"
+                                Foreground="White"
+                                FontSize="14"
+                                BorderThickness="0"
+                                Click="ManagementModeToggle_Click"
+                                Cursor="Hand"
+                                Visibility="Collapsed">
+                            <ToggleButton.Style>
+                                <Style TargetType="ToggleButton">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        CornerRadius="8">
+                                                    <ContentPresenter HorizontalAlignment="Center"
+                                                                    VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                                            <Setter Property="Content" Value="Selection Mode"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="False">
+                                            <Setter Property="Content" Value="Manage"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ToggleButton.Style>
+                        </ToggleButton>
+
+                        <!-- Close Button -->
+                        <Button Grid.Column="2"
+                                x:Name="CloseButton"
+                                Content="✕"
+                                Width="40" Height="40"
+                                Background="Transparent"
+                                Foreground="{StaticResource TextSecondaryBrush}"
+                                FontSize="20"
+                                BorderThickness="0"
+                                Click="CloseButton_Click"
+                                Cursor="Hand">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="20">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- Management Settings Panel -->
+                <Border Grid.Row="1" x:Name="ManagementSettingsPanel"
+                        Background="#353535"
+                        Padding="30,15" Margin="30,0,30,10"
+                        Visibility="Collapsed">
+                    <StackPanel>
+                        <!-- Event Selection Row -->
+                        <Grid Margin="0,0,0,15">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                      Text="Managing templates for event:"
+                                      FontSize="15"
+                                      FontWeight="Medium"
+                                      Foreground="{StaticResource TextPrimaryBrush}"
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,15,0"/>
+
+                            <ComboBox Grid.Column="1"
+                                     x:Name="EventSelectionComboBox"
+                                     Height="35"
+                                     MaxWidth="400"
+                                     HorizontalAlignment="Left"
+                                     FontSize="14"
+                                     SelectionChanged="EventSelection_Changed"
+                                     Margin="0,0,15,0">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock>
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="{}{0} - {1}">
+                                                    <Binding Path="Name"/>
+                                                    <Binding Path="EventDate" StringFormat="{}{0:MMM dd, yyyy}"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+
+                        </Grid>
+
+                        <!-- First row: Enable checkbox and model selection -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox Grid.Column="0"
+                                     x:Name="EnableAITransformationCheckBox"
+                                     Content="Enable AI Transformation for this event"
+                                     FontSize="16" FontWeight="Medium"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,30,0"
+                                     Checked="EnableAITransformation_Changed"
+                                 Unchecked="EnableAITransformation_Changed"/>
+
+                            <!-- Model Selection -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="AI Model:"
+                                          FontSize="14"
+                                          Foreground="{StaticResource TextPrimaryBrush}"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,10,0"/>
+                                <ComboBox x:Name="ModelSelectionComboBox"
+                                         Width="200"
+                                         Height="30"
+                                         FontSize="14"
+                                         SelectionChanged="ModelSelection_Changed"/>
+                            </StackPanel>
+
+                            <!-- Buttons -->
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button x:Name="EditPromptsButton"
+                                       Content="Edit Prompts"
+                                       Width="115" Height="32"
+                                       FontSize="13"
+                                       Background="{StaticResource AccentBrush}"
+                                       Foreground="White"
+                                       BorderThickness="0"
+                                       Margin="0,0,8,0"
+                                       Click="EditPromptsButton_Click"
+                                       Cursor="Hand">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                   CornerRadius="6">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+
+                                <Button x:Name="AddModelButton"
+                                       Content="Add Model"
+                                       Width="115" Height="32"
+                                       FontSize="13"
+                                       Background="#4CAF50"
+                                       Foreground="White"
+                                       BorderThickness="0"
+                                       Click="AddModelButton_Click"
+                                       Cursor="Hand"
+                                       Margin="0,0,8,0">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                   CornerRadius="6">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+
+                                <Button x:Name="AddTemplateButton"
+                                       Content="➕ Template"
+                                       Width="115" Height="32"
+                                       FontSize="13"
+                                       Background="#FF6B35"
+                                       Foreground="White"
+                                       BorderThickness="0"
+                                       Click="AddTemplate_Click"
+                                       Cursor="Hand"
+                                       Margin="0,0,8,0"
+                                       ToolTip="Add new AI template">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                   CornerRadius="6">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+
+                                <Button x:Name="DeleteTemplateButton"
+                                       Content="🗑️ Delete"
+                                       Width="100" Height="32"
+                                       FontSize="13"
+                                       Background="#F44336"
+                                       Foreground="White"
+                                       BorderThickness="0"
+                                       Click="DeleteTemplate_Click"
+                                       Cursor="Hand"
+                                       ToolTip="Delete selected templates">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                   CornerRadius="6">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Second row: Other checkboxes -->
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox Grid.Column="0" x:Name="AutoApplyDefaultCheckBox"
+                                     Content="Auto-apply default template"
+                                     FontSize="14"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     IsEnabled="{Binding IsChecked, ElementName=EnableAITransformationCheckBox}"
+                                     Checked="AutoApplyDefault_Changed"
+                                     Unchecked="AutoApplyDefault_Changed"
+                                     Margin="0,0,30,0"/>
+
+                            <CheckBox Grid.Column="1" x:Name="ShowSelectionOverlayCheckBox"
+                                     Content="Show selection overlay"
+                                     FontSize="14"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     IsEnabled="{Binding IsChecked, ElementName=EnableAITransformationCheckBox}"
+                                     Checked="ShowSelectionOverlay_Changed"
+                                     Unchecked="ShowSelectionOverlay_Changed"
+                                     Margin="0,0,30,0"/>
+
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <ToggleButton x:Name="FilterSelectedToggle"
+                                            Width="145" Height="32"
+                                            FontSize="12"
+                                            Margin="0,0,8,0"
+                                            Cursor="Hand"
+                                            Checked="FilterSelected_Changed"
+                                            Unchecked="FilterSelected_Changed"
+                                            ToolTip="Toggle between showing all templates and only those selected for this event">
+                                    <ToggleButton.Style>
+                                        <Style TargetType="ToggleButton">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ToggleButton">
+                                                        <Border x:Name="Border"
+                                                               Background="#9C27B0"
+                                                               CornerRadius="6">
+                                                            <ContentPresenter HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsChecked" Value="True">
+                                                                <Setter TargetName="Border" Property="Background" Value="#2196F3"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter Property="Content" Value="✅ Event Selected"/>
+                                                </Trigger>
+                                                <Trigger Property="IsChecked" Value="False">
+                                                    <Setter Property="Content" Value="📋 All Templates"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ToggleButton.Style>
+                                </ToggleButton>
+
+                                <Button Content="Select All" Width="115" Height="32"
+                                       Background="#4CAF50"
+                                       Foreground="White" BorderThickness="0"
+                                       FontSize="13"
+                                       Click="SelectAllButton_Click" Margin="0,0,8,0"
+                                       Cursor="Hand">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                   CornerRadius="6">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                <Button Content="Deselect All" Width="115" Height="32"
+                                       Background="#757575"
+                                       Foreground="White" BorderThickness="0"
+                                       FontSize="13"
+                                       Click="DeselectAllButton_Click"
+                                       Cursor="Hand">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                   CornerRadius="6">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Main Content Area -->
+                <Grid Grid.Row="2" Margin="30,20" x:Name="MainContentGrid">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Category List -->
+                    <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                        <TextBlock Text="CATEGORIES"
+                                 FontSize="12"
+                                 FontWeight="Bold"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 Margin="0,0,0,15"/>
+
+                        <ItemsControl x:Name="CategoryList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource CategoryCardStyle}"
+                                            Height="50"
+                                            Margin="0,5"
+                                            MouseLeftButtonDown="CategoryCard_Click"
+                                            Tag="{Binding Id}">
+                                        <Grid Margin="15,0">
+                                            <TextBlock Text="{Binding Name}"
+                                                     VerticalAlignment="Center"
+                                                     FontSize="14"
+                                                     Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- Template Grid -->
+                    <Grid Grid.Column="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Templates ScrollViewer -->
+                        <ScrollViewer Grid.Row="0"
+                                    VerticalScrollBarVisibility="Auto"
+                                    HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl x:Name="TemplateGrid">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource TemplateCardStyle}"
+                                                MouseLeftButtonDown="TemplateCard_Click"
+                                                Tag="{Binding}">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="140"/>
+                                                    <RowDefinition Height="*"/>
+                                                </Grid.RowDefinitions>
+
+                                                <!-- Template Thumbnail -->
+                                                <Border Grid.Row="0"
+                                                        Background="#404040"
+                                                        CornerRadius="12,12,0,0">
+                                                    <Grid>
+                                                        <!-- Default icon when no thumbnail -->
+                                                        <TextBlock Text="🎨"
+                                                                 FontSize="48"
+                                                                 HorizontalAlignment="Center"
+                                                                 VerticalAlignment="Center"
+                                                                 Opacity="0.5" />
+
+                                                        <!-- Sample Image -->
+                                                        <Image Source="{Binding ThumbnailPath, Converter={StaticResource ThumbnailPathConverter}}"
+                                                             Stretch="UniformToFill"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center"/>
+
+                                                        <!-- Management Mode: Upload Button -->
+                                                        <Button x:Name="UploadThumbnailButton"
+                                                               Content="📷"
+                                                               FontSize="20"
+                                                               Width="40" Height="40"
+                                                               Background="#CC000000"
+                                                               Foreground="White"
+                                                               BorderThickness="0"
+                                                               HorizontalAlignment="Right"
+                                                               VerticalAlignment="Top"
+                                                               Margin="5"
+                                                               Click="UploadThumbnail_Click"
+                                                               Tag="{Binding}"
+                                                               ToolTip="Upload sample image"/>
+
+                                                        <!-- Management Mode: Selection Checkbox -->
+                                                        <Grid HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8">
+                                                            <Border Background="#CC000000" CornerRadius="4" Padding="4">
+                                                                <CheckBox x:Name="TemplateSelectionCheckBox"
+                                                                         Checked="TemplateCheckBox_Changed"
+                                                                         Unchecked="TemplateCheckBox_Changed"
+                                                                         Tag="{Binding Id}"
+                                                                         ToolTip="Include in event"/>
+                                                            </Border>
+                                                        </Grid>
+
+                                                        <!-- Management Mode: Default Radio Button -->
+                                                        <Grid HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8">
+                                                            <Border Background="#CC000000" CornerRadius="4" Padding="4">
+                                                                <RadioButton x:Name="DefaultTemplateRadio"
+                                                                            GroupName="DefaultTemplate"
+                                                                            Checked="DefaultRadioButton_Changed"
+                                                                            Tag="{Binding Id}"
+                                                                            ToolTip="Set as default"
+                                                                            Foreground="{StaticResource AccentBrush}"/>
+                                                            </Border>
+                                                        </Grid>
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Template Info -->
+                                                <Grid Grid.Row="1" Margin="8">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <!-- Normal View - Just template info -->
+                                                    <StackPanel Grid.Row="0" x:Name="TemplateInfoPanel">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                 FontSize="14"
+                                                                 FontWeight="SemiBold"
+                                                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                                                 TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Description}"
+                                                                 FontSize="11"
+                                                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                                                 TextTrimming="CharacterEllipsis"
+                                                                 TextWrapping="Wrap"
+                                                                 MaxHeight="25"
+                                                                 Margin="0,2,0,0"/>
+                                                        <!-- Show negative prompt if exists -->
+                                                        <TextBlock Text="{Binding NegativePrompt, StringFormat='❌ Avoid: {0}'}"
+                                                                 FontSize="10"
+                                                                 Foreground="#FF9999"
+                                                                 TextTrimming="CharacterEllipsis"
+                                                                 TextWrapping="Wrap"
+                                                                 MaxHeight="20"
+                                                                 Margin="0,2,0,0"
+                                                                 ToolTip="{Binding NegativePrompt}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding NegativePrompt}" Value="{x:Null}">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding NegativePrompt}" Value="">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </StackPanel>
+
+                                                    <!-- Management Mode - Model & Prompt Controls -->
+                                                    <StackPanel Grid.Row="1" x:Name="ManagementControls"
+                                                              Margin="0,4,0,0">
+                                                        <!-- Model Selection -->
+                                                        <ComboBox x:Name="TemplateModelCombo"
+                                                                 Height="24"
+                                                                 FontSize="11"
+                                                                 Margin="0,2,0,2"
+                                                                 SelectionChanged="TemplateModel_Changed"
+                                                                 Tag="{Binding Id}"
+                                                                 ToolTip="Select AI model for this template"/>
+
+                                                        <!-- Edit Prompt Button -->
+                                                        <Button x:Name="EditTemplatePromptBtn"
+                                                               Content="✏️ Edit Prompt"
+                                                               Height="22"
+                                                               FontSize="10"
+                                                               Background="{StaticResource AccentBrush}"
+                                                               Foreground="White"
+                                                               BorderThickness="0"
+                                                               Click="EditTemplatePrompt_Click"
+                                                               Tag="{Binding}"
+                                                               Cursor="Hand"
+                                                               Margin="0,0,0,2"
+                                                               ToolTip="Customize prompt for this template">
+                                                            <Button.Template>
+                                                                <ControlTemplate TargetType="Button">
+                                                                    <Border Background="{TemplateBinding Background}"
+                                                                           CornerRadius="3">
+                                                                        <ContentPresenter HorizontalAlignment="Center"
+                                                                                       VerticalAlignment="Center"/>
+                                                                    </Border>
+                                                                </ControlTemplate>
+                                                            </Button.Template>
+                                                        </Button>
+
+                                                        <!-- Test Template Button -->
+                                                        <Button x:Name="TestTemplateBtn"
+                                                               Content="🖼️ Test Photo"
+                                                               Height="22"
+                                                               FontSize="10"
+                                                               Background="#FF6B6B"
+                                                               Foreground="White"
+                                                               BorderThickness="0"
+                                                               Click="TestTemplate_Click"
+                                                               Tag="{Binding}"
+                                                               Cursor="Hand"
+                                                               ToolTip="Test this template with a photo">
+                                                            <Button.Template>
+                                                                <ControlTemplate TargetType="Button">
+                                                                    <Border Background="{TemplateBinding Background}"
+                                                                           CornerRadius="3">
+                                                                        <ContentPresenter HorizontalAlignment="Center"
+                                                                                       VerticalAlignment="Center"/>
+                                                                    </Border>
+                                                                </ControlTemplate>
+                                                            </Button.Template>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- Progress Panel (Hidden by default) -->
+                        <Border Grid.Row="0"
+                                x:Name="ProgressPanel"
+                                Background="#CC000000"
+                                Visibility="Collapsed">
+                            <StackPanel VerticalAlignment="Center"
+                                      HorizontalAlignment="Center"
+                                      MaxWidth="400">
+                                <TextBlock Text="Processing Transformation..."
+                                         FontSize="18"
+                                         FontWeight="SemiBold"
+                                         Foreground="{StaticResource TextPrimaryBrush}"
+                                         HorizontalAlignment="Center"
+                                         Margin="0,0,0,20"/>
+
+                                <ProgressBar x:Name="TransformationProgress"
+                                           Style="{StaticResource ModernProgressBarStyle}"
+                                           Height="8"
+                                           IsIndeterminate="True"/>
+
+                                <TextBlock x:Name="ProgressStatus"
+                                         Text="Applying AI transformation..."
+                                         FontSize="12"
+                                         Foreground="{StaticResource TextSecondaryBrush}"
+                                         HorizontalAlignment="Center"
+                                         Margin="0,15,0,0"/>
+
+                                <Button Content="Cancel"
+                                       x:Name="CancelButton"
+                                       Width="120"
+                                       Height="40"
+                                       Margin="0,30,0,0"
+                                       HorizontalAlignment="Center"
+                                       Click="CancelButton_Click"
+                                       Style="{StaticResource TouchButtonStyle}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+
+                <!-- Action Buttons -->
+                <Border Grid.Row="3"
+                        Background="#202020"
+                        CornerRadius="0,0,20,20"
+                        Padding="30,20">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Selected Template Info -->
+                        <StackPanel Grid.Column="0"
+                                  VerticalAlignment="Center">
+                            <TextBlock x:Name="SelectedTemplateText"
+                                     Text="No template selected"
+                                     FontSize="14"
+                                     Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <!-- Action Buttons -->
+                        <StackPanel Grid.Column="1"
+                                  Orientation="Horizontal">
+                            <Button x:Name="ApplyButton"
+                                   Content="Apply Transformation"
+                                   IsEnabled="False"
+                                   Click="ApplyButton_Click"
+                                   Style="{StaticResource TouchButtonStyle}">
+                                <Button.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#4CAF50" Offset="0"/>
+                                        <GradientStop Color="#66BB6A" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Button.Background>
+                            </Button>
+
+                            <Button x:Name="SkipButton"
+                                   Content="Skip"
+                                   Click="SkipButton_Click"
+                                   Style="{StaticResource TouchButtonStyle}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

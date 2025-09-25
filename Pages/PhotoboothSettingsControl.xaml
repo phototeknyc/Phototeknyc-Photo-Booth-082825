@@ -2110,6 +2110,201 @@
                 </StackPanel>
             </Expander>
 
+            <!-- AI Transformation Settings -->
+            <Expander Header="AI Transformation Settings" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎨" FontSize="18" Margin="0,0,15,0"/>
+                            <TextBlock Text="AI Transformation Settings" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <StackPanel Margin="30,20">
+                    <!-- Modern Settings Card -->
+                    <Border Background="#1E2235" CornerRadius="10" Padding="20">
+                        <StackPanel>
+                            <!-- Enable AI Transformation -->
+                            <StackPanel Margin="0,0,0,20">
+                                <CheckBox Name="EnableAITransformationCheckbox"
+                                        IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=EnableAITransformation}"
+                                        Content="Enable AI Photo Transformation"
+                                        Foreground="#B0B3B8"/>
+                                <TextBlock Text="Transform photos using AI to apply artistic styles, character transformations, and scene changes"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="25,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- API Token Configuration -->
+                            <StackPanel Margin="0,0,0,20">
+                                <TextBlock Text="Replicate API Token" FontWeight="SemiBold" FontSize="14"
+                                         Foreground="#E4E6EB" Margin="0,0,0,10"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <PasswordBox Name="ReplicateAPITokenBox"
+                                               Grid.Column="0"
+                                               IsEnabled="{Binding ElementName=EnableAITransformationCheckbox, Path=IsChecked}"
+                                               Margin="0,0,10,0"
+                                               PasswordChanged="ReplicateAPITokenBox_PasswordChanged"/>
+                                    <Button Grid.Column="1" Content="Test API"
+                                          Click="TestAIAPI_Click"
+                                          IsEnabled="{Binding ElementName=EnableAITransformationCheckbox, Path=IsChecked}"
+                                          Width="80" Height="32"/>
+                                </Grid>
+                                <TextBlock Text="Get your API token from replicate.com (approximately $0.012 per transformation)"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Quality Settings -->
+                            <StackPanel Margin="0,0,0,20">
+                                <TextBlock Text="Transformation Quality" FontWeight="SemiBold" FontSize="14"
+                                         Foreground="#E4E6EB" Margin="0,0,0,10"/>
+                                <ComboBox Name="AITransformationQualityCombo"
+                                        SelectedValue="{Binding Source={x:Static properties:Settings.Default}, Path=AITransformationQuality}"
+                                        IsEnabled="{Binding ElementName=EnableAITransformationCheckbox, Path=IsChecked}"
+                                        Width="200" HorizontalAlignment="Left">
+                                    <ComboBoxItem Content="Fast (Lower Quality)" Tag="Fast"/>
+                                    <ComboBoxItem Content="Medium (Balanced)" Tag="Medium"/>
+                                    <ComboBoxItem Content="High (Best Quality)" Tag="High"/>
+                                </ComboBox>
+                                <TextBlock Text="Higher quality provides better results but takes longer to process"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Default Category -->
+                            <StackPanel Margin="0,0,0,20">
+                                <TextBlock Text="Default Template Category" FontWeight="SemiBold" FontSize="14"
+                                         Foreground="#E4E6EB" Margin="0,0,0,10"/>
+                                <ComboBox Name="DefaultAITemplateCategoryCombo"
+                                        SelectedValue="{Binding Source={x:Static properties:Settings.Default}, Path=DefaultAITemplateCategory}"
+                                        IsEnabled="{Binding ElementName=EnableAITransformationCheckbox, Path=IsChecked}"
+                                        Width="200" HorizontalAlignment="Left">
+                                    <ComboBoxItem Content="Characters" Tag="Characters"/>
+                                    <ComboBoxItem Content="Scenery" Tag="Scenery"/>
+                                    <ComboBoxItem Content="Artistic Styles" Tag="Artistic Styles"/>
+                                    <ComboBoxItem Content="Fantasy" Tag="Fantasy"/>
+                                    <ComboBoxItem Content="Professional" Tag="Professional"/>
+                                    <ComboBoxItem Content="Seasonal" Tag="Seasonal"/>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <!-- Preview Settings -->
+                            <StackPanel Margin="0,0,0,20">
+                                <CheckBox Name="ShowAITransformationPreviewCheckbox"
+                                        IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=ShowAITransformationPreview}"
+                                        Content="Show Transformation Preview"
+                                        IsEnabled="{Binding ElementName=EnableAITransformationCheckbox, Path=IsChecked}"
+                                        Foreground="#B0B3B8"/>
+                                <TextBlock Text="Display a preview of the transformation before applying"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="25,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Cache Settings -->
+                            <StackPanel Margin="0,0,0,20">
+                                <CheckBox Name="AITransformationCacheEnabledCheckbox"
+                                        IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=AITransformationCacheEnabled}"
+                                        Content="Enable Transformation Cache"
+                                        IsEnabled="{Binding ElementName=EnableAITransformationCheckbox, Path=IsChecked}"
+                                        Foreground="#B0B3B8"/>
+                                <TextBlock Text="Cache transformation results to speed up repeated transformations"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="25,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Timeout Settings -->
+                            <StackPanel Margin="0,0,0,20">
+                                <TextBlock Text="Transformation Timeout (seconds)" FontWeight="SemiBold" FontSize="14"
+                                         Foreground="#E4E6EB" Margin="0,0,0,10"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="60"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Name="AITransformationTimeoutSlider"
+                                          Grid.Column="0"
+                                          Value="{Binding Source={x:Static properties:Settings.Default}, Path=AITransformationTimeout}"
+                                          Minimum="30" Maximum="120" TickFrequency="10" IsSnapToTickEnabled="True"
+                                          IsEnabled="{Binding ElementName=EnableAITransformationCheckbox, Path=IsChecked}"/>
+                                    <TextBlock Grid.Column="1"
+                                             Text="{Binding ElementName=AITransformationTimeoutSlider, Path=Value, StringFormat='{}{0:F0}s'}"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                                             Foreground="#B0B3B8"/>
+                                </Grid>
+                                <TextBlock Text="Maximum time to wait for transformation to complete"
+                                         TextWrapping="Wrap" FontSize="11" Opacity="0.7"
+                                         Foreground="#B0B3B8" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Management Buttons -->
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <Button Content="Manage AI Templates"
+                                      Click="ManageAITemplates_Click"
+                                      IsEnabled="{Binding ElementName=EnableAITransformationCheckbox, Path=IsChecked}"
+                                      Width="180" Height="36" Margin="0,0,10,0">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Background">
+                                                <Setter.Value>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#667EEA" Offset="0"/>
+                                                        <GradientStop Color="#764BA2" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Setter.Value>
+                                            </Setter>
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="FontWeight" Value="Medium"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="{TemplateBinding Background}"
+                                                              CornerRadius="8">
+                                                            <ContentPresenter HorizontalAlignment="Center"
+                                                                            VerticalAlignment="Center"/>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+
+                                <Button Content="Load Sample Templates"
+                                      Click="LoadSampleAITemplates_Click"
+                                      IsEnabled="{Binding ElementName=EnableAITransformationCheckbox, Path=IsChecked}"
+                                      Width="180" Height="36">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Background" Value="#2A2E47"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="FontWeight" Value="Medium"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="{TemplateBinding Background}"
+                                                              CornerRadius="8">
+                                                            <ContentPresenter HorizontalAlignment="Center"
+                                                                            VerticalAlignment="Center"/>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Expander>
+
             <!-- Print Settings -->
             <Expander Header="Print Settings" IsExpanded="False" Style="{StaticResource SettingsExpanderStyle}">
                 <Expander.HeaderTemplate>

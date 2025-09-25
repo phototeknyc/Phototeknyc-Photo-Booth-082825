@@ -329,6 +329,13 @@ namespace Photobooth.Pages
                     BackgroundRemovalEdgeRefinementSlider.Value = Properties.Settings.Default.BackgroundRemovalEdgeRefinement;
                     System.Diagnostics.Debug.WriteLine($"Loaded BackgroundRemovalEdgeRefinement: {Properties.Settings.Default.BackgroundRemovalEdgeRefinement}");
                 }
+
+                // Load AI transformation settings
+                if (ReplicateAPITokenBox != null)
+                {
+                    // Load the API token from settings (when Properties.Settings.Default.ReplicateAPIToken is available)
+                    // ReplicateAPITokenBox.Password = Properties.Settings.Default.ReplicateAPIToken ?? ""; // TODO: Uncomment after Settings.Designer.cs is regenerated
+                }
                 
                 // Load filter settings
                 enableFiltersCheckBox.IsChecked = Properties.Settings.Default.EnableFilters;
@@ -5599,6 +5606,141 @@ NOTES:
             {
                 MessageBox.Show($"Error opening background manager: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ReplicateAPITokenBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            var passwordBox = sender as PasswordBox;
+            if (passwordBox != null)
+            {
+                // Save the password to settings
+                // Properties.Settings.Default.ReplicateAPIToken = passwordBox.Password; // TODO: Uncomment after Settings.Designer.cs is regenerated
+                // Properties.Settings.Default.Save();
+            }
+        }
+
+        private void TestAIAPI_Click(object sender, RoutedEventArgs e)
+        {
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var aiService = Services.AITransformationService.Instance;
+
+                    // Get API token from the password box
+                    string apiToken = "";
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        apiToken = ReplicateAPITokenBox.Password;
+                    });
+
+                    if (string.IsNullOrEmpty(apiToken))
+                    {
+                        await Dispatcher.InvokeAsync(() =>
+                        {
+                            MessageBox.Show("Please enter your Replicate API token first.",
+                                "No API Token", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        });
+                        return;
+                    }
+
+                    bool success = await aiService.InitializeAsync(apiToken);
+
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        if (success)
+                        {
+                            MessageBox.Show("API connection successful! You can now use AI transformations.",
+                                "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
+                        else
+                        {
+                            MessageBox.Show("Failed to connect to Replicate API. Please check your token.",
+                                "Connection Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        MessageBox.Show($"Error testing API: {ex.Message}",
+                            "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    });
+                }
+            });
+        }
+
+        private void ManageAITemplates_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Open the AI template management window in fullscreen
+                var templateWindow = new Window
+                {
+                    Title = "Manage AI Transformation Templates",
+                    WindowState = WindowState.Maximized,
+                    WindowStyle = WindowStyle.None,
+                    ResizeMode = ResizeMode.NoResize,
+                    Topmost = true,
+                    Background = new SolidColorBrush(Color.FromArgb(230, 0, 0, 0))
+                };
+
+                // Add ESC key handler to close
+                templateWindow.KeyDown += (winSender, keyArgs) =>
+                {
+                    if (keyArgs.Key == Key.Escape)
+                    {
+                        templateWindow.Close();
+                    }
+                };
+
+                // Create a simple management UI
+                var grid = new Grid();
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+                // Header
+                var header = new TextBlock
+                {
+                    Text = "AI Transformation Templates",
+                    FontSize = 24,
+                    FontWeight = FontWeights.Bold,
+                    Margin = new Thickness(20, 20, 20, 10)
+                };
+                Grid.SetRow(header, 0);
+                grid.Children.Add(header);
+
+                // Template overlay for management
+                var overlayControl = new AITransformationOverlay();
+                Grid.SetRow(overlayControl, 1);
+                grid.Children.Add(overlayControl);
+
+                templateWindow.Content = grid;
+                templateWindow.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening template manager: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void LoadSampleAITemplates_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var database = Database.AITemplateDatabase.Instance;
+                database.InsertSampleTemplates();
+
+                MessageBox.Show("Sample AI transformation templates have been loaded successfully!",
+                    "Templates Loaded", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading sample templates: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

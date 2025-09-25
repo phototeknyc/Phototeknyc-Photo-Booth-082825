@@ -37,7 +37,8 @@ namespace Photobooth.Services
         public enum ModelType
         {
             MODNet,         // ~25MB - fast, optimized for humans
-            PPLiteSeg       // ~32MB - ultra-fast, lightweight segmentation
+            PPLiteSeg,      // ~32MB - ultra-fast, lightweight segmentation
+            RVMMobileNetV3  // ~15MB - RVM with MobileNetV3 backbone, extremely fast
         }
 
         public class ModelInfo
@@ -81,6 +82,19 @@ namespace Photobooth.Services
                 NormStd = new[] { 0.5f, 0.5f, 0.5f },
                 InputName = "x",  // PP-LiteSeg uses 'x' as input name
                 OutputName = "save_infer_model/scale_0.tmp_1"  // PP-LiteSeg output name
+            },
+            [ModelType.RVMMobileNetV3] = new ModelInfo
+            {
+                Name = "RVM-MobileNetV3",
+                FileName = "rvm_mobilenetv3_fp32.onnx",
+                Description = "Extremely fast RVM with MobileNetV3 backbone",
+                InputSize = 256,  // Smaller input for maximum speed
+                SpeedMultiplier = 10.0f,  // Much faster than MODNet
+                RequiresNormalization = false,  // RVM doesn't require normalization
+                NormMean = null,
+                NormStd = null,
+                InputName = "src",  // RVM uses 'src' as input
+                OutputName = "pha"  // RVM outputs alpha matte directly
             }
         };
 
@@ -89,13 +103,19 @@ namespace Photobooth.Services
         /// </summary>
         public ModelType GetRecommendedModel(BackgroundRemovalQuality quality)
         {
-            // Check if PP-LiteSeg is available first - it's the fastest
+            // Check for RVM-MobileNetV3 first - it's the fastest and most compatible
+            if (IsModelAvailable(ModelType.RVMMobileNetV3))
+            {
+                return ModelType.RVMMobileNetV3;
+            }
+
+            // Check if PP-LiteSeg is available - fast but has compatibility issues
             if (IsModelAvailable(ModelType.PPLiteSeg))
             {
                 return ModelType.PPLiteSeg;
             }
 
-            // Fallback to MODNet if PP-LiteSeg not available
+            // Fallback to MODNet if others not available
             return ModelType.MODNet;
         }
 

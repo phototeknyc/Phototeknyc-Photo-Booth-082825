@@ -154,6 +154,18 @@ namespace Photobooth.Services
             public string DefaultBackground { get; set; }
             public bool UseGPU { get; set; }
         }
+
+        public class AITransformationSettings
+        {
+            public bool EnableAITransformation { get; set; }
+            public string ReplicateAPIToken { get; set; }
+            public string AITransformationQuality { get; set; }
+            public int AITransformationTimeout { get; set; }
+            public bool AITransformationCacheEnabled { get; set; }
+            public string DefaultAITemplateCategory { get; set; }
+            public string DefaultAITemplate { get; set; }
+            public bool ShowAITransformationPreview { get; set; }
+        }
         #endregion
         
         #region Properties
@@ -167,7 +179,8 @@ namespace Photobooth.Services
         private RetakeSettings _retakeSettings;
         private StorageSettings _storageSettings;
         private BackgroundRemovalSettings _backgroundRemovalSettings;
-        
+        private AITransformationSettings _aiTransformationSettings;
+
         public SessionSettings Session
         {
             get => _sessionSettings;
@@ -234,6 +247,12 @@ namespace Photobooth.Services
             get => _backgroundRemovalSettings;
             set { _backgroundRemovalSettings = value; OnPropertyChanged(); }
         }
+
+        public AITransformationSettings AITransformation
+        {
+            get => _aiTransformationSettings;
+            set { _aiTransformationSettings = value; OnPropertyChanged(); }
+        }
         #endregion
         
         private SettingsManagementService()
@@ -244,6 +263,24 @@ namespace Photobooth.Services
         /// <summary>
         /// Load all settings from Properties.Settings.Default
         /// </summary>
+        public void RefreshAISettings()
+        {
+            try
+            {
+                // Reload AI settings from Properties.Settings
+                if (_aiTransformationSettings == null)
+                    _aiTransformationSettings = new AITransformationSettings();
+
+                _aiTransformationSettings.ReplicateAPIToken = Properties.Settings.Default.ReplicateAPIToken;
+                _aiTransformationSettings.EnableAITransformation = Properties.Settings.Default.EnableAITransformation;
+                Log.Debug($"SettingsManagementService: Refreshed AI settings - Token: {(!string.IsNullOrEmpty(_aiTransformationSettings.ReplicateAPIToken) ? $"YES (length: {_aiTransformationSettings.ReplicateAPIToken.Length})" : "NO/EMPTY")}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsManagementService: Error refreshing AI settings: {ex.Message}");
+            }
+        }
+
         public void LoadSettings()
         {
             try
@@ -348,6 +385,22 @@ namespace Photobooth.Services
 
                 Log.Debug($"SettingsManagementService: Loaded background removal settings - Enabled: {_backgroundRemovalSettings.EnableBackgroundRemoval}, LiveView: {_backgroundRemovalSettings.EnableLiveViewRemoval}");
 
+                // AI Transformation Settings
+                _aiTransformationSettings = new AITransformationSettings
+                {
+                    EnableAITransformation = Properties.Settings.Default.EnableAITransformation,
+                    ReplicateAPIToken = Properties.Settings.Default.ReplicateAPIToken,
+                    AITransformationQuality = "Medium",  // Default until setting is added
+                    AITransformationTimeout = 60,  // Default until setting is added
+                    AITransformationCacheEnabled = true,  // Default until setting is added
+                    DefaultAITemplateCategory = "Characters",  // Default until setting is added
+                    DefaultAITemplate = "None",  // Default until setting is added
+                    ShowAITransformationPreview = true  // Default until setting is added
+                };
+
+                Log.Debug($"SettingsManagementService: Loaded AI transformation settings - Enabled: {_aiTransformationSettings.EnableAITransformation}");
+                Log.Debug($"SettingsManagementService: API Token loaded: {(!string.IsNullOrEmpty(_aiTransformationSettings.ReplicateAPIToken) ? $"YES (length: {_aiTransformationSettings.ReplicateAPIToken.Length}, ends with: ...{_aiTransformationSettings.ReplicateAPIToken.Substring(Math.Max(0, _aiTransformationSettings.ReplicateAPIToken.Length - 4))})" : "NO/EMPTY")}");
+
                 // Sharing Settings
                 _sharingSettings = new SharingSettings
                 {
@@ -444,6 +497,17 @@ namespace Photobooth.Services
                 Properties.Settings.Default.BackgroundRemovalEdgeRefinement = _backgroundRemovalSettings.EdgeRefinement;
                 Properties.Settings.Default.DefaultVirtualBackground = _backgroundRemovalSettings.DefaultBackground;
                 Properties.Settings.Default.BackgroundRemovalUseGPU = _backgroundRemovalSettings.UseGPU;
+
+                // AI Transformation Settings
+                Properties.Settings.Default.EnableAITransformation = _aiTransformationSettings.EnableAITransformation;
+                Properties.Settings.Default.ReplicateAPIToken = _aiTransformationSettings.ReplicateAPIToken;
+                // TODO: Add these settings to Settings.settings file
+                // Properties.Settings.Default.AITransformationQuality = _aiTransformationSettings.AITransformationQuality;
+                // Properties.Settings.Default.AITransformationTimeout = _aiTransformationSettings.AITransformationTimeout;
+                // Properties.Settings.Default.AITransformationCacheEnabled = _aiTransformationSettings.AITransformationCacheEnabled;
+                // Properties.Settings.Default.DefaultAITemplateCategory = _aiTransformationSettings.DefaultAITemplateCategory;
+                // Properties.Settings.Default.DefaultAITemplate = _aiTransformationSettings.DefaultAITemplate;
+                // Properties.Settings.Default.ShowAITransformationPreview = _aiTransformationSettings.ShowAITransformationPreview;
 
                 // Sharing Settings
                 // Sharing settings might be stored elsewhere or use different property names
@@ -556,6 +620,75 @@ namespace Photobooth.Services
                         });
 
                         Log.Debug($"SettingsManagementService: Successfully updated BackgroundRemoval.{settingName} to {value}");
+                        return;
+                    }
+                }
+
+                // Special handling for AITransformation settings
+                if (category == "AITransformation")
+                {
+                    bool handled = true;
+                    var oldValue = "";
+
+                    switch (settingName)
+                    {
+                        case "EnableAITransformation":
+                            oldValue = _aiTransformationSettings.EnableAITransformation.ToString();
+                            _aiTransformationSettings.EnableAITransformation = Convert.ToBoolean(value);
+                            Properties.Settings.Default.EnableAITransformation = Convert.ToBoolean(value);
+                            Properties.Settings.Default.Save();
+                            break;
+                        case "ReplicateAPIToken":
+                            oldValue = _aiTransformationSettings.ReplicateAPIToken;
+                            _aiTransformationSettings.ReplicateAPIToken = value?.ToString();
+                            Properties.Settings.Default.ReplicateAPIToken = value?.ToString();
+                            Properties.Settings.Default.Save();
+                            Log.Debug($"SettingsManagementService: Saved API Token - Length: {value?.ToString()?.Length ?? 0}");
+                            Log.Debug($"SettingsManagementService: Token saved to Properties.Settings: {!string.IsNullOrEmpty(Properties.Settings.Default.ReplicateAPIToken)}");
+                            break;
+                        case "AITransformationQuality":
+                            oldValue = _aiTransformationSettings.AITransformationQuality;
+                            _aiTransformationSettings.AITransformationQuality = value?.ToString();
+                            // TODO: Uncomment after Settings.Designer.cs is regenerated
+                            // Properties.Settings.Default.AITransformationQuality = value?.ToString();
+                            break;
+                        case "AITransformationTimeout":
+                            oldValue = _aiTransformationSettings.AITransformationTimeout.ToString();
+                            _aiTransformationSettings.AITransformationTimeout = Convert.ToInt32(value);
+                            // TODO: Uncomment after Settings.Designer.cs is regenerated
+                            // Properties.Settings.Default.AITransformationTimeout = Convert.ToInt32(value);
+                            break;
+                        case "AITransformationCacheEnabled":
+                            oldValue = _aiTransformationSettings.AITransformationCacheEnabled.ToString();
+                            _aiTransformationSettings.AITransformationCacheEnabled = Convert.ToBoolean(value);
+                            // TODO: Uncomment after Settings.Designer.cs is regenerated
+                            // Properties.Settings.Default.AITransformationCacheEnabled = Convert.ToBoolean(value);
+                            break;
+                        case "ShowAITransformationPreview":
+                            oldValue = _aiTransformationSettings.ShowAITransformationPreview.ToString();
+                            _aiTransformationSettings.ShowAITransformationPreview = Convert.ToBoolean(value);
+                            // TODO: Uncomment after Settings.Designer.cs is regenerated
+                            // Properties.Settings.Default.ShowAITransformationPreview = Convert.ToBoolean(value);
+                            break;
+                        default:
+                            handled = false;
+                            break;
+                    }
+
+                    if (handled)
+                    {
+                        Properties.Settings.Default.Save();
+
+                        // Notify
+                        SettingChanged?.Invoke(this, new SettingChangedEventArgs
+                        {
+                            Category = category,
+                            SettingName = settingName,
+                            OldValue = oldValue,
+                            NewValue = value
+                        });
+
+                        Log.Debug($"SettingsManagementService: Successfully updated AITransformation.{settingName} to {value}");
                         return;
                     }
                 }
@@ -743,6 +876,18 @@ namespace Photobooth.Services
                 DefaultBackground = "",
                 UseGPU = false
             };
+
+            _aiTransformationSettings = new AITransformationSettings
+            {
+                EnableAITransformation = false,
+                ReplicateAPIToken = "",
+                AITransformationQuality = "Medium",
+                AITransformationTimeout = 60,
+                AITransformationCacheEnabled = true,
+                DefaultAITemplateCategory = "Characters",
+                DefaultAITemplate = "None",
+                ShowAITransformationPreview = true
+            };
             
             _sharingSettings = new SharingSettings
             {
@@ -883,6 +1028,23 @@ namespace Photobooth.Services
                 },
                 new SettingItem { Name = "EdgeRefinement", DisplayName = "Edge Refinement", Value = BackgroundRemoval.EdgeRefinement, Type = SettingType.Slider, Min = 0, Max = 100, Unit = "%" },
                 new SettingItem { Name = "UseGPU", DisplayName = "GPU Acceleration", Value = BackgroundRemoval.UseGPU, Type = SettingType.Toggle }
+            };
+
+            // AI Transformation Settings
+            categories["AITransformation"] = new List<SettingItem>
+            {
+                new SettingItem { Name = "EnableAITransformation", DisplayName = "Enable AI Transformation", Value = AITransformation.EnableAITransformation, Type = SettingType.Toggle },
+                new SettingItem { Name = "AITransformationTimeout", DisplayName = "Transformation Timeout", Value = AITransformation.AITransformationTimeout, Type = SettingType.Slider, Min = 30, Max = 120, Unit = "seconds" },
+                new SettingItem { Name = "AITransformationCacheEnabled", DisplayName = "Enable Cache", Value = AITransformation.AITransformationCacheEnabled, Type = SettingType.Toggle },
+                new SettingItem { Name = "ShowAITransformationPreview", DisplayName = "Show Preview", Value = AITransformation.ShowAITransformationPreview, Type = SettingType.Toggle },
+                new SettingItem { Name = "AITransformationQuality", DisplayName = "Transformation Quality", Value = AITransformation.AITransformationQuality, Type = SettingType.Dropdown,
+                    DropdownOptions = new List<DropdownOption>
+                    {
+                        new DropdownOption { Display = "Fast", Value = "Fast" },
+                        new DropdownOption { Display = "Medium", Value = "Medium" },
+                        new DropdownOption { Display = "High", Value = "High" }
+                    }
+                }
             };
 
             return categories;

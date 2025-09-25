@@ -2166,6 +2166,15 @@
                                            Grid.RowSpan="10"
                                            Grid.ColumnSpan="10"
                                            Panel.ZIndex="2000"/>
+
+        <!-- AI Transformation Overlay -->
+        <controls:AITransformationOverlay x:Name="AITransformationOverlayControl"
+                                           Visibility="Collapsed"
+                                           Grid.Row="0"
+                                           Grid.Column="0"
+                                           Grid.RowSpan="10"
+                                           Grid.ColumnSpan="10"
+                                           Panel.ZIndex="1500"/>
         
         <!-- PIN Entry Overlay (highest z-index for security) -->
         <controls:PinEntryOverlay x:Name="PinEntryOverlayControl"

@@ -1,0 +1,302 @@
+<UserControl x:Class="Photobooth.Controls.EventAITemplateManager"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:Photobooth.Controls"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="1200">
+
+    <UserControl.Resources>
+        <!-- Dark Theme Colors (matching SettingsOverlay) -->
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#2D2D30"/>
+        <SolidColorBrush x:Key="SecondaryBackgroundBrush" Color="#252525"/>
+        <SolidColorBrush x:Key="CardBackgroundBrush" Color="#353535"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#4CAF50"/>
+        <SolidColorBrush x:Key="SecondaryAccentBrush" Color="#2196F3"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="#F44336"/>
+        <SolidColorBrush x:Key="WarningBrush" Color="#FFC107"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E4E6EB"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B0B3B8"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#404040"/>
+        <SolidColorBrush x:Key="HighlightBrush" Color="#505050"/>
+
+        <!-- Modern Touch-Friendly Button Style -->
+        <Style x:Key="ModernButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="50"/>
+            <Setter Property="MinWidth" Value="120"/>
+            <Setter Property="Padding" Value="24,12"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                BorderThickness="0">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Template Item Style -->
+        <Style x:Key="TemplateItemStyle" TargetType="Border">
+            <Setter Property="Width" Value="220"/>
+            <Setter Property="Height" Value="140"/>
+            <Setter Property="Margin" Value="10"/>
+            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource HighlightBrush}"/>
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect Color="Black" BlurRadius="10" Opacity="0.3" ShadowDepth="2"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- CheckBox Style -->
+        <Style x:Key="ModernCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- RadioButton Style for Default Selection -->
+        <Style x:Key="DefaultRadioButtonStyle" TargetType="RadioButton">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource BackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="{StaticResource SecondaryBackgroundBrush}"
+                Padding="30,20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="AI Transformation Templates"
+                              FontSize="28" FontWeight="Bold"
+                              Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock Text="Select templates available for this event"
+                              FontSize="16" Margin="0,5,0,0"
+                              Foreground="{StaticResource TextSecondaryBrush}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="SelectAllButton" Content="Select All"
+                           Style="{StaticResource ModernButtonStyle}"
+                           Background="{StaticResource SecondaryAccentBrush}"
+                           Click="SelectAllButton_Click"
+                           Margin="0,0,10,0"/>
+                    <Button x:Name="DeselectAllButton" Content="Deselect All"
+                           Style="{StaticResource ModernButtonStyle}"
+                           Background="{StaticResource BorderBrush}"
+                           Click="DeselectAllButton_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Settings Bar -->
+        <Border Grid.Row="1" Background="{StaticResource CardBackgroundBrush}"
+                Padding="30,15" Margin="0,1,0,0">
+            <StackPanel>
+                <CheckBox x:Name="EnableAITransformationCheckBox"
+                         Content="Enable AI Transformation for this event"
+                         Style="{StaticResource ModernCheckBoxStyle}"
+                         FontSize="16" FontWeight="Medium"
+                         Checked="EnableAITransformation_Changed"
+                         Unchecked="EnableAITransformation_Changed"
+                         Margin="0,0,0,10"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <CheckBox Grid.Column="0" x:Name="AutoApplyDefaultCheckBox"
+                             Content="Auto-apply default template"
+                             Style="{StaticResource ModernCheckBoxStyle}"
+                             IsEnabled="{Binding IsChecked, ElementName=EnableAITransformationCheckBox}"
+                             Checked="AutoApplyDefault_Changed"
+                             Unchecked="AutoApplyDefault_Changed"
+                             Margin="0,0,30,0"/>
+
+                    <CheckBox Grid.Column="1" x:Name="ShowSelectionOverlayCheckBox"
+                             Content="Show selection overlay"
+                             Style="{StaticResource ModernCheckBoxStyle}"
+                             IsEnabled="{Binding IsChecked, ElementName=EnableAITransformationCheckBox}"
+                             Checked="ShowSelectionOverlay_Changed"
+                             Unchecked="ShowSelectionOverlay_Changed"
+                             Margin="0,0,30,0"/>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <TextBlock Text="Selection Timeout:"
+                                  VerticalAlignment="Center"
+                                  Foreground="{StaticResource TextSecondaryBrush}"
+                                  Margin="0,0,10,0"/>
+                        <TextBox x:Name="SelectionTimeoutTextBox"
+                                Width="60" Height="30"
+                                Text="120"
+                                IsEnabled="{Binding IsChecked, ElementName=ShowSelectionOverlayCheckBox}"
+                                VerticalContentAlignment="Center"
+                                Background="{StaticResource SecondaryBackgroundBrush}"
+                                Foreground="{StaticResource TextPrimaryBrush}"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                TextChanged="SelectionTimeout_Changed"/>
+                        <TextBlock Text="seconds"
+                                  VerticalAlignment="Center"
+                                  Foreground="{StaticResource TextSecondaryBrush}"
+                                  Margin="5,0,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Templates List -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Disabled"
+                     Padding="20">
+            <ItemsControl x:Name="TemplatesItemsControl">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource TemplateItemStyle}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Template Preview/Icon -->
+                                <Border Grid.Row="0" Background="{StaticResource SecondaryBackgroundBrush}"
+                                       CornerRadius="8,8,0,0" Margin="8,8,8,0">
+                                    <Grid>
+                                        <TextBlock Text="AI" FontSize="24" FontWeight="Bold"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Foreground="{StaticResource AccentBrush}" Opacity="0.3"/>
+                                        <Image x:Name="TemplatePreview"
+                                              Source="{Binding ThumbnailPath}"
+                                              Stretch="UniformToFill"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Template Info -->
+                                <StackPanel Grid.Row="1" Margin="12,8,12,4">
+                                    <TextBlock Text="{Binding Name}"
+                                              FontWeight="SemiBold" FontSize="14"
+                                              Foreground="{StaticResource TextPrimaryBrush}"
+                                              TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Category.Name}"
+                                              FontSize="12"
+                                              Foreground="{StaticResource TextSecondaryBrush}"
+                                              TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <!-- Selection Controls -->
+                                <Grid Grid.Row="2" Margin="12,0,12,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <CheckBox Grid.Column="0"
+                                             IsChecked="{Binding IsSelected}"
+                                             Style="{StaticResource ModernCheckBoxStyle}"
+                                             ToolTip="Include in event"
+                                             Checked="TemplateCheckBox_Changed"
+                                             Unchecked="TemplateCheckBox_Changed"
+                                             Tag="{Binding Id}"/>
+
+                                    <RadioButton Grid.Column="1"
+                                                GroupName="DefaultTemplate"
+                                                IsChecked="{Binding IsDefault}"
+                                                Style="{StaticResource DefaultRadioButtonStyle}"
+                                                Content="Default"
+                                                HorizontalAlignment="Right"
+                                                IsEnabled="{Binding IsSelected}"
+                                                ToolTip="Set as default template"
+                                                Checked="DefaultRadioButton_Changed"
+                                                Tag="{Binding Id}"/>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Footer -->
+        <Border Grid.Row="3" Background="{StaticResource SecondaryBackgroundBrush}"
+                Padding="30,20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" VerticalAlignment="Center">
+                    <Run Text="Selected:" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <Run x:Name="SelectedCountText" Text="0" FontWeight="Bold"
+                         Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <Run Text="templates" Foreground="{StaticResource TextSecondaryBrush}"/>
+                </TextBlock>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button x:Name="SaveButton" Content="Save Changes"
+                           Style="{StaticResource ModernButtonStyle}"
+                           Background="{StaticResource AccentBrush}"
+                           Click="SaveButton_Click"
+                           Margin="0,0,10,0"/>
+                    <Button x:Name="CancelButton" Content="Cancel"
+                           Style="{StaticResource ModernButtonStyle}"
+                           Background="{StaticResource BorderBrush}"
+                           Click="CancelButton_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

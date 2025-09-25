@@ -5280,6 +5280,23 @@ namespace Photobooth.Pages
                     return;
                 }
 
+                // Check if AI template selection should be shown (using clean service)
+                Log.Debug($"[StartPhotoSession] Checking AI template selection - Current Event: {_currentEvent?.Name} (ID: {_currentEvent?.Id})");
+                var aiTemplateSelectionService = AITemplateSelectionService.Instance;
+                bool shouldShowAI = aiTemplateSelectionService.ShouldShowTemplateSelection(_currentEvent);
+                Log.Debug($"[StartPhotoSession] Should show AI template selection: {shouldShowAI}");
+
+                if (shouldShowAI)
+                {
+                    Log.Debug("[StartPhotoSession] Showing AI template selection overlay");
+                    ShowAITemplateSelectionOverlay();
+                    return;
+                }
+                else
+                {
+                    Log.Debug("[StartPhotoSession] Not showing AI template selection - continuing with normal flow");
+                }
+
                 // Ensure template and event are loaded
                 if (!await EnsureTemplateAndEvent())
                     return;
@@ -8211,8 +8228,154 @@ namespace Photobooth.Pages
         
         #endregion
         
+        #region AI Template Selection - Clean Architecture
+
+        private void ShowAITemplateSelectionOverlay()
+        {
+            Log.Debug("================== AI TEMPLATE SELECTION OVERLAY ==================");
+            Log.Debug("ShowAITemplateSelectionOverlay: Starting AI template selection");
+
+            // Method 1: Try FindName
+            Log.Debug("Attempting to find overlay using FindName('AITransformationOverlayControl')");
+            var aiOverlay = this.FindName("AITransformationOverlayControl") as Controls.AITransformationOverlay;
+
+            if (aiOverlay != null)
+            {
+                Log.Debug("✓ Found overlay using FindName method");
+            }
+            else
+            {
+                Log.Debug("✗ FindName method failed, trying direct property access");
+
+                // Method 2: Try direct property access (should work if XAML has x:Name)
+                try
+                {
+                    aiOverlay = AITransformationOverlayControl;
+                    if (aiOverlay != null)
+                    {
+                        Log.Debug("✓ Found overlay using direct property access");
+                    }
+                    else
+                    {
+                        Log.Debug("✗ Direct property access returned null");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug($"✗ Direct property access threw exception: {ex.Message}");
+                }
+            }
+
+            if (aiOverlay == null)
+            {
+                Log.Error("✗✗✗ ShowAITemplateSelectionOverlay: AITransformationOverlay not found in UI");
+                Log.Error("Failed to locate AITransformationOverlayControl through any method");
+                Log.Debug("====================================================================");
+                // Continue without AI template selection
+                ContinueWithoutAITemplate();
+                return;
+            }
+
+            Log.Debug($"✓✓✓ ShowAITemplateSelectionOverlay: Successfully found AITransformationOverlay control");
+            Log.Debug($"Control type: {aiOverlay.GetType().FullName}");
+            Log.Debug("====================================================================");
+
+            // Show overlay in selection mode (not management mode)
+            aiOverlay.ShowOverlay(managementMode: false);
+
+            // Subscribe to overlay events (UI routing only)
+            EventHandler templateSelectedHandler = null;
+            EventHandler overlayClosedHandler = null;
+
+            templateSelectedHandler = async (s, e) =>
+            {
+                Log.Debug($"[AI Template Selection] TemplateSelected event received");
+                Log.Debug($"[AI Template Selection] Selected template: {aiOverlay.SelectedTemplate?.Name} (ID: {aiOverlay.SelectedTemplate?.Id})");
+
+                // Clean up event handlers
+                aiOverlay.TemplateSelected -= templateSelectedHandler;
+                aiOverlay.OverlayClosed -= overlayClosedHandler;
+
+                // Notify service that template was selected
+                var aiSelectionService = AITemplateSelectionService.Instance;
+                aiSelectionService.NotifyTemplateSelected(aiOverlay.SelectedTemplate);
+                Log.Debug($"[AI Template Selection] Service notified of template selection");
+
+                Log.Debug("[AI Template Selection] Continuing with session after template selection");
+                await ContinueSessionAfterAISelection();
+            };
+
+            overlayClosedHandler = async (s, e) =>
+            {
+                Log.Debug("[AI Template Selection] OverlayClosed event received (selection skipped)");
+
+                // Clean up event handlers
+                aiOverlay.TemplateSelected -= templateSelectedHandler;
+                aiOverlay.OverlayClosed -= overlayClosedHandler;
+
+                // Notify service that selection was skipped
+                var aiSelectionService = AITemplateSelectionService.Instance;
+                aiSelectionService.NotifySelectionSkipped();
+
+                Log.Debug("[AI Template Selection] Service notified - selection skipped, continuing without AI template");
+                await ContinueSessionAfterAISelection();
+            };
+
+            aiOverlay.TemplateSelected += templateSelectedHandler;
+            aiOverlay.OverlayClosed += overlayClosedHandler;
+        }
+
+        private async Task ContinueSessionAfterAISelection()
+        {
+            // Continue with normal session flow
+            if (!await EnsureTemplateAndEvent())
+                return;
+
+            bool sessionStarted = await _sessionService.StartSessionAsync(
+                _currentEvent,
+                _currentTemplate,
+                GetTotalPhotosNeeded());
+
+            if (sessionStarted)
+            {
+                await _workflowService.StartPhotoCaptureWorkflowAsync();
+
+                if (Properties.Settings.Default.PhotographerMode)
+                {
+                    // Stop live view to release camera for trigger
+                    try
+                    {
+                        Log.Debug("Stopping live view to release camera trigger");
+                        DeviceManager.SelectedCameraDevice?.StopLiveView();
+                        _liveViewTimer.Stop();
+
+                        // Reset IsBusy flag to allow trigger
+                        if (DeviceManager.SelectedCameraDevice != null)
+                        {
+                            DeviceManager.SelectedCameraDevice.IsBusy = false;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"Error stopping live view for photographer mode: {ex.Message}");
+                    }
+                }
+            }
+            else
+            {
+                HandleSessionStartFailure("Failed to start session");
+            }
+        }
+
+        private async void ContinueWithoutAITemplate()
+        {
+            await ContinueSessionAfterAISelection();
+        }
+
+        #endregion
+
         #region Capture Modes Integration
-        
+
         private void ShowCaptureModesOverlay()
         {
             Log.Debug($"ShowCaptureModesOverlay: CaptureModesOverlay is {(CaptureModesOverlay != null ? "not null" : "null")}");

@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using CameraControl.Devices;
 using CameraControl.Devices.Classes;
+using Photobooth.Controls;
 using Photobooth.Database;
 using Photobooth.Models;
 
@@ -388,7 +391,132 @@ namespace Photobooth.Services
                     }
                 }
 
-                // Apply Beauty Mode if enabled (after background removal)
+                // Apply AI Transformation if enabled (after background removal, before beauty mode)
+                var settingsService = SettingsManagementService.Instance;
+                var aiTemplateService = EventAITemplateService.Instance;
+                var aiSelectionService = AITemplateSelectionService.Instance;
+
+                Log.Debug($"[PhotoboothSessionService] AI Transformation Check:");
+
+                // Refresh AI settings to ensure we have the latest token
+                settingsService.RefreshAISettings();
+
+                // Check if AI transformation is enabled for current event
+                bool aiTransformationEnabled = aiTemplateService.IsAITransformationEnabled() ||
+                                               (settingsService.AITransformation?.EnableAITransformation ?? false);
+
+                // Get API token from settings
+                string apiToken = settingsService.AITransformation?.ReplicateAPIToken;
+
+                // Fallback to Properties.Settings if service doesn't have it
+                if (string.IsNullOrEmpty(apiToken))
+                {
+                    try
+                    {
+                        apiToken = Properties.Settings.Default.ReplicateAPIToken;
+                        Log.Debug($"[PhotoboothSessionService] Loaded API token from Properties.Settings: {(!string.IsNullOrEmpty(apiToken) ? $"YES (length: {apiToken.Length})" : "NO/EMPTY")}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"[PhotoboothSessionService] Error loading token from Properties.Settings: {ex.Message}");
+                    }
+                }
+
+                // Additional debug for API token
+                Log.Debug($"[PhotoboothSessionService] SettingsService exists: {settingsService != null}");
+                Log.Debug($"[PhotoboothSessionService] AITransformation settings exists: {settingsService.AITransformation != null}");
+                Log.Debug($"[PhotoboothSessionService] API Token value: {(!string.IsNullOrEmpty(apiToken) ? "***" + apiToken?.Substring(Math.Max(0, apiToken.Length - 4)) : "NULL/EMPTY")}");
+                Log.Debug($"[PhotoboothSessionService] API Token length: {apiToken?.Length ?? 0}");
+
+                Log.Debug($"[PhotoboothSessionService] AI Enabled: {aiTransformationEnabled}, Has API Token: {!string.IsNullOrEmpty(apiToken)}");
+
+                // Check if there are templates available for current event
+                var availableTemplates = aiTemplateService.GetTemplatesForCurrentEvent();
+                bool hasTemplates = availableTemplates != null && availableTemplates.Count > 0;
+
+                Log.Debug($"[PhotoboothSessionService] Available templates: {availableTemplates?.Count ?? 0}");
+
+                // Check if a template was selected during session start
+                var selectedTemplate = aiSelectionService.GetSelectedTemplate();
+                Log.Debug($"[PhotoboothSessionService] Selected template from session: {selectedTemplate?.Name ?? "None"} (ID: {selectedTemplate?.Id})");
+
+                if (aiTransformationEnabled && !string.IsNullOrEmpty(apiToken) && hasTemplates)
+                {
+                    try
+                    {
+                        Database.AITransformationTemplate templateToApply = null;
+
+                        // First check if a template was selected during session start
+                        if (selectedTemplate != null)
+                        {
+                            templateToApply = selectedTemplate;
+                            Log.Debug($"[PhotoboothSessionService] Using session-selected template: {templateToApply.Name}");
+                        }
+                        else
+                        {
+                            // Check if we should auto-apply default template
+                            var eventSettings = aiTemplateService.GetCurrentEventSettings();
+                            var defaultTemplate = aiTemplateService.GetDefaultTemplate();
+
+                            if (eventSettings.AutoApplyDefault && defaultTemplate != null)
+                            {
+                                templateToApply = defaultTemplate;
+                                Log.Debug($"[PhotoboothSessionService] Using auto-apply default template: {templateToApply.Name}");
+                            }
+                        }
+
+                        if (templateToApply != null)
+                        {
+                            Log.Debug($"[PhotoboothSessionService] Applying AI transformation with template: {templateToApply.Name}");
+
+                            var transformationService = AITransformationService.Instance;
+
+                            // Initialize the AI service with the API token
+                            Log.Debug($"[PhotoboothSessionService] Initializing AI service with API token");
+                            bool initialized = await transformationService.InitializeAsync(apiToken);
+
+                            if (!initialized)
+                            {
+                                Log.Error($"[PhotoboothSessionService] Failed to initialize AI transformation service - check API token");
+                                // Continue without AI transformation
+                            }
+                            else
+                            {
+                                Log.Debug($"[PhotoboothSessionService] AI service initialized successfully, applying transformation");
+
+                                var result = await transformationService.ApplyTransformationAsync(
+                                    processedPhotoPath,
+                                    templateToApply,
+                                    Path.GetDirectoryName(processedPhotoPath)
+                                );
+
+                                if (!string.IsNullOrEmpty(result) && File.Exists(result))
+                                {
+                                    Log.Debug($"[PhotoboothSessionService] AI Transformation successful, result saved to: {result}");
+                                    // Replace the original photo with the transformed one
+                                    File.Delete(processedPhotoPath);
+                                    File.Move(result, processedPhotoPath);
+                                    Log.Debug($"[PhotoboothSessionService] Replaced original photo with transformed version");
+                                }
+                                else
+                                {
+                                    Log.Debug($"[PhotoboothSessionService] AI Transformation failed or returned empty result");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Log.Debug($"[PhotoboothSessionService] No template to apply - either not selected or not configured");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"Failed to apply AI Transformation: {ex.Message}");
+                        // Continue with original photo on error
+                    }
+                }
+
+                // Apply Beauty Mode if enabled (after background removal and AI transformation)
                 if (Properties.Settings.Default.BeautyModeEnabled)
                 {
                     Log.Debug($"Applying Beauty Mode to photo with intensity {Properties.Settings.Default.BeautyModeIntensity}");
@@ -854,6 +982,10 @@ namespace Photobooth.Services
             // Reset photo capture service
             _photoCaptureService?.ResetSession();
 
+            // Clear AI template selection for next session
+            AITemplateSelectionService.Instance.ClearSelection();
+            Log.Debug("PhotoboothSessionService: Cleared AI template selection");
+
             // Notify listeners
             SessionCleared?.Invoke(this, EventArgs.Empty);
 
@@ -1140,6 +1272,39 @@ namespace Photobooth.Services
                 _sessionManager.SessionCompleted -= OnSessionManagerSessionCompleted;
             }
         }
+        #endregion
+        #region Helper Methods
+
+        /// <summary>
+        /// Find the AITransformationOverlay in the visual tree
+        /// </summary>
+        private AITransformationOverlay FindAITransformationOverlay(DependencyObject parent)
+        {
+            if (parent == null) return null;
+
+            // Try to find by name first
+            if (parent is FrameworkElement element)
+            {
+                var overlay = LogicalTreeHelper.FindLogicalNode(element, "AITransformationOverlayControl") as AITransformationOverlay;
+                if (overlay != null)
+                    return overlay;
+            }
+
+            // Search visual tree
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+
+                if (child is AITransformationOverlay aiOverlay)
+                    return aiOverlay;
+
+                var result = FindAITransformationOverlay(child);
+                if (result != null)
+                    return result;
+            }
+            return null;
+        }
+
         #endregion
     }
 

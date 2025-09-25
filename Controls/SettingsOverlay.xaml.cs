@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -220,6 +221,15 @@ namespace Photobooth.Controls
                     SettingsCount = 3
                 });
                 
+                // AI Transformation Settings
+                categories.Add(new CategoryViewModel
+                {
+                    Name = "AI Transformation",
+                    Icon = "🎨",
+                    Summary = "AI-powered photo transformations",
+                    SettingsCount = 8
+                });
+
                 // Retake Settings
                 categories.Add(new CategoryViewModel
                 {
@@ -620,6 +630,13 @@ namespace Photobooth.Controls
             if (categoryName == "BackgroundRemoval")
             {
                 LoadBackgroundRemovalSettings();
+                return;
+            }
+
+            // Special handling for AI Transformation category
+            if (categoryName == "AI Transformation")
+            {
+                LoadAITransformationSettings();
                 return;
             }
 
@@ -1076,7 +1093,64 @@ namespace Photobooth.Controls
         }
         
         #endregion
-        
+
+        #region Helper Methods
+
+        /// <summary>
+        /// Find the AITransformationOverlay in the parent window
+        /// </summary>
+        private AITransformationOverlay FindAITransformationOverlay()
+        {
+            try
+            {
+                // Find the parent window
+                var parent = this.Parent as FrameworkElement;
+                while (parent != null && !(parent is Window || parent is Page))
+                {
+                    parent = parent.Parent as FrameworkElement;
+                }
+
+                if (parent != null)
+                {
+                    // Try to find the overlay by name
+                    var overlay = LogicalTreeHelper.FindLogicalNode(parent, "AITransformationOverlayControl") as AITransformationOverlay;
+                    if (overlay != null)
+                        return overlay;
+
+                    // Try to find in visual tree
+                    return FindVisualChild<AITransformationOverlay>(parent);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Failed to find AITransformationOverlay: {ex.Message}");
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Helper method to find a visual child of a specific type
+        /// </summary>
+        private T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+        {
+            if (parent == null) return null;
+
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+
+                if (child is T typedChild)
+                    return typedChild;
+
+                var result = FindVisualChild<T>(child);
+                if (result != null)
+                    return result;
+            }
+            return null;
+        }
+
+        #endregion
+
         #region Security Settings
         
         /// <summary>
@@ -3841,6 +3915,652 @@ namespace Photobooth.Controls
         }
 
         #endregion
+
+        private void LoadAITransformationSettings()
+    {
+        try
+        {
+            // Enable AI Transformation
+            var enableAISetting = new SettingItem
+            {
+                Name = "EnableAITransformation",
+                DisplayName = "Enable AI Photo Transformation",
+                Type = SettingType.Toggle,
+                Value = _settingsService.AITransformation?.EnableAITransformation ?? false
+            };
+            var enableAIControl = CreateSettingControl(enableAISetting, "AITransformation");
+            SettingsListPanel.Children.Add(enableAIControl);
+
+            // API Token input
+            var apiTokenContainer = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var tokenGrid = new Grid();
+            tokenGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            tokenGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var tokenLabel = new TextBlock
+            {
+                Text = "Replicate API Token",
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            Grid.SetRow(tokenLabel, 0);
+            tokenGrid.Children.Add(tokenLabel);
+
+            var tokenPanel = new Grid();
+            tokenPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            tokenPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var tokenBox = new PasswordBox
+            {
+                Password = _settingsService.AITransformation?.ReplicateAPIToken ?? "",
+                Margin = new Thickness(0, 0, 10, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            tokenBox.PasswordChanged += (s, e) =>
+            {
+                // Save the API token through settings management service
+                Log.Debug($"[SettingsOverlay] API Token changed - Length: {tokenBox.Password?.Length ?? 0}");
+                OnSettingValueChanged("AITransformation", "ReplicateAPIToken", tokenBox.Password);
+
+                // Verify it was saved
+                Log.Debug($"[SettingsOverlay] Token in Settings after save: {(!string.IsNullOrEmpty(Properties.Settings.Default.ReplicateAPIToken) ? "YES (length: " + Properties.Settings.Default.ReplicateAPIToken.Length + ")" : "NO/EMPTY")}");
+            };
+            Grid.SetColumn(tokenBox, 0);
+            tokenPanel.Children.Add(tokenBox);
+
+            var testButton = new Button
+            {
+                Content = "Test API",
+                Width = 80,
+                Height = 30
+            };
+            // Try to apply style if available
+            try { testButton.Style = FindResource("ModernButtonStyle") as Style; }
+            catch { /* Use default style */ }
+            testButton.Click += async (s, e) =>
+            {
+                try
+                {
+                    var aiService = Photobooth.Services.AITransformationService.Instance;
+                    bool success = await aiService.InitializeAsync(tokenBox.Password);
+                    MessageBox.Show(success ? "API connection successful!" : "Failed to connect to API",
+                        "API Test", MessageBoxButton.OK,
+                        success ? MessageBoxImage.Information : MessageBoxImage.Error);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error testing API: {ex.Message}", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            };
+            Grid.SetColumn(testButton, 1);
+            tokenPanel.Children.Add(testButton);
+
+            Grid.SetRow(tokenPanel, 1);
+            tokenGrid.Children.Add(tokenPanel);
+            apiTokenContainer.Child = tokenGrid;
+            SettingsListPanel.Children.Add(apiTokenContainer);
+
+            // Model Selection
+            var modelManager = Photobooth.Services.AIModelManager.Instance;
+            modelManager.Initialize();
+
+            var modelContainer = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var modelGrid = new Grid();
+            modelGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            modelGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            modelGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var modelLabel = new TextBlock
+            {
+                Text = "AI Model Selection",
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            Grid.SetRow(modelLabel, 0);
+            modelGrid.Children.Add(modelLabel);
+
+            // Model dropdown
+            var modelDropdown = new ComboBox
+            {
+                Margin = new Thickness(0, 0, 0, 8),
+                ItemsSource = modelManager.AvailableModels,
+                DisplayMemberPath = "Name",
+                SelectedValuePath = "Id",
+                SelectedValue = modelManager.SelectedModelId
+            };
+            modelDropdown.SelectionChanged += (s, e) =>
+            {
+                if (modelDropdown.SelectedValue != null)
+                {
+                    modelManager.SelectedModelId = modelDropdown.SelectedValue.ToString();
+                    var selectedModel = modelManager.SelectedModel;
+                    if (selectedModel != null)
+                    {
+                        // Update model description
+                        var descTextBlock = modelGrid.Children.OfType<TextBlock>()
+                            .FirstOrDefault(tb => tb.Name == "ModelDescriptionText");
+                        if (descTextBlock != null)
+                        {
+                            descTextBlock.Text = selectedModel.Description;
+                        }
+                    }
+                }
+            };
+            Grid.SetRow(modelDropdown, 1);
+            modelGrid.Children.Add(modelDropdown);
+
+            // Model description
+            var modelDescText = new TextBlock
+            {
+                Name = "ModelDescriptionText",
+                Text = modelManager.SelectedModel?.Description ?? "",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 160)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 0)
+            };
+            Grid.SetRow(modelDescText, 2);
+            modelGrid.Children.Add(modelDescText);
+
+            modelContainer.Child = modelGrid;
+            SettingsListPanel.Children.Add(modelContainer);
+
+            // Quality Setting
+            var qualitySetting = new SettingItem
+            {
+                Name = "AITransformationQuality",
+                DisplayName = "Transformation Quality",
+                Type = SettingType.Dropdown,
+                Value = _settingsService.AITransformation?.AITransformationQuality ?? "Medium",
+                DropdownOptions = new List<DropdownOption>
+                {
+                    new DropdownOption { Display = "Fast (Lower Quality)", Value = "Fast" },
+                    new DropdownOption { Display = "Medium (Balanced)", Value = "Medium" },
+                    new DropdownOption { Display = "High (Best Quality)", Value = "High" }
+                }
+            };
+            var qualityControl = CreateSettingControl(qualitySetting, "AITransformation");
+            SettingsListPanel.Children.Add(qualityControl);
+
+            // Default Template (Dropdown)
+            var defaultTemplateSetting = new SettingItem
+            {
+                Name = "DefaultAITemplate",
+                DisplayName = "Default Template",
+                Type = SettingType.Dropdown,
+                Value = _settingsService.AITransformation?.DefaultAITemplate ?? "None",
+                DropdownOptions = new List<DropdownOption>
+                {
+                    new DropdownOption { Display = "None", Value = "None" },
+                    new DropdownOption { Display = "Superhero", Value = "Superhero" },
+                    new DropdownOption { Display = "Medieval Knight", Value = "Medieval Knight" },
+                    new DropdownOption { Display = "Tropical Beach", Value = "Tropical Beach" },
+                    new DropdownOption { Display = "Space Station", Value = "Space Station" },
+                    new DropdownOption { Display = "Oil Painting", Value = "Oil Painting" },
+                    new DropdownOption { Display = "Watercolor", Value = "Watercolor" },
+                    new DropdownOption { Display = "Fairy Tale Princess", Value = "Fairy Tale Princess" },
+                    new DropdownOption { Display = "Wizard", Value = "Wizard" },
+                    new DropdownOption { Display = "Corporate Headshot", Value = "Corporate Headshot" },
+                    new DropdownOption { Display = "Christmas Holiday", Value = "Christmas Holiday" }
+                }
+            };
+            var defaultTemplateControl = CreateSettingControl(defaultTemplateSetting, "AITransformation");
+            SettingsListPanel.Children.Add(defaultTemplateControl);
+
+            // Show Preview
+            var showPreviewSetting = new SettingItem
+            {
+                Name = "ShowAITransformationPreview",
+                DisplayName = "Show Transformation Preview",
+                Type = SettingType.Toggle,
+                Value = _settingsService.AITransformation?.ShowAITransformationPreview ?? true
+            };
+            var showPreviewControl = CreateSettingControl(showPreviewSetting, "AITransformation");
+            SettingsListPanel.Children.Add(showPreviewControl);
+
+            // Cache Enabled
+            var cacheEnabledSetting = new SettingItem
+            {
+                Name = "AITransformationCacheEnabled",
+                DisplayName = "Enable Transformation Cache",
+                Type = SettingType.Toggle,
+                Value = _settingsService.AITransformation?.AITransformationCacheEnabled ?? true
+            };
+            var cacheEnabledControl = CreateSettingControl(cacheEnabledSetting, "AITransformation");
+            SettingsListPanel.Children.Add(cacheEnabledControl);
+
+            // Timeout Slider
+            var timeoutSetting = new SettingItem
+            {
+                Name = "AITransformationTimeout",
+                DisplayName = "Transformation Timeout",
+                Type = SettingType.Slider,
+                Value = _settingsService.AITransformation?.AITransformationTimeout ?? 60,
+                Min = 30,
+                Max = 120,
+                Unit = "seconds"
+            };
+            var timeoutControl = CreateSettingControl(timeoutSetting, "AITransformation");
+            SettingsListPanel.Children.Add(timeoutControl);
+
+            // Manage Templates & Prompts Button
+            var manageTemplatesContainer = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Padding = new Thickness(15)
+            };
+
+            var managePanel = new StackPanel();
+
+            var manageLabel = new TextBlock
+            {
+                Text = "Advanced Configuration",
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            managePanel.Children.Add(manageLabel);
+
+            var buttonPanel = new WrapPanel { Orientation = Orientation.Horizontal };
+
+            // Manage Templates Button
+            var manageButton = new Button
+            {
+                Content = "Manage AI Templates",
+                Width = 160,
+                Height = 35,
+                Margin = new Thickness(0, 0, 10, 0)
+            };
+            // Try to apply style if available
+            try { manageButton.Style = FindResource("ModernButtonStyle") as Style; }
+            catch { /* Use default style */ }
+            manageButton.Click += (s, e) =>
+            {
+                try
+                {
+                    HideOverlay();
+
+                    // Try to find the AITransformationOverlay in the parent window
+                    var aiOverlay = FindAITransformationOverlay();
+                    if (aiOverlay != null)
+                    {
+                        // Use the embedded overlay in management mode
+                        aiOverlay.ShowOverlay(managementMode: true);
+
+                        // Subscribe to the closed event to show settings overlay again
+                        EventHandler closedHandler = null;
+                        closedHandler = (sender, args) =>
+                        {
+                            aiOverlay.OverlayClosed -= closedHandler;
+                            ShowOverlay(bypassPin: true);
+                        };
+                        aiOverlay.OverlayClosed += closedHandler;
+                    }
+                    else
+                    {
+                        // Fallback: create a window if no embedded overlay found
+                        Log.Debug("No embedded AITransformationOverlay found, creating window");
+                        var overlayControl = new Photobooth.Controls.AITransformationOverlay();
+                        var window = new Window
+                        {
+                            Title = "AI Transformation Templates",
+                            WindowState = WindowState.Maximized,
+                            WindowStyle = WindowStyle.None,
+                            ResizeMode = ResizeMode.NoResize,
+                            Topmost = true,
+                            Background = new SolidColorBrush(Color.FromArgb(230, 0, 0, 0)),
+                            Content = overlayControl
+                        };
+
+                        // Add ESC key handler to close
+                        window.KeyDown += (sender, keyArgs) =>
+                        {
+                            if (keyArgs.Key == System.Windows.Input.Key.Escape)
+                            {
+                                window.Close();
+                            }
+                        };
+
+                        overlayControl.ShowOverlay();
+                        window.Closed += (sender, args) => ShowOverlay(bypassPin: true);
+                        window.ShowDialog();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error opening template manager: {ex.Message}",
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            };
+            buttonPanel.Children.Add(manageButton);
+
+            // Edit Prompts Button
+            var editPromptsButton = new Button
+            {
+                Content = "Edit Model Prompts",
+                Width = 160,
+                Height = 35,
+                Margin = new Thickness(0, 0, 10, 0)
+            };
+            // Try to apply style if available
+            try { editPromptsButton.Style = FindResource("ModernButtonStyle") as Style; }
+            catch { /* Use default style */ }
+            editPromptsButton.Click += (s, e) =>
+            {
+                ShowPromptEditor();
+            };
+            buttonPanel.Children.Add(editPromptsButton);
+
+            var loadSampleButton = new Button
+            {
+                Content = "Load Sample Templates",
+                Width = 160,
+                Height = 35
+            };
+            // Try to apply style if available
+            try { loadSampleButton.Style = FindResource("ModernButtonStyle") as Style; }
+            catch { /* Use default style */ }
+            loadSampleButton.Click += (s, e) =>
+            {
+                try
+                {
+                    var database = Photobooth.Database.AITemplateDatabase.Instance;
+                    database.InsertSampleTemplates();
+                    MessageBox.Show("Sample templates loaded successfully!",
+                        "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error loading templates: {ex.Message}",
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            };
+            buttonPanel.Children.Add(loadSampleButton);
+
+            managePanel.Children.Add(buttonPanel);
+            manageTemplatesContainer.Child = managePanel;
+            SettingsListPanel.Children.Add(manageTemplatesContainer);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"SettingsOverlay: Failed to load AI Transformation settings: {ex.Message}");
+        }
+    }
+
+    private void OpenAITemplateManagement()
+    {
+        try
+        {
+            // Find the AITransformationOverlay in the parent window
+            var aiOverlay = FindAITransformationOverlay();
+            if (aiOverlay != null)
+            {
+                // Set the current event for the EventAITemplateService
+                // Try to get the current event ID from PhotoboothService
+                var currentEvent = Services.PhotoboothService.CurrentEvent;
+                if (currentEvent != null)
+                {
+                    var eventTemplateService = Services.EventAITemplateService.Instance;
+                    eventTemplateService.SetCurrentEvent(currentEvent.Id);
+                    Debug.WriteLine($"[SettingsOverlay] Set current event to {currentEvent.Id} ({currentEvent.Name}) for AI Template Management");
+                }
+                else
+                {
+                    Debug.WriteLine("[SettingsOverlay] Warning: No current event selected for AI Template Management");
+                }
+
+                // Hide settings overlay temporarily
+                this.Visibility = Visibility.Collapsed;
+
+                // Show AI overlay in management mode
+                aiOverlay.ShowOverlay(managementMode: true);
+
+                // When AI overlay closes, show settings again
+                EventHandler overlayClosedHandler = null;
+                overlayClosedHandler = (s, e) =>
+                {
+                    this.Visibility = Visibility.Visible;
+                    aiOverlay.OverlayClosed -= overlayClosedHandler;
+                };
+                aiOverlay.OverlayClosed += overlayClosedHandler;
+            }
+            else
+            {
+                MessageBox.Show("AI Template Management is not available", "Info",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[SettingsOverlay] Error opening AI template management: {ex.Message}");
+        }
+    }
+
+    private void ShowPromptEditor()
+    {
+        try
+        {
+            var modelManager = Photobooth.Services.AIModelManager.Instance;
+            var templateDatabase = Photobooth.Database.AITemplateDatabase.Instance;
+            var currentModel = modelManager.SelectedModel;
+
+            if (currentModel == null)
+            {
+                MessageBox.Show("Please select an AI model first", "No Model Selected",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // Create prompt editor window
+            var window = new Window
+            {
+                Title = $"Edit Prompts for {currentModel.Name}",
+                Width = 800,
+                Height = 600,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                Background = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x30))
+            };
+
+            var scrollViewer = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Margin = new Thickness(20)
+            };
+
+            var stackPanel = new StackPanel();
+
+            // Header
+            var headerText = new TextBlock
+            {
+                Text = $"Customize prompts for {currentModel.Name}",
+                FontSize = 18,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 20)
+            };
+            stackPanel.Children.Add(headerText);
+
+            // Model capabilities info
+            var capabilitiesText = new TextBlock
+            {
+                Text = $"Model Capabilities: {(currentModel.PreservesIdentity ? "Identity Preserving" : "Style Transfer")}",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 160)),
+                Margin = new Thickness(0, 0, 0, 20)
+            };
+            stackPanel.Children.Add(capabilitiesText);
+
+            // Get all templates
+            var allTemplates = templateDatabase.GetAllTemplates();
+
+            foreach (var template in allTemplates)
+            {
+                // Create container for each template
+                var templateBorder = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35)),
+                    CornerRadius = new CornerRadius(8),
+                    Margin = new Thickness(0, 0, 0, 15),
+                    Padding = new Thickness(15)
+                };
+
+                var templateStack = new StackPanel();
+
+                // Template name
+                var templateName = new TextBlock
+                {
+                    Text = template.Name,
+                    FontSize = 14,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Brushes.White,
+                    Margin = new Thickness(0, 0, 0, 10)
+                };
+                templateStack.Children.Add(templateName);
+
+                // Get existing custom prompt if any
+                var existingPrompt = modelManager.GetPromptForTemplate(currentModel.Id, template.Id.ToString());
+
+                // Prompt TextBox
+                var promptLabel = new TextBlock
+                {
+                    Text = "Prompt:",
+                    FontSize = 12,
+                    Foreground = Brushes.White,
+                    Margin = new Thickness(0, 0, 0, 5)
+                };
+                templateStack.Children.Add(promptLabel);
+
+                var promptBox = new TextBox
+                {
+                    Text = existingPrompt?.Prompt ?? template.Prompt,
+                    TextWrapping = TextWrapping.Wrap,
+                    AcceptsReturn = true,
+                    MinHeight = 60,
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Background = new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40)),
+                    Foreground = Brushes.White,
+                    Tag = template.Id // Store template ID for later
+                };
+                templateStack.Children.Add(promptBox);
+
+                // Negative Prompt (if supported)
+                if (currentModel.Capabilities.SupportsNegativePrompt)
+                {
+                    var negPromptLabel = new TextBlock
+                    {
+                        Text = "Negative Prompt:",
+                        FontSize = 12,
+                        Foreground = Brushes.White,
+                        Margin = new Thickness(0, 0, 0, 5)
+                    };
+                    templateStack.Children.Add(negPromptLabel);
+
+                    var negPromptBox = new TextBox
+                    {
+                        Text = existingPrompt?.NegativePrompt ?? template.NegativePrompt ?? "",
+                        TextWrapping = TextWrapping.Wrap,
+                        AcceptsReturn = true,
+                        MinHeight = 40,
+                        Margin = new Thickness(0, 0, 0, 10),
+                        Background = new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40)),
+                        Foreground = Brushes.White,
+                        Name = $"NegPrompt_{template.Id}"
+                    };
+                    templateStack.Children.Add(negPromptBox);
+                }
+
+                templateBorder.Child = templateStack;
+                stackPanel.Children.Add(templateBorder);
+            }
+
+            // Buttons
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 20, 0, 0)
+            };
+
+            var saveButton = new Button
+            {
+                Content = "Save All",
+                Width = 100,
+                Height = 35,
+                Margin = new Thickness(0, 0, 10, 0),
+                Background = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                Foreground = Brushes.White
+            };
+            saveButton.Click += (s, e) =>
+            {
+                // Save all prompts
+                foreach (var child in stackPanel.Children)
+                {
+                    if (child is Border border && border.Child is StackPanel templateStack)
+                    {
+                        var promptBox = templateStack.Children.OfType<TextBox>().FirstOrDefault(tb => tb.Tag != null);
+                        if (promptBox != null)
+                        {
+                            var templateId = promptBox.Tag.ToString();
+                            var prompt = promptBox.Text;
+
+                            var negPromptBox = templateStack.Children.OfType<TextBox>()
+                                .FirstOrDefault(tb => tb.Name?.StartsWith("NegPrompt_") == true);
+                            var negPrompt = negPromptBox?.Text ?? "";
+
+                            modelManager.SetPromptForTemplate(currentModel.Id, templateId, prompt, negPrompt);
+                        }
+                    }
+                }
+                MessageBox.Show("Prompts saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                window.Close();
+            };
+            buttonPanel.Children.Add(saveButton);
+
+            var cancelButton = new Button
+            {
+                Content = "Cancel",
+                Width = 100,
+                Height = 35,
+                Background = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)),
+                Foreground = Brushes.White
+            };
+            cancelButton.Click += (s, e) => window.Close();
+            buttonPanel.Children.Add(cancelButton);
+
+            stackPanel.Children.Add(buttonPanel);
+            scrollViewer.Content = stackPanel;
+            window.Content = scrollViewer;
+
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error opening prompt editor: {ex.Message}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
     }
 
     /// <summary>
@@ -3853,5 +4573,6 @@ namespace Photobooth.Controls
         public string Icon { get; set; }
         public string Summary { get; set; }
         public int SettingsCount { get; set; }
+        public Action CustomAction { get; set; }
     }
 }
