@@ -354,23 +354,26 @@ namespace Photobooth.Services
 
                                 if (!string.IsNullOrEmpty(composedPath) && File.Exists(composedPath))
                                 {
-                                    // Replace the original with the composed version
-                                    File.Delete(processedPhotoPath);
-                                    File.Move(composedPath, processedPhotoPath);
-                                    Log.Debug("Successfully applied virtual background with positioning");
+                                    Log.Debug($"[PhotoboothSessionService] Virtual background composed, result saved to: {composedPath}");
+                                    Log.Debug($"[PhotoboothSessionService] Preserving original photo at: {processedPhotoPath}");
+                                    // Keep both original and background-removed result
+                                    // Original stays in originals folder, composed result stays in its folder
+                                    // Update the processed path to point to composed result for template composition
+                                    processedPhotoPath = composedPath;
+                                    Log.Debug($"[PhotoboothSessionService] Using background-removed result for composition: {processedPhotoPath}");
                                 }
                             }
                             else if (!string.IsNullOrEmpty(removalResult.ProcessedImagePath))
                             {
-                                // When no virtual background is selected, keep the original photo
-                                // Don't replace with transparent PNG as it won't work for template composition
-                                Log.Debug("Background removed but no virtual background selected - keeping original photo for composition");
-
-                                // Clean up the transparent PNG since we're not using it
-                                if (File.Exists(removalResult.ProcessedImagePath))
-                                {
-                                    File.Delete(removalResult.ProcessedImagePath);
-                                }
+                                // When no virtual background is selected, use the background-removed transparent PNG
+                                Log.Debug($"[PhotoboothSessionService] Background removed, no virtual background selected");
+                                Log.Debug($"[PhotoboothSessionService] Preserving original photo at: {processedPhotoPath}");
+                                Log.Debug($"[PhotoboothSessionService] Using background-removed PNG: {removalResult.ProcessedImagePath}");
+                                // Keep both original and background-removed result
+                                // Original stays in originals folder, transparent PNG in its folder
+                                // Update the processed path to point to transparent PNG for template composition
+                                processedPhotoPath = removalResult.ProcessedImagePath;
+                                Log.Debug($"[PhotoboothSessionService] Using background-removed result for composition: {processedPhotoPath}");
                             }
 
                             // Clean up mask file
@@ -493,10 +496,12 @@ namespace Photobooth.Services
                                 if (!string.IsNullOrEmpty(result) && File.Exists(result))
                                 {
                                     Log.Debug($"[PhotoboothSessionService] AI Transformation successful, result saved to: {result}");
-                                    // Replace the original photo with the transformed one
-                                    File.Delete(processedPhotoPath);
-                                    File.Move(result, processedPhotoPath);
-                                    Log.Debug($"[PhotoboothSessionService] Replaced original photo with transformed version");
+                                    Log.Debug($"[PhotoboothSessionService] Preserving original photo at: {processedPhotoPath}");
+                                    // Keep both original and AI result - use AI result for composition
+                                    // Original stays in originals folder, AI result in AI_Transformations folder
+                                    // Update the processed path to point to AI result for template composition
+                                    processedPhotoPath = result;
+                                    Log.Debug($"[PhotoboothSessionService] Using AI result for composition: {processedPhotoPath}");
                                 }
                                 else
                                 {
