@@ -336,8 +336,10 @@ namespace Photobooth.Services
             {
                 try
                 {
+                    string fileName = Path.GetFileNameWithoutExtension(foregroundPath);
+                    string dateStamp = DateTime.Now.ToString("yyyyMMdd");
                     string outputPath = Path.Combine(outputFolder,
-                        $"{Path.GetFileNameWithoutExtension(foregroundPath)}_composed.jpg");
+                        $"{fileName}_{dateStamp}_composed.jpg");
 
                     using (var foreground = Image.FromFile(foregroundPath) as Bitmap)
                     using (var mask = Image.FromFile(maskPath) as Bitmap)

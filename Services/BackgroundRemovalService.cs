@@ -501,8 +501,9 @@ namespace Photobooth.Services
                             Directory.CreateDirectory(resultFolder);
 
                             var fileName = Path.GetFileNameWithoutExtension(imagePath);
-                            var foregroundPath = Path.Combine(resultFolder, $"{fileName}_nobg.png");
-                            var maskPath = Path.Combine(resultFolder, $"{fileName}_mask.png");
+                            string dateStamp = DateTime.Now.ToString("yyyyMMdd");
+                            var foregroundPath = Path.Combine(resultFolder, $"{fileName}_{dateStamp}_nobg.png");
+                            var maskPath = Path.Combine(resultFolder, $"{fileName}_{dateStamp}_mask.png");
 
                             // Save with high quality PNG settings
                             var encoder = new SixLabors.ImageSharp.Formats.Png.PngEncoder
@@ -2645,7 +2646,8 @@ namespace Photobooth.Services
                     Directory.CreateDirectory(resultFolder);
 
                     var fileName = Path.GetFileNameWithoutExtension(imagePath);
-                    var outputPath = Path.Combine(resultFolder, $"{fileName}_nobg.png");
+                    string dateStamp = DateTime.Now.ToString("yyyyMMdd");
+                    var outputPath = Path.Combine(resultFolder, $"{fileName}_{dateStamp}_nobg.png");
 
                     // For now, just copy the original
                     File.Copy(imagePath, outputPath, true);
