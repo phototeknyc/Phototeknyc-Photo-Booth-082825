@@ -18,6 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a WPF photobooth application written in C# that provides a visual designer canvas for creating photo layouts with camera integration and advanced printing capabilities. The solution is built on .NET Framework 4.8 and includes extensive touch support for touchscreen kiosks.
 
 ## Build Commands
+- **Quick build (recommended)**: `./build.sh`
 - **Build entire solution**: `msbuild Photobooth.sln`
 - **Build specific project**: `msbuild Photobooth.csproj`
 - **Build for Release**: `msbuild Photobooth.sln /p:Configuration=Release`

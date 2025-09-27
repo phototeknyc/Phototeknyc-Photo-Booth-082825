@@ -127,17 +127,9 @@ namespace Photobooth.Controls
                 {
                     var viewModel = new TemplateItemViewModel(template);
 
-                    // Generate thumbnail if needed
-                    if (string.IsNullOrEmpty(template.ThumbnailImagePath) || !File.Exists(template.ThumbnailImagePath))
-                    {
-                        viewModel.ThumbnailImageSource = CreateTemplateThumbnail(template);
-                        viewModel.HasThumbnail = viewModel.ThumbnailImageSource != null;
-                    }
-                    else
-                    {
-                        viewModel.ThumbnailImageSource = LoadImageFromPath(template.ThumbnailImagePath);
-                        viewModel.HasThumbnail = viewModel.ThumbnailImageSource != null;
-                    }
+                    // Always generate a consistent preview; ignore stored thumbnails
+                    viewModel.ThumbnailImageSource = GeneratePreviewImage(template);
+                    viewModel.HasThumbnail = viewModel.ThumbnailImageSource != null;
 
                     // Mark preselected template
                     if (preselectedTemplateId > 0 && template.Id == preselectedTemplateId)
@@ -754,46 +746,8 @@ namespace Photobooth.Controls
         {
             try
             {
-                var drawingVisual = new DrawingVisual();
-                using (var drawingContext = drawingVisual.RenderOpen())
-                {
-                    // Background
-                    var backgroundColor = Colors.White;
-                    if (!string.IsNullOrEmpty(template.BackgroundColor))
-                    {
-                        try
-                        {
-                            backgroundColor = (Color)ColorConverter.ConvertFromString(template.BackgroundColor);
-                        }
-                        catch { }
-                    }
-
-                    var backgroundBrush = new SolidColorBrush(backgroundColor);
-                    drawingContext.DrawRectangle(backgroundBrush, null, new Rect(0, 0, 200, 150));
-
-                    // Template indicator
-                    drawingContext.DrawRectangle(null, new Pen(Brushes.Gray, 1), new Rect(10, 40, 180, 100));
-                }
-
-                var renderTargetBitmap = new RenderTargetBitmap(200, 150, 96, 96, PixelFormats.Pbgra32);
-                renderTargetBitmap.Render(drawingVisual);
-
-                var bitmapImage = new BitmapImage();
-                using (var stream = new MemoryStream())
-                {
-                    var encoder = new PngBitmapEncoder();
-                    encoder.Frames.Add(BitmapFrame.Create(renderTargetBitmap));
-                    encoder.Save(stream);
-                    stream.Position = 0;
-
-                    bitmapImage.BeginInit();
-                    bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmapImage.StreamSource = stream;
-                    bitmapImage.EndInit();
-                    bitmapImage.Freeze();
-                }
-
-                return bitmapImage;
+                // Keep for compatibility but delegate to richer preview generator
+                return GeneratePreviewImage(template);
             }
             catch
             {
@@ -801,22 +755,256 @@ namespace Photobooth.Controls
             }
         }
 
+        // Generate a high-fidelity preview image using template data
+        private BitmapImage GeneratePreviewImage(TemplateData template)
+        {
+            try
+            {
+                if (template == null)
+                {
+                    Log.Debug("TemplateBrowserOverlay: Template is null, cannot generate preview");
+                    return null;
+                }
+
+                // Card preview bounds
+                const double maxThumbWidth = 240;  // matches card width
+                const double maxThumbHeight = 160; // matches card preview height
+
+                double templateWidth = Math.Max(1, template.CanvasWidth);
+                double templateHeight = Math.Max(1, template.CanvasHeight);
+
+                if (templateWidth > 10000 || templateHeight > 10000)
+                {
+                    Log.Debug($"TemplateBrowserOverlay: Template {template.Name} has invalid dimensions: {templateWidth}x{templateHeight}");
+                    return null;
+                }
+
+                double scale = Math.Min(maxThumbWidth / templateWidth, maxThumbHeight / templateHeight);
+                int thumbWidth = Math.Max(1, (int)(templateWidth * scale));
+                int thumbHeight = Math.Max(1, (int)(templateHeight * scale));
+
+                var visual = new DrawingVisual();
+                using (var dc = visual.RenderOpen())
+                {
+                    // Draw background: use template background image if available; else use solid/gradient
+                    if (!string.IsNullOrEmpty(template.BackgroundImagePath) && File.Exists(template.BackgroundImagePath))
+                    {
+                        var bg = new BitmapImage();
+                        bg.BeginInit();
+                        bg.CacheOption = BitmapCacheOption.OnLoad;
+                        bg.UriSource = new Uri(template.BackgroundImagePath, UriKind.Absolute);
+                        bg.EndInit();
+                        bg.Freeze();
+
+                        // Uniform fit into thumbnail area
+                        double imgRatio = (double)bg.PixelWidth / Math.Max(1, bg.PixelHeight);
+                        double thumbRatio = (double)thumbWidth / Math.Max(1, thumbHeight);
+                        Rect dest;
+                        if (imgRatio > thumbRatio)
+                        {
+                            // Image wider -> fit by width
+                            double h = thumbWidth / imgRatio;
+                            dest = new Rect(0, (thumbHeight - h) / 2, thumbWidth, h);
+                        }
+                        else
+                        {
+                            // Image taller -> fit by height
+                            double w = thumbHeight * imgRatio;
+                            dest = new Rect((thumbWidth - w) / 2, 0, w, thumbHeight);
+                        }
+                        dc.DrawImage(bg, dest);
+                    }
+                    else
+                    {
+                        // Fallback background
+                        Color c1 = Colors.DimGray;
+                        Color c2 = Colors.Black;
+                        var brush = new LinearGradientBrush(c1, c2, 90);
+                        dc.DrawRectangle(brush, null, new Rect(0, 0, thumbWidth, thumbHeight));
+                    }
+
+                    // Load items from DB
+                    var items = _templateDatabase.GetCanvasItems(template.Id) ?? new List<CanvasItemData>();
+                    if (items.Count == 0)
+                    {
+                        // Simple default placeholder if no items yet
+                        items = new List<CanvasItemData>
+                        {
+                            new CanvasItemData 
+                            { ItemType = "Placeholder", X = templateWidth * 0.1, Y = templateHeight * 0.1, Width = templateWidth * 0.8, Height = templateHeight * 0.8, PlaceholderNumber = 1 }
+                        };
+                    }
+
+                    // Draw all items by Z order (images, placeholders, text, shapes)
+                    int index = 0;
+                    foreach (var item in items.OrderBy(i => i.ZIndex))
+                    {
+                        double x = item.X * scale;
+                        double y = item.Y * scale;
+                        double w = Math.Max(1, item.Width * scale);
+                        double h = Math.Max(1, item.Height * scale);
+                        var rect = new Rect(x, y, w, h);
+
+                        if (item.Rotation != 0)
+                        {
+                            dc.PushTransform(new RotateTransform(item.Rotation, rect.Left + rect.Width / 2, rect.Top + rect.Height / 2));
+                        }
+
+                        switch (item.ItemType)
+                        {
+                            case "Image":
+                                if (!string.IsNullOrEmpty(item.ImagePath) && File.Exists(item.ImagePath))
+                                {
+                                    try
+                                    {
+                                        var img = LoadImageFromPath(item.ImagePath);
+                                        if (img != null) dc.DrawImage(img, rect);
+                                    }
+                                    catch { }
+                                }
+                                break;
+
+                            case "Placeholder":
+                                Color phColor;
+                                if (!string.IsNullOrEmpty(item.PlaceholderColor))
+                                {
+                                    try { phColor = (Color)ColorConverter.ConvertFromString(item.PlaceholderColor); }
+                                    catch { phColor = GetPaletteColor(item.PlaceholderNumber ?? (index + 1)); }
+                                }
+                                else
+                                {
+                                    phColor = GetPaletteColor(item.PlaceholderNumber ?? (index + 1));
+                                }
+                                var rounded = new RectangleGeometry(rect, 6, 6);
+                                dc.DrawGeometry(new SolidColorBrush(Color.FromArgb(220, phColor.R, phColor.G, phColor.B)),
+                                               new Pen(new SolidColorBrush(Colors.White), 2), rounded);
+                                int n = item.PlaceholderNumber ?? (index + 1);
+                                var ft = new FormattedText(
+                                    $"Photo {n}",
+                                    System.Globalization.CultureInfo.CurrentCulture,
+                                    FlowDirection.LeftToRight,
+                                    new Typeface("Segoe UI"),
+                                    Math.Min(w, h) * 0.16,
+                                    new SolidColorBrush(Color.FromRgb(50, 50, 50)), 96);
+                                dc.DrawText(ft, new Point(rect.Left + (rect.Width - ft.Width) / 2, rect.Top + (rect.Height - ft.Height) / 2));
+                                break;
+
+                            case "Text":
+                                var tf = new Typeface(
+                                    new FontFamily(string.IsNullOrEmpty(item.FontFamily) ? "Segoe UI" : item.FontFamily),
+                                    item.IsItalic ? FontStyles.Italic : FontStyles.Normal,
+                                    item.IsBold ? FontWeights.Bold : FontWeights.Normal,
+                                    FontStretches.Normal);
+                                Brush brush = new SolidColorBrush(Colors.Black);
+                                if (!string.IsNullOrEmpty(item.TextColor))
+                                {
+                                    try { brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item.TextColor)); } catch { }
+                                }
+                                double fs = Math.Max(8, (item.FontSize ?? 20) * scale);
+                                var t = new FormattedText(item.Text ?? string.Empty,
+                                    System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                                    tf, fs, brush, 96);
+                                t.MaxTextWidth = rect.Width; t.MaxTextHeight = rect.Height;
+                                dc.DrawText(t, new Point(rect.Left, rect.Top));
+                                break;
+
+                            case "Shape":
+                                Brush fill = Brushes.Transparent; Pen pen = null;
+                                if (!string.IsNullOrEmpty(item.FillColor)) { try { fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item.FillColor)); } catch { } }
+                                if (!string.IsNullOrEmpty(item.StrokeColor) && item.StrokeThickness > 0) { try { pen = new Pen(new SolidColorBrush((Color)ColorConverter.ConvertFromString(item.StrokeColor)), item.StrokeThickness); } catch { } }
+                                var st = item.ShapeType?.Trim()?.ToLowerInvariant();
+                                if (st == "circle" || st == "ellipse")
+                                    dc.DrawEllipse(fill, pen, new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2), rect.Width / 2, rect.Height / 2);
+                                else
+                                    dc.DrawRectangle(fill, pen, rect);
+                                break;
+                        }
+
+                        if (item.Rotation != 0) dc.Pop();
+                        index++;
+                    }
+                }
+
+                var rtb = new RenderTargetBitmap(thumbWidth, thumbHeight, 96, 96, PixelFormats.Pbgra32);
+
+                try
+                {
+                    rtb.Render(visual);
+                }
+                catch (Exception renderEx)
+                {
+                    Log.Error($"TemplateBrowserOverlay: Failed to render visual for template {template.Name}: {renderEx.Message}");
+                    return null;
+                }
+
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(rtb));
+                using (var ms = new MemoryStream())
+                {
+                    encoder.Save(ms);
+                    ms.Position = 0;
+                    var bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.StreamSource = ms;
+                    bmp.EndInit();
+                    bmp.Freeze();
+                    return bmp;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TemplateBrowserOverlay: Failed to generate preview for template {template.Name}: {ex.Message}");
+                return null;
+            }
+        }
+
+        private Color GetPaletteColor(int n)
+        {
+            Color[] palette = new Color[]
+            {
+                Color.FromRgb(255,182,193), // Light Pink
+                Color.FromRgb(173,216,230), // Light Blue
+                Color.FromRgb(144,238,144), // Light Green
+                Color.FromRgb(255,228,181), // Peach/Moccasin
+                Color.FromRgb(221,160,221), // Plum
+                Color.FromRgb(240,230,140), // Khaki
+            };
+            int idx = Math.Max(0, (n - 1) % palette.Length);
+            return palette[idx];
+        }
+
         private BitmapImage LoadImageFromPath(string imagePath)
         {
-            if (string.IsNullOrEmpty(imagePath) || !File.Exists(imagePath)) return null;
+            if (string.IsNullOrEmpty(imagePath)) return null;
 
             try
             {
+                if (!File.Exists(imagePath))
+                {
+                    Log.Debug($"TemplateBrowserOverlay: Image file not found: {imagePath}");
+                    return null;
+                }
+
+                var fileInfo = new FileInfo(imagePath);
+                if (fileInfo.Length == 0)
+                {
+                    Log.Debug($"TemplateBrowserOverlay: Image file is empty: {imagePath}");
+                    return null;
+                }
+
                 var bitmapImage = new BitmapImage();
                 bitmapImage.BeginInit();
                 bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
+                bitmapImage.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
                 bitmapImage.UriSource = new Uri(imagePath, UriKind.Absolute);
                 bitmapImage.EndInit();
                 bitmapImage.Freeze();
                 return bitmapImage;
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Debug($"TemplateBrowserOverlay: Failed to load image from {imagePath}: {ex.Message}");
                 return null;
             }
         }

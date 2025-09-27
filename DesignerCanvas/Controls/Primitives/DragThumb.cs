@@ -36,6 +36,7 @@ namespace DesignerCanvas.Controls.Primitives
             if (destItem == null) return;
             designer = DesignerCanvas.FindDesignerCanvas(this);
             if (designer == null) return;
+            designer.BeginBatchDrag();
             instantPreview = designer.SelectedItems.Count < InstantPreviewItemsThreshold;
             foreach (var item in designer.SelectedItems)
             {
@@ -79,16 +80,16 @@ namespace DesignerCanvas.Controls.Primitives
                     deltaX = minOverlap - item.Left - item.Width;
                 
                 // Prevent moving completely off the right edge  
-                if (newLeft > designer.ActualWidth - minOverlap)
-                    deltaX = designer.ActualWidth - minOverlap - item.Left;
+                if (newLeft > designer.ViewPortRect.Width - minOverlap)
+                    deltaX = designer.ViewPortRect.Width - minOverlap - item.Left;
                 
                 // Prevent moving completely off the top edge
                 if (newBottom < minOverlap)
                     deltaY = minOverlap - item.Top - item.Height;
                 
                 // Prevent moving completely off the bottom edge
-                if (newTop > designer.ActualHeight - minOverlap)
-                    deltaY = designer.ActualHeight - minOverlap - item.Top;
+                if (newTop > designer.ViewPortRect.Height - minOverlap)
+                    deltaY = designer.ViewPortRect.Height - minOverlap - item.Top;
             }
             if (instantPreview)
             {
@@ -96,15 +97,30 @@ namespace DesignerCanvas.Controls.Primitives
                 foreach (var item in designer.SelectedItems)
                 {
                     item.NotifyUserDragging(deltaX, deltaY);
-                    item.Left += deltaX;
-                    item.Top += deltaY;
+                    // Coalesce Left/Top updates where possible to reduce duplicate invalidations
+                    if (item is CanvasItem ci)
+                    {
+                        ci.Location = new Point(ci.Left + deltaX, ci.Top + deltaY);
+                    }
+                    else
+                    {
+                        item.Left += deltaX;
+                        item.Top += deltaY;
+                    }
                 }
             }
             else
             {
                 destItem.NotifyUserDragging(deltaX, deltaY);
-                destItem.Left += deltaX;
-                destItem.Top += deltaY;
+                if (destItem is CanvasItem dci)
+                {
+                    dci.Location = new Point(dci.Left + deltaX, dci.Top + deltaY);
+                }
+                else
+                {
+                    destItem.Left += deltaX;
+                    destItem.Top += deltaY;
+                }
             }
             e.Handled = true;
         }
@@ -146,23 +162,30 @@ namespace DesignerCanvas.Controls.Primitives
                         deltaHorizontal = minOverlap - constraintItem.Left - constraintItem.Width;
                     
                     // Prevent moving completely off the right edge  
-                    if (newLeft > designer.ActualWidth - minOverlap)
-                        deltaHorizontal = designer.ActualWidth - minOverlap - constraintItem.Left;
+                    if (newLeft > designer.ViewPortRect.Width - minOverlap)
+                        deltaHorizontal = designer.ViewPortRect.Width - minOverlap - constraintItem.Left;
                     
                     // Prevent moving completely off the top edge
                     if (newBottom < minOverlap)
                         deltaVertical = minOverlap - constraintItem.Top - constraintItem.Height;
                     
                     // Prevent moving completely off the bottom edge
-                    if (newTop > designer.ActualHeight - minOverlap)
-                        deltaVertical = designer.ActualHeight - minOverlap - constraintItem.Top;
+                    if (newTop > designer.ViewPortRect.Height - minOverlap)
+                        deltaVertical = designer.ViewPortRect.Height - minOverlap - constraintItem.Top;
                 }
                 foreach (var item in designer.SelectedItems.OfType<IBoxCanvasItem>())
                 {
                     if (item == destItem) continue;
                     item.NotifyUserDragging(deltaHorizontal, deltaVertical);
-                    item.Left += deltaHorizontal;
-                    item.Top += deltaVertical;
+                    if (item is CanvasItem ci)
+                    {
+                        ci.Location = new Point(ci.Left + deltaHorizontal, ci.Top + deltaVertical);
+                    }
+                    else
+                    {
+                        item.Left += deltaHorizontal;
+                        item.Top += deltaVertical;
+                    }
                 }
             }
             foreach (var item in designer.SelectedItems)
@@ -170,6 +193,7 @@ namespace DesignerCanvas.Controls.Primitives
                 item.NotifyUserDraggingStarted();
             }
             designer.InvalidateMeasure();
+            designer.EndBatchDrag();
         }
     }
 }

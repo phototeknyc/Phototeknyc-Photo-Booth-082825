@@ -91,7 +91,7 @@ namespace Photobooth.Models
                     },
                     DefaultParameters = new ModelParameters
                     {
-                        OutputFormat = "png"
+                        OutputFormat = "jpg"
                     }
                 },
                 new AIModelDefinition
@@ -199,9 +199,10 @@ namespace Photobooth.Models
                     Provider = "replicate",
                     ModelPath = "bytedance/seedream-4",
                     PreservesIdentity = false,
-                    SupportsImageInput = false, // This is a text-to-image model
-                    ImageInputFormat = "none", // No image input required
-                    SupportsSynchronousMode = false,
+                    SupportsImageInput = true,
+                    ImageInputFormat = "dataurl",
+                    RequiresImageArray = true,
+                    SupportsSynchronousMode = true,
                     Capabilities = new ModelCapabilities
                     {
                         SupportsNegativePrompt = false,
@@ -214,8 +215,8 @@ namespace Photobooth.Models
                     DefaultParameters = new ModelParameters
                     {
                         OutputFormat = "jpg",
-                        Width = 1024,
-                        Height = 768 // Default 4:3 aspect ratio
+                        Width = 2048,
+                        Height = 2048
                     }
                 }
             };

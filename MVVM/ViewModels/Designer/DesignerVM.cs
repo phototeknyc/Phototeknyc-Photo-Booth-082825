@@ -3398,25 +3398,42 @@ namespace Photobooth.MVVM.ViewModels.Designer
 					item = imageItem;
 					break;
 					
-				case "Shape":
-					// Parse shape type first
-					ShapeType shapeType = ShapeType.Rectangle;
-					if (!string.IsNullOrEmpty(data.ShapeType))
-					{
-						Enum.TryParse<ShapeType>(data.ShapeType, out shapeType);
-					}
+                case "Shape":
+                    // Parse shape type first (accept both Circle/Ellipse)
+                    ShapeType shapeType = ShapeType.Rectangle;
+                    if (!string.IsNullOrEmpty(data.ShapeType))
+                    {
+                        var st = data.ShapeType.Trim();
+                        if (string.Equals(st, "Ellipse", StringComparison.OrdinalIgnoreCase))
+                        {
+                            shapeType = ShapeType.Circle;
+                        }
+                        else
+                        {
+                            Enum.TryParse<ShapeType>(st, true, out shapeType);
+                        }
+                    }
 					
 					// Create shape with required constructor parameters
 					var shapeItem = new ShapeCanvasItem(data.X, data.Y, shapeType);
 					
 					// Set additional properties
-					shapeItem.Fill = ColorStringToBrush(data.FillColor);
-					shapeItem.Stroke = ColorStringToBrush(data.StrokeColor);
-					shapeItem.StrokeThickness = data.StrokeThickness;
-					shapeItem.HasNoFill = data.HasNoFill;
-					shapeItem.HasNoStroke = data.HasNoStroke;
-					item = shapeItem;
-					break;
+                    shapeItem.Fill = ColorStringToBrush(data.FillColor);
+                    shapeItem.Stroke = ColorStringToBrush(data.StrokeColor);
+                    shapeItem.StrokeThickness = data.StrokeThickness;
+                    shapeItem.HasNoFill = data.HasNoFill;
+                    shapeItem.HasNoStroke = data.HasNoStroke;
+                    // Apply shadow if provided
+                    if (data.HasShadow)
+                    {
+                        shapeItem.HasShadow = true;
+                        shapeItem.ShadowColor = ColorStringToColor(data.ShadowColor);
+                        shapeItem.ShadowBlurRadius = data.ShadowBlurRadius;
+                        shapeItem.ShadowOffsetX = data.ShadowOffsetX;
+                        shapeItem.ShadowOffsetY = data.ShadowOffsetY;
+                    }
+                    item = shapeItem;
+                    break;
 			}
 			
 			// Set common properties

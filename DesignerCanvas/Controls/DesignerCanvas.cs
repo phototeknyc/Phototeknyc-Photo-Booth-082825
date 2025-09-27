@@ -294,6 +294,17 @@ namespace DesignerCanvas.Controls
         private void Item_BoundsChanged(object sender, EventArgs e)
         {
             var obj = (ICanvasItem) sender;
+            // During batch dragging, avoid heavy churn each frame.
+            if (_dragDepth > 0)
+            {
+                _dragChangedAnyItem = true;
+                // Ensure items that come into view appear; skip hiding to avoid extra churn mid-drag.
+                if (_ViewPortRect.IntersectsWith(obj.Bounds))
+                {
+                    SetContainerVisibility(obj, true);
+                }
+                return;
+            }
             // Bring the container into view if the bounds has been moved into viewport, vice versa.
             SetContainerVisibility(obj, _ViewPortRect.IntersectsWith(obj.Bounds));
             UnionExtendRect(obj.Bounds);
@@ -351,6 +362,30 @@ namespace DesignerCanvas.Controls
         }
 
         private DrawingVisual debuggingVisual;
+
+        // Batch-dragging state to reduce per-move churn
+        private int _dragDepth = 0;
+        private bool _dragChangedAnyItem = false;
+
+        internal void BeginBatchDrag()
+        {
+            _dragDepth++;
+        }
+
+        internal void EndBatchDrag()
+        {
+            if (_dragDepth > 0) _dragDepth--;
+            if (_dragDepth == 0)
+            {
+                if (_dragChangedAnyItem)
+                {
+                    _dragChangedAnyItem = false;
+                    // Recalculate extents and viewport-generated containers once at the end.
+                    RefreshExtendRect();
+                    InvalidateViewPortRect();
+                }
+            }
+        }
 
         public override void OnApplyTemplate()
         {

@@ -735,7 +735,31 @@
                                                                Click="TestTemplate_Click"
                                                                Tag="{Binding}"
                                                                Cursor="Hand"
+                                                               Margin="0,0,0,2"
                                                                ToolTip="Test this template with a photo">
+                                                            <Button.Template>
+                                                                <ControlTemplate TargetType="Button">
+                                                                    <Border Background="{TemplateBinding Background}"
+                                                                           CornerRadius="3">
+                                                                        <ContentPresenter HorizontalAlignment="Center"
+                                                                                       VerticalAlignment="Center"/>
+                                                                    </Border>
+                                                                </ControlTemplate>
+                                                            </Button.Template>
+                                                        </Button>
+
+                                                        <!-- Rename Template Button -->
+                                                        <Button x:Name="RenameTemplateBtn"
+                                                               Content="✏️ Rename"
+                                                               Height="22"
+                                                               FontSize="10"
+                                                               Background="#4CAF50"
+                                                               Foreground="White"
+                                                               BorderThickness="0"
+                                                               Click="RenameTemplate_Click"
+                                                               Tag="{Binding}"
+                                                               Cursor="Hand"
+                                                               ToolTip="Rename this template">
                                                             <Button.Template>
                                                                 <ControlTemplate TargetType="Button">
                                                                     <Border Background="{TemplateBinding Background}"

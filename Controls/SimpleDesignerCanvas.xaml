@@ -49,6 +49,7 @@
                         MouseLeftButtonDown="MainCanvas_MouseLeftButtonDown"
                         MouseLeftButtonUp="MainCanvas_MouseLeftButtonUp"
                         MouseMove="MainCanvas_MouseMove"
+                        TouchDown="MainCanvas_TouchDown"
                         AllowDrop="True"
                         Drop="MainCanvas_Drop"
                         DragOver="MainCanvas_DragOver">

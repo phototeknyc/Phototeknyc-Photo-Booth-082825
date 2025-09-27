@@ -6,6 +6,8 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Photobooth.Database;
 using Photobooth.Models;
@@ -80,6 +82,7 @@ namespace Photobooth.Services
             get => _selectedEvent;
             set
             {
+                bool isSameEvent = _selectedEvent != null && value != null && _selectedEvent.Id == value.Id;
                 _selectedEvent = value;
                 OnPropertyChanged();
                 if (value != null)
@@ -120,9 +123,16 @@ namespace Photobooth.Services
                     // Only update selection time if this is a new selection (not restoring from settings)
                     if (!_isRestoringFromSettings)
                     {
-                        _eventSelectionTime = DateTime.Now;
-                        SaveEventSelectionTime();
-                        Log.Debug($"Saved selected event ID: {value.Id} - {value.Name} at {_eventSelectionTime}");
+                        if (!isSameEvent)
+                        {
+                            _eventSelectionTime = DateTime.Now;
+                            SaveEventSelectionTime();
+                            Log.Debug($"Saved selected event ID: {value.Id} - {value.Name} at {_eventSelectionTime}");
+                        }
+                        else
+                        {
+                            Log.Debug($"EventSelectionService: Selected same event '{value.Name}', preserving existing selection time {_eventSelectionTime}");
+                        }
                     }
                     else
                     {
@@ -203,12 +213,8 @@ namespace Photobooth.Services
                 FilteredEvents = new ObservableCollection<EventData>(_allEvents);
                 
                 Log.Debug($"EventSelectionService: Loaded {_allEvents.Count} events");
-                
-                // Select first event if available for preview
-                if (_allEvents.Any() && SelectedEvent == null)
-                {
-                    SelectedEvent = _allEvents.First();
-                }
+                // Do not auto-select an event here; selection should be explicit to
+                // avoid unintentionally resetting the 5-hour timer on UI open.
             }
             catch (Exception ex)
             {
@@ -232,27 +238,10 @@ namespace Photobooth.Services
                 
                 if (templates != null && templates.Any())
                 {
-                    // Get first active template
+                    // Get first active template and build robust preview
                     var template = templates.FirstOrDefault(t => t.IsActive) ?? templates.First();
-                    
-                    // Try to load preview image
-                    BitmapImage previewImage = null;
-                    
-                    if (!string.IsNullOrEmpty(template.ThumbnailImagePath) && File.Exists(template.ThumbnailImagePath))
-                    {
-                        previewImage = LoadImageFromFile(template.ThumbnailImagePath);
-                    }
-                    else if (!string.IsNullOrEmpty(template.BackgroundImagePath) && File.Exists(template.BackgroundImagePath))
-                    {
-                        previewImage = LoadImageFromFile(template.BackgroundImagePath);
-                    }
-                    
-                    // Store the preview image in a dynamic property (we'll extend EventData)
-                    // For now, we'll use a dictionary to map event to preview
-                    if (previewImage != null)
-                    {
-                        _eventPreviews[eventData.Id] = previewImage;
-                    }
+                    var previewImage = GenerateTemplatePreviewImage(template, 220, 180);
+                    if (previewImage != null) _eventPreviews[eventData.Id] = previewImage;
                 }
             }
             catch (Exception ex)
@@ -325,22 +314,23 @@ namespace Photobooth.Services
                 {
                     // Get first active template
                     PreviewTemplate = templates.FirstOrDefault(t => t.IsActive) ?? templates.First();
-                    
-                    // Load template preview image
-                    if (!string.IsNullOrEmpty(PreviewTemplate.ThumbnailImagePath) && File.Exists(PreviewTemplate.ThumbnailImagePath))
+
+                    var bmp = GenerateTemplatePreviewImage(PreviewTemplate, 320, 240);
+                    if (bmp != null)
                     {
-                        LoadPreviewImage(PreviewTemplate.ThumbnailImagePath);
-                    }
-                    else if (!string.IsNullOrEmpty(PreviewTemplate.BackgroundImagePath) && File.Exists(PreviewTemplate.BackgroundImagePath))
-                    {
-                        LoadPreviewImage(PreviewTemplate.BackgroundImagePath);
+                        TemplatePreviewImage = bmp;
                     }
                     else
                     {
-                        // Try to generate a preview from the template data
-                        GenerateTemplatePreview(PreviewTemplate);
+                        // Fallbacks
+                        if (!string.IsNullOrEmpty(PreviewTemplate.ThumbnailImagePath) && File.Exists(PreviewTemplate.ThumbnailImagePath))
+                            LoadPreviewImage(PreviewTemplate.ThumbnailImagePath);
+                        else if (!string.IsNullOrEmpty(PreviewTemplate.BackgroundImagePath) && File.Exists(PreviewTemplate.BackgroundImagePath))
+                            LoadPreviewImage(PreviewTemplate.BackgroundImagePath);
+                        else
+                            GenerateTemplatePreview(PreviewTemplate);
                     }
-                    
+
                     Log.Debug($"EventSelectionService: Loaded preview template '{PreviewTemplate.Name}' for event");
                 }
                 else
@@ -413,41 +403,233 @@ namespace Photobooth.Services
         {
             try
             {
-                // Try to use the background image as preview if available
-                if (!string.IsNullOrEmpty(template.BackgroundImagePath) && File.Exists(template.BackgroundImagePath))
-                {
-                    LoadPreviewImage(template.BackgroundImagePath);
-                    return;
-                }
-                
-                // Look for composed images in common session folders
-                var sessionPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Photobooth Sessions");
-                if (Directory.Exists(sessionPath))
-                {
-                    // Look for any recent composed image
-                    var composedFiles = Directory.GetFiles(sessionPath, "*composed*.jpg", SearchOption.AllDirectories)
-                        .Union(Directory.GetFiles(sessionPath, "*composed*.png", SearchOption.AllDirectories))
-                        .Union(Directory.GetFiles(sessionPath, "*final*.jpg", SearchOption.AllDirectories))
-                        .Union(Directory.GetFiles(sessionPath, "*final*.png", SearchOption.AllDirectories))
-                        .OrderByDescending(f => new FileInfo(f).LastWriteTime)
-                        .Take(1)
-                        .FirstOrDefault();
-                    
-                    if (!string.IsNullOrEmpty(composedFiles) && File.Exists(composedFiles))
-                    {
-                        LoadPreviewImage(composedFiles);
-                        return;
-                    }
-                }
-                
-                // If no preview found, clear the image
-                TemplatePreviewImage = null;
+                TemplatePreviewImage = GenerateTemplatePreviewImage(template, 320, 240);
             }
             catch (Exception ex)
             {
                 Log.Error($"EventSelectionService: Failed to generate template preview: {ex.Message}");
                 TemplatePreviewImage = null;
             }
+        }
+
+        // Public: generate robust preview with labels and consistent scaling
+        public BitmapImage GenerateTemplatePreviewImage(TemplateData template, int maxWidth = 320, int maxHeight = 240)
+        {
+            try
+            {
+                if (template == null) return null;
+
+                // Ignore stored thumbnails; generate preview dynamically for consistent scaling
+
+                // Generate from template contents
+                double tW = Math.Max(1, template.CanvasWidth);
+                double tH = Math.Max(1, template.CanvasHeight);
+                double scale = Math.Min((double)maxWidth / tW, (double)maxHeight / tH);
+                int outW = Math.Max(1, (int)(tW * scale));
+                int outH = Math.Max(1, (int)(tH * scale));
+
+                var items = _templateDatabase.GetCanvasItems(template.Id) ?? new List<CanvasItemData>();
+                var visual = new DrawingVisual();
+                using (var dc = visual.RenderOpen())
+                {
+                    // Background: image if available, scaled Uniform
+                    if (!string.IsNullOrEmpty(template.BackgroundImagePath) && File.Exists(template.BackgroundImagePath))
+                    {
+                        var bg = LoadImageFromFile(template.BackgroundImagePath);
+                        if (bg != null)
+                        {
+                            double imgRatio = (double)bg.PixelWidth / Math.Max(1, bg.PixelHeight);
+                            double outRatio = (double)outW / Math.Max(1, outH);
+                            Rect dest;
+                            if (imgRatio > outRatio)
+                            {
+                                double h = outW / imgRatio;
+                                dest = new Rect(0, (outH - h) / 2, outW, h);
+                            }
+                            else
+                            {
+                                double w = outH * imgRatio;
+                                dest = new Rect((outW - w) / 2, 0, w, outH);
+                            }
+                            dc.DrawImage(bg, dest);
+                        }
+                        else
+                        {
+                            dc.DrawRectangle(new SolidColorBrush(Colors.Black), null, new Rect(0, 0, outW, outH));
+                        }
+                    }
+                    else
+                    {
+                        var brush = new LinearGradientBrush(Colors.DimGray, Colors.Black, 90);
+                        dc.DrawRectangle(brush, null, new Rect(0, 0, outW, outH));
+                    }
+
+                // Draw all items in Z order (Image, Placeholder, Text, Shape)
+                int i = 0;
+                foreach (var item in items.OrderBy(x => x.ZIndex))
+                {
+                    double x = item.X * scale;
+                    double y = item.Y * scale;
+                    double w = Math.Max(1, item.Width * scale);
+                    double h = Math.Max(1, item.Height * scale);
+                    var rect = new Rect(x, y, w, h);
+
+                    // Apply rotation origin at item center
+                    if (item.Rotation != 0)
+                    {
+                        dc.PushTransform(new RotateTransform(item.Rotation, rect.Left + rect.Width / 2, rect.Top + rect.Height / 2));
+                    }
+
+                    switch (item.ItemType)
+                    {
+                        case "Image":
+                            if (!string.IsNullOrEmpty(item.ImagePath) && File.Exists(item.ImagePath))
+                            {
+                                try
+                                {
+                                    var img = LoadImageFromFile(item.ImagePath);
+                                    if (img != null)
+                                    {
+                                        dc.DrawImage(img, rect);
+                                    }
+                                }
+                                catch { }
+                            }
+                            break;
+
+                        case "Placeholder":
+                            Color col;
+                            if (!string.IsNullOrEmpty(item.PlaceholderColor))
+                            {
+                                try { col = (Color)ColorConverter.ConvertFromString(item.PlaceholderColor); }
+                                catch { col = GetPaletteColor(item.PlaceholderNumber ?? (i + 1)); }
+                            }
+                            else
+                            {
+                                col = GetPaletteColor(item.PlaceholderNumber ?? (i + 1));
+                            }
+
+                            var geom = new RectangleGeometry(rect, 6, 6);
+                            dc.DrawGeometry(new SolidColorBrush(Color.FromArgb(220, col.R, col.G, col.B)),
+                                           new Pen(new SolidColorBrush(Colors.White), 2), geom);
+
+                            int n = item.PlaceholderNumber ?? (i + 1);
+                            var ft = new FormattedText(
+                                $"Photo {n}",
+                                System.Globalization.CultureInfo.CurrentCulture,
+                                FlowDirection.LeftToRight,
+                                new Typeface("Segoe UI"),
+                                Math.Min(w, h) * 0.16,
+                                new SolidColorBrush(Color.FromRgb(50, 50, 50)), 96);
+                            dc.DrawText(ft, new Point(rect.Left + (rect.Width - ft.Width) / 2, rect.Top + (rect.Height - ft.Height) / 2));
+                            break;
+
+                        case "Text":
+                            // Build typeface
+                            var isBold = item.IsBold;
+                            var isItalic = item.IsItalic;
+                            var typeface = new Typeface(
+                                new FontFamily(string.IsNullOrEmpty(item.FontFamily) ? "Segoe UI" : item.FontFamily),
+                                isItalic ? FontStyles.Italic : FontStyles.Normal,
+                                isBold ? FontWeights.Bold : FontWeights.Normal,
+                                FontStretches.Normal);
+
+                            // Text color
+                            Brush textBrush = new SolidColorBrush(Colors.Black);
+                            if (!string.IsNullOrEmpty(item.TextColor))
+                            {
+                                try { textBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item.TextColor)); }
+                                catch { }
+                            }
+
+                            double fontSize = Math.Max(8, (item.FontSize ?? 20) * scale);
+                            var text = item.Text ?? string.Empty;
+                            var ftText = new FormattedText(
+                                text,
+                                System.Globalization.CultureInfo.CurrentCulture,
+                                FlowDirection.LeftToRight,
+                                typeface,
+                                fontSize,
+                                textBrush,
+                                96);
+                            // Align inside rect
+                            ftText.MaxTextWidth = rect.Width;
+                            ftText.MaxTextHeight = rect.Height;
+                            dc.DrawText(ftText, new Point(rect.Left, rect.Top));
+                            break;
+
+                        case "Shape":
+                            // Basic rectangle/ellipse rendering
+                            Brush fill = Brushes.Transparent;
+                            if (!string.IsNullOrEmpty(item.FillColor))
+                            {
+                                try { fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item.FillColor)); }
+                                catch { }
+                            }
+                            Pen pen = null;
+                            if (!string.IsNullOrEmpty(item.StrokeColor) && item.StrokeThickness > 0)
+                            {
+                                try { pen = new Pen(new SolidColorBrush((Color)ColorConverter.ConvertFromString(item.StrokeColor)), item.StrokeThickness); }
+                                catch { }
+                            }
+
+                            var shapeType = item.ShapeType?.Trim()?.ToLowerInvariant();
+                            if (shapeType == "circle" || shapeType == "ellipse")
+                            {
+                                dc.DrawEllipse(fill, pen, new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2), rect.Width / 2, rect.Height / 2);
+                            }
+                            else
+                            {
+                                dc.DrawRectangle(fill, pen, rect);
+                            }
+                            break;
+                    }
+
+                    if (item.Rotation != 0)
+                    {
+                        dc.Pop();
+                    }
+                    i++;
+                }
+                }
+
+                var rtb = new RenderTargetBitmap(outW, outH, 96, 96, PixelFormats.Pbgra32);
+                rtb.Render(visual);
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(rtb));
+                using (var ms = new System.IO.MemoryStream())
+                {
+                    encoder.Save(ms);
+                    ms.Position = 0;
+                    var bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.StreamSource = ms;
+                    bmp.EndInit();
+                    bmp.Freeze();
+                    return bmp;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"EventSelectionService: Failed to generate template preview image: {ex.Message}");
+                return null;
+            }
+        }
+
+        private Color GetPaletteColor(int n)
+        {
+            Color[] palette = new Color[]
+            {
+                Color.FromRgb(255,182,193), // Light Pink
+                Color.FromRgb(173,216,230), // Light Blue
+                Color.FromRgb(144,238,144), // Light Green
+                Color.FromRgb(255,228,181), // Peach
+                Color.FromRgb(221,160,221), // Plum
+                Color.FromRgb(240,230,140), // Khaki
+            };
+            int idx = Math.Max(0, (n - 1) % palette.Length);
+            return palette[idx];
         }
         
         /// <summary>
@@ -458,6 +640,7 @@ namespace Photobooth.Services
             if (eventData == null) return;
 
             Log.Debug($"EventSelectionService: Selecting event '{eventData.Name}'");
+            bool wasSame = SelectedEvent != null && eventData != null && SelectedEvent.Id == eventData.Id;
             SelectedEvent = eventData;
 
             // Load event backgrounds
@@ -471,8 +654,15 @@ namespace Photobooth.Services
                 Log.Error($"EventSelectionService: Failed to load event backgrounds: {ex.Message}");
             }
 
-            // Start the 5-hour expiration timer
-            StartEventExpirationTimer();
+            // Start the 5-hour expiration timer only if this is a new selection
+            if (!wasSame)
+            {
+                StartEventExpirationTimer();
+            }
+            else
+            {
+                Log.Debug("EventSelectionService: Same event re-selected; preserving existing expiration timer");
+            }
 
             EventSelected?.Invoke(this, eventData);
         }
@@ -535,20 +725,14 @@ namespace Photobooth.Services
 
                 Log.Debug($"EventSelectionService: Settings values after reload - SelectedEventId: {savedEventId}, EventSelectionTime: {savedTime}");
 
-                // If EventSelectionTime is at its default (MinValue or year 2000), but we have a saved event,
-                // assume it was just selected and set the time to now
-                if (savedEventId > 0 && (savedTime == DateTime.MinValue || savedTime.Year <= 2000))
-                {
-                    Log.Debug($"EventSelectionService: Detected saved event {savedEventId} with invalid/default time, setting to current time");
-                    savedTime = DateTime.Now;
-                    _eventSelectionTime = savedTime;
-                    SaveEventSelectionTime();
-                }
+                // If EventSelectionTime is invalid (default), do NOT reset to now.
+                // Treat as no valid persisted timer to preserve correct 5-hour window semantics.
+                bool hasValidSavedTime = savedTime != DateTime.MinValue && savedTime.Year > 2000;
 
                 // Check against the default DateTime value (year 2000)
                 var defaultTime = new DateTime(2000, 1, 1);
 
-                if (savedEventId > 0 && savedTime.Year > 2000)
+                if (savedEventId > 0 && hasValidSavedTime)
                 {
                     var elapsed = DateTime.Now - savedTime;
                     var expirationTime = TimeSpan.FromHours(5);
@@ -604,11 +788,15 @@ namespace Photobooth.Services
                 }
                 else
                 {
-                    // No saved event found, try loading from EventBackgroundService's internal startup logic
-                    Log.Debug("EventSelectionService: No saved event, calling EventBackgroundService startup load");
+                    // No valid saved event/time; do not reset timer implicitly.
+                    // Optionally load backgrounds for compatibility if an event ID exists without a valid time.
+                    Log.Debug("EventSelectionService: No valid saved event/time; skipping implicit timer reset");
                     try
                     {
-                        await EventBackgroundService.Instance.LoadLastSelectedEventOnStartup();
+                        if (savedEventId > 0)
+                        {
+                            await EventBackgroundService.Instance.LoadLastSelectedEventOnStartup();
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -666,15 +854,20 @@ namespace Photobooth.Services
         /// <summary>
         /// Reset service state
         /// </summary>
-        public void Reset()
+        public void Reset(bool preserveSelection = true)
         {
             SearchText = string.Empty;
-            SelectedEvent = null;
+            if (!preserveSelection)
+            {
+                // Explicit reset: clear selection and stop the timer
+                SelectedEvent = null;
+                StopEventExpirationTimer();
+            }
+            // Always clear transient preview state used by the overlay UI
             PreviewTemplate = null;
             TemplatePreviewImage = null;
             _allEvents.Clear();
             FilteredEvents.Clear();
-            StopEventExpirationTimer();
         }
 
         /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -10,10 +11,13 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using DesignerCanvas;
 using DesignerCanvas.Controls;
+using System.IO.Compression;
+using Newtonsoft.Json;
 using Microsoft.Win32;
 using Photobooth.Services;
 using Photobooth.MVVM.ViewModels.Designer;
@@ -51,6 +55,8 @@ namespace Photobooth.Controls
         private System.Windows.Threading.DispatcherTimer _autoSaveTimer;
         private bool _hasUnsavedChanges = false;
         private DateTime _lastSaveTime = DateTime.Now;
+        private int _autoSaveCount = 0;
+        private int _lastItemCount = 0;
         private const int AUTO_SAVE_INTERVAL_SECONDS = 30; // Auto-save every 30 seconds
 
         // Flag to prevent checkbox event during programmatic updates
@@ -120,6 +126,9 @@ namespace Photobooth.Controls
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
+            // Save any pending changes before unloading
+            SaveOnExit();
+
             // Clean up auto-save when control is unloaded
             StopAutoSave();
         }
@@ -245,8 +254,9 @@ namespace Photobooth.Controls
             // Subscribe to the placeholder number edit request event
             DesignerCanvas.PlaceholderNumberEditRequested += OnPlaceholderNumberEditRequested;
 
-            // Set initial canvas size (will be overridden by paper size selection or template loading)
-            DesignerCanvas.Width = 600;
+            // Set initial canvas size to 4x6 (1200x1800 at 300 DPI) - most common print size
+            // Will be overridden by paper size selection or template loading
+            DesignerCanvas.Width = 1200;
             DesignerCanvas.Height = 1800;
 
             Log.Debug($"TouchTemplateDesigner: InitializeCanvas set size to {DesignerCanvas.Width}x{DesignerCanvas.Height}");
@@ -821,8 +831,21 @@ namespace Photobooth.Controls
                     canvas.Items.Clear();
                 }
                 SimpleImageItem.ResetPlaceholderCounter(); // Reset placeholder counter for new template
-                TemplateNameText.Text = "Untitled";
-                _currentTemplateId = -1;
+
+                // Auto-name template after selected event (use current event if none selected in designer)
+                string templateName = "Untitled";
+                var eventToUse = _selectedEvent ?? EventSelectionService.Instance.SelectedEvent;
+                if (eventToUse != null && eventToUse.Id > 0)
+                {
+                    // Generate template name based on event name and current date/time
+                    var timestamp = DateTime.Now.ToString("MMdd_HHmm");
+                    templateName = $"{eventToUse.Name}_{timestamp}";
+                    _selectedEvent = eventToUse; // Update the selected event
+                }
+                TemplateNameText.Text = templateName;
+
+                // Auto-save the new template immediately
+                AutoSaveNewTemplate(templateName);
 
                 // Reset auto-save state for new template
                 _hasUnsavedChanges = false;
@@ -903,15 +926,113 @@ namespace Photobooth.Controls
             }
         }
 
+        private void AutoSaveNewTemplate(string templateName)
+        {
+            try
+            {
+                var canvas = DesignerCanvas as SimpleDesignerCanvas;
+                if (canvas == null) return;
+
+                Log.Debug($"★★★ AutoSaveNewTemplate: Canvas dimensions at save time: {canvas.Width}x{canvas.Height} ★★★");
+                Log.Debug($"★★★ AutoSaveNewTemplate: _desiredCanvasWidth={_desiredCanvasWidth}, _desiredCanvasHeight={_desiredCanvasHeight} ★★★");
+
+                // Generate both thumbnail and full preview
+                string thumbnailPath = GenerateTemplateThumbnail(canvas, templateName);
+                string previewPath = GenerateTemplatePreview(canvas, templateName);
+
+                // Create template data
+                var database = new TemplateDatabase();
+                var template = new TemplateData
+                {
+                    Name = templateName,
+                    CanvasWidth = canvas.Width,
+                    CanvasHeight = canvas.Height,
+                    CanvasItems = new List<CanvasItemData>(),
+                    BackgroundImagePath = GetCanvasBackgroundPath(),
+                    ThumbnailImagePath = thumbnailPath ?? previewPath,  // Use preview as fallback
+                    CreatedDate = DateTime.Now,
+                    ModifiedDate = DateTime.Now,
+                    IsActive = true
+                };
+
+                // Save to database
+                _currentTemplateId = database.SaveTemplate(template);
+
+                // Auto-assign to event if one is selected
+                if (_selectedEvent != null && _currentTemplateId > 0)
+                {
+                    _eventService.AssignTemplateToEvent(_selectedEvent.Id, _currentTemplateId, false);
+                    ShowAutoSaveNotification($"Template '{templateName}' created for event '{_selectedEvent.Name}'");
+                }
+                else
+                {
+                    ShowAutoSaveNotification($"Template '{templateName}' created");
+                }
+
+                Log.Debug($"TouchTemplateDesigner: Auto-saved new template '{templateName}' with ID {_currentTemplateId}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner: Failed to auto-save new template: {ex.Message}");
+            }
+        }
+
+        private string GetCanvasBackgroundPath()
+        {
+            // Try to get the background image path from the canvas
+            var canvas = DesignerCanvas as SimpleDesignerCanvas;
+            if (canvas?.CanvasBackground is ImageBrush imageBrush)
+            {
+                if (imageBrush.ImageSource is BitmapImage bitmapImage)
+                {
+                    return bitmapImage.UriSource?.LocalPath ?? string.Empty;
+                }
+            }
+            return string.Empty;
+        }
+
         private async void PerformAutoSave()
         {
             try
             {
-                // Don't auto-save if template hasn't been manually saved at least once
-                if (_currentTemplateId <= 0) return;
-
                 var canvas = DesignerCanvas as SimpleDesignerCanvas;
-                if (canvas == null || canvas.Items.Count == 0) return;
+                if (canvas == null) return;
+
+                // Auto-create template if it hasn't been saved yet
+                if (_currentTemplateId <= 0)
+                {
+                    // Only auto-create if user has made changes:
+                    // - Added items to canvas, OR
+                    // - Explicitly set a paper size (indicated by _desiredCanvasWidth being set)
+                    bool hasItems = canvas.Items.Count > 0;
+                    bool hasPaperSizeSet = _desiredCanvasWidth.HasValue && _desiredCanvasHeight.HasValue;
+
+                    if (!hasItems && !hasPaperSizeSet)
+                    {
+                        Log.Debug("TouchTemplateDesigner: Skipping auto-save - no items and no paper size set");
+                        return;
+                    }
+
+                    string templateName = TemplateNameText.Text;
+                    if (string.IsNullOrWhiteSpace(templateName) || templateName == "Untitled")
+                    {
+                        if (_selectedEvent != null)
+                        {
+                            var timestamp = DateTime.Now.ToString("MMdd_HHmm");
+                            templateName = $"{_selectedEvent.Name}_{timestamp}";
+                            TemplateNameText.Text = templateName;
+                        }
+                        else
+                        {
+                            templateName = $"Template_{DateTime.Now:MMdd_HHmm}";
+                            TemplateNameText.Text = templateName;
+                        }
+                    }
+                    AutoSaveNewTemplate(templateName);
+                    return;
+                }
+
+                if (canvas.Items.Count == 0) return;
 
                 var database = new TemplateDatabase();
                 var template = database.GetTemplate(_currentTemplateId);
@@ -926,6 +1047,19 @@ namespace Photobooth.Controls
                     var canvasItem = ConvertToCanvasItemData(item, _currentTemplateId);
                     database.SaveCanvasItem(canvasItem);
                 }
+
+                // Regenerate thumbnail periodically (every 5 saves) or if significant changes
+                if (_autoSaveCount % 5 == 0 || canvas.Items.Count != _lastItemCount)
+                {
+                    string newThumbnailPath = GenerateTemplateThumbnail(canvas, template.Name);
+                    if (!string.IsNullOrEmpty(newThumbnailPath))
+                    {
+                        template.ThumbnailImagePath = newThumbnailPath;
+                        database.UpdateTemplate(_currentTemplateId, template);
+                    }
+                    _lastItemCount = canvas.Items.Count;
+                }
+                _autoSaveCount++;
 
                 _hasUnsavedChanges = false;
                 _lastSaveTime = DateTime.Now;
@@ -954,6 +1088,7 @@ namespace Photobooth.Controls
                 Height = item.Height,
                 ZIndex = item.ZIndex,
                 Rotation = item.RotationAngle,
+                Opacity = item.Opacity,
                 IsLocked = false,
                 IsVisible = true
             };
@@ -1000,18 +1135,23 @@ namespace Photobooth.Controls
                     canvasItem.TextColor = textBrush.Color.ToString();
                 }
 
-                // Persist outline from stroke settings
+                // Persist outline from stroke settings - save as both Outline and Stroke for compatibility
                 if (textItem.StrokeThickness > 0 && textItem.StrokeBrush is SolidColorBrush outlineBrush)
                 {
                     canvasItem.HasOutline = true;
                     canvasItem.OutlineThickness = textItem.StrokeThickness;
                     canvasItem.OutlineColor = outlineBrush.Color.ToString();
+                    // Also save as stroke for consistency
+                    canvasItem.StrokeColor = outlineBrush.Color.ToString();
+                    canvasItem.StrokeThickness = textItem.StrokeThickness;
                 }
                 else
                 {
                     canvasItem.HasOutline = false;
                     canvasItem.OutlineThickness = 0;
                     canvasItem.OutlineColor = null;
+                    canvasItem.StrokeColor = null;
+                    canvasItem.StrokeThickness = 0;
                 }
 
                 // Note: TextDecorations/Underline not currently supported in SimpleTextItem
@@ -1061,6 +1201,7 @@ namespace Photobooth.Controls
                 canvasItem.HasShadow = true;
                 canvasItem.ShadowColor = shadow.Color.ToString();
                 canvasItem.ShadowBlurRadius = shadow.BlurRadius;
+                canvasItem.ShadowOpacity = shadow.Opacity;
 
                 // Calculate X,Y offsets from Direction and ShadowDepth
                 var radians = shadow.Direction * (Math.PI / 180);
@@ -1073,6 +1214,7 @@ namespace Photobooth.Controls
                 canvasItem.ShadowOffsetX = 0;
                 canvasItem.ShadowOffsetY = 0;
                 canvasItem.ShadowBlurRadius = 0;
+                canvasItem.ShadowOpacity = 1.0;
                 canvasItem.ShadowColor = null;
             }
 
@@ -1094,6 +1236,48 @@ namespace Photobooth.Controls
                     TemplateNameText.Foreground = new SolidColorBrush(Colors.White);
                 }
             });
+        }
+
+        public void SaveBeforeClose()
+        {
+            // Public method that can be called before closing
+            SaveOnExit();
+        }
+
+        private void SaveOnExit()
+        {
+            try
+            {
+                // Only save if there are unsaved changes and we have a template ID
+                if (_hasUnsavedChanges && _currentTemplateId > 0)
+                {
+                    Log.Debug("TouchTemplateDesigner: Saving changes on exit...");
+
+                    // Perform a synchronous save before exit
+                    var canvas = DesignerCanvas as SimpleDesignerCanvas;
+                    if (canvas == null) return;
+
+                    var database = new TemplateDatabase();
+
+                    // Clear existing canvas items for this template
+                    database.DeleteCanvasItems(_currentTemplateId);
+
+                    // Save all canvas items
+                    foreach (var item in canvas.Items.OrderBy(i => i.ZIndex))
+                    {
+                        var canvasItem = ConvertToCanvasItemData(item, _currentTemplateId);
+                        database.SaveCanvasItem(canvasItem);
+                    }
+
+                    _hasUnsavedChanges = false;
+                    Log.Debug($"TouchTemplateDesigner: Successfully saved template on exit (ID: {_currentTemplateId})");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner: Failed to save on exit: {ex.Message}");
+                // Don't show error message on exit to avoid blocking the close
+            }
         }
 
         private void StopAutoSave()
@@ -1119,12 +1303,25 @@ namespace Photobooth.Controls
 
         #endregion
 
+        // Save button removed - using auto-save only
+        // Keeping method for reference but it's no longer called from UI
         private async void SaveTemplate_Click(object sender, RoutedEventArgs e)
         {
+            // This method is deprecated - auto-save handles all saving
+            return;
+
+            /*
             try
             {
-                var templateName = ShowInputDialog("Save Template", "Enter template name:",
-                    TemplateNameText.Text);
+                // Pre-fill with event-based name if current name is Untitled
+                string defaultName = TemplateNameText.Text;
+                if ((string.IsNullOrWhiteSpace(defaultName) || defaultName == "Untitled") && _selectedEvent != null)
+                {
+                    var timestamp = DateTime.Now.ToString("MMdd_HHmm");
+                    defaultName = $"{_selectedEvent.Name}_{timestamp}";
+                }
+
+                var templateName = ShowInputDialog("Save Template", "Enter template name:", defaultName);
 
                 if (string.IsNullOrWhiteSpace(templateName))
                     return;
@@ -1161,6 +1358,7 @@ namespace Photobooth.Controls
                         Height = item.Height,
                         ZIndex = item.ZIndex,
                         Rotation = item.RotationAngle,
+                        Opacity = item.Opacity,
                         IsLocked = false,
                         IsVisible = true
                     };
@@ -1208,18 +1406,23 @@ namespace Photobooth.Controls
                             canvasItem.TextColor = textBrush.Color.ToString();
                         }
 
-                        // Persist outline settings from stroke
+                        // Persist outline settings from stroke - save as both Outline and Stroke for compatibility
                         if (textItem.StrokeThickness > 0 && textItem.StrokeBrush is SolidColorBrush outlineBrush)
                         {
                             canvasItem.HasOutline = true;
                             canvasItem.OutlineThickness = textItem.StrokeThickness;
                             canvasItem.OutlineColor = outlineBrush.Color.ToString();
+                            // Also save as stroke for consistency
+                            canvasItem.StrokeColor = outlineBrush.Color.ToString();
+                            canvasItem.StrokeThickness = textItem.StrokeThickness;
                         }
                         else
                         {
                             canvasItem.HasOutline = false;
                             canvasItem.OutlineThickness = 0;
                             canvasItem.OutlineColor = null;
+                            canvasItem.StrokeColor = null;
+                            canvasItem.StrokeThickness = 0;
                         }
 
                         // Note: TextDecorations/Underline not currently supported in SimpleTextItem
@@ -1264,6 +1467,7 @@ namespace Photobooth.Controls
                         canvasItem.HasShadow = true;
                         canvasItem.ShadowColor = shadow.Color.ToString();
                         canvasItem.ShadowBlurRadius = shadow.BlurRadius;
+                        canvasItem.ShadowOpacity = shadow.Opacity;
 
                         // Calculate X,Y offsets from Direction and ShadowDepth
                         var radians = shadow.Direction * (Math.PI / 180);
@@ -1276,6 +1480,7 @@ namespace Photobooth.Controls
                         canvasItem.ShadowOffsetX = 0;
                         canvasItem.ShadowOffsetY = 0;
                         canvasItem.ShadowBlurRadius = 0;
+                        canvasItem.ShadowOpacity = 1.0;
                         canvasItem.ShadowColor = null;
                     }
 
@@ -1311,7 +1516,7 @@ namespace Photobooth.Controls
                 }
 
                 // Assign to event if checkbox is checked and event is selected
-                if (AssignToEventCheckBox.IsChecked == true && _selectedEvent != null)
+                if ((AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton)?.IsChecked == true && _selectedEvent != null)
                 {
                     // Check if template is already assigned to this event
                     var eventTemplates = _eventService.GetEventTemplates(_selectedEvent.Id);
@@ -1346,6 +1551,7 @@ namespace Photobooth.Controls
                 MessageBox.Show($"Error saving template: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
+            */
         }
 
         private void LoadTemplate_Click(object sender, RoutedEventArgs e)
@@ -1421,11 +1627,11 @@ namespace Photobooth.Controls
                 if (_selectedEvent != null && _selectedEvent.Id > 0)
                 {
                     var eventTemplates = _eventService.GetEventTemplates(_selectedEvent.Id);
-                    AssignToEventCheckBox.IsChecked = eventTemplates.Any(t => t.Id == template.Id);
+                    (AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton).IsChecked = eventTemplates.Any(t => t.Id == template.Id);
                 }
                 else
                 {
-                    AssignToEventCheckBox.IsChecked = false;
+                    (AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton).IsChecked = false;
                 }
                 _suppressCheckboxEvents = false;
 
@@ -1461,6 +1667,9 @@ namespace Photobooth.Controls
 
                 // Update canvas size display
                 UpdateCanvasSizeDisplay();
+
+                // Update orientation from loaded canvas dimensions
+                UpdateOrientationFromCanvas();
 
                 Log.Debug($"TouchTemplateDesigner: Template {template.Name} loaded successfully");
             }
@@ -1534,6 +1743,7 @@ namespace Photobooth.Controls
                 if (width > 0 && height > 0 && width <= 10000 && height <= 10000)
                 {
                     SetCanvasSize(width, height);
+                    UpdateTemplateDimensions();
                 }
                 else
                 {
@@ -1547,27 +1757,37 @@ namespace Photobooth.Controls
             }
         }
 
-        private void ImportTemplate_Click(object sender, RoutedEventArgs e)
+        private async void ImportTemplate_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 var openFileDialog = new OpenFileDialog
                 {
-                    Filter = "Template files (*.template, *.xml)|*.template;*.xml|All files (*.*)|*.*",
+                    Filter = "Template Package (*.zip)|*.zip|Template files (*.template, *.xml)|*.template;*.xml|All files (*.*)|*.*",
                     Title = "Import Template"
                 };
 
                 if (openFileDialog.ShowDialog() == true)
                 {
-                    // Load template from file
-                    _designerVM.LoadTemplateCmd.Execute(openFileDialog.FileName);
+                    var extension = System.IO.Path.GetExtension(openFileDialog.FileName).ToLower();
 
-                    // Update display
-                    var templateName = System.IO.Path.GetFileNameWithoutExtension(openFileDialog.FileName);
-                    TemplateNameText.Text = templateName;
-                    UpdateCanvasSizeDisplay();
+                    if (extension == ".zip")
+                    {
+                        // Import ZIP package with assets
+                        await ImportTemplatePackage(openFileDialog.FileName);
+                    }
+                    else
+                    {
+                        // Legacy import (just the template file)
+                        _designerVM.LoadTemplateCmd.Execute(openFileDialog.FileName);
 
-                    Log.Debug($"TouchTemplateDesigner: Imported template from {openFileDialog.FileName}");
+                        // Update display
+                        var templateName = System.IO.Path.GetFileNameWithoutExtension(openFileDialog.FileName);
+                        TemplateNameText.Text = templateName;
+                        UpdateCanvasSizeDisplay();
+
+                        Log.Debug($"TouchTemplateDesigner: Imported template from {openFileDialog.FileName}");
+                    }
                 }
             }
             catch (Exception ex)
@@ -1578,25 +1798,393 @@ namespace Photobooth.Controls
             }
         }
 
-        private void ExportTemplate_Click(object sender, RoutedEventArgs e)
+        private async Task ImportTemplatePackage(string zipFilePath)
+        {
+            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"template_import_{Guid.NewGuid()}");
+
+            try
+            {
+                // Extract ZIP to temporary directory
+                ZipFile.ExtractToDirectory(zipFilePath, tempDir);
+
+                // Read template JSON
+                var templateJsonPath = System.IO.Path.Combine(tempDir, "template.json");
+                if (!System.IO.File.Exists(templateJsonPath))
+                {
+                    throw new FileNotFoundException("template.json not found in package");
+                }
+
+                var json = System.IO.File.ReadAllText(templateJsonPath);
+                var templateData = JsonConvert.DeserializeObject<TemplateData>(json);
+
+                // Copy assets to application's assets folder
+                var assetsSourceDir = System.IO.Path.Combine(tempDir, "assets");
+                if (System.IO.Directory.Exists(assetsSourceDir))
+                {
+                    await ImportAssets(assetsSourceDir, templateData);
+                }
+
+                // Clear canvas and apply template
+                var canvas = this.DesignerCanvas as SimpleDesignerCanvas;
+                if (canvas == null) return;
+                canvas.Items.Clear();
+                TemplateNameText.Text = templateData.Name;
+
+                // Set canvas size
+                canvas.Width = templateData.CanvasWidth;
+                canvas.Height = templateData.CanvasHeight;
+                UpdateCanvasSizeDisplay();
+
+                // Set background color
+                if (!string.IsNullOrEmpty(templateData.BackgroundColor))
+                {
+                    try
+                    {
+                        var color = (Color)ColorConverter.ConvertFromString(templateData.BackgroundColor);
+                        // Apply to SimpleDesignerCanvas background
+                        canvas.CanvasBackground = new SolidColorBrush(color);
+                    }
+                    catch { /* Ignore color conversion errors */ }
+                }
+
+                // Recreate canvas items - sort by Z-index to maintain proper layer order
+                if (templateData.CanvasItems != null)
+                {
+                    // Sort items by Z-index to ensure proper layering
+                    var sortedItems = templateData.CanvasItems.OrderBy(item => item.ZIndex).ToList();
+
+                    foreach (var itemData in sortedItems)
+                    {
+                        await CreateCanvasItemFromData(itemData, templateData.AssetMappings);
+                    }
+                }
+
+                ShowAutoSaveNotification($"Template '{templateData.Name}' imported successfully!");
+                Log.Debug($"TouchTemplateDesigner: Imported template package from {zipFilePath}");
+            }
+            finally
+            {
+                // Clean up temporary directory
+                if (Directory.Exists(tempDir))
+                {
+                    try
+                    {
+                        Directory.Delete(tempDir, true);
+                    }
+                    catch { /* Ignore cleanup errors */ }
+                }
+            }
+        }
+
+        private async Task ImportAssets(string assetsSourceDir, TemplateData templateData)
+        {
+            // Create app assets directory if it doesn't exist
+            var appAssetsDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TemplateAssets");
+            if (!System.IO.Directory.Exists(appAssetsDir))
+            {
+                System.IO.Directory.CreateDirectory(appAssetsDir);
+            }
+
+            // Copy all assets and update mappings
+            if (templateData.AssetMappings != null)
+            {
+                var newMappings = new Dictionary<string, string>();
+
+                foreach (var mapping in templateData.AssetMappings)
+                {
+                    var sourceFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(assetsSourceDir), mapping.Value.Replace('/', '\\'));
+                    if (System.IO.File.Exists(sourceFile))
+                    {
+                        var fileName = System.IO.Path.GetFileName(sourceFile);
+                        var destFile = System.IO.Path.Combine(appAssetsDir, fileName);
+
+                        // Copy with unique name if file exists
+                        if (System.IO.File.Exists(destFile))
+                        {
+                            var uniqueName = $"{System.IO.Path.GetFileNameWithoutExtension(fileName)}_{Guid.NewGuid():N}{System.IO.Path.GetExtension(fileName)}";
+                            destFile = System.IO.Path.Combine(appAssetsDir, uniqueName);
+                        }
+
+                        System.IO.File.Copy(sourceFile, destFile, true);
+                        newMappings[mapping.Value] = destFile;
+                    }
+                }
+
+                // Update template data with new local paths
+                templateData.AssetMappings = newMappings;
+            }
+        }
+
+        private async Task CreateCanvasItemFromData(CanvasItemData itemData, Dictionary<string, string> assetMappings)
+        {
+            SimpleCanvasItem canvasItem = null;
+
+            // Support both old and new type names
+            var type = (itemData.ItemType ?? string.Empty).Trim();
+            switch (type)
+            {
+                case "ImageItem":
+                case "Image":
+                    var imageItem = new SimpleImageItem();
+
+                    // Load image if path is available
+                    var imgPath = itemData.ImagePath;
+                    // Check mapping for packaged assets
+                    if (!string.IsNullOrEmpty(imgPath) && assetMappings != null && assetMappings.TryGetValue(imgPath, out var mapped))
+                    {
+                        imgPath = mapped;
+                    }
+                    if (!string.IsNullOrEmpty(imgPath) && System.IO.File.Exists(imgPath))
+                    {
+                        imageItem.ImageSource = new BitmapImage(new Uri(imgPath, UriKind.Absolute));
+                        imageItem.ImagePath = imgPath;
+                    }
+
+                    canvasItem = imageItem;
+                    break;
+
+                case "TextItem":
+                case "Text":
+                    var textItem = new SimpleTextItem();
+
+                    textItem.Text = itemData.Text;
+                    if (!string.IsNullOrEmpty(itemData.FontFamily))
+                        textItem.FontFamily = new FontFamily(itemData.FontFamily);
+                    if (itemData.FontSize.HasValue)
+                        textItem.FontSize = itemData.FontSize.Value;
+                    if (!string.IsNullOrEmpty(itemData.TextColor))
+                    {
+                        try
+                        {
+                            var color = (Color)ColorConverter.ConvertFromString(itemData.TextColor);
+                            textItem.Foreground = new SolidColorBrush(color);
+                        }
+                        catch { /* Ignore */ }
+                    }
+
+                    // Apply text outline (stroke) if it has outline properties
+                    if (itemData.HasOutline && !string.IsNullOrEmpty(itemData.OutlineColor))
+                    {
+                        try
+                        {
+                            var outlineColor = (Color)ColorConverter.ConvertFromString(itemData.OutlineColor);
+                            textItem.StrokeBrush = new SolidColorBrush(outlineColor);
+                            textItem.StrokeThickness = itemData.OutlineThickness;
+                        }
+                        catch { /* Ignore */ }
+                    }
+
+                    canvasItem = textItem;
+                    break;
+
+                case "PlaceholderItem":
+                case "Placeholder":
+                    var placeholder = new SimpleImageItem
+                    {
+                        IsPlaceholder = true
+                    };
+                    if (itemData.PlaceholderNumber.HasValue)
+                    {
+                        placeholder.PlaceholderNumber = itemData.PlaceholderNumber.Value;
+                    }
+                    if (!string.IsNullOrEmpty(itemData.Name))
+                    {
+                        placeholder.PlaceholderName = itemData.Name;
+                    }
+                    if (!string.IsNullOrEmpty(itemData.PlaceholderColor))
+                    {
+                        try
+                        {
+                            var color = (Color)ColorConverter.ConvertFromString(itemData.PlaceholderColor);
+                            placeholder.PlaceholderBackground = new SolidColorBrush(color);
+                        }
+                        catch { /* Ignore */ }
+                    }
+
+                    canvasItem = placeholder;
+                    break;
+
+                case "ShapeItem":
+                case "Shape":
+                    var shapeType = SimpleShapeType.Rectangle; // Default
+                    if (!string.IsNullOrEmpty(itemData.ShapeType))
+                    {
+                        var st = itemData.ShapeType.Trim();
+                        // Accept both Circle/Ellipse synonyms
+                        if (string.Equals(st, "Circle", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(st, "Ellipse", StringComparison.OrdinalIgnoreCase))
+                        {
+                            shapeType = SimpleShapeType.Ellipse;
+                        }
+                        else if (!Enum.TryParse<SimpleShapeType>(st, true, out shapeType))
+                        {
+                            shapeType = SimpleShapeType.Rectangle;
+                        }
+                    }
+                    var shape = new SimpleShapeItem
+                    {
+                        ShapeType = shapeType
+                    };
+
+                    canvasItem = shape;
+                    break;
+            }
+
+            if (canvasItem != null)
+            {
+                // Set common properties
+                canvasItem.Width = itemData.Width;
+                canvasItem.Height = itemData.Height;
+
+                // Set position using both Canvas attached properties and item properties
+                Canvas.SetLeft(canvasItem, itemData.X);
+                Canvas.SetTop(canvasItem, itemData.Y);
+                canvasItem.Left = itemData.X;  // Also set the internal property
+                canvasItem.Top = itemData.Y;    // Also set the internal property
+
+                // Set Z-index (layer order)
+                Canvas.SetZIndex(canvasItem, itemData.ZIndex);
+                canvasItem.ZIndex = itemData.ZIndex;
+
+                // Set rotation
+                canvasItem.RotationAngle = itemData.Rotation;
+
+                // Set aspect ratio lock
+                canvasItem.IsAspectRatioLocked = itemData.LockedAspectRatio;
+
+                // Set visibility
+                canvasItem.Visibility = itemData.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+
+                // Apply fill color for shapes
+                if (canvasItem is SimpleShapeItem shapeItem && !string.IsNullOrEmpty(itemData.FillColor))
+                {
+                    try
+                    {
+                        var fillColor = (Color)ColorConverter.ConvertFromString(itemData.FillColor);
+                        shapeItem.Fill = new SolidColorBrush(fillColor);
+                    }
+                    catch
+                    {
+                        // Fallback handled below
+                    }
+                }
+                // Explicitly apply transparent fill if requested or color was invalid/missing
+                if (canvasItem is SimpleShapeItem shapeItemFill)
+                {
+                    if (itemData.HasNoFill || string.IsNullOrEmpty(itemData.FillColor))
+                    {
+                        shapeItemFill.Fill = Brushes.Transparent;
+                    }
+                }
+
+                // Apply stroke properties - check both StrokeColor and OutlineColor for compatibility
+                var hasStroke = (!string.IsNullOrEmpty(itemData.StrokeColor) ||
+                                !string.IsNullOrEmpty(itemData.OutlineColor)) &&
+                               (itemData.StrokeThickness > 0 || itemData.OutlineThickness > 0) &&
+                               !itemData.HasNoStroke;
+
+                if (hasStroke)
+                {
+                    try
+                    {
+                        // Use StrokeColor first, fall back to OutlineColor
+                        var colorStr = !string.IsNullOrEmpty(itemData.StrokeColor) ? itemData.StrokeColor : itemData.OutlineColor;
+                        var thickness = itemData.StrokeThickness > 0 ? itemData.StrokeThickness : itemData.OutlineThickness;
+
+                        var strokeColor = (Color)ColorConverter.ConvertFromString(colorStr);
+                        var strokeBrush = new SolidColorBrush(strokeColor);
+
+                        if (canvasItem is SimpleTextItem textItemStroke)
+                        {
+                            textItemStroke.StrokeBrush = strokeBrush;
+                            textItemStroke.StrokeThickness = thickness;
+                        }
+                        else if (canvasItem is SimpleImageItem imgItem)
+                        {
+                            imgItem.StrokeBrush = strokeBrush;
+                            imgItem.StrokeThickness = thickness;
+                        }
+                        else if (canvasItem is SimpleShapeItem shapeItem2)
+                        {
+                            shapeItem2.Stroke = strokeBrush;
+                            shapeItem2.StrokeThickness = thickness;
+                        }
+                    }
+                    catch { /* Ignore invalid colors */ }
+                }
+                else if (itemData.HasNoStroke && canvasItem is SimpleShapeItem shapeItem3)
+                {
+                    shapeItem3.Stroke = null;
+                }
+
+                // Apply shadow properties
+                if (itemData.HasShadow && !string.IsNullOrEmpty(itemData.ShadowColor))
+                {
+                    try
+                    {
+                        var shadowColor = (Color)ColorConverter.ConvertFromString(itemData.ShadowColor);
+
+                        // Calculate Direction and ShadowDepth from X,Y offsets
+                        var direction = Math.Atan2(itemData.ShadowOffsetY, itemData.ShadowOffsetX) * (180 / Math.PI);
+                        var shadowDepth = Math.Sqrt(itemData.ShadowOffsetX * itemData.ShadowOffsetX +
+                                                   itemData.ShadowOffsetY * itemData.ShadowOffsetY);
+
+                        var shadow = new DropShadowEffect
+                        {
+                            Color = shadowColor,
+                            BlurRadius = itemData.ShadowBlurRadius,
+                            Direction = direction,
+                            ShadowDepth = shadowDepth,
+                            Opacity = itemData.ShadowOpacity > 0 ? itemData.ShadowOpacity : 1.0
+                        };
+
+                        canvasItem.Effect = shadow;
+                    }
+                    catch { /* Ignore invalid shadow settings */ }
+                }
+
+                // Apply opacity if specified
+                if (itemData.Opacity > 0 && itemData.Opacity <= 1)
+                {
+                    canvasItem.Opacity = itemData.Opacity;
+                }
+
+                // SimpleCanvasItem does not support IsLocked; ignore this flag for now
+
+                // Add to canvas - IMPORTANT: Add items in Z-index order
+                var canvas = this.DesignerCanvas as SimpleDesignerCanvas;
+                canvas?.Items.Add(canvasItem);
+            }
+        }
+
+        private async void ExportTemplate_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 var saveFileDialog = new SaveFileDialog
                 {
-                    Filter = "Template files (*.template)|*.template|XML files (*.xml)|*.xml|All files (*.*)|*.*",
-                    Title = "Export Template",
-                    FileName = $"{TemplateNameText.Text}.template"
+                    Filter = "Template Package (*.zip)|*.zip|Template files (*.template)|*.template|All files (*.*)|*.*",
+                    Title = "Export Template Package",
+                    FileName = $"{TemplateNameText.Text}_package.zip"
                 };
 
                 if (saveFileDialog.ShowDialog() == true)
                 {
-                    // Save template to file
-                    _designerVM.SaveAsCmd.Execute(saveFileDialog.FileName);
+                    var extension = System.IO.Path.GetExtension(saveFileDialog.FileName).ToLower();
 
-                    Log.Debug($"TouchTemplateDesigner: Exported template to {saveFileDialog.FileName}");
-                    MessageBox.Show($"Template exported successfully to {System.IO.Path.GetFileName(saveFileDialog.FileName)}",
-                        "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    if (extension == ".zip")
+                    {
+                        // Export as ZIP package with assets
+                        await ExportTemplatePackage(saveFileDialog.FileName);
+                    }
+                    else
+                    {
+                        // Legacy export (just the template file)
+                        _designerVM.SaveAsCmd.Execute(saveFileDialog.FileName);
+                        Log.Debug($"TouchTemplateDesigner: Exported template to {saveFileDialog.FileName}");
+                        MessageBox.Show($"Template exported successfully to {System.IO.Path.GetFileName(saveFileDialog.FileName)}",
+                            "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
                 }
             }
             catch (Exception ex)
@@ -1605,6 +2193,308 @@ namespace Photobooth.Controls
                 MessageBox.Show($"Failed to export template: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private async Task ExportTemplatePackage(string zipFilePath)
+        {
+            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"template_export_{Guid.NewGuid()}");
+
+            try
+            {
+                // Create temporary directory
+                Directory.CreateDirectory(tempDir);
+
+                // Create assets directory
+                var assetsDir = System.IO.Path.Combine(tempDir, "assets");
+                System.IO.Directory.CreateDirectory(assetsDir);
+
+                // Create template data with assets
+                var templateData = await CreateTemplateDataWithAssets(assetsDir);
+
+                // Save template JSON
+                var templateJsonPath = System.IO.Path.Combine(tempDir, "template.json");
+                var json = JsonConvert.SerializeObject(templateData, Formatting.Indented);
+                System.IO.File.WriteAllText(templateJsonPath, json);
+
+                // Create manifest file
+                await CreateManifest(tempDir, templateData);
+
+                // Create ZIP package
+                if (System.IO.File.Exists(zipFilePath))
+                    System.IO.File.Delete(zipFilePath);
+
+                ZipFile.CreateFromDirectory(tempDir, zipFilePath);
+
+                ShowAutoSaveNotification($"Template package exported successfully!");
+                Log.Debug($"TouchTemplateDesigner: Exported template package to {zipFilePath}");
+            }
+            finally
+            {
+                // Clean up temporary directory
+                if (System.IO.Directory.Exists(tempDir))
+                {
+                    try
+                    {
+                        System.IO.Directory.Delete(tempDir, true);
+                    }
+                    catch { /* Ignore cleanup errors */ }
+                }
+            }
+        }
+
+        private async Task<TemplateData> CreateTemplateDataWithAssets(string assetsDir)
+        {
+            var canvas = this.DesignerCanvas as SimpleDesignerCanvas;
+            if (canvas == null) throw new InvalidOperationException("DesignerCanvas is not available");
+            // Create template data from current canvas
+            var templateData = new TemplateData
+            {
+                Name = TemplateNameText.Text,
+                Description = "Template created in TouchTemplateDesigner",
+                CanvasWidth = canvas.Width,
+                CanvasHeight = canvas.Height,
+                BackgroundColor = ((DesignerCanvas.CanvasBackground as SolidColorBrush)?.Color.ToString()) ?? "#FFFFFF",
+                CreatedDate = DateTime.Now,
+                ModifiedDate = DateTime.Now,
+                IsActive = true,
+                CanvasItems = new List<CanvasItemData>()
+            };
+
+            var assetCounter = 1;
+            var assetMappings = new Dictionary<string, string>();
+
+            // Process all canvas items to find and copy assets
+            foreach (var item in canvas.Items)
+            {
+                var canvasItemData = await ConvertToCanvasItemData(item, assetsDir, assetCounter, assetMappings);
+                if (canvasItemData != null)
+                {
+                    templateData.CanvasItems.Add(canvasItemData);
+                    if (item is SimpleImageItem)
+                        assetCounter++;
+                }
+            }
+
+            // Store asset mappings in template data
+            templateData.AssetMappings = assetMappings;
+
+            return templateData;
+        }
+
+        private async Task<CanvasItemData> ConvertToCanvasItemData(SimpleCanvasItem item, string assetsDir, int assetId, Dictionary<string, string> assetMappings)
+        {
+            var itemData = new CanvasItemData
+            {
+                ItemType = item.GetType().Name,
+                X = Canvas.GetLeft(item),
+                Y = Canvas.GetTop(item),
+                Width = item.Width,
+                Height = item.Height,
+                ZIndex = Canvas.GetZIndex(item),
+                // using typed fields in CanvasItemData
+            };
+
+            // Handle different item types
+            if (item is SimpleImageItem imageItem)
+            {
+                // Mark as placeholder if applicable, else image
+                itemData.ItemType = imageItem.IsPlaceholder ? "Placeholder" : "Image";
+                // Copy image asset if it exists
+                if (imageItem.ImageSource != null && !imageItem.IsPlaceholder)
+                {
+                    var imagePath = await ProcessImageAsset(imageItem, assetsDir, assetId, assetMappings);
+                    if (!string.IsNullOrEmpty(imagePath))
+                    {
+                        itemData.ImagePath = imagePath;
+                    }
+                }
+                if (imageItem.IsPlaceholder)
+                {
+                    itemData.PlaceholderNumber = imageItem.PlaceholderNumber;
+                }
+
+                // Export optional stroke for images (border)
+                if (imageItem.StrokeBrush is SolidColorBrush imgStroke)
+                {
+                    itemData.OutlineColor = imgStroke.Color.ToString();
+                }
+                itemData.OutlineThickness = imageItem.StrokeThickness;
+
+                // Export drop shadow if present
+                if (imageItem.Effect is System.Windows.Media.Effects.DropShadowEffect dsImg)
+                {
+                    itemData.HasShadow = true;
+                    itemData.ShadowColor = dsImg.Color.ToString();
+                    itemData.ShadowBlurRadius = dsImg.BlurRadius;
+                    // Convert Direction/Depth to X/Y offsets
+                    var radians = dsImg.Direction * (Math.PI / 180.0);
+                    itemData.ShadowOffsetX = Math.Cos(radians) * dsImg.ShadowDepth;
+                    itemData.ShadowOffsetY = Math.Sin(radians) * dsImg.ShadowDepth;
+                    itemData.ShadowOpacity = dsImg.Opacity;
+                }
+            }
+            else if (item is SimpleTextItem textItem)
+            {
+                itemData.ItemType = "Text";
+                itemData.Text = textItem.Text;
+                itemData.FontFamily = textItem.FontFamily?.ToString();
+                itemData.FontSize = textItem.FontSize;
+                itemData.FontWeight = textItem.FontWeight.ToString();
+                itemData.TextColor = (textItem.Foreground as SolidColorBrush)?.Color.ToString();
+
+                // Export text outline (stroke)
+                if (textItem.StrokeBrush is SolidColorBrush txtStroke && textItem.StrokeThickness > 0)
+                {
+                    itemData.HasOutline = true;
+                    itemData.OutlineColor = txtStroke.Color.ToString();
+                    itemData.OutlineThickness = textItem.StrokeThickness;
+                }
+
+                // Export drop shadow if present
+                if (textItem.Effect is System.Windows.Media.Effects.DropShadowEffect ds)
+                {
+                    itemData.HasShadow = true;
+                    itemData.ShadowColor = ds.Color.ToString();
+                    itemData.ShadowBlurRadius = ds.BlurRadius;
+                    var radians = ds.Direction * (Math.PI / 180.0);
+                    itemData.ShadowOffsetX = Math.Cos(radians) * ds.ShadowDepth;
+                    itemData.ShadowOffsetY = Math.Sin(radians) * ds.ShadowDepth;
+                    itemData.ShadowOpacity = ds.Opacity;
+                }
+            }
+            else if (item is SimpleShapeItem shapeItem)
+            {
+                itemData.ItemType = "Shape";
+                // Map SimpleShapeType to a portable string
+                switch (shapeItem.ShapeType)
+                {
+                    case SimpleShapeType.Rectangle:
+                        itemData.ShapeType = "Rectangle";
+                        break;
+                    case SimpleShapeType.Ellipse:
+                        // Use "Circle" for compatibility with DesignerCanvas enum
+                        itemData.ShapeType = "Circle";
+                        break;
+                    case SimpleShapeType.Line:
+                        itemData.ShapeType = "Line";
+                        break;
+                }
+
+                // Fill
+                if (shapeItem.Fill is SolidColorBrush fillBrush)
+                {
+                    // Treat Transparent as no fill
+                    if (fillBrush.Color.A == 0)
+                    {
+                        itemData.HasNoFill = true;
+                    }
+                    else
+                    {
+                        itemData.FillColor = fillBrush.Color.ToString();
+                    }
+                }
+                else
+                {
+                    itemData.HasNoFill = true;
+                }
+
+                // Stroke
+                if (shapeItem.Stroke is SolidColorBrush sBrush && shapeItem.StrokeThickness > 0)
+                {
+                    if (sBrush.Color.A == 0)
+                    {
+                        itemData.HasNoStroke = true;
+                    }
+                    else
+                    {
+                        itemData.StrokeColor = sBrush.Color.ToString();
+                        itemData.StrokeThickness = shapeItem.StrokeThickness;
+                    }
+                }
+                else
+                {
+                    itemData.HasNoStroke = true;
+                }
+
+                // Drop shadow
+                if (shapeItem.Effect is System.Windows.Media.Effects.DropShadowEffect dsShape)
+                {
+                    itemData.HasShadow = true;
+                    itemData.ShadowColor = dsShape.Color.ToString();
+                    itemData.ShadowBlurRadius = dsShape.BlurRadius;
+                    var radians = dsShape.Direction * (Math.PI / 180.0);
+                    itemData.ShadowOffsetX = Math.Cos(radians) * dsShape.ShadowDepth;
+                    itemData.ShadowOffsetY = Math.Sin(radians) * dsShape.ShadowDepth;
+                    itemData.ShadowOpacity = dsShape.Opacity;
+                }
+            }
+            // No SimplePlaceholderItem type in current code — placeholders are SimpleImageItem with IsPlaceholder=true
+
+            return itemData;
+        }
+
+        private async Task<string> ProcessImageAsset(SimpleImageItem imageItem, string assetsDir, int assetId, Dictionary<string, string> assetMappings)
+        {
+            try
+            {
+                if (imageItem.ImageSource is BitmapImage bitmapImage && bitmapImage.UriSource != null)
+                {
+                    var originalPath = bitmapImage.UriSource.LocalPath;
+
+                    if (System.IO.File.Exists(originalPath))
+                    {
+                        var extension = System.IO.Path.GetExtension(originalPath);
+                        var newFileName = $"asset_{assetId:D3}{extension}";
+                        var newFilePath = System.IO.Path.Combine(assetsDir, newFileName);
+
+                        // Copy the asset file
+                        System.IO.File.Copy(originalPath, newFilePath);
+
+                        // Store the mapping and return relative path
+                        var relativePath = $"assets/{newFileName}";
+                        assetMappings[originalPath] = relativePath;
+
+                        return relativePath;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner: Failed to process image asset: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        private async Task CreateManifest(string tempDir, TemplateData templateData)
+        {
+            var manifest = new
+            {
+                PackageVersion = "1.0",
+                ExportDate = DateTime.Now,
+                ApplicationName = "Photobooth TouchTemplateDesigner",
+                Template = new
+                {
+                    templateData.Name,
+                    templateData.Description,
+                    templateData.CanvasWidth,
+                    templateData.CanvasHeight,
+                    ItemCount = templateData.CanvasItems?.Count ?? 0
+                },
+                Assets = templateData.AssetMappings?.Count ?? 0,
+                EventAssociation = _selectedEvent?.Name,
+                Instructions = new[]
+                {
+                    "To import this template package:",
+                    "1. Use the Import function in TouchTemplateDesigner",
+                    "2. Select this ZIP file",
+                    "3. All assets will be automatically restored"
+                }
+            };
+
+            var manifestPath = System.IO.Path.Combine(tempDir, "manifest.json");
+            var manifestJson = JsonConvert.SerializeObject(manifest, Formatting.Indented);
+            System.IO.File.WriteAllText(manifestPath, manifestJson);
         }
 
         #endregion
@@ -2369,21 +3259,55 @@ namespace Photobooth.Controls
             }
         }
 
+        private void UpdateOrientationFromCanvas()
+        {
+            try
+            {
+                var canvas = DesignerCanvas as SimpleDesignerCanvas;
+                if (canvas == null) return;
+
+                bool isLandscape = canvas.Width > canvas.Height;
+                _isLandscape = isLandscape;
+
+                var toggle = this.FindName("OrientationToggle") as ToggleButton;
+                if (toggle != null)
+                {
+                    toggle.Content = _isLandscape ? "Landscape" : "Portrait";
+                    toggle.Background = _isLandscape ? new SolidColorBrush(Color.FromRgb(255, 152, 0)) : new SolidColorBrush(Color.FromRgb(76, 175, 80));
+                    toggle.IsChecked = _isLandscape;
+                }
+
+                Log.Debug($"TouchTemplateDesigner: Detected orientation from canvas {canvas.Width}x{canvas.Height}: {(_isLandscape ? "Landscape" : "Portrait")}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner: Failed to update orientation from canvas: {ex.Message}");
+            }
+        }
+
         private void Size4x6_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                Log.Debug($"TouchTemplateDesigner: Size4x6_Click called, _isLandscape = {_isLandscape}");
+                Log.Debug($"★★★ Size4x6_Click: Called, _isLandscape = {_isLandscape} ★★★");
+                Log.Debug($"★★★ Size4x6_Click: Canvas BEFORE: {DesignerCanvas.Width}x{DesignerCanvas.Height} ★★★");
+
                 if (_isLandscape)
                 {
-                    Log.Debug("TouchTemplateDesigner: Setting canvas to 1800x1200 (6x4 landscape)");
+                    Log.Debug("★★★ Size4x6_Click: Setting canvas to 1800x1200 (6x4 landscape) ★★★");
                     SetCanvasSize(1800, 1200); // 6x4
                 }
                 else
                 {
-                    Log.Debug("TouchTemplateDesigner: Setting canvas to 1200x1800 (4x6 portrait)");
+                    Log.Debug("★★★ Size4x6_Click: Setting canvas to 1200x1800 (4x6 portrait) ★★★");
                     SetCanvasSize(1200, 1800); // 4x6
                 }
+
+                Log.Debug($"★★★ Size4x6_Click: Canvas AFTER: {DesignerCanvas.Width}x{DesignerCanvas.Height} ★★★");
+
+                // Update template dimensions (create if doesn't exist, update if it does)
+                UpdateTemplateDimensions();
+
                 ClosePaperSizePopup();
             }
             catch (Exception ex)
@@ -2399,6 +3323,8 @@ namespace Photobooth.Controls
                 SetCanvasSize(2100, 1500); // 7x5
             else
                 SetCanvasSize(1500, 2100); // 5x7
+
+            UpdateTemplateDimensions();
             ClosePaperSizePopup();
         }
 
@@ -2408,6 +3334,8 @@ namespace Photobooth.Controls
                 SetCanvasSize(3000, 2400); // 10x8
             else
                 SetCanvasSize(2400, 3000); // 8x10
+
+            UpdateTemplateDimensions();
             ClosePaperSizePopup();
         }
 
@@ -2417,13 +3345,51 @@ namespace Photobooth.Controls
                 SetCanvasSize(1800, 600); // 6x2
             else
                 SetCanvasSize(600, 1800); // 2x6
+
+            UpdateTemplateDimensions();
             ClosePaperSizePopup();
         }
 
         private void SizeInstagram_Click(object sender, RoutedEventArgs e)
         {
             SetCanvasSize(1080, 1080); // Square format
+            UpdateTemplateDimensions();
             ClosePaperSizePopup();
+        }
+
+        private void UpdateTemplateDimensions()
+        {
+            var canvas = DesignerCanvas as SimpleDesignerCanvas;
+            if (canvas == null) return;
+
+            if (_currentTemplateId <= 0)
+            {
+                // Template doesn't exist yet - create it
+                Log.Debug("TouchTemplateDesigner: Paper size selected, creating new template");
+                PerformAutoSave();
+            }
+            else
+            {
+                // Template exists - update its dimensions
+                try
+                {
+                    var database = new TemplateDatabase();
+                    var template = database.GetTemplate(_currentTemplateId);
+                    if (template != null)
+                    {
+                        Log.Debug($"TouchTemplateDesigner: Updating template {_currentTemplateId} dimensions from {template.CanvasWidth}x{template.CanvasHeight} to {canvas.Width}x{canvas.Height}");
+                        template.CanvasWidth = canvas.Width;
+                        template.CanvasHeight = canvas.Height;
+                        template.ModifiedDate = DateTime.Now;
+                        database.UpdateTemplate(_currentTemplateId, template);
+                        Log.Debug($"TouchTemplateDesigner: Template dimensions updated successfully");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"TouchTemplateDesigner: Failed to update template dimensions: {ex.Message}");
+                }
+            }
         }
 
         private void SizeFacebook_Click(object sender, RoutedEventArgs e)
@@ -4002,6 +4968,81 @@ namespace Photobooth.Controls
             // Auto-fit canvas to viewport when first loaded to prevent scrolling
             Dispatcher.BeginInvoke(new Action(() => AutoFitCanvasToViewport()),
                 System.Windows.Threading.DispatcherPriority.Loaded);
+
+            // Try to auto-select the current event after UI is fully loaded
+            // Use a slight delay to ensure EventSelectionService has fully initialized
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                TryAutoSelectCurrentEvent();
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        private void TryAutoSelectCurrentEvent()
+        {
+            try
+            {
+                var currentEvent = EventSelectionService.Instance.SelectedEvent;
+                Log.Debug($"TouchTemplateDesigner.TryAutoSelectCurrentEvent: Current event is '{currentEvent?.Name ?? "None"}' (ID: {currentEvent?.Id ?? 0})");
+
+                if (currentEvent != null && currentEvent.Id > 0 && _selectedEvent?.Id != currentEvent.Id)
+                {
+                    // Only update if not already selected
+                    for (int i = 0; i < EventComboBox.Items.Count; i++)
+                    {
+                        if (EventComboBox.Items[i] is EventData evt && evt.Id == currentEvent.Id)
+                        {
+                            EventComboBox.SelectedIndex = i;
+                            _selectedEvent = evt;
+                            Log.Debug($"TouchTemplateDesigner: Successfully auto-selected event '{currentEvent.Name}' in OnLoaded");
+
+                            // Try to load the default template for this event
+                            LoadDefaultTemplateForEvent(evt);
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner.TryAutoSelectCurrentEvent: Failed - {ex.Message}");
+            }
+        }
+
+        private void LoadDefaultTemplateForEvent(EventData eventData)
+        {
+            try
+            {
+                if (eventData == null || eventData.Id <= 0)
+                    return;
+
+                // Get the default template for this event
+                var defaultTemplate = _eventService.GetDefaultEventTemplate(eventData.Id);
+                if (defaultTemplate != null)
+                {
+                    Log.Debug($"TouchTemplateDesigner: Loading default template '{defaultTemplate.Name}' for event '{eventData.Name}'");
+
+                    // Check if we already have content in the designer
+                    var canvas = DesignerCanvas as SimpleDesignerCanvas;
+                    if (canvas != null && canvas.Items.Count == 0 && _currentTemplateId <= 0)
+                    {
+                        // Only load if canvas is empty and no template is currently loaded
+                        LoadTemplate(defaultTemplate.Id);
+                        ShowAutoSaveNotification($"Loaded default template '{defaultTemplate.Name}' for {eventData.Name}");
+                    }
+                    else
+                    {
+                        Log.Debug($"TouchTemplateDesigner: Canvas not empty or template already loaded, skipping default template load");
+                    }
+                }
+                else
+                {
+                    Log.Debug($"TouchTemplateDesigner: No default template found for event '{eventData.Name}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner.LoadDefaultTemplateForEvent: Failed - {ex.Message}");
+            }
         }
 
         private void OnSizeChanged(object sender, SizeChangedEventArgs e)
@@ -4142,8 +5183,19 @@ namespace Photobooth.Controls
 
         private void RenameTemplate_Click(object sender, RoutedEventArgs e)
         {
+            // Show the rename overlay
+            RenameTemplateTextBox.Text = TemplateNameText.Text;
+            RenameTemplateOverlay.Visibility = Visibility.Visible;
+
+            // Focus the textbox and select all text for easy replacement
+            RenameTemplateTextBox.Focus();
+            RenameTemplateTextBox.SelectAll();
+        }
+
+        private void ApplyRenameTemplate_Click(object sender, RoutedEventArgs e)
+        {
             var currentName = TemplateNameText.Text;
-            var newName = ShowInputDialog("Rename Template", "Enter new template name:", currentName);
+            var newName = RenameTemplateTextBox.Text?.Trim();
 
             if (!string.IsNullOrWhiteSpace(newName) && newName != currentName)
             {
@@ -4160,9 +5212,40 @@ namespace Photobooth.Controls
                     if (_currentTemplateId > 0)
                     {
                         _designerVM.SaveToDbCmd.Execute(null);
+                        ShowAutoSaveNotification($"Template renamed to '{newName}'");
                         Log.Debug($"TouchTemplateDesigner: Renamed template to '{newName}'");
                     }
                 }
+            }
+
+            // Hide the overlay
+            RenameTemplateOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void CancelRenameTemplate_Click(object sender, RoutedEventArgs e)
+        {
+            // Hide the overlay without saving
+            RenameTemplateOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void RenameTemplateTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                ApplyRenameTemplate_Click(sender, e);
+            }
+            else if (e.Key == Key.Escape)
+            {
+                CancelRenameTemplate_Click(sender, e);
+            }
+        }
+
+        private void RenameTemplateOverlay_BackgroundClick(object sender, MouseButtonEventArgs e)
+        {
+            // Only close if clicking on the background, not the content
+            if (e.OriginalSource == sender)
+            {
+                RenameTemplateOverlay.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -4210,6 +5293,9 @@ namespace Photobooth.Controls
                 }
 
                 UpdateCanvasSizeDisplay();
+
+                // Update orientation indicator after canvas size changes
+                UpdateOrientationFromCanvas();
 
                 Log.Debug($"TouchTemplateDesigner: Set canvas size to {width}x{height} (will persist through template loads)");
             }
@@ -4303,8 +5389,51 @@ namespace Photobooth.Controls
 
         private void Close_Click(object sender, RoutedEventArgs e)
         {
-            var parent = Parent as Panel;
-            parent?.Children.Remove(this);
+            try
+            {
+                // First check if we're inside a TouchTemplateDesignerOverlay
+                var overlay = this.GetVisualParent<TouchTemplateDesignerOverlay>();
+                if (overlay != null)
+                {
+                    Log.Debug("TouchTemplateDesigner: Closing via overlay");
+
+                    // Call the overlay's Close method
+                    overlay.Close();
+                }
+                else
+                {
+                    Log.Debug("TouchTemplateDesigner: Closing standalone control");
+
+                    // If not in overlay, just remove this control
+                    if (Parent is Panel parentPanel)
+                    {
+                        parentPanel.Children.Remove(this);
+                    }
+                    else if (Parent is ContentControl parentControl)
+                    {
+                        parentControl.Content = null;
+                    }
+
+                    // Also collapse visibility
+                    this.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner: Error closing designer: {ex.Message}");
+            }
+        }
+
+        private T GetVisualParent<T>() where T : DependencyObject
+        {
+            DependencyObject parent = VisualTreeHelper.GetParent(this);
+            while (parent != null)
+            {
+                if (parent is T typedParent)
+                    return typedParent;
+                parent = VisualTreeHelper.GetParent(parent);
+            }
+            return null;
         }
 
         #endregion
@@ -4669,8 +5798,8 @@ namespace Photobooth.Controls
                 string thumbnailFileName = $"thumb_{safeName}_{timestamp}.png";
                 string thumbnailPath = System.IO.Path.Combine(thumbnailsPath, thumbnailFileName);
 
-                // Calculate thumbnail size (maintain aspect ratio)
-                int maxDimension = 300;
+                // Calculate thumbnail size (maintain aspect ratio) - higher resolution for better quality
+                int maxDimension = 600;  // Double the size for retina-quality thumbnails
                 double aspectRatio = canvas.Width / canvas.Height;
                 int thumbnailWidth, thumbnailHeight;
 
@@ -4687,8 +5816,8 @@ namespace Photobooth.Controls
                     thumbnailWidth = (int)(maxDimension * aspectRatio);
                 }
 
-                // Create a RenderTargetBitmap
-                var renderTarget = new RenderTargetBitmap(thumbnailWidth, thumbnailHeight, 96, 96, PixelFormats.Pbgra32);
+                // Create a RenderTargetBitmap at higher DPI for better quality
+                var renderTarget = new RenderTargetBitmap(thumbnailWidth, thumbnailHeight, 144, 144, PixelFormats.Pbgra32);
 
                 // Create a visual to render
                 var drawingVisual = new DrawingVisual();
@@ -4829,11 +5958,255 @@ namespace Photobooth.Controls
             }
         }
 
+        /// <summary>
+        /// Generates a full-resolution preview PNG of the template
+        /// This is used for fast preview rendering without recreating the entire canvas
+        /// </summary>
+        private string GenerateTemplatePreview(SimpleDesignerCanvas canvas, string templateName)
+        {
+            try
+            {
+                // Create previews directory
+                string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string previewsPath = System.IO.Path.Combine(appDataPath, "Photobooth", "TemplatePreviews");
+                if (!Directory.Exists(previewsPath))
+                {
+                    Directory.CreateDirectory(previewsPath);
+                }
+
+                // Generate unique filename
+                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string safeName = string.Join("_", templateName.Split(System.IO.Path.GetInvalidFileNameChars()));
+                string previewFileName = $"preview_{safeName}_{timestamp}.png";
+                string previewPath = System.IO.Path.Combine(previewsPath, previewFileName);
+
+                // Create high-resolution render (up to 4K resolution)
+                int maxWidth = 3840;  // 4K width
+                int maxHeight = 2160; // 4K height
+                double canvasWidth = canvas.Width;
+                double canvasHeight = canvas.Height;
+
+                // Calculate scale - we want to upscale small templates too for better quality
+                double scale = 1.0;
+
+                // If canvas is smaller than max, upscale it (up to 2x for quality)
+                if (canvasWidth < maxWidth && canvasHeight < maxHeight)
+                {
+                    double scaleX = Math.Min(maxWidth / canvasWidth, 2.0);
+                    double scaleY = Math.Min(maxHeight / canvasHeight, 2.0);
+                    scale = Math.Min(scaleX, scaleY);
+                }
+                // If canvas is larger than max, downscale it
+                else if (canvasWidth > maxWidth || canvasHeight > maxHeight)
+                {
+                    double scaleX = maxWidth / canvasWidth;
+                    double scaleY = maxHeight / canvasHeight;
+                    scale = Math.Min(scaleX, scaleY);
+                }
+
+                int renderWidth = (int)(canvasWidth * scale);
+                int renderHeight = (int)(canvasHeight * scale);
+
+                // Create a RenderTargetBitmap at higher DPI (150) for better quality
+                var renderTarget = new RenderTargetBitmap(renderWidth, renderHeight, 150, 150, PixelFormats.Pbgra32);
+
+                // Create a visual to render
+                var drawingVisual = new DrawingVisual();
+                using (var context = drawingVisual.RenderOpen())
+                {
+                    // Apply scale if needed
+                    if (scale != 1.0)
+                    {
+                        context.PushTransform(new ScaleTransform(scale, scale));
+                    }
+
+                    // Draw canvas background
+                    if (canvas.Background != null)
+                    {
+                        context.DrawRectangle(canvas.Background, null, new Rect(0, 0, canvasWidth, canvasHeight));
+                    }
+                    else
+                    {
+                        context.DrawRectangle(Brushes.White, null, new Rect(0, 0, canvasWidth, canvasHeight));
+                    }
+
+                    // Draw each canvas item
+                    foreach (var item in canvas.Items.OrderBy(i => i.ZIndex))
+                    {
+                        DrawCanvasItemToContext(context, item);
+                    }
+
+                    if (scale != 1.0)
+                    {
+                        context.Pop();
+                    }
+                }
+
+                // Render the visual
+                renderTarget.Render(drawingVisual);
+
+                // Save to PNG file with optimized settings
+                var encoder = new PngBitmapEncoder();
+                encoder.Interlace = PngInterlaceOption.Off; // Better quality, slightly larger file
+                encoder.Frames.Add(BitmapFrame.Create(renderTarget));
+
+                using (var fileStream = new FileStream(previewPath, FileMode.Create))
+                {
+                    encoder.Save(fileStream);
+                }
+
+                Log.Debug($"TouchTemplateDesigner: Generated preview image at {previewPath}");
+                return previewPath;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner: Failed to generate preview: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Helper method to draw a canvas item to a drawing context
+        /// </summary>
+        private void DrawCanvasItemToContext(DrawingContext context, SimpleCanvasItem item)
+        {
+            // Save current transform
+            context.PushTransform(new TranslateTransform(item.Left, item.Top));
+
+            // Apply rotation if any
+            if (item.RotationAngle != 0)
+            {
+                context.PushTransform(new RotateTransform(item.RotationAngle, item.Width / 2, item.Height / 2));
+            }
+
+            // Apply opacity
+            if (item.Opacity < 1.0)
+            {
+                context.PushOpacity(item.Opacity);
+            }
+
+            var itemRect = new Rect(0, 0, item.Width, item.Height);
+
+            if (item is SimpleImageItem imageItem)
+            {
+                if (imageItem.IsPlaceholder)
+                {
+                    // Draw placeholder
+                    var placeholderBrush = imageItem.PlaceholderBackground ??
+                        new SolidColorBrush(Color.FromRgb(40, 40, 40));
+                    var borderPen = new Pen(new SolidColorBrush(Color.FromRgb(76, 175, 80)), 2);
+                    context.DrawRectangle(placeholderBrush, borderPen, itemRect);
+
+                    // Draw placeholder text
+                    var formattedText = new FormattedText(
+                        $"PHOTO {imageItem.PlaceholderNumber}",
+                        System.Globalization.CultureInfo.CurrentCulture,
+                        FlowDirection.LeftToRight,
+                        new Typeface("Arial"),
+                        16,
+                        new SolidColorBrush(Color.FromRgb(76, 175, 80)),
+                        96);
+
+                    formattedText.TextAlignment = TextAlignment.Center;
+                    formattedText.MaxTextWidth = item.Width;
+
+                    var textY = (item.Height - formattedText.Height) / 2;
+                    context.DrawText(formattedText, new Point(item.Width / 2, textY));
+                }
+                else if (!string.IsNullOrEmpty(imageItem.ImagePath) && File.Exists(imageItem.ImagePath))
+                {
+                    // Draw actual image
+                    try
+                    {
+                        var bitmap = new BitmapImage(new Uri(imageItem.ImagePath, UriKind.Absolute));
+                        context.DrawImage(bitmap, itemRect);
+                    }
+                    catch
+                    {
+                        // If image fails to load, draw placeholder
+                        context.DrawRectangle(Brushes.Gray, null, itemRect);
+                    }
+                }
+
+                // Draw stroke if present
+                if (imageItem.StrokeBrush != null && imageItem.StrokeThickness > 0)
+                {
+                    var strokePen = new Pen(imageItem.StrokeBrush, imageItem.StrokeThickness);
+                    context.DrawRectangle(null, strokePen, itemRect);
+                }
+            }
+            else if (item is SimpleTextItem textItem && textItem.Text != null)
+            {
+                // Create formatted text from text item properties
+                var formattedText = new FormattedText(
+                    textItem.Text,
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    new Typeface(textItem.FontFamily ?? new FontFamily("Arial"),
+                                textItem.FontStyle,
+                                textItem.FontWeight,
+                                textItem.FontStretch),
+                    textItem.FontSize,
+                    textItem.Foreground ?? Brushes.Black,
+                    96);
+
+                formattedText.TextAlignment = textItem.TextAlignment;
+                formattedText.MaxTextWidth = item.Width;
+                formattedText.MaxTextHeight = item.Height;
+
+                context.DrawText(formattedText, new Point(0, 0));
+            }
+            else if (item is SimpleShapeItem shapeItem)
+            {
+                // Draw shape
+                if (shapeItem.ShapeType == SimpleShapeType.Rectangle)
+                {
+                    context.DrawRectangle(shapeItem.Fill,
+                        shapeItem.StrokeThickness > 0 ? new Pen(shapeItem.Stroke, shapeItem.StrokeThickness) : null,
+                        itemRect);
+                }
+                else if (shapeItem.ShapeType == SimpleShapeType.Ellipse)
+                {
+                    var center = new Point(item.Width / 2, item.Height / 2);
+                    context.DrawEllipse(shapeItem.Fill,
+                        shapeItem.StrokeThickness > 0 ? new Pen(shapeItem.Stroke, shapeItem.StrokeThickness) : null,
+                        center, item.Width / 2, item.Height / 2);
+                }
+            }
+
+            // Pop transforms in reverse order
+            if (item.Opacity < 1.0)
+            {
+                context.Pop();
+            }
+            if (item.RotationAngle != 0)
+            {
+                context.Pop();
+            }
+            context.Pop();
+        }
+
         #endregion
 
         #region Event Management
 
-        private void LoadEvents()
+        /// <summary>
+        /// Public method to refresh the event selection with the current event from EventSelectionService
+        /// </summary>
+        public void RefreshEventSelection()
+        {
+            try
+            {
+                Log.Debug("TouchTemplateDesigner.RefreshEventSelection: Called");
+                TryAutoSelectCurrentEvent();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner.RefreshEventSelection: Failed - {ex.Message}");
+            }
+        }
+
+        private void LoadEvents(bool tryAutoSelect = true)
         {
             try
             {
@@ -4848,11 +6221,50 @@ namespace Photobooth.Controls
                     EventComboBox.Items.Add(evt);
                 }
 
-                // Select first item (No Event)
-                EventComboBox.SelectedIndex = 0;
+                if (tryAutoSelect)
+                {
+                    // Try to auto-select the current event from EventSelectionService
+                    var currentEvent = EventSelectionService.Instance.SelectedEvent;
+                    Log.Debug($"TouchTemplateDesigner: Checking for current event - Found: {currentEvent?.Name ?? "None"} (ID: {currentEvent?.Id ?? 0})");
+
+                    if (currentEvent != null && currentEvent.Id > 0)
+                    {
+                        // Find the matching event in the combo box
+                        bool found = false;
+                        for (int i = 0; i < EventComboBox.Items.Count; i++)
+                        {
+                            if (EventComboBox.Items[i] is EventData evt && evt.Id == currentEvent.Id)
+                            {
+                                EventComboBox.SelectedIndex = i;
+                                _selectedEvent = evt;
+                                Log.Debug($"TouchTemplateDesigner: Auto-selected current event '{currentEvent.Name}' at index {i}");
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found)
+                        {
+                            Log.Debug($"TouchTemplateDesigner: Current event '{currentEvent.Name}' not found in dropdown");
+                            EventComboBox.SelectedIndex = 0;
+                        }
+                    }
+                    else
+                    {
+                        // Select first item (No Event) if no current event
+                        Log.Debug("TouchTemplateDesigner: No current event found, selecting 'No Event'");
+                        EventComboBox.SelectedIndex = 0;
+                    }
+                }
+                else
+                {
+                    // Don't auto-select, just default to first item
+                    EventComboBox.SelectedIndex = 0;
+                }
             }
             catch (Exception ex)
             {
+                Log.Error($"TouchTemplateDesigner: Failed to load events: {ex.Message}");
                 MessageBox.Show($"Failed to load events: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
@@ -4862,18 +6274,29 @@ namespace Photobooth.Controls
         {
             try
             {
+                var previousEvent = _selectedEvent;
                 _selectedEvent = EventComboBox.SelectedItem as EventData;
 
                 if (_selectedEvent != null && _selectedEvent.Id > 0)
                 {
-                    AssignToEventCheckBox.IsEnabled = true;
-                    AssignToEventCheckBox.IsChecked = false;
+                    (AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton).IsEnabled = true;
+                    (AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton).IsChecked = false;
                     LoadEventTemplates();
+
+                    // If this is a different event and the canvas is empty, try to load the default template
+                    if (previousEvent?.Id != _selectedEvent.Id)
+                    {
+                        var canvas = DesignerCanvas as SimpleDesignerCanvas;
+                        if (canvas != null && canvas.Items.Count == 0 && _currentTemplateId <= 0)
+                        {
+                            LoadDefaultTemplateForEvent(_selectedEvent);
+                        }
+                    }
                 }
                 else
                 {
-                    AssignToEventCheckBox.IsEnabled = false;
-                    AssignToEventCheckBox.IsChecked = false;
+                    (AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton).IsEnabled = false;
+                    (AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton).IsChecked = false;
                 }
             }
             catch (Exception ex)
@@ -4883,6 +6306,8 @@ namespace Photobooth.Controls
             }
         }
 
+        private List<TemplateData> _eventTemplates;
+
         private void LoadEventTemplates()
         {
             try
@@ -4890,13 +6315,44 @@ namespace Photobooth.Controls
                 if (_selectedEvent != null && _selectedEvent.Id > 0)
                 {
                     var templates = _eventService.GetEventTemplates(_selectedEvent.Id);
-                    // You could populate a separate list of event templates if needed
-                    // For now, this just prepares for future template filtering
+
+                    // Update the template count and visibility
+                    UpdateEventTemplatesButton(templates);
+
+                    // Store templates for later use
+                    _eventTemplates = templates;
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Failed to load event templates: {ex.Message}");
+            }
+        }
+
+        private void UpdateEventTemplatesButton(List<TemplateData> templates)
+        {
+            if (templates != null && templates.Count > 0)
+            {
+                EventTemplatesButton.Visibility = Visibility.Visible;
+                TemplateCountText.Text = templates.Count.ToString();
+
+                // Update tooltip with template names
+                var tooltipText = $"Event has {templates.Count} template(s):\n";
+                foreach (var template in templates.Take(5))
+                {
+                    tooltipText += $"• {template.Name}";
+                    if (template.IsDefault)
+                        tooltipText += " (Default)";
+                    tooltipText += "\n";
+                }
+                if (templates.Count > 5)
+                    tooltipText += $"... and {templates.Count - 5} more";
+
+                EventTemplatesButton.ToolTip = tooltipText;
+            }
+            else
+            {
+                EventTemplatesButton.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -4913,7 +6369,7 @@ namespace Photobooth.Controls
                 {
                     MessageBox.Show("Please save the template first before assigning it to an event.",
                         "Template Not Saved", MessageBoxButton.OK, MessageBoxImage.Information);
-                    AssignToEventCheckBox.IsChecked = false;
+                    (AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton).IsChecked = false;
                     return;
                 }
 
@@ -4921,12 +6377,12 @@ namespace Photobooth.Controls
                 {
                     MessageBox.Show("Please select an event first.",
                         "No Event Selected", MessageBoxButton.OK, MessageBoxImage.Information);
-                    AssignToEventCheckBox.IsChecked = false;
+                    (AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton).IsChecked = false;
                     return;
                 }
 
                 // Auto-save the template association with the event
-                if (AssignToEventCheckBox.IsChecked == true)
+                if ((AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton)?.IsChecked == true)
                 {
                     // Assign template to event
                     _eventService.AssignTemplateToEvent(_selectedEvent.Id, _currentTemplateId, false);
@@ -4951,7 +6407,8 @@ namespace Photobooth.Controls
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
 
                 // Revert checkbox state on error
-                AssignToEventCheckBox.IsChecked = !AssignToEventCheckBox.IsChecked;
+                var toggleBtn = AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton;
+                toggleBtn.IsChecked = !toggleBtn.IsChecked;
             }
         }
 
@@ -5006,18 +6463,32 @@ namespace Photobooth.Controls
 
         private void CreateEvent_Click(object sender, RoutedEventArgs e)
         {
+            // Show the create event overlay
+            CreateEventNameTextBox.Text = "";
+            CreateEventDescriptionTextBox.Text = "";
+            CreateEventOverlay.Visibility = Visibility.Visible;
+
+            // Focus the name textbox
+            CreateEventNameTextBox.Focus();
+        }
+
+        private void ApplyCreateEvent_Click(object sender, RoutedEventArgs e)
+        {
             try
             {
-                var eventName = ShowInputDialog("Create Event", "Enter event name:", "");
+                var eventName = CreateEventNameTextBox.Text?.Trim();
                 if (string.IsNullOrWhiteSpace(eventName))
+                {
+                    ShowAutoSaveNotification("Please enter an event name");
                     return;
+                }
 
-                var description = ShowInputDialog("Event Description", "Enter description (optional):", "");
+                var description = CreateEventDescriptionTextBox.Text?.Trim();
 
                 var eventId = _eventService.CreateEvent(eventName, description);
                 if (eventId > 0)
                 {
-                    LoadEvents();
+                    LoadEvents(false);  // Don't auto-select, we'll select the new event
 
                     // Select the newly created event
                     for (int i = 0; i < EventComboBox.Items.Count; i++)
@@ -5029,14 +6500,59 @@ namespace Photobooth.Controls
                         }
                     }
 
-                    MessageBox.Show($"Event '{eventName}' created successfully!", "Success",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    ShowAutoSaveNotification($"Event '{eventName}' created successfully!");
                 }
+
+                // Hide the overlay
+                CreateEventOverlay.Visibility = Visibility.Collapsed;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to create event: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ShowAutoSaveNotification($"Failed to create event: {ex.Message}");
+                Log.Error($"TouchTemplateDesigner: Failed to create event: {ex.Message}");
+            }
+        }
+
+        private void CancelCreateEvent_Click(object sender, RoutedEventArgs e)
+        {
+            // Hide the overlay without creating
+            CreateEventOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void CreateEventTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                // Move to description field
+                CreateEventDescriptionTextBox.Focus();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                CancelCreateEvent_Click(sender, e);
+            }
+        }
+
+        private void CreateEventDescriptionTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                // Shift+Enter adds a new line, Enter alone submits
+                ApplyCreateEvent_Click(sender, e);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                CancelCreateEvent_Click(sender, e);
+            }
+        }
+
+        private void CreateEventOverlay_BackgroundClick(object sender, MouseButtonEventArgs e)
+        {
+            // Only close if clicking on the background, not the content
+            if (e.OriginalSource == sender)
+            {
+                CreateEventOverlay.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -5044,13 +6560,294 @@ namespace Photobooth.Controls
         {
             try
             {
-                LoadEvents();
-                MessageBox.Show("Events refreshed", "Success",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                LoadEvents(true);  // Try to auto-select current event on refresh
+                ShowAutoSaveNotification("Events refreshed successfully");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to refresh events: {ex.Message}", "Error",
+                ShowAutoSaveNotification($"Failed to refresh events: {ex.Message}");
+                Log.Error($"TouchTemplateDesigner: Failed to refresh events: {ex.Message}");
+            }
+        }
+
+        private void EventTemplatesButton_Click(object sender, RoutedEventArgs e)
+        {
+            ShowEventTemplatesDialog();
+        }
+
+        private void ShowEventTemplatesDialog()
+        {
+            try
+            {
+                // Use the new overlay instead of dialog
+                if (_selectedEvent != null)
+                {
+                    EventTemplatesOverlay.ShowForEvent(_selectedEvent, (templateId) =>
+                    {
+                        // Load the selected template
+                        LoadTemplate(templateId);
+                    });
+                }
+                else
+                {
+                    ShowAutoSaveNotification("Please select an event first");
+                }
+                return;
+
+                // Create a selection window
+                var templateWindow = new Window
+                {
+                    Title = $"Event Templates - {_selectedEvent.Name}",
+                    Width = 650,
+                    Height = 500,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                    Owner = Window.GetWindow(this),
+                    Background = new SolidColorBrush(Color.FromRgb(45, 45, 48)),
+                    Foreground = Brushes.White
+                };
+
+                // Create main grid
+                var mainGrid = new Grid();
+                mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                // Title
+                var titlePanel = new StackPanel
+                {
+                    Margin = new Thickness(15, 10, 15, 5)
+                };
+
+                var titleText = new TextBlock
+                {
+                    Text = $"Select a template to load ({_eventTemplates.Count} available)",
+                    FontSize = 16,
+                    Foreground = Brushes.White,
+                    Margin = new Thickness(0, 0, 0, 5)
+                };
+
+                var instructionText = new TextBlock
+                {
+                    Text = "Click any template to load it immediately",
+                    FontSize = 13,
+                    FontStyle = FontStyles.Italic,
+                    Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150))
+                };
+
+                titlePanel.Children.Add(titleText);
+                titlePanel.Children.Add(instructionText);
+                Grid.SetRow(titlePanel, 0);
+                mainGrid.Children.Add(titlePanel);
+
+                // Create scrollable list of templates
+                var scrollViewer = new ScrollViewer
+                {
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Margin = new Thickness(10)
+                };
+
+                var templatesPanel = new StackPanel();
+
+                // Add each template as a clickable item
+                foreach (var template in _eventTemplates)
+                {
+                    var border = new Border
+                    {
+                        Background = new SolidColorBrush(Color.FromRgb(50, 50, 52)),
+                        BorderBrush = new SolidColorBrush(Color.FromRgb(80, 80, 85)),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(5),
+                        Margin = new Thickness(8),
+                        Padding = new Thickness(20, 15, 20, 15),
+                        MinHeight = 80  // Minimum height for touch targets
+                    };
+
+                    var contentGrid = new Grid();
+                    // Single column layout since Load button is removed
+                    contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Keep for layout compatibility
+
+                    var infoPanel = new StackPanel();
+
+                    // Template name
+                    var nameText = new TextBlock
+                    {
+                        Text = template.Name,
+                        FontSize = 14,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = Brushes.White
+                    };
+                    infoPanel.Children.Add(nameText);
+
+                    // Template info
+                    var infoText = new TextBlock
+                    {
+                        Text = $"Size: {template.CanvasWidth} x {template.CanvasHeight}",
+                        FontSize = 12,
+                        Foreground = Brushes.LightGray,
+                        Margin = new Thickness(0, 2, 0, 0)
+                    };
+                    infoPanel.Children.Add(infoText);
+
+                    // Show if it's the default or current template
+                    if (template.IsDefault)
+                    {
+                        var defaultBadgePanel = new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Margin = new Thickness(0, 2, 0, 0)
+                        };
+                        var defaultIcon = new TextBlock
+                        {
+                            Text = "\uE735", // Star icon
+                            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                            FontSize = 12,
+                            Foreground = new SolidColorBrush(Color.FromRgb(255, 215, 0)),
+                            Margin = new Thickness(0, 0, 3, 0),
+                            VerticalAlignment = VerticalAlignment.Center
+                        };
+                        var defaultText = new TextBlock
+                        {
+                            Text = "Default Template",
+                            FontSize = 11,
+                            FontWeight = FontWeights.Bold,
+                            Foreground = new SolidColorBrush(Color.FromRgb(255, 215, 0)),
+                            VerticalAlignment = VerticalAlignment.Center
+                        };
+                        defaultBadgePanel.Children.Add(defaultIcon);
+                        defaultBadgePanel.Children.Add(defaultText);
+                        infoPanel.Children.Add(defaultBadgePanel);
+                    }
+
+                    if (template.Id == _currentTemplateId)
+                    {
+                        var currentBadgePanel = new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Margin = new Thickness(0, 2, 0, 0)
+                        };
+                        var currentIcon = new TextBlock
+                        {
+                            Text = "\uE73E", // CheckMark icon
+                            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                            FontSize = 12,
+                            Foreground = new SolidColorBrush(Color.FromRgb(76, 175, 80)),
+                            Margin = new Thickness(0, 0, 3, 0),
+                            VerticalAlignment = VerticalAlignment.Center
+                        };
+                        var currentText = new TextBlock
+                        {
+                            Text = "Currently Loaded",
+                            FontSize = 11,
+                            FontWeight = FontWeights.Bold,
+                            Foreground = new SolidColorBrush(Color.FromRgb(76, 175, 80)),
+                            VerticalAlignment = VerticalAlignment.Center
+                        };
+                        currentBadgePanel.Children.Add(currentIcon);
+                        currentBadgePanel.Children.Add(currentText);
+                        infoPanel.Children.Add(currentBadgePanel);
+                    }
+
+                    Grid.SetColumn(infoPanel, 0);
+                    Grid.SetColumnSpan(infoPanel, 2); // Span both columns since no button
+                    contentGrid.Children.Add(infoPanel);
+
+                    border.Child = contentGrid;
+
+                    // Make the entire template item clickable for one-touch loading
+                    border.Cursor = Cursors.Hand;
+                    border.Tag = template;
+
+                    // Single tap to load template immediately without confirmation
+                    border.MouseLeftButtonDown += (s, args) =>
+                    {
+                        var clickedBorder = (Border)s;
+                        var selectedTemplate = (TemplateData)clickedBorder.Tag;
+
+                        // Skip if already loaded
+                        if (_currentTemplateId == selectedTemplate.Id)
+                        {
+                            ShowAutoSaveNotification("This template is already loaded");
+                            return;
+                        }
+
+                        // Visual feedback - briefly highlight
+                        clickedBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(76, 175, 80));
+                        clickedBorder.BorderThickness = new Thickness(3);
+
+                        // Load template immediately without any confirmation
+                        LoadTemplate(selectedTemplate.Id);
+                        ShowAutoSaveNotification($"Loaded: {selectedTemplate.Name}");
+
+                        // Close dialog after successful load
+                        templateWindow.Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            templateWindow.Close();
+                        }), System.Windows.Threading.DispatcherPriority.Background);
+                    };
+
+                    // Add hover effect for better UX
+                    border.MouseEnter += (s, args) =>
+                    {
+                        var hoveredBorder = (Border)s;
+                        hoveredBorder.Background = new SolidColorBrush(Color.FromRgb(65, 65, 68));
+                        if (hoveredBorder.Tag != null && ((TemplateData)hoveredBorder.Tag).Id != _currentTemplateId)
+                        {
+                            hoveredBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(100, 100, 105));
+                            hoveredBorder.BorderThickness = new Thickness(2);
+                        }
+                    };
+
+                    border.MouseLeave += (s, args) =>
+                    {
+                        var hoveredBorder = (Border)s;
+                        hoveredBorder.Background = new SolidColorBrush(Color.FromRgb(50, 50, 52));
+                        if (hoveredBorder.Tag != null && ((TemplateData)hoveredBorder.Tag).Id != _currentTemplateId)
+                        {
+                            hoveredBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(80, 80, 85));
+                            hoveredBorder.BorderThickness = new Thickness(1);
+                        }
+                    };
+
+                    templatesPanel.Children.Add(border);
+                }
+
+                scrollViewer.Content = templatesPanel;
+                Grid.SetRow(scrollViewer, 1);
+                mainGrid.Children.Add(scrollViewer);
+
+                // Add close button
+                var buttonPanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Margin = new Thickness(10)
+                };
+
+                var closeButton = new Button
+                {
+                    Content = "Close",
+                    Width = 100,
+                    Height = 40,
+                    FontSize = 14,
+                    Background = new SolidColorBrush(Color.FromRgb(100, 100, 100)),
+                    Foreground = Brushes.White,
+                    BorderThickness = new Thickness(0),
+                    Cursor = Cursors.Hand
+                };
+                closeButton.Click += (s, args) => templateWindow.Close();
+                buttonPanel.Children.Add(closeButton);
+
+                Grid.SetRow(buttonPanel, 2);
+                mainGrid.Children.Add(buttonPanel);
+
+                templateWindow.Content = mainGrid;
+                templateWindow.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner.ShowEventTemplatesDialog: Failed - {ex.Message}");
+                MessageBox.Show($"Failed to show event templates: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

@@ -40,6 +40,7 @@ namespace Photobooth.Services
 
         private List<AIModelDefinition> _availableModels;
         private Dictionary<string, Dictionary<string, AIModelTemplatePrompt>> _modelTemplatePrompts;
+        private Dictionary<string, string> _templateModelPreferences; // templateId -> modelId
         private string _selectedModelId;
         private readonly string _configFilePath;
 
@@ -226,6 +227,25 @@ namespace Photobooth.Services
             return _availableModels?.FirstOrDefault(m => m.Id == modelId);
         }
 
+        public void SetTemplateModelPreference(int templateId, string modelId)
+        {
+            if (_templateModelPreferences == null)
+                _templateModelPreferences = new Dictionary<string, string>();
+
+            _templateModelPreferences[templateId.ToString()] = modelId;
+            SaveConfiguration();
+            Debug.WriteLine($"[AIModelManager] Set template {templateId} to use model {modelId}");
+        }
+
+        public string GetTemplateModelPreference(int templateId)
+        {
+            if (_templateModelPreferences?.ContainsKey(templateId.ToString()) == true)
+            {
+                return _templateModelPreferences[templateId.ToString()];
+            }
+            return null;
+        }
+
         public void ResetToDefaults()
         {
             LoadDefaultModels();
@@ -239,20 +259,80 @@ namespace Photobooth.Services
         {
             var input = new Dictionary<string, object>();
 
+            // Get parameters early as they're needed for various model configurations
+            var parameters = customPrompt?.Parameters ?? model.DefaultParameters;
+
             // Add prompt
             input["prompt"] = customPrompt?.Prompt ?? template.Prompt;
 
-            // Handle special case for Seedream-4 text-to-image model
-            if (model.Id == "seedream-4")
+            // Handle special case for Google Nano Banana (identity-preserving)
+            if (model.Id == "nano-banana" || string.Equals(model.ModelPath, "google/nano-banana", StringComparison.OrdinalIgnoreCase))
             {
-                // Seedream-4 specific parameters
-                input["aspect_ratio"] = "4:3"; // Can be made configurable later
-                // No image input needed for text-to-image
+                // Use data URL image in an array field named image_input (matches working cURL semantics)
+                if (!string.IsNullOrEmpty(base64Image))
+                {
+                    var dataUrl = $"data:image/jpeg;base64,{base64Image}";
+                    input["image_input"] = new[] { dataUrl };
+                }
+
+                // Explicitly set output format if provided
+                if (!string.IsNullOrEmpty(parameters.OutputFormat))
+                {
+                    input["output_format"] = parameters.OutputFormat;
+                }
+            }
+            // Handle special case for Seedream-4
+            else if (model.Id == "seedream-4")
+            {
+                // Seedream-4 specific parameters - ensure minimum 1024x1024
+                int width = Math.Max(parameters.Width, 1024);
+                int height = Math.Max(parameters.Height, 1024);
+
+                input["size"] = "2K";
+                input["width"] = Math.Max(width, 2048);
+                input["height"] = Math.Max(height, 2048);
+                input["max_images"] = 1;
+                input["sequential_image_generation"] = "disabled";
+
+                // Detect aspect ratio from prompt flags like "--ar 16:9" if present
+                var promptText = customPrompt?.Prompt ?? template.Prompt;
+                try
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(promptText ?? string.Empty, "--ar\\s*(\\d+:\\d+)");
+                    if (match.Success)
+                    {
+                        var ratio = match.Groups[1].Value;
+                        if (!string.IsNullOrWhiteSpace(ratio))
+                        {
+                            input["aspect_ratio"] = ratio;
+                        }
+                    }
+                    else
+                    {
+                        // Default to 4:3 if not specified, matching working direct call
+                        input["aspect_ratio"] = "4:3";
+                    }
+                }
+                catch { /* best-effort parsing only */ }
+
+                // Add image input if provided
+                if (!string.IsNullOrEmpty(base64Image))
+                {
+                    // Use jpeg in data URL since we're encoding as JPEG now
+                    var dataUrl = $"data:image/jpeg;base64,{base64Image}";
+                    input["image_input"] = new[] { dataUrl };
+                    Debug.WriteLine($"[AIModelManager] *** Seedream-4: Added image_input array with JPEG data URL (base64 length: {base64Image.Length})");
+                }
+                else
+                {
+                    Debug.WriteLine($"[AIModelManager] *** WARNING: Seedream-4: base64Image is null or empty, skipping image_input!");
+                }
             }
             // Handle image input based on model requirements
             else if (model.ImageInputFormat == "dataurl")
             {
-                var dataUrl = $"data:image/png;base64,{base64Image}";
+                // Use JPEG data URL for better compression
+                var dataUrl = $"data:image/jpeg;base64,{base64Image}";
                 if (model.RequiresImageArray)
                 {
                     input["image_input"] = new[] { dataUrl };
@@ -280,8 +360,6 @@ namespace Photobooth.Services
             }
 
             // Add parameters based on model capabilities
-            var parameters = customPrompt?.Parameters ?? model.DefaultParameters;
-
             if (model.Capabilities.SupportsNegativePrompt && !string.IsNullOrEmpty(customPrompt?.NegativePrompt))
             {
                 input["negative_prompt"] = customPrompt.NegativePrompt;
@@ -332,6 +410,7 @@ namespace Photobooth.Services
 
                     _availableModels = config.Models ?? new List<AIModelDefinition>();
                     _modelTemplatePrompts = config.ModelTemplatePrompts ?? new Dictionary<string, Dictionary<string, AIModelTemplatePrompt>>();
+                    _templateModelPreferences = config.TemplateModelPreferences ?? new Dictionary<string, string>();
                     _selectedModelId = config.SelectedModelId;
 
                     Debug.WriteLine($"[AIModelManager] Loaded {_availableModels.Count} models from configuration");
@@ -363,6 +442,7 @@ namespace Photobooth.Services
                 {
                     Models = _availableModels,
                     ModelTemplatePrompts = _modelTemplatePrompts,
+                    TemplateModelPreferences = _templateModelPreferences,
                     SelectedModelId = _selectedModelId
                 };
 
@@ -391,6 +471,7 @@ namespace Photobooth.Services
         {
             public List<AIModelDefinition> Models { get; set; }
             public Dictionary<string, Dictionary<string, AIModelTemplatePrompt>> ModelTemplatePrompts { get; set; }
+            public Dictionary<string, string> TemplateModelPreferences { get; set; }
             public string SelectedModelId { get; set; }
         }
 

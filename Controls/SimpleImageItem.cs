@@ -234,6 +234,109 @@ namespace Photobooth.Controls
             }
         }
 
+        /// <summary>
+        /// Override HitTestCore to enable click-through on transparent pixels
+        /// </summary>
+        public new HitTestResult HitTestCore(PointHitTestParameters hitTestParameters)
+        {
+            try
+            {
+                // Placeholders should always be selectable - don't do transparency checking for them
+                if (IsPlaceholder)
+                {
+                    return base.HitTestCore(hitTestParameters);
+                }
+
+                // Only apply per-pixel logic if we have an actual image
+                if (ImageSource is BitmapSource bmpSource && _image != null)
+                {
+                    // Map the hit point to the Image's coordinate space
+                    var pointInImage = this.TranslatePoint(hitTestParameters.HitPoint, _image);
+
+                    // Get the actual size of the image element
+                    var imageWidth = _image.ActualWidth;
+                    var imageHeight = _image.ActualHeight;
+
+                    if (imageWidth <= 0 || imageHeight <= 0)
+                        return base.HitTestCore(hitTestParameters);
+
+                    // For Stretch.Uniform, determine the actual drawn rectangle
+                    var drawnRect = GetUniformRenderRect(imageWidth, imageHeight,
+                                                         bmpSource.PixelWidth, bmpSource.PixelHeight);
+
+                    // If the point is outside the drawn image area (letterboxing), treat as transparent
+                    if (!drawnRect.Contains(pointInImage))
+                    {
+                        return null; // pass-through to underlying items
+                    }
+
+                    // Normalize within the drawn rect and map to source pixel coordinates
+                    double nx = (pointInImage.X - drawnRect.X) / Math.Max(1.0, drawnRect.Width);
+                    double ny = (pointInImage.Y - drawnRect.Y) / Math.Max(1.0, drawnRect.Height);
+                    int px = Math.Min(bmpSource.PixelWidth - 1, Math.Max(0, (int)Math.Floor(nx * bmpSource.PixelWidth)));
+                    int py = Math.Min(bmpSource.PixelHeight - 1, Math.Max(0, (int)Math.Floor(ny * bmpSource.PixelHeight)));
+
+                    // Ensure format is BGRA32 for easy alpha read
+                    BitmapSource src = bmpSource;
+                    if (src.Format != PixelFormats.Bgra32 && src.Format != PixelFormats.Pbgra32)
+                    {
+                        src = new FormatConvertedBitmap(bmpSource, PixelFormats.Bgra32, null, 0);
+                    }
+
+                    byte[] pixel = new byte[4]; // BGRA
+                    try
+                    {
+                        src.CopyPixels(new Int32Rect(px, py, 1, 1), pixel, 4, 0);
+                    }
+                    catch
+                    {
+                        // If reading fails, fall back to default behavior
+                        return base.HitTestCore(hitTestParameters);
+                    }
+
+                    byte alpha = pixel[3];
+                    const byte TransparentThreshold = 10; // consider nearly transparent as transparent
+                    if (alpha <= TransparentThreshold)
+                    {
+                        return null; // transparent pixel - let hits pass through
+                    }
+                }
+            }
+            catch
+            {
+                // Swallow and fall back to default hit testing
+            }
+
+            return base.HitTestCore(hitTestParameters);
+        }
+
+        private static Rect GetUniformRenderRect(double targetWidth, double targetHeight,
+                                                 int sourcePixelWidth, int sourcePixelHeight)
+        {
+            if (targetWidth <= 0 || targetHeight <= 0 || sourcePixelWidth <= 0 || sourcePixelHeight <= 0)
+                return new Rect(0, 0, 0, 0);
+
+            double controlAR = targetWidth / targetHeight;
+            double sourceAR = (double)sourcePixelWidth / sourcePixelHeight;
+
+            if (controlAR > sourceAR)
+            {
+                // Constrained by height
+                double drawHeight = targetHeight;
+                double drawWidth = drawHeight * sourceAR;
+                double offsetX = (targetWidth - drawWidth) / 2.0;
+                return new Rect(offsetX, 0, drawWidth, drawHeight);
+            }
+            else
+            {
+                // Constrained by width
+                double drawWidth = targetWidth;
+                double drawHeight = drawWidth / sourceAR;
+                double offsetY = (targetHeight - drawHeight) / 2.0;
+                return new Rect(0, offsetY, drawWidth, drawHeight);
+            }
+        }
+
         public SimpleImageItem(string imagePath) : this()
         {
             LoadImage(imagePath);
@@ -364,7 +467,15 @@ namespace Photobooth.Controls
 
         private Button _incrementButton;
         private Button _decrementButton;
+        private Button _duplicateButton;
+        private Button _bringToFrontButton;
+        private Button _sendToBackButton;
         private StackPanel _numberButtonsPanel;
+
+        // Events for layer actions
+        public event EventHandler DuplicateRequested;
+        public event EventHandler BringToFrontRequested;
+        public event EventHandler SendToBackRequested;
 
         private void AddNumberChangeButtons()
         {
@@ -424,7 +535,73 @@ namespace Photobooth.Controls
                 e.Handled = true;
             };
 
+            // Create duplicate button
+            _duplicateButton = new Button
+            {
+                Content = "⎘",
+                Width = 40,
+                Height = 40,
+                FontSize = 20,
+                FontWeight = FontWeights.Bold,
+                Background = new SolidColorBrush(Color.FromArgb(200, 33, 150, 243)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(5, 0, 5, 0),
+                Cursor = Cursors.Hand,
+                ToolTip = "Duplicate"
+            };
+            _duplicateButton.Click += (s, e) =>
+            {
+                DuplicateRequested?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+            };
+
+            // Create bring to front button
+            _bringToFrontButton = new Button
+            {
+                Content = "▲",
+                Width = 40,
+                Height = 40,
+                FontSize = 20,
+                FontWeight = FontWeights.Bold,
+                Background = new SolidColorBrush(Color.FromArgb(200, 255, 152, 0)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(5, 0, 5, 0),
+                Cursor = Cursors.Hand,
+                ToolTip = "Bring to Front"
+            };
+            _bringToFrontButton.Click += (s, e) =>
+            {
+                BringToFrontRequested?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+            };
+
+            // Create send to back button
+            _sendToBackButton = new Button
+            {
+                Content = "▼",
+                Width = 40,
+                Height = 40,
+                FontSize = 20,
+                FontWeight = FontWeights.Bold,
+                Background = new SolidColorBrush(Color.FromArgb(200, 158, 158, 158)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(5, 0, 5, 0),
+                Cursor = Cursors.Hand,
+                ToolTip = "Send to Back"
+            };
+            _sendToBackButton.Click += (s, e) =>
+            {
+                SendToBackRequested?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+            };
+
             _numberButtonsPanel.Children.Add(_decrementButton);
+            _numberButtonsPanel.Children.Add(_duplicateButton);
+            _numberButtonsPanel.Children.Add(_bringToFrontButton);
+            _numberButtonsPanel.Children.Add(_sendToBackButton);
             _numberButtonsPanel.Children.Add(_incrementButton);
 
             // Add to the container grid
@@ -768,6 +945,9 @@ namespace Photobooth.Controls
                     item._numberButtonsPanel = null;
                     item._incrementButton = null;
                     item._decrementButton = null;
+                    item._duplicateButton = null;
+                    item._bringToFrontButton = null;
+                    item._sendToBackButton = null;
                 }
             }
         }

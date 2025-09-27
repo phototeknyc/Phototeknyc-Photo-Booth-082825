@@ -59,12 +59,17 @@
                             Background="{TemplateBinding Background}">
                         <Grid>
                             <ContentPresenter x:Name="PART_ContentPresenter" />
-                            <primitives:DragThumb x:Name="PART_DragThumb" Template="{StaticResource DragThumbTemplate}" />
+                            <!-- Use touch-enabled thumb for better touch + mouse drag behavior -->
+                            <primitives:TouchDragThumb x:Name="PART_DragThumb" Template="{StaticResource DragThumbTemplate}" />
                         </Grid>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <!-- Ensure the container always participates in hit testing across its full bounds,
+             even when the content has transparent areas. This makes it easy to select an
+             item and access its resize handles by tapping anywhere within its bounding box. -->
+        <Setter Property="Background" Value="Transparent" />
         <Setter Property="ClipToBounds" Value="False" />
         <!-- Connect the data object to the Control -->
         <Setter Property="Canvas.Left" Value="{Binding Left}" />
@@ -253,7 +258,7 @@
                            FontSize="{Binding CurrentScale, RelativeSource={RelativeSource AncestorType=controls:DesignerCanvas}, Converter={StaticResource ScaleToHandleSizeConverter}, ConverterParameter=16, FallbackValue=16}" 
                            FontWeight="Bold">
                     <TextBlock.Text>
-                        <MultiBinding StringFormat="Picture {0}">
+                        <MultiBinding StringFormat="Photo {0}">
                             <Binding Path="PlaceholderNo"/>
                         </MultiBinding>
                     </TextBlock.Text>
@@ -494,4 +499,3 @@
         </Setter>
     </Style>
 </ResourceDictionary>
-

@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace DesignerCanvas.Controls.Primitives
 {
@@ -46,6 +47,105 @@ namespace DesignerCanvas.Controls.Primitives
         {
             base.OnApplyTemplate();
             contentPresenter = GetTemplateChild("PART_ContentPresenter") as ContentPresenter;
+        }
+
+        /// <summary>
+        /// Per-pixel hit testing for images to allow pass-through on transparent pixels.
+        /// If the click/touch falls on a fully transparent pixel of an ImageCanvasItem,
+        /// ignore this container so items underneath can be selected/resized.
+        /// </summary>
+        protected override System.Windows.Media.HitTestResult HitTestCore(PointHitTestParameters hitTestParameters)
+        {
+            try
+            {
+                // Only apply per-pixel logic for image items
+                if (this.Content is global::DesignerCanvas.ImageCanvasItem imgItem)
+                {
+                    // Find the Image element rendered by the DataTemplate
+                    var searchRoot = (DependencyObject)(contentPresenter as DependencyObject ?? this);
+                    var image = FindVisualChild<System.Windows.Controls.Image>(searchRoot);
+                    if (image != null && imgItem.Image is BitmapSource bmpSource)
+                    {
+                        // Map the hit point to the Image's coordinate space
+                        var pointInImage = this.TranslatePoint(hitTestParameters.HitPoint, image);
+
+                        // Determine the actual drawn rectangle inside the Image (accounts for Stretch=Uniform)
+                        var drawnRect = GetUniformRenderRect(image.ActualWidth, image.ActualHeight, bmpSource.PixelWidth, bmpSource.PixelHeight);
+
+                        // If the point is outside the drawn image area (letterboxing), treat as transparent
+                        if (!drawnRect.Contains(pointInImage))
+                        {
+                            return null; // pass-through to underlying items
+                        }
+
+                        // Normalize within the drawn rect and map to source pixel coordinates
+                        double nx = (pointInImage.X - drawnRect.X) / Math.Max(1.0, drawnRect.Width);
+                        double ny = (pointInImage.Y - drawnRect.Y) / Math.Max(1.0, drawnRect.Height);
+                        int px = Math.Min(bmpSource.PixelWidth - 1, Math.Max(0, (int)Math.Floor(nx * bmpSource.PixelWidth)));
+                        int py = Math.Min(bmpSource.PixelHeight - 1, Math.Max(0, (int)Math.Floor(ny * bmpSource.PixelHeight)));
+
+                        // Ensure format is BGRA32 for easy alpha read
+                        BitmapSource src = bmpSource;
+                        if (src.Format != PixelFormats.Bgra32 && src.Format != PixelFormats.Pbgra32)
+                        {
+                            src = new FormatConvertedBitmap(bmpSource, PixelFormats.Bgra32, null, 0);
+                        }
+
+                        byte[] pixel = new byte[4]; // BGRA
+                        try
+                        {
+                            src.CopyPixels(new Int32Rect(px, py, 1, 1), pixel, 4, 0);
+                        }
+                        catch
+                        {
+                            // If reading fails, fall back to default behavior
+                            return base.HitTestCore(hitTestParameters);
+                        }
+
+                        byte alpha = pixel[3];
+                        const byte TransparentThreshold = 10; // consider nearly transparent as transparent
+                        if (alpha <= TransparentThreshold)
+                        {
+                            return null; // transparent pixel - let hits pass through
+                        }
+
+                        // Opaque pixel - treat as a valid hit on this container
+                        return new PointHitTestResult(this, hitTestParameters.HitPoint);
+                    }
+                }
+            }
+            catch
+            {
+                // Swallow and fall back to default hit testing
+            }
+
+            return base.HitTestCore(hitTestParameters);
+        }
+
+        private static Rect GetUniformRenderRect(double targetWidth, double targetHeight, int sourcePixelWidth, int sourcePixelHeight)
+        {
+            if (targetWidth <= 0 || targetHeight <= 0 || sourcePixelWidth <= 0 || sourcePixelHeight <= 0)
+                return new Rect(0, 0, 0, 0);
+
+            double controlAR = targetWidth / targetHeight;
+            double sourceAR = (double)sourcePixelWidth / sourcePixelHeight;
+
+            if (controlAR > sourceAR)
+            {
+                // Constrained by height
+                double drawHeight = targetHeight;
+                double drawWidth = drawHeight * sourceAR;
+                double offsetX = (targetWidth - drawWidth) / 2.0;
+                return new Rect(offsetX, 0, drawWidth, drawHeight);
+            }
+            else
+            {
+                // Constrained by width
+                double drawWidth = targetWidth;
+                double drawHeight = drawWidth / sourceAR;
+                double offsetY = (targetHeight - drawHeight) / 2.0;
+                return new Rect(0, offsetY, drawWidth, drawHeight);
+            }
         }
 
         // Not supported yet.

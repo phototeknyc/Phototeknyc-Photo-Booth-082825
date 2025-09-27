@@ -83,9 +83,15 @@ namespace DesignerCanvas.Controls.Primitives
 
         protected virtual void OnAdornedObjectPropertyChanged(string propertyName)
         {
-            if (_ParentCanvas != null)
+            if (_ParentCanvas == null) return;
+            // Update on bounds or any fundamental position/size change
+            if (propertyName == nameof(AdornedObject.Bounds)
+                || propertyName == nameof(ICanvasItem.Left)
+                || propertyName == nameof(ICanvasItem.Top)
+                || propertyName == "Width"
+                || propertyName == "Height")
             {
-                if (propertyName == nameof(AdornedObject.Bounds)) OnUpdateLayout();
+                OnUpdateLayout();
             }
         }
 

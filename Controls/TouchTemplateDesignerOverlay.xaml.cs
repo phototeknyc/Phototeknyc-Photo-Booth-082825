@@ -38,8 +38,19 @@ namespace Photobooth.Controls
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
+            Close();
+        }
+
+        public void Close()
+        {
+            // Save any pending changes before closing
+            if (TouchDesigner != null)
+            {
+                TouchDesigner.SaveBeforeClose();
+            }
+
             CloseRequested?.Invoke(this, EventArgs.Empty);
-            
+
             // Remove from parent
             if (Parent is Panel parentPanel)
             {
@@ -49,6 +60,9 @@ namespace Photobooth.Controls
             {
                 parentControl.Content = null;
             }
+
+            // Also set visibility to collapsed
+            Visibility = Visibility.Collapsed;
         }
 
         public void ShowFullScreen()

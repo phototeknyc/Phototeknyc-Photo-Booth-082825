@@ -7,18 +7,18 @@
              xmlns:dc="clr-namespace:DesignerCanvas.Controls;assembly=DesignerCanvas"
              mc:Ignorable="d"
              d:DesignHeight="1080" d:DesignWidth="1920"
-             Background="#FF0F0F0F"
+             Background="#1E1E1E"
              UseLayoutRounding="True"
              SnapsToDevicePixels="True">
     
     <UserControl.Resources>
-        <!-- Modern color scheme -->
-        <Color x:Key="PrimaryColor">#6C63FF</Color>
-        <Color x:Key="SecondaryColor">#FF6B6B</Color>
-        <Color x:Key="AccentColor">#4ECDC4</Color>
-        <Color x:Key="DarkBg">#1A1A2E</Color>
-        <Color x:Key="MediumBg">#16213E</Color>
-        <Color x:Key="LightBg">#0F3460</Color>
+        <!-- Modern color scheme matching refactored page -->
+        <Color x:Key="PrimaryColor">#4CAF50</Color>
+        <Color x:Key="SecondaryColor">#F44336</Color>
+        <Color x:Key="AccentColor">#2196F3</Color>
+        <Color x:Key="DarkBg">#1E1E1E</Color>
+        <Color x:Key="MediumBg">#2E2E2E</Color>
+        <Color x:Key="LightBg">#3E3E3E</Color>
         
         <!-- Brushes -->
         <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource PrimaryColor}"/>
@@ -34,7 +34,7 @@
             <Setter Property="Width" Value="Auto"/>
             <Setter Property="Height" Value="Auto"/>
             <Setter Property="Margin" Value="3"/>
-            <Setter Property="Background" Value="{StaticResource MediumBgBrush}"/>
+            <Setter Property="Background" Value="#3E3E3E"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontSize" Value="18"/>
@@ -69,7 +69,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                                <Setter TargetName="border" Property="Background" Value="#45A049"/>
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>
                                         <Storyboard>
@@ -96,7 +96,7 @@
                                 </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource SecondaryBrush}"/>
+                                <Setter TargetName="border" Property="Background" Value="#388E3C"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -111,7 +111,7 @@
             <Setter Property="Width" Value="Auto"/>
             <Setter Property="Height" Value="Auto"/>
             <Setter Property="Margin" Value="3"/>
-            <Setter Property="Background" Value="{StaticResource MediumBgBrush}"/>
+            <Setter Property="Background" Value="#3E3E3E"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontSize" Value="18"/>
@@ -149,7 +149,7 @@
                                 <Setter TargetName="border" Property="Background" Value="{StaticResource PrimaryBrush}"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                                <Setter TargetName="border" Property="Background" Value="#45A049"/>
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>
                                         <Storyboard>
@@ -176,7 +176,7 @@
                                 </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource SecondaryBrush}"/>
+                                <Setter TargetName="border" Property="Background" Value="#388E3C"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -238,7 +238,7 @@
         </Storyboard>
     </UserControl.Resources>
 
-    <Grid x:Name="MainGrid" Background="#FF0F0F0F">
+    <Grid x:Name="MainGrid" Background="#1E1E1E">
         <!-- Responsive layout that adapts to orientation -->
         <Grid x:Name="LayoutGrid">
             <Grid.RowDefinitions>
@@ -258,14 +258,11 @@
 
                     <!-- File Operations - Wrappable -->
                     <WrapPanel Grid.Column="0" Orientation="Horizontal" Margin="10" VerticalAlignment="Center">
-                        <Button Style="{StaticResource TouchToolButton}" 
-                                Click="NewTemplate_Click" 
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="NewTemplate_Click"
                                 ToolTip="New" Content="&#xE7C3;"/>
-                        <Button Style="{StaticResource TouchToolButton}" 
-                                Click="SaveTemplate_Click" 
-                                ToolTip="Save" Content="&#xE74E;"/>
-                        <Button Style="{StaticResource TouchToolButton}" 
-                                Click="LoadTemplate_Click" 
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="LoadTemplate_Click"
                                 ToolTip="Load" Content="&#xE8E5;"/>
                         <Border Width="8" Margin="10,5" CornerRadius="3">
                             <Border.Background>
@@ -279,76 +276,158 @@
                         <Button Style="{StaticResource TouchToolButton}" 
                                 Click="ImportTemplate_Click" 
                                 ToolTip="Import" Content="&#xE8B5;"/>
-                        <Button Style="{StaticResource TouchToolButton}" 
-                                Click="ExportTemplate_Click" 
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="ExportTemplate_Click"
                                 ToolTip="Export" Content="&#xEDE1;"/>
+                        <Border Width="8" Margin="10,5" CornerRadius="3">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#404040" Offset="0"/>
+                                    <GradientStop Color="#808080" Offset="0.5"/>
+                                    <GradientStop Color="#404040" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Background="#F44336"
+                                Click="Close_Click"
+                                ToolTip="Close Designer"
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="18"
+                                Content="&#xE711;"/>
                     </WrapPanel>
 
-                    <!-- Template Info -->
-                    <StackPanel Grid.Column="1" Orientation="Vertical"
+                    <!-- Template and Event Info - Single Row -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal"
                                HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <!-- Event Selection Row -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,5">
-                            <TextBlock Text="📅" FontSize="16" FontFamily="Segoe UI Emoji" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                            <TextBlock Text="Event: " Foreground="Gray" FontSize="14" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="EventComboBox"
-                                     Width="200"
-                                     Height="28"
-                                     Background="#2D2D30"
-                                     Foreground="White"
-                                     BorderBrush="Gray"
-                                     SelectionChanged="EventComboBox_SelectionChanged">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" Foreground="White"/>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                            <Button Style="{StaticResource TouchToolButton}"
-                                   Width="30" Height="28"
-                                   Margin="5,0,0,0"
-                                   Click="CreateEvent_Click"
-                                   ToolTip="Create New Event">
-                                <TextBlock Text="➕" FontSize="14" FontFamily="Segoe UI Emoji"/>
-                            </Button>
-                            <Button Style="{StaticResource TouchToolButton}"
-                                   Width="30" Height="28"
-                                   Margin="5,0,0,0"
-                                   Click="RefreshEvents_Click"
-                                   ToolTip="Refresh Events">
-                                <TextBlock Text="🔄" FontSize="14" FontFamily="Segoe UI Emoji"/>
-                            </Button>
-                        </StackPanel>
 
-                        <!-- Template Name Row -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBlock Text="📄" FontSize="16" FontFamily="Segoe UI Emoji" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                            <TextBlock Text="Template: " Foreground="Gray" FontSize="16" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TemplateNameText" Text="Untitled"
-                                      Foreground="White" FontSize="18" FontWeight="Bold"
-                                      VerticalAlignment="Center" Margin="5,0"/>
-                            <Button Background="Transparent" BorderThickness="0"
-                                   Foreground="Gray" FontSize="16"
-                                   Click="RenameTemplate_Click"
-                                   VerticalAlignment="Center" Margin="5,0"
-                                   ToolTip="Rename Template">
-                                <TextBlock Text="✏️" FontSize="14" FontFamily="Segoe UI Emoji"/>
-                            </Button>
-                            <CheckBox x:Name="AssignToEventCheckBox"
+                        <!-- Event Selection Group -->
+                        <Border Background="#2E2E2E" BorderBrush="#4CAF50" BorderThickness="1" CornerRadius="5" Padding="10,5" Margin="0,0,15,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE787;" FontFamily="Segoe MDL2 Assets" FontSize="18" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#4CAF50"/>
+                                <TextBlock Text="Event:" Foreground="#A0A0A0" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <ComboBox x:Name="EventComboBox"
+                                         Width="200"
+                                         Height="36"
+                                         Background="#3E3E3E"
+                                         Foreground="White"
+                                         BorderBrush="#4CAF50"
+                                         BorderThickness="1"
+                                         FontSize="14"
+                                         Padding="8,0"
+                                         VerticalAlignment="Center"
+                                         SelectionChanged="EventComboBox_SelectionChanged">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" Foreground="White"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <Button Style="{StaticResource TouchToolButton}"
+                                       Width="36" Height="36"
+                                       Margin="6,0,0,0"
+                                       Click="CreateEvent_Click"
+                                       ToolTip="Create New Event"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="16"
+                                       Content="&#xE710;"/>
+                                <Button Style="{StaticResource TouchToolButton}"
+                                       Width="36" Height="36"
+                                       Margin="6,0,0,0"
+                                       Click="RefreshEvents_Click"
+                                       ToolTip="Refresh Events"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="16"
+                                       Content="&#xE72C;"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Template Name Group -->
+                        <Border Background="#2E2E2E" BorderBrush="#2196F3" BorderThickness="1" CornerRadius="5" Padding="10,5" Margin="0,0,15,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" FontSize="18" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#2196F3"/>
+                                <TextBlock Text="Template:" Foreground="#A0A0A0" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <Border Background="#3E3E3E" BorderBrush="#2196F3" BorderThickness="1" CornerRadius="3" Padding="10,4" Margin="0,0,6,0">
+                                    <TextBlock x:Name="TemplateNameText" Text="Untitled"
+                                              Foreground="White" FontSize="14" FontWeight="Bold"
+                                              VerticalAlignment="Center"/>
+                                </Border>
+                                <Button Style="{StaticResource TouchToolButton}"
+                                       Width="36" Height="36"
+                                       Click="RenameTemplate_Click"
+                                       ToolTip="Rename Template"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="16"
+                                       Content="&#xE70F;"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Assign to Event Toggle -->
+                        <ToggleButton x:Name="AssignToEventCheckBox"
                                      VerticalAlignment="Center"
-                                     Margin="15,0,0,0"
-                                     IsEnabled="True"
-                                     Foreground="White"
+                                     Height="46"
+                                     MinWidth="140"
+                                     Background="#3E3E3E"
+                                     BorderBrush="#4CAF50"
+                                     BorderThickness="1"
+                                     Margin="0,0,15,0"
                                      Checked="AssignToEventCheckBox_Changed"
                                      Unchecked="AssignToEventCheckBox_Changed">
-                                <CheckBox.Content>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="🔗" FontSize="14" FontFamily="Segoe UI Emoji" Margin="0,0,5,0"/>
-                                        <TextBlock Text="Assign to Event" FontSize="14"/>
-                                    </StackPanel>
-                                </CheckBox.Content>
-                            </CheckBox>
-                        </StackPanel>
+                            <ToggleButton.Style>
+                                <Style TargetType="ToggleButton">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border x:Name="border"
+                                                        Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="5">
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <TextBlock x:Name="icon" Text="&#xE71B;" FontFamily="Segoe MDL2 Assets" FontSize="14" Margin="8,0,6,0" Foreground="White"/>
+                                                        <TextBlock x:Name="text" Text="Assign to Event" FontSize="14" FontWeight="SemiBold" Margin="0,0,8,0" Foreground="White"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#4CAF50"/>
+                                                        <Setter TargetName="icon" Property="Text" Value="&#xE73E;"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#45A049"/>
+                                                    </Trigger>
+                                                    <MultiTrigger>
+                                                        <MultiTrigger.Conditions>
+                                                            <Condition Property="IsChecked" Value="True"/>
+                                                            <Condition Property="IsMouseOver" Value="True"/>
+                                                        </MultiTrigger.Conditions>
+                                                        <Setter TargetName="border" Property="Background" Value="#66BB6A"/>
+                                                    </MultiTrigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ToggleButton.Style>
+                        </ToggleButton>
+
+                        <!-- Event Templates Button with Count -->
+                        <Button x:Name="EventTemplatesButton"
+                               Style="{StaticResource TouchToolButton}"
+                               Height="46"
+                               MinWidth="120"
+                               Click="EventTemplatesButton_Click"
+                               ToolTip="View Event Templates"
+                               Visibility="Collapsed">
+                            <Button.Content>
+                                <StackPanel Orientation="Horizontal" Margin="8,0,12,0">
+                                    <TextBlock Text="&#xE8FD;" FontFamily="Segoe MDL2 Assets" FontSize="14" FontWeight="Normal" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Templates (" FontSize="14" VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                                    <TextBlock x:Name="TemplateCountText" Text="0" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Foreground="#4CAF50" FontFamily="Segoe UI"/>
+                                    <TextBlock Text=")" FontSize="14" VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                                </StackPanel>
+                            </Button.Content>
+                        </Button>
                     </StackPanel>
 
                     <!-- Canvas Size Display - Responsive -->
@@ -381,7 +460,7 @@
                     <!-- Side Tools Panel with Tab Controls -->
                     <Grid x:Name="SideToolsContainer" Grid.Column="0">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="90"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
@@ -392,7 +471,7 @@
                                 <!-- Panel Toggle Buttons -->
                                 <ToggleButton x:Name="LayersToggle"
                                              Style="{StaticResource TouchToggleButton}"
-                                             Width="44" Height="44"
+                                             Width="60" Height="60"
                                              ToolTip="Layers"
                                              Click="LayersToggle_Click">
                                     <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets"/>
@@ -403,7 +482,7 @@
 
                                 <Button x:Name="BackgroundButton"
                                         Style="{StaticResource TouchToolButton}"
-                                        Width="44" Height="44"
+                                        Width="60" Height="60"
                                         ToolTip="Change Background"
                                         Click="BackgroundButton_Click">
                                     <TextBlock Text="&#xE790;" FontFamily="Segoe MDL2 Assets"/>
@@ -907,12 +986,12 @@
                                 <Button Style="{StaticResource TouchToolButton}"
                                         Click="BringToFront_Click"
                                         ToolTip="Bring to front">
-                                    <TextBlock Text="⬆" FontSize="20" FontFamily="Segoe UI Symbol"/>
+                                    <TextBlock Text="&#xE898;" FontFamily="Segoe MDL2 Assets"/>
                                 </Button>
                                 <Button Style="{StaticResource TouchToolButton}"
                                         Click="SendToBack_Click"
                                         ToolTip="Send to back">
-                                    <TextBlock Text="⬇" FontSize="20" FontFamily="Segoe UI Symbol"/>
+                                    <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets"/>
                                 </Button>
                                 <Button Style="{StaticResource TouchToolButton}"
                                         Click="AlignItems_Click"
@@ -921,7 +1000,7 @@
                                 </Button>
                                 <ToggleButton x:Name="AspectRatioLockToggle"
                                              Style="{StaticResource TouchToggleButton}"
-                                             Width="44" Height="44"
+                                             Width="60" Height="60"
                                              ToolTip="Lock Aspect Ratio"
                                              Click="AspectRatioLock_Click">
                                     <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets"/>
@@ -1094,20 +1173,7 @@
                         </ToggleButton>
                     </StackPanel>
 
-                    <!-- Close Button -->
-                    <Button Grid.Column="2"
-                           Width="100" Height="50"
-                           Margin="10,0,20,0"
-                           Background="#FF6B6B"
-                           Foreground="White"
-                           BorderThickness="0"
-                           FontSize="16"
-                           Click="Close_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="❌" FontSize="20" Margin="5,0"/>
-                            <TextBlock Text="Close" VerticalAlignment="Center" Margin="5,0"/>
-                        </StackPanel>
-                    </Button>
+                    <!-- Empty space for layout balance -->
                 </Grid>
             </Border>
         </Grid>
@@ -1667,6 +1733,205 @@
                 </StackPanel>
             </Border>
         </Border>
+
+        <!-- Template Rename Overlay -->
+        <Border x:Name="RenameTemplateOverlay"
+                Grid.RowSpan="10"
+                Background="#AA000000"
+                Visibility="Collapsed"
+                MouseLeftButtonDown="RenameTemplateOverlay_BackgroundClick">
+
+            <Border Background="#FF2D2D30"
+                    BorderBrush="#FF6C63FF"
+                    BorderThickness="3"
+                    CornerRadius="15"
+                    Width="500"
+                    MinHeight="280"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+
+                <StackPanel Margin="30">
+                    <!-- Title -->
+                    <TextBlock Text="Rename Template"
+                              Foreground="White"
+                              FontSize="24"
+                              FontWeight="Bold"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,20"/>
+
+                    <!-- Input Section -->
+                    <TextBlock Text="Enter new template name:"
+                              Foreground="#B0B0B0"
+                              FontSize="16"
+                              Margin="0,0,0,10"/>
+
+                    <TextBox x:Name="RenameTemplateTextBox"
+                            FontSize="18"
+                            Height="50"
+                            Padding="10"
+                            Background="#FF1A1A2E"
+                            Foreground="White"
+                            BorderBrush="#FF6C63FF"
+                            BorderThickness="2"
+                            Margin="0,0,0,30"
+                            KeyDown="RenameTemplateTextBox_KeyDown"/>
+
+                    <!-- Buttons -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="20"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0"
+                               Height="50"
+                               Background="#FF4CAF50"
+                               Foreground="White"
+                               BorderThickness="0"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               Padding="10,5"
+                               Click="ApplyRenameTemplate_Click">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center">
+                                    <Run Text="&#xE73E;"/>
+                                </TextBlock>
+                                <TextBlock Text="Apply" VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Grid.Column="2"
+                               Height="50"
+                               Background="#FFFF6B6B"
+                               Foreground="White"
+                               BorderThickness="0"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               Padding="10,5"
+                               Click="CancelRenameTemplate_Click">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center">
+                                    <Run Text="&#xE711;"/>
+                                </TextBlock>
+                                <TextBlock Text="Cancel" VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- Create Event Overlay -->
+        <Border x:Name="CreateEventOverlay"
+                Grid.RowSpan="10"
+                Background="#AA000000"
+                Visibility="Collapsed"
+                MouseLeftButtonDown="CreateEventOverlay_BackgroundClick">
+
+            <Border Background="#FF2D2D30"
+                    BorderBrush="#FF6C63FF"
+                    BorderThickness="3"
+                    CornerRadius="15"
+                    Width="500"
+                    MinHeight="380"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+
+                <StackPanel Margin="30">
+                    <!-- Title -->
+                    <TextBlock Text="Create New Event"
+                              Foreground="White"
+                              FontSize="24"
+                              FontWeight="Bold"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,20"/>
+
+                    <!-- Event Name Input -->
+                    <TextBlock Text="Event Name:"
+                              Foreground="#B0B0B0"
+                              FontSize="16"
+                              Margin="0,0,0,10"/>
+
+                    <TextBox x:Name="CreateEventNameTextBox"
+                            FontSize="18"
+                            Height="50"
+                            Padding="10"
+                            Background="#FF1A1A2E"
+                            Foreground="White"
+                            BorderBrush="#FF6C63FF"
+                            BorderThickness="2"
+                            Margin="0,0,0,20"
+                            KeyDown="CreateEventTextBox_KeyDown"/>
+
+                    <!-- Event Description Input -->
+                    <TextBlock Text="Description (Optional):"
+                              Foreground="#B0B0B0"
+                              FontSize="16"
+                              Margin="0,0,0,10"/>
+
+                    <TextBox x:Name="CreateEventDescriptionTextBox"
+                            FontSize="16"
+                            Height="80"
+                            Padding="10"
+                            Background="#FF1A1A2E"
+                            Foreground="White"
+                            BorderBrush="#FF6C63FF"
+                            BorderThickness="2"
+                            TextWrapping="Wrap"
+                            AcceptsReturn="True"
+                            VerticalScrollBarVisibility="Auto"
+                            Margin="0,0,0,30"
+                            KeyDown="CreateEventDescriptionTextBox_KeyDown"/>
+
+                    <!-- Buttons -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="20"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0"
+                               Height="50"
+                               Background="#FF4CAF50"
+                               Foreground="White"
+                               BorderThickness="0"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               Padding="10,5"
+                               Click="ApplyCreateEvent_Click">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center">
+                                    <Run Text="&#xE710;"/>
+                                </TextBlock>
+                                <TextBlock Text="Create" VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Grid.Column="2"
+                               Height="50"
+                               Background="#FFFF6B6B"
+                               Foreground="White"
+                               BorderThickness="0"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               Padding="10,5"
+                               Click="CancelCreateEvent_Click">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center">
+                                    <Run Text="&#xE711;"/>
+                                </TextBlock>
+                                <TextBlock Text="Cancel" VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- Event Templates Overlay -->
+        <local:EventTemplatesOverlay x:Name="EventTemplatesOverlay" Visibility="Collapsed"/>
 
     </Grid>
 </UserControl>

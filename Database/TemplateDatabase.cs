@@ -2803,10 +2803,14 @@ namespace Photobooth.Database
         public double StrokeThickness { get; set; }
         public bool HasNoFill { get; set; }
         public bool HasNoStroke { get; set; }
-        
+
+        // Visual Properties
+        public double Opacity { get; set; } = 1.0;
+        public double ShadowOpacity { get; set; } = 1.0;
+
         // Additional Properties
         public string CustomProperties { get; set; } // JSON for extensibility
-        
+
         public DateTime CreatedDate { get; set; }
         public DateTime ModifiedDate { get; set; }
     }

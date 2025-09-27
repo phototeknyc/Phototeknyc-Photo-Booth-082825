@@ -53,7 +53,8 @@ namespace DesignerCanvas.Controls.Primitives
 
         private void TouchDragThumb_TouchDown(object sender, TouchEventArgs e)
         {
-            var touchPoint = e.GetTouchPoint(this);
+            // Track touch in designer coordinate space to keep deltas consistent
+            var touchPoint = _designer != null ? e.GetTouchPoint(_designer) : e.GetTouchPoint(this);
             var touchId = e.TouchDevice.Id;
             
             _activeTouches[touchId] = touchPoint;
@@ -71,6 +72,7 @@ namespace DesignerCanvas.Controls.Primitives
                     }
                     _designer.SelectedItems.Add(_targetItem);
                 }
+                _designer?.BeginBatchDrag();
                 
                 // Provide haptic feedback if available
                 ProvideHapticFeedback();
@@ -85,7 +87,8 @@ namespace DesignerCanvas.Controls.Primitives
             if (!_isDragging || _targetItem == null)
                 return;
                 
-            var touchPoint = e.GetTouchPoint(_designer);
+            var relativeTo = (System.Windows.IInputElement)_designer ?? (System.Windows.IInputElement)this;
+            var touchPoint = e.GetTouchPoint(relativeTo);
             var touchId = e.TouchDevice.Id;
             
             if (!_activeTouches.ContainsKey(touchId))
@@ -96,9 +99,20 @@ namespace DesignerCanvas.Controls.Primitives
             
             var deltaX = touchPoint.Position.X - previousPoint.X;
             var deltaY = touchPoint.Position.Y - previousPoint.Y;
-            
-            // Apply movement with constraints
-            MoveItemWithConstraints(_targetItem, deltaX, deltaY);
+            // Ignore tiny jitters
+            if (Math.Abs(deltaX) < 0.25 && Math.Abs(deltaY) < 0.25)
+            {
+                e.Handled = true;
+                return;
+            }
+            // Convert to canvas virtual units (account for zoom and external scale)
+            var z = _designer?.Zoom / 100.0 ?? 1.0;
+            var s = _designer?.CurrentScale ?? 1.0;
+            var scale = z * s;
+            if (scale <= 0) scale = 1.0;
+
+            // Apply movement with constraints in virtual coordinates
+            MoveItemWithConstraints(_targetItem, deltaX / scale, deltaY / scale);
             
             e.Handled = true;
         }
@@ -111,6 +125,7 @@ namespace DesignerCanvas.Controls.Primitives
             if (_activeTouches.Count == 0)
             {
                 _isDragging = false;
+                _designer?.EndBatchDrag();
             }
             
             ReleaseTouchCapture(e.TouchDevice);
@@ -136,14 +151,22 @@ namespace DesignerCanvas.Controls.Primitives
             var deltaX = e.DeltaManipulation.Translation.X;
             var deltaY = e.DeltaManipulation.Translation.Y;
             
-            if (Math.Abs(deltaX) > 1 || Math.Abs(deltaY) > 1)
+            // Avoid duplicate single-finger translation (TouchMove already handles it). Use manipulations for multi-touch only.
+            if (_activeTouches.Count >= 2 && (Math.Abs(deltaX) > 0.5 || Math.Abs(deltaY) > 0.5))
             {
+                // Convert to virtual units
+                var z = _designer?.Zoom / 100.0 ?? 1.0;
+                var s = _designer?.CurrentScale ?? 1.0;
+                var scale = z * s;
+                if (scale <= 0) scale = 1.0;
+                var vx = deltaX / scale;
+                var vy = deltaY / scale;
                 // Move all selected items
                 foreach (var item in _designer.SelectedItems.ToList())
                 {
                     if (item is IBoxCanvasItem boxItem)
                     {
-                        MoveItemWithConstraints(boxItem, deltaX, deltaY);
+                        MoveItemWithConstraints(boxItem, vx, vy);
                     }
                 }
             }
@@ -153,6 +176,7 @@ namespace DesignerCanvas.Controls.Primitives
 
         private void TouchDragThumb_ManipulationCompleted(object sender, ManipulationCompletedEventArgs e)
         {
+            _designer?.EndBatchDrag();
             e.Handled = true;
         }
 
@@ -170,8 +194,9 @@ namespace DesignerCanvas.Controls.Primitives
             
             // Apply movement constraints to keep item visible
             var minOverlap = 50; // Minimum pixels that must remain visible
-            var canvasWidth = _designer?.ActualWidth ?? 800;
-            var canvasHeight = _designer?.ActualHeight ?? 600;
+            // Use viewport size in virtual units for constraints
+            var canvasWidth = _designer?.ViewPortRect.Width ?? 800;
+            var canvasHeight = _designer?.ViewPortRect.Height ?? 600;
             
             var minLeft = -item.Width + minOverlap;
             var maxLeft = canvasWidth - minOverlap;
@@ -181,8 +206,15 @@ namespace DesignerCanvas.Controls.Primitives
             newLeft = Math.Max(minLeft, Math.Min(maxLeft, newLeft));
             newTop = Math.Max(minTop, Math.Min(maxTop, newTop));
             
-            item.Left = newLeft;
-            item.Top = newTop;
+            if (item is CanvasItem ci)
+            {
+                ci.Location = new Point(newLeft, newTop);
+            }
+            else
+            {
+                item.Left = newLeft;
+                item.Top = newTop;
+            }
             
             // Trigger bounds changed event
             // Trigger bounds changed event - this will be handled by the CanvasItem implementation

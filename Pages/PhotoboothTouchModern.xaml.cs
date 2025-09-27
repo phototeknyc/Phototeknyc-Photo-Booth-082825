@@ -2812,23 +2812,17 @@ namespace Photobooth.Pages
                     previewTemplateInfo.Text = $"{photoCount} photos • {dimensions}";
                 }
                 
-                // Load the thumbnail image in larger size
+                // Load a robust, dynamically rendered preview (ignores stored thumbnails)
                 if (largeTemplatePreview != null)
                 {
                     try
                     {
-                        if (!string.IsNullOrEmpty(templateData.ThumbnailImagePath) && 
-                            System.IO.File.Exists(templateData.ThumbnailImagePath))
+                        var preview = EventSelectionService.Instance.GenerateTemplatePreviewImage(templateData, 640, 480);
+                        if (preview != null)
                         {
-                            var bitmap = new BitmapImage();
-                            bitmap.BeginInit();
-                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                            bitmap.UriSource = new Uri(templateData.ThumbnailImagePath, UriKind.Absolute);
-                            bitmap.EndInit();
-                            largeTemplatePreview.Source = bitmap;
+                            largeTemplatePreview.Source = preview;
                         }
-                        else if (!string.IsNullOrEmpty(templateData.BackgroundImagePath) && 
-                                System.IO.File.Exists(templateData.BackgroundImagePath))
+                        else if (!string.IsNullOrEmpty(templateData.BackgroundImagePath) && System.IO.File.Exists(templateData.BackgroundImagePath))
                         {
                             var bitmap = new BitmapImage();
                             bitmap.BeginInit();
@@ -2840,7 +2834,7 @@ namespace Photobooth.Pages
                     }
                     catch (Exception ex)
                     {
-                        Log.Error($"Failed to load template preview image: {ex.Message}");
+                        Log.Error($"Failed to generate template preview image: {ex.Message}");
                     }
                 }
                 

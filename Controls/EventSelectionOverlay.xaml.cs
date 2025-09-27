@@ -142,8 +142,8 @@ namespace Photobooth.Controls
                     // Hide the control itself
                     this.Visibility = Visibility.Collapsed;
 
-                    // Reset service
-                    _eventSelectionService.Reset();
+                    // Reset overlay state without clearing the selected event or timer
+                    _eventSelectionService.Reset(preserveSelection: true);
 
                     // Clear UI
                     SearchTextBox.Clear();
@@ -478,13 +478,16 @@ namespace Photobooth.Controls
             for (int i = 0; i < _currentEventTemplates.Count; i++)
             {
                 var template = _currentEventTemplates[i];
+                // Build a robust preview image using the service (aspect-checked thumbnail or generated)
+                var preview = _eventSelectionService.GenerateTemplatePreviewImage(template, 480, 680);
+
                 var viewModel = new
                 {
                     Template = template,
                     Name = template.Name ?? "Untitled Template",
                     Info = $"Template {i + 1}",
                     IsDefault = template.IsDefault,
-                    PreviewPath = template.ThumbnailImagePath
+                    PreviewPath = (object)preview ?? (object)template.ThumbnailImagePath
                 };
                 templateViewModels.Add(viewModel);
             }

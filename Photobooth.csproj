@@ -240,6 +240,9 @@
     <Compile Include="Controls\TouchTemplateDesignerOverlay.xaml.cs">
       <DependentUpon>TouchTemplateDesignerOverlay.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\EventTemplatesOverlay.xaml.cs">
+      <DependentUpon>EventTemplatesOverlay.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\PinEntryOverlay.xaml.cs">
       <DependentUpon>PinEntryOverlay.xaml</DependentUpon>
     </Compile>
@@ -546,6 +549,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\TouchTemplateDesignerOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\EventTemplatesOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

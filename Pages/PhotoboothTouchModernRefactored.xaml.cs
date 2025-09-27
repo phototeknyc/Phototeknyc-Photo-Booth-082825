@@ -4897,11 +4897,18 @@ namespace Photobooth.Pages
                 _currentEvent = selectedEvent;
                 _eventTemplateService.SelectEvent(_currentEvent);
 
-                // Update EventSelectionService with the selected event and start timer
-                // This will also trigger the 5-hour expiration timer
-                // The EventSelectionService will handle saving the ID and timestamp automatically
-                EventSelectionService.Instance.SelectedEvent = selectedEvent;
-                EventSelectionService.Instance.StartTimerForCurrentEvent();
+                // Update EventSelectionService only if the event actually changed.
+                // Avoid resetting the 5-hour timer on re-selecting the same event (e.g., after restart).
+                var currentSelected = EventSelectionService.Instance.SelectedEvent;
+                if (currentSelected == null || currentSelected.Id != selectedEvent.Id)
+                {
+                    EventSelectionService.Instance.SelectedEvent = selectedEvent;
+                    EventSelectionService.Instance.StartTimerForCurrentEvent();
+                }
+                else
+                {
+                    Log.Debug("OnEventSelectionOverlayEventSelected: Same event selected; preserving remaining time");
+                }
 
                 Log.Debug($"OnEventSelectionOverlayEventSelected: Event selection delegated to EventSelectionService");
                 

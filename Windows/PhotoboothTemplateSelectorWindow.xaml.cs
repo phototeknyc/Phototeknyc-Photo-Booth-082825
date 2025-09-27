@@ -65,8 +65,8 @@ namespace Photobooth.Windows
             // Update the selected template
             SelectedTemplate = viewModel.TemplateData;
             
-            // Update the large preview UI
-            LargePreviewImage.Source = viewModel.ThumbnailImageSource ?? GenerateLargerPreview(viewModel.TemplateData);
+            // Update the large preview UI using a full render of the template
+            LargePreviewImage.Source = GenerateLargerPreview(viewModel.TemplateData) ?? viewModel.ThumbnailImageSource;
             LargePreviewTitle.Text = viewModel.Name;
             LargePreviewDescription.Text = viewModel.Description;
             
@@ -78,34 +78,148 @@ namespace Photobooth.Windows
         {
             try
             {
-                // First try to load the actual template background image at larger size
-                if (!string.IsNullOrEmpty(template.BackgroundImagePath) && System.IO.File.Exists(template.BackgroundImagePath))
+                // Render full template (background + items) at a larger size
+                double maxWidth = 700;
+                double maxHeight = 500;
+                double tW = Math.Max(1, template.CanvasWidth);
+                double tH = Math.Max(1, template.CanvasHeight);
+                double scale = Math.Min(maxWidth / tW, maxHeight / tH);
+                int outW = Math.Max(1, (int)(tW * scale));
+                int outH = Math.Max(1, (int)(tH * scale));
+
+                var db = new TemplateDatabase();
+                var items = db.GetCanvasItems(template.Id) ?? new List<Database.CanvasItemData>();
+
+                var visual = new System.Windows.Media.DrawingVisual();
+                using (var dc = visual.RenderOpen())
                 {
-                    var backgroundImage = new BitmapImage();
-                    backgroundImage.BeginInit();
-                    backgroundImage.CacheOption = BitmapCacheOption.OnLoad;
-                    backgroundImage.UriSource = new Uri(template.BackgroundImagePath, UriKind.Absolute);
-                    
-                    // Larger size for preview
-                    double maxWidth = 600;
-                    double maxHeight = 400;
-                    double aspectRatio = template.CanvasWidth / template.CanvasHeight;
-                    
-                    if (aspectRatio > maxWidth / maxHeight)
+                    // Background
+                    if (!string.IsNullOrEmpty(template.BackgroundImagePath) && File.Exists(template.BackgroundImagePath))
                     {
-                        backgroundImage.DecodePixelWidth = (int)maxWidth;
+                        var bg = new BitmapImage();
+                        bg.BeginInit();
+                        bg.CacheOption = BitmapCacheOption.OnLoad;
+                        bg.UriSource = new Uri(template.BackgroundImagePath, UriKind.Absolute);
+                        bg.EndInit();
+                        bg.Freeze();
+
+                        double imgRatio = (double)bg.PixelWidth / Math.Max(1, bg.PixelHeight);
+                        double outRatio = (double)outW / Math.Max(1, outH);
+                        Rect dest;
+                        if (imgRatio > outRatio)
+                        {
+                            double h = outW / imgRatio;
+                            dest = new Rect(0, (outH - h) / 2, outW, h);
+                        }
+                        else
+                        {
+                            double w = outH * imgRatio;
+                            dest = new Rect((outW - w) / 2, 0, w, outH);
+                        }
+                        dc.DrawImage(bg, dest);
                     }
                     else
                     {
-                        backgroundImage.DecodePixelHeight = (int)maxHeight;
+                        var brush = new System.Windows.Media.LinearGradientBrush(System.Windows.Media.Colors.DimGray, System.Windows.Media.Colors.Black, 90);
+                        dc.DrawRectangle(brush, null, new Rect(0, 0, outW, outH));
                     }
-                    
-                    backgroundImage.EndInit();
-                    backgroundImage.Freeze();
-                    return backgroundImage;
+
+                    // Draw items by Z order
+                    int i = 0;
+                    foreach (var item in items.OrderBy(x => x.ZIndex))
+                    {
+                        double x = item.X * scale;
+                        double y = item.Y * scale;
+                        double w = Math.Max(1, item.Width * scale);
+                        double h = Math.Max(1, item.Height * scale);
+                        var rect = new Rect(x, y, w, h);
+
+                        if (item.Rotation != 0)
+                            dc.PushTransform(new System.Windows.Media.RotateTransform(item.Rotation, rect.Left + rect.Width / 2, rect.Top + rect.Height / 2));
+
+                        switch (item.ItemType)
+                        {
+                            case "Image":
+                                if (!string.IsNullOrEmpty(item.ImagePath) && File.Exists(item.ImagePath))
+                                {
+                                    try
+                                    {
+                                        var img = new BitmapImage(new Uri(item.ImagePath, UriKind.Absolute));
+                                        dc.DrawImage(img, rect);
+                                    }
+                                    catch { }
+                                }
+                                break;
+                            case "Placeholder":
+                                System.Windows.Media.Color col;
+                                if (!string.IsNullOrEmpty(item.PlaceholderColor))
+                                {
+                                    try { col = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(item.PlaceholderColor); }
+                                    catch { col = System.Windows.Media.Color.FromRgb(255,182,193); }
+                                }
+                                else
+                                {
+                                    col = System.Windows.Media.Color.FromRgb(255,182,193);
+                                }
+                                var rounded = new System.Windows.Media.RectangleGeometry(rect, 6, 6);
+                                dc.DrawGeometry(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(220, col.R, col.G, col.B)),
+                                               new System.Windows.Media.Pen(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.White), 2), rounded);
+                                int n = item.PlaceholderNumber ?? (i + 1);
+                                var ft = new System.Windows.Media.FormattedText(
+                                    $"Photo {n}",
+                                    System.Globalization.CultureInfo.CurrentCulture,
+                                    System.Windows.FlowDirection.LeftToRight,
+                                    new System.Windows.Media.Typeface("Segoe UI"),
+                                    Math.Min(w, h) * 0.16,
+                                    new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(50, 50, 50)), 96);
+                                dc.DrawText(ft, new System.Windows.Point(rect.Left + (rect.Width - ft.Width) / 2, rect.Top + (rect.Height - ft.Height) / 2));
+                                break;
+                            case "Text":
+                                var tf = new System.Windows.Media.Typeface(new System.Windows.Media.FontFamily(string.IsNullOrEmpty(item.FontFamily) ? "Segoe UI" : item.FontFamily),
+                                    item.IsItalic ? System.Windows.FontStyles.Italic : System.Windows.FontStyles.Normal,
+                                    item.IsBold ? System.Windows.FontWeights.Bold : System.Windows.FontWeights.Normal,
+                                    System.Windows.FontStretches.Normal);
+                                System.Windows.Media.Brush brush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Black);
+                                if (!string.IsNullOrEmpty(item.TextColor))
+                                {
+                                    try { brush = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(item.TextColor)); } catch { }
+                                }
+                                double fs = Math.Max(8, (item.FontSize ?? 20) * scale);
+                                var t = new System.Windows.Media.FormattedText(item.Text ?? string.Empty,
+                                    System.Globalization.CultureInfo.CurrentCulture, System.Windows.FlowDirection.LeftToRight,
+                                    tf, fs, brush, 96);
+                                t.MaxTextWidth = rect.Width; t.MaxTextHeight = rect.Height;
+                                dc.DrawText(t, new System.Windows.Point(rect.Left, rect.Top));
+                                break;
+                            case "Shape":
+                                System.Windows.Media.Brush fill = System.Windows.Media.Brushes.Transparent; System.Windows.Media.Pen pen = null;
+                                if (!string.IsNullOrEmpty(item.FillColor)) { try { fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(item.FillColor)); } catch { } }
+                                if (!string.IsNullOrEmpty(item.StrokeColor) && item.StrokeThickness > 0) { try { pen = new System.Windows.Media.Pen(new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(item.StrokeColor)), item.StrokeThickness); } catch { } }
+                                dc.DrawRectangle(fill, pen, rect);
+                                break;
+                        }
+
+                        if (item.Rotation != 0) dc.Pop();
+                        i++;
+                    }
                 }
-                
-                return null;
+
+                var rtb = new RenderTargetBitmap(outW, outH, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                rtb.Render(visual);
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(rtb));
+                using (var ms = new MemoryStream())
+                {
+                    encoder.Save(ms);
+                    ms.Position = 0;
+                    var bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.StreamSource = ms;
+                    bmp.EndInit();
+                    bmp.Freeze();
+                    return bmp;
+                }
             }
             catch
             {
@@ -188,20 +302,8 @@ namespace Photobooth.Windows
         {
             try
             {
-                // Load the stored thumbnail or background image
-                if (!string.IsNullOrEmpty(TemplateData.ThumbnailImagePath) && File.Exists(TemplateData.ThumbnailImagePath))
-                {
-                    ThumbnailImageSource = LoadImageFromPath(TemplateData.ThumbnailImagePath);
-                }
-                else if (!string.IsNullOrEmpty(TemplateData.BackgroundImagePath) && File.Exists(TemplateData.BackgroundImagePath))
-                {
-                    ThumbnailImageSource = LoadImageFromPath(TemplateData.BackgroundImagePath);
-                }
-                else
-                {
-                    // Generate a thumbnail from the actual template
-                    ThumbnailImageSource = GenerateTemplateThumbnail();
-                }
+                // Always generate a dynamic preview of the full template (ignore saved thumbnails)
+                ThumbnailImageSource = GenerateTemplateThumbnail();
             }
             catch (Exception ex)
             {
@@ -299,126 +401,139 @@ namespace Photobooth.Windows
         {
             try
             {
-                // Generate a colorful preview for each template type
+                // Render full template preview at card size
                 double templateWidth = TemplateData.CanvasWidth;
                 double templateHeight = TemplateData.CanvasHeight;
                 double maxThumbWidth = 240;
                 double maxThumbHeight = 160;
-                
-                // Calculate scale to fit within max bounds while maintaining aspect ratio
+
                 double scale = Math.Min(maxThumbWidth / templateWidth, maxThumbHeight / templateHeight);
                 int thumbWidth = (int)(templateWidth * scale);
                 int thumbHeight = (int)(templateHeight * scale);
-                
-                // Create a drawing visual to render the template
+
+                var db = new TemplateDatabase();
+                var items = db.GetCanvasItems(TemplateData.Id) ?? new List<Database.CanvasItemData>();
+
                 var visual = new System.Windows.Media.DrawingVisual();
                 using (var dc = visual.RenderOpen())
                 {
-                    // Generate unique colors based on template name/ID
-                    var random = new Random(TemplateData.Id);
-                    var bgColors = new[]
+                    // Background
+                    if (!string.IsNullOrEmpty(TemplateData.BackgroundImagePath) && File.Exists(TemplateData.BackgroundImagePath))
                     {
-                        System.Windows.Media.Color.FromRgb(255, 182, 193), // Light Pink
-                        System.Windows.Media.Color.FromRgb(135, 206, 235), // Sky Blue
-                        System.Windows.Media.Color.FromRgb(152, 251, 152), // Pale Green
-                        System.Windows.Media.Color.FromRgb(255, 218, 185), // Peach
-                        System.Windows.Media.Color.FromRgb(221, 160, 221), // Plum
-                        System.Windows.Media.Color.FromRgb(240, 230, 140)  // Khaki
-                    };
-                    
-                    // Draw gradient background
-                    var gradientBrush = new System.Windows.Media.LinearGradientBrush(
-                        bgColors[random.Next(bgColors.Length)],
-                        bgColors[random.Next(bgColors.Length)],
-                        0);
-                    
-                    dc.DrawRectangle(gradientBrush, null, new Rect(0, 0, thumbWidth, thumbHeight));
-                    
-                    // Get template items from database
-                    var database = new TemplateDatabase();
-                    var items = database.GetCanvasItems(TemplateData.Id);
-                    
-                    // If no items, create default layout based on template name
-                    if (items == null || !items.Any())
-                    {
-                        items = CreateDefaultItems(TemplateData);
+                        var bg = new BitmapImage();
+                        bg.BeginInit();
+                        bg.CacheOption = BitmapCacheOption.OnLoad;
+                        bg.UriSource = new Uri(TemplateData.BackgroundImagePath, UriKind.Absolute);
+                        bg.EndInit();
+                        bg.Freeze();
+
+                        double imgRatio = (double)bg.PixelWidth / Math.Max(1, bg.PixelHeight);
+                        double outRatio = (double)thumbWidth / Math.Max(1, thumbHeight);
+                        Rect dest;
+                        if (imgRatio > outRatio)
+                        {
+                            double h = thumbWidth / imgRatio;
+                            dest = new Rect(0, (thumbHeight - h) / 2, thumbWidth, h);
+                        }
+                        else
+                        {
+                            double w = thumbHeight * imgRatio;
+                            dest = new Rect((thumbWidth - w) / 2, 0, w, thumbHeight);
+                        }
+                        dc.DrawImage(bg, dest);
                     }
-                    
-                    // Draw colorful placeholder areas
-                    var placeholderColors = new[]
+                    else
                     {
-                        System.Windows.Media.Color.FromArgb(200, 255, 192, 203), // Pink with transparency
-                        System.Windows.Media.Color.FromArgb(200, 173, 216, 230), // Light Blue
-                        System.Windows.Media.Color.FromArgb(200, 144, 238, 144), // Light Green
-                        System.Windows.Media.Color.FromArgb(200, 255, 228, 181), // Moccasin
-                    };
-                    
-                    int colorIndex = 0;
-                    foreach (var item in items.Where(i => i.ItemType == "Placeholder"))
+                        var brush = new System.Windows.Media.LinearGradientBrush(System.Windows.Media.Colors.DimGray, System.Windows.Media.Colors.Black, 90);
+                        dc.DrawRectangle(brush, null, new Rect(0, 0, thumbWidth, thumbHeight));
+                    }
+
+                    int i = 0;
+                    foreach (var item in items.OrderBy(it => it.ZIndex))
                     {
                         double x = item.X * scale;
                         double y = item.Y * scale;
-                        double width = item.Width * scale;
-                        double height = item.Height * scale;
-                        
-                        // Draw colorful placeholder with rounded corners
-                        var placeholderBrush = new System.Windows.Media.SolidColorBrush(
-                            placeholderColors[colorIndex % placeholderColors.Length]);
-                        
-                        // Create rounded rectangle geometry
-                        var rect = new System.Windows.Media.RectangleGeometry(new Rect(x, y, width, height));
-                        rect.RadiusX = 5;
-                        rect.RadiusY = 5;
-                        
-                        dc.DrawGeometry(
-                            placeholderBrush,
-                            new System.Windows.Media.Pen(
-                                new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)), 
-                                2),
-                            rect);
-                        
-                        // Add "Picture X" text
-                        var text = $"Picture {colorIndex + 1}";
-                        var formattedText = new System.Windows.Media.FormattedText(
-                            text,
-                            System.Globalization.CultureInfo.CurrentCulture,
-                            System.Windows.FlowDirection.LeftToRight,
-                            new System.Windows.Media.Typeface("Segoe UI"),
-                            Math.Min(width, height) * 0.15,
-                            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(50, 50, 50)),
-                            96);
-                        
-                        dc.DrawText(formattedText, 
-                            new System.Windows.Point(x + (width - formattedText.Width) / 2, 
-                                                    y + (height - formattedText.Height) / 2));
-                        
-                        colorIndex++;
+                        double width = Math.Max(1, item.Width * scale);
+                        double height = Math.Max(1, item.Height * scale);
+                        var rect = new Rect(x, y, width, height);
+
+                        if (item.Rotation != 0)
+                            dc.PushTransform(new System.Windows.Media.RotateTransform(item.Rotation, rect.Left + rect.Width / 2, rect.Top + rect.Height / 2));
+
+                        switch (item.ItemType)
+                        {
+                            case "Image":
+                                if (!string.IsNullOrEmpty(item.ImagePath) && File.Exists(item.ImagePath))
+                                {
+                                    try
+                                    {
+                                        var img = new BitmapImage(new Uri(item.ImagePath, UriKind.Absolute));
+                                        dc.DrawImage(img, rect);
+                                    }
+                                    catch { }
+                                }
+                                break;
+                            case "Placeholder":
+                                var pc = System.Windows.Media.Colors.LightPink;
+                                if (!string.IsNullOrEmpty(item.PlaceholderColor))
+                                {
+                                    try { pc = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(item.PlaceholderColor); } catch { }
+                                }
+                                var rg = new System.Windows.Media.RectangleGeometry(rect, 6, 6);
+                                dc.DrawGeometry(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(220, pc.R, pc.G, pc.B)),
+                                               new System.Windows.Media.Pen(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.White), 2), rg);
+                                int n = item.PlaceholderNumber ?? (i + 1);
+                                var ft = new System.Windows.Media.FormattedText($"Photo {n}",
+                                    System.Globalization.CultureInfo.CurrentCulture, System.Windows.FlowDirection.LeftToRight,
+                                    new System.Windows.Media.Typeface("Segoe UI"), Math.Min(width, height) * 0.16,
+                                    new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(50,50,50)), 96);
+                                dc.DrawText(ft, new System.Windows.Point(rect.Left + (rect.Width - ft.Width) / 2, rect.Top + (rect.Height - ft.Height) / 2));
+                                break;
+                            case "Text":
+                                var tf = new System.Windows.Media.Typeface(new System.Windows.Media.FontFamily(string.IsNullOrEmpty(item.FontFamily) ? "Segoe UI" : item.FontFamily),
+                                    item.IsItalic ? System.Windows.FontStyles.Italic : System.Windows.FontStyles.Normal,
+                                    item.IsBold ? System.Windows.FontWeights.Bold : System.Windows.FontWeights.Normal,
+                                    System.Windows.FontStretches.Normal);
+                                var tb = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Black);
+                                if (!string.IsNullOrEmpty(item.TextColor)) { try { tb = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(item.TextColor)); } catch { }
+                                }
+                                double fs = Math.Max(8, (item.FontSize ?? 20) * scale);
+                                var fmt = new System.Windows.Media.FormattedText(item.Text ?? string.Empty,
+                                    System.Globalization.CultureInfo.CurrentCulture, System.Windows.FlowDirection.LeftToRight,
+                                    tf, fs, tb, 96);
+                                fmt.MaxTextWidth = rect.Width; fmt.MaxTextHeight = rect.Height;
+                                dc.DrawText(fmt, new System.Windows.Point(rect.Left, rect.Top));
+                                break;
+                            case "Shape":
+                                System.Windows.Media.Brush fill = System.Windows.Media.Brushes.Transparent; System.Windows.Media.Pen pen = null;
+                                if (!string.IsNullOrEmpty(item.FillColor)) { try { fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(item.FillColor)); } catch { }
+                                }
+                                if (!string.IsNullOrEmpty(item.StrokeColor) && item.StrokeThickness > 0) { try { pen = new System.Windows.Media.Pen(new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(item.StrokeColor)), item.StrokeThickness); } catch { }
+                                }
+                                dc.DrawRectangle(fill, pen, rect);
+                                break;
+                        }
+
+                        if (item.Rotation != 0) dc.Pop();
+                        i++;
                     }
                 }
-                
-                // Render visual to bitmap
-                var renderBitmap = new RenderTargetBitmap(
-                    thumbWidth, thumbHeight,
-                    96, 96,
-                    System.Windows.Media.PixelFormats.Pbgra32);
+
+                var renderBitmap = new RenderTargetBitmap(thumbWidth, thumbHeight, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
                 renderBitmap.Render(visual);
-                
-                // Convert to BitmapImage
+
                 var encoder = new PngBitmapEncoder();
                 encoder.Frames.Add(BitmapFrame.Create(renderBitmap));
-                
                 using (var stream = new MemoryStream())
                 {
                     encoder.Save(stream);
                     stream.Position = 0;
-                    
                     var bitmapImage = new BitmapImage();
                     bitmapImage.BeginInit();
                     bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
                     bitmapImage.StreamSource = stream;
                     bitmapImage.EndInit();
                     bitmapImage.Freeze();
-                    
                     return bitmapImage;
                 }
             }

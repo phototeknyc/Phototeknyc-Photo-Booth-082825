@@ -147,12 +147,13 @@ namespace Photobooth.Services
             CancellationToken cancellationToken = default)
         {
             // Wrapper method for compatibility with existing code
-            return await TransformImageAsync(inputImagePath, template, cancellationToken);
+            return await TransformImageAsync(inputImagePath, template, outputFolder, cancellationToken);
         }
 
         public async Task<string> TransformImageAsync(
             string inputImagePath,
             AITransformationTemplate template,
+            string outputFolder = null,
             CancellationToken cancellationToken = default)
         {
             Debug.WriteLine($"[AITransformation] TransformImageAsync called");
@@ -172,6 +173,29 @@ namespace Photobooth.Services
                 throw new FileNotFoundException("Input image not found", inputImagePath);
             }
 
+            // Log detailed file information for debugging
+            var fileInfo = new System.IO.FileInfo(inputImagePath);
+            Debug.WriteLine($"[AITransformation] *** FILE INFO ***");
+            Debug.WriteLine($"[AITransformation] *** Path: {inputImagePath}");
+            Debug.WriteLine($"[AITransformation] *** Size: {fileInfo.Length} bytes ({fileInfo.Length / 1024.0:F2} KB)");
+            Debug.WriteLine($"[AITransformation] *** Extension: {fileInfo.Extension}");
+            Debug.WriteLine($"[AITransformation] *** Last Modified: {fileInfo.LastWriteTime}");
+
+            // Try to read image properties
+            try
+            {
+                using (var img = System.Drawing.Image.FromFile(inputImagePath))
+                {
+                    Debug.WriteLine($"[AITransformation] *** Image Format: {img.RawFormat}");
+                    Debug.WriteLine($"[AITransformation] *** Pixel Format: {img.PixelFormat}");
+                    Debug.WriteLine($"[AITransformation] *** Has Alpha: {System.Drawing.Image.IsAlphaPixelFormat(img.PixelFormat)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[AITransformation] *** Could not read image properties: {ex.Message}");
+            }
+
             try
             {
                 // Check cache first
@@ -184,17 +208,40 @@ namespace Photobooth.Services
 
                 Debug.WriteLine("[AITransformation] No cached result, proceeding with transformation");
 
-                // Convert image to base64
-                string base64Image = ConvertImageToBase64(inputImagePath);
+                // Get the selected model - check template preference first
+                var modelManager = AIModelManager.Instance;
+                string preferredModelId = modelManager.GetTemplateModelPreference(template.Id);
+                var model = !string.IsNullOrEmpty(preferredModelId)
+                    ? modelManager.GetModel(preferredModelId)
+                    : modelManager.SelectedModel;
 
-                // Create prediction
-                var predictionId = await CreatePredictionAsync(base64Image, template, cancellationToken);
+                if (model == null)
+                {
+                    Debug.WriteLine("[AITransformation] No model found, using default");
+                    model = modelManager.AvailableModels.FirstOrDefault();
+                }
+
+                Debug.WriteLine($"[AITransformation] Using model: {model?.Name} (ID: {model?.Id})");
+                Debug.WriteLine($"[AITransformation] Template preference: {preferredModelId ?? "none (using global)"}");
+
+                // Convert image to base64 with appropriate sizing for the model
+                int minDimension = (model?.Id == "seedream-4") ? 2048 : 0;
+                int? targetMaxKB = null; // Allow large inputs; Seedream works with bigger files
+                Debug.WriteLine($"[AITransformation] *** About to convert image: {inputImagePath}");
+                Debug.WriteLine($"[AITransformation] *** File exists: {File.Exists(inputImagePath)}");
+                bool preferHighQuality = model?.PreservesIdentity == true;
+                string base64Image = ConvertImageToBase64(inputImagePath, minDimension, targetMaxKB, preferHighQuality);
+                Debug.WriteLine($"[AITransformation] *** Base64 conversion complete, length: {base64Image?.Length ?? 0}");
+                Debug.WriteLine($"[AITransformation] *** Base64 preview (first 100 chars): {(base64Image?.Length > 100 ? base64Image.Substring(0, 100) : base64Image)}");
+
+                // Create prediction with the selected model
+                var predictionId = await CreatePredictionAsync(base64Image, template, model, cancellationToken);
 
                 // Poll for completion
                 var result = await PollForCompletionAsync(predictionId, cancellationToken);
 
                 // Download and save result
-                string outputPath = await DownloadResultAsync(result, inputImagePath);
+                string outputPath = await DownloadResultAsync(result, inputImagePath, outputFolder);
 
                 // Cache result
                 CacheResult(cacheKey, new TransformationResult
@@ -243,7 +290,7 @@ namespace Photobooth.Services
 
                 try
                 {
-                    var result = await TransformImageAsync(imagePath, template, cancellationToken);
+                    var result = await TransformImageAsync(imagePath, template, null, cancellationToken);
                     results.Add(result);
                 }
                 catch (Exception ex)
@@ -266,17 +313,10 @@ namespace Photobooth.Services
         private async Task<string> CreatePredictionAsync(
             string base64Image,
             AITransformationTemplate template,
+            AIModelDefinition model,
             CancellationToken cancellationToken)
         {
-            // Get the selected model from AIModelManager
             var modelManager = AIModelManager.Instance;
-            var model = modelManager.SelectedModel;
-
-            if (model == null)
-            {
-                Debug.WriteLine("[AITransformation] No model selected, using default Nano Banana");
-                model = modelManager.GetModel("nano-banana") ?? PredefinedModels.GetDefaultModels().First();
-            }
 
             Debug.WriteLine($"[AITransformation] Using model: {model.Name} ({model.Id})");
             Debug.WriteLine($"[AITransformation] Model path: {model.ModelPath}");
@@ -349,13 +389,18 @@ namespace Photobooth.Services
 
             // Handle synchronous response if model supports it
             var status = prediction["status"]?.ToString();
+            Debug.WriteLine($"[AITransformation] Response status: {status}");
+            Debug.WriteLine($"[AITransformation] Has output: {(prediction["output"] != null)}");
+
             if (model.SupportsSynchronousMode && status == "succeeded" && prediction["output"] != null)
             {
                 Debug.WriteLine($"[AITransformation] {model.Name} returned immediate result");
                 return responseJson; // Return full JSON to handle in polling method
             }
 
-            return prediction["id"]?.ToString();
+            var predictionId = prediction["id"]?.ToString();
+            Debug.WriteLine($"[AITransformation] Prediction ID: {predictionId}");
+            return predictionId;
         }
 
         private async Task<JObject> PollForCompletionAsync(
@@ -417,25 +462,53 @@ namespace Photobooth.Services
             throw new TimeoutException("Prediction timed out");
         }
 
-        private async Task<string> DownloadResultAsync(JObject prediction, string originalPath)
+        private async Task<string> DownloadResultAsync(JObject prediction, string originalPath, string preferredOutputFolder = null)
         {
             var output = prediction["output"];
-            if (output == null || !output.Any())
+            if (output == null)
             {
+                Debug.WriteLine($"[AITransformation] Prediction response: {prediction}");
                 throw new Exception("No output from prediction");
             }
 
-            string outputUrl = output.First().ToString();
+            Debug.WriteLine($"[AITransformation] Output type: {output.Type}");
+            Debug.WriteLine($"[AITransformation] Output value: {output}");
 
-            // Generate output filename
-            string outputDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                "Photobooth",
-                "AI_Transformations",
-                DateTime.Now.ToString("yyyyMMdd"));
+            string outputUrl;
+
+            // Handle different output formats
+            if (output.Type == JTokenType.Array && output.Any())
+            {
+                outputUrl = output.First().ToString();
+            }
+            else if (output.Type == JTokenType.String)
+            {
+                outputUrl = output.ToString();
+            }
+            else
+            {
+                Debug.WriteLine($"[AITransformation] Unexpected output format. Full prediction: {prediction}");
+                throw new Exception($"Unexpected output format: {output.Type}");
+            }
+
+            // Decide output folder
+            string outputDir;
+            if (!string.IsNullOrWhiteSpace(preferredOutputFolder))
+            {
+                outputDir = preferredOutputFolder;
+            }
+            else
+            {
+                outputDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                    "Photobooth",
+                    "AI_Transformations",
+                    DateTime.Now.ToString("yyyyMMdd"));
+            }
 
             Directory.CreateDirectory(outputDir);
 
+            // Generate output filename
             string outputFilename = $"AI_{Path.GetFileNameWithoutExtension(originalPath)}_{DateTime.Now:HHmmss}.png";
             string outputPath = Path.Combine(outputDir, outputFilename);
 
@@ -453,18 +526,74 @@ namespace Photobooth.Services
             return outputPath;
         }
 
-        private string ConvertImageToBase64(string imagePath)
+        private string ConvertImageToBase64(string imagePath, int minDimension = 0, int? targetMaxKB = null, bool preferHighQuality = false)
         {
             using (Image image = Image.FromFile(imagePath))
             {
-                Debug.WriteLine($"[AITransformation] Original image size: {image.Width}x{image.Height}");
+                Debug.WriteLine($"[AITransformation] Original image size: {image.Width}x{image.Height}, minDimension: {minDimension}");
 
-                // Resize to smaller size for faster AI processing while maintaining aspect ratio
-                // Different max dimensions for portrait vs landscape for optimal quality/speed
+                // For models with dimension requirements (like Seedream-4), enforce both min and max
+                if (minDimension > 0)
+                {
+                    // For Seedream-4, align with 2K size (~2048)
+                    const int maxDimensionForModel = 2048;
+
+                    // Check if image needs resizing (too small OR too large)
+                    bool needsResizing = image.Width < minDimension || image.Height < minDimension ||
+                                      image.Width > maxDimensionForModel || image.Height > maxDimensionForModel;
+
+                    if (needsResizing)
+                    {
+                        // Calculate target dimensions to fit within min-max range
+                        float scale;
+
+                        if (image.Width < minDimension || image.Height < minDimension)
+                        {
+                            // Scale UP to meet minimum
+                            scale = Math.Max(
+                                (float)minDimension / image.Width,
+                                (float)minDimension / image.Height);
+                        }
+                        else
+                        {
+                            // Scale DOWN to meet maximum
+                            scale = Math.Min(
+                                (float)maxDimensionForModel / image.Width,
+                                (float)maxDimensionForModel / image.Height);
+                        }
+
+                        int newWidth = (int)(image.Width * scale);
+                        int newHeight = (int)(image.Height * scale);
+
+                        // Ensure we're within bounds
+                        newWidth = Math.Max(minDimension, Math.Min(maxDimensionForModel, newWidth));
+                        newHeight = Math.Max(minDimension, Math.Min(maxDimensionForModel, newHeight));
+
+                        Debug.WriteLine($"[AITransformation] Resizing image: {image.Width}x{image.Height} → {newWidth}x{newHeight} (scale: {scale:F2})");
+
+                        using (var resized = new Bitmap(newWidth, newHeight))
+                        {
+                            using (var graphics = Graphics.FromImage(resized))
+                            {
+                                graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+                                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                                graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                                graphics.DrawImage(image, 0, 0, newWidth, newHeight);
+                            }
+
+                            return ImageToBase64(resized, targetMaxKB, preferHighQuality);
+                        }
+                    }
+
+                    // Image is within acceptable range
+                    Debug.WriteLine($"[AITransformation] Image dimensions acceptable ({image.Width}x{image.Height}), using as is");
+                    return ImageToBase64(image, targetMaxKB, preferHighQuality);
+                }
+
+                // Standard resizing logic for models without minimum requirements
                 bool isPortrait = image.Height > image.Width;
-                int maxDimension = isPortrait ? 768 : 1024; // Portrait images can be smaller, landscape need more width
-
-                // Calculate if resizing is needed
+                int maxDimension = isPortrait ? 768 : 1024; // Default max dimensions
                 bool needsResize = image.Width > maxDimension || image.Height > maxDimension;
 
                 if (needsResize)
@@ -494,22 +623,61 @@ namespace Photobooth.Services
                         }
 
                         Debug.WriteLine($"[AITransformation] Image resized successfully to {newWidth}x{newHeight}");
-                        return ImageToBase64(resized);
+                        return ImageToBase64(resized, targetMaxKB, preferHighQuality);
                     }
                 }
 
                 Debug.WriteLine($"[AITransformation] Image size OK, no resize needed ({image.Width}x{image.Height})");
-                return ImageToBase64(image);
+                return ImageToBase64(image, targetMaxKB, preferHighQuality);
             }
         }
 
-        private string ImageToBase64(Image image)
+        private string ImageToBase64(Image image, int? targetMaxKB = null, bool preferHighQuality = false)
         {
-            using (var memoryStream = new MemoryStream())
+            // Encode to JPEG with adaptive quality to meet optional size target
+            var jpegEncoder = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders()
+                .FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid);
+
+            // Quality ladder to try if a target is specified
+            var qualities = preferHighQuality
+                ? new List<long> { 95L, 90L, 85L, 80L, 75L, 70L, 65L, 60L }
+                : new List<long> { 90L, 85L, 80L, 75L, 70L, 65L, 60L };
+
+            foreach (var q in qualities)
             {
-                image.Save(memoryStream, ImageFormat.Png);
-                byte[] imageBytes = memoryStream.ToArray();
-                return Convert.ToBase64String(imageBytes);
+                using (var memoryStream = new MemoryStream())
+                {
+                    if (jpegEncoder != null)
+                    {
+                        var encoderParams = new System.Drawing.Imaging.EncoderParameters(1);
+                        encoderParams.Param[0] = new System.Drawing.Imaging.EncoderParameter(
+                            System.Drawing.Imaging.Encoder.Quality, q);
+
+                        image.Save(memoryStream, jpegEncoder, encoderParams);
+                        Debug.WriteLine($"[AITransformation] *** Converted to JPEG (quality {q}%), size: {memoryStream.Length / 1024.0:F2} KB");
+                    }
+                    else
+                    {
+                        image.Save(memoryStream, ImageFormat.Png);
+                        Debug.WriteLine($"[AITransformation] *** Converted to PNG, size: {memoryStream.Length / 1024.0:F2} KB");
+                    }
+
+                    // If a target size is provided, check and, if satisfied, return; otherwise, try next quality
+                    if (!targetMaxKB.HasValue || (memoryStream.Length / 1024.0) <= targetMaxKB.Value || q == qualities.Last())
+                    {
+                        byte[] imageBytes = memoryStream.ToArray();
+                        string base64 = Convert.ToBase64String(imageBytes);
+                        Debug.WriteLine($"[AITransformation] *** Base64 output length: {base64.Length} characters");
+                        return base64;
+                    }
+                }
+            }
+
+            // Fallback shouldn't be reached
+            using (var ms = new MemoryStream())
+            {
+                image.Save(ms, ImageFormat.Jpeg);
+                return Convert.ToBase64String(ms.ToArray());
             }
         }
 

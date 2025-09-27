@@ -39,16 +39,40 @@ namespace Photobooth.Controls
                 new PropertyMetadata(0.0, OnRotationAngleChanged));
 
         // Properties
+        // Backing fields for direct access during dragging
+        private double _left = 0;
+        private double _top = 0;
+
         public double Left
         {
-            get => (double)GetValue(LeftProperty);
-            set => SetValue(LeftProperty, value);
+            get => _left;
+            set
+            {
+                if (_isBatchUpdating)
+                {
+                    _left = value;
+                }
+                else
+                {
+                    SetValue(LeftProperty, value);
+                }
+            }
         }
 
         public double Top
         {
-            get => (double)GetValue(TopProperty);
-            set => SetValue(TopProperty, value);
+            get => _top;
+            set
+            {
+                if (_isBatchUpdating)
+                {
+                    _top = value;
+                }
+                else
+                {
+                    SetValue(TopProperty, value);
+                }
+            }
         }
 
         public int ZIndex
@@ -95,6 +119,12 @@ namespace Photobooth.Controls
         protected ResizeHandle _resizeHandle = ResizeHandle.None;
         protected bool _isAspectRatioLocked = false;
         protected double _aspectRatio = 1.0;
+
+        // Performance optimization
+        private DateTime _lastHandleUpdate = DateTime.MinValue;
+        private const int HANDLE_UPDATE_THROTTLE_MS = 16; // ~60fps max
+        private bool _isBatchUpdating = false;
+        private bool _pendingHandleUpdate = false;
 
         // Selection handles
         protected Rectangle[] _selectionHandles;
@@ -260,6 +290,9 @@ namespace Photobooth.Controls
                 // Apply rotation
                 RotationAngle = _initialRotation + angleDiff;
 
+                // Throttle handle updates during rotation
+                ThrottledUpdateSelectionHandles();
+
                 e.Handled = true;
             }
         }
@@ -306,6 +339,11 @@ namespace Photobooth.Controls
             {
                 _isDragging = false;
                 ReleaseMouseCapture();
+
+                // Sync the dependency properties after drag ends
+                SetValue(LeftProperty, _left);
+                SetValue(TopProperty, _top);
+
                 e.Handled = true;
             }
         }
@@ -318,9 +356,40 @@ namespace Photobooth.Controls
                 var deltaX = currentPoint.X - _dragStartPoint.X;
                 var deltaY = currentPoint.Y - _dragStartPoint.Y;
 
-                Left = _initialPosition.X + deltaX;
-                Top = _initialPosition.Y + deltaY;
-                ClampPositionToCanvas();
+                // Batch update to avoid multiple property change callbacks
+                BeginBatchUpdate();
+
+                var newLeft = _initialPosition.X + deltaX;
+                var newTop = _initialPosition.Y + deltaY;
+
+                // Directly update canvas position without going through dependency properties during drag
+                if (Parent is Canvas canvas)
+                {
+                    // Clamp values
+                    double cw = !double.IsNaN(canvas.Width) && canvas.Width > 0 ? canvas.Width : canvas.ActualWidth;
+                    double ch = !double.IsNaN(canvas.Height) && canvas.Height > 0 ? canvas.Height : canvas.ActualHeight;
+
+                    if (cw > 0 && ch > 0)
+                    {
+                        double maxLeft = Math.Max(0, cw - Width);
+                        double maxTop = Math.Max(0, ch - Height);
+                        if (newLeft < 0) newLeft = 0; else if (newLeft > maxLeft) newLeft = maxLeft;
+                        if (newTop < 0) newTop = 0; else if (newTop > maxTop) newTop = maxTop;
+                    }
+
+                    // Update position directly on canvas for smooth movement
+                    Canvas.SetLeft(this, newLeft);
+                    Canvas.SetTop(this, newTop);
+
+                    // Update properties without triggering callbacks
+                    _left = newLeft;
+                    _top = newTop;
+                }
+
+                EndBatchUpdate();
+
+                // Throttle handle updates for performance
+                ThrottledUpdateSelectionHandles();
 
                 e.Handled = true;
             }
@@ -393,8 +462,8 @@ namespace Photobooth.Controls
                 Width = Math.Max(20, Width * e.DeltaManipulation.Scale.X);
                 Height = Math.Max(20, Height * e.DeltaManipulation.Scale.Y);
                 ClampBoundsToCanvas();
-                // Ensure handles follow edges during scaling
-                UpdateSelectionHandles();
+                // Throttle handle updates for performance
+                ThrottledUpdateSelectionHandles();
             }
 
             e.Handled = true;
@@ -438,8 +507,8 @@ namespace Photobooth.Controls
                 var deltaY = currentPoint.Y - _dragStartPoint.Y;
 
                 ResizeItem(deltaX, deltaY);
-                // Ensure handles remain glued to the item edges during resize
-                UpdateSelectionHandles();
+                // Throttle handle updates for performance
+                ThrottledUpdateSelectionHandles();
                 e.Handled = true;
             }
         }
@@ -598,23 +667,30 @@ namespace Photobooth.Controls
 
             var visibility = IsSelected ? Visibility.Visible : Visibility.Collapsed;
 
-            foreach (var handle in _selectionHandles)
+            // Only update visibility if it changed
+            if (_selectionHandles[0].Visibility != visibility)
             {
-                handle.Visibility = visibility;
-                // Ensure handles are always on top
-                Panel.SetZIndex(handle, 10000);
-            }
+                foreach (var handle in _selectionHandles)
+                {
+                    handle.Visibility = visibility;
+                    // Only set z-index once when visibility changes
+                    if (visibility == Visibility.Visible)
+                        Panel.SetZIndex(handle, 10000);
+                }
 
-            // Update rotate handle visibility
-            if (_rotateHandle != null)
-            {
-                _rotateHandle.Visibility = visibility;
-                Panel.SetZIndex(_rotateHandle, 10001);
-            }
-            if (_rotateHandleLine != null)
-            {
-                _rotateHandleLine.Visibility = visibility;
-                Panel.SetZIndex(_rotateHandleLine, 9999);
+                // Update rotate handle visibility
+                if (_rotateHandle != null)
+                {
+                    _rotateHandle.Visibility = visibility;
+                    if (visibility == Visibility.Visible)
+                        Panel.SetZIndex(_rotateHandle, 10001);
+                }
+                if (_rotateHandleLine != null)
+                {
+                    _rotateHandleLine.Visibility = visibility;
+                    if (visibility == Visibility.Visible)
+                        Panel.SetZIndex(_rotateHandleLine, 9999);
+                }
             }
 
             if (IsSelected)
@@ -623,9 +699,45 @@ namespace Photobooth.Controls
             }
         }
 
+        private void ThrottledUpdateSelectionHandles()
+        {
+            if (_isBatchUpdating)
+            {
+                _pendingHandleUpdate = true;
+                return;
+            }
+
+            var now = DateTime.Now;
+            if ((now - _lastHandleUpdate).TotalMilliseconds >= HANDLE_UPDATE_THROTTLE_MS)
+            {
+                UpdateSelectionHandles();
+                _lastHandleUpdate = now;
+                _pendingHandleUpdate = false;
+            }
+        }
+
+        private void BeginBatchUpdate()
+        {
+            _isBatchUpdating = true;
+        }
+
+        private void EndBatchUpdate()
+        {
+            _isBatchUpdating = false;
+
+            if (_pendingHandleUpdate)
+            {
+                ThrottledUpdateSelectionHandles();
+            }
+        }
+
         protected virtual void PositionSelectionHandles()
         {
-            if (_selectionHandles == null) return;
+            if (_selectionHandles == null || !IsSelected) return;
+
+            // Only position handles if they're visible
+            if (_selectionHandles[0].Visibility != Visibility.Visible)
+                return;
 
             var halfHandle = HandleSize / 2;
 
@@ -699,8 +811,18 @@ namespace Photobooth.Controls
         {
             if (d is SimpleCanvasItem item)
             {
-                item.UpdateCanvasPosition();
-                item.UpdateSelectionHandles();
+                // Update backing fields
+                if (e.Property == LeftProperty)
+                    item._left = (double)e.NewValue;
+                else if (e.Property == TopProperty)
+                    item._top = (double)e.NewValue;
+
+                // Only update canvas position if not batch updating (dragging)
+                if (!item._isBatchUpdating)
+                {
+                    item.UpdateCanvasPosition();
+                    item.ThrottledUpdateSelectionHandles();
+                }
                 item.OnPropertyChanged(e.Property.Name);
             }
         }

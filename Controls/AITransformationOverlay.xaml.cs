@@ -674,9 +674,8 @@ namespace Photobooth.Controls
 
         private string GetTemplateModelPreference(int templateId)
         {
-            // TODO: Get from database once we add the column
-            // For now, return null to use default model
-            return null;
+            var modelManager = AIModelManager.Instance;
+            return modelManager.GetTemplateModelPreference(templateId);
         }
 
         private void LoadEventsIntoDropdown()
@@ -1186,6 +1185,175 @@ namespace Photobooth.Controls
                     LoadAllTemplates(); // Refresh templates
                 }
             }
+        }
+
+        private void RenameTemplate_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as Button;
+            if (button?.Tag is Database.AITransformationTemplate template)
+            {
+                ShowRenameTemplateDialog(template);
+            }
+        }
+
+        private void ShowRenameTemplateDialog(Database.AITransformationTemplate template)
+        {
+            var dialog = new Window
+            {
+                Title = "Rename Template",
+                Width = 500,
+                Height = 200,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                Owner = Window.GetWindow(this),
+                Background = new SolidColorBrush(Color.FromRgb(40, 40, 40)),
+                Foreground = Brushes.White,
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var grid = new Grid { Margin = new Thickness(20) };
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // Current name label
+            var currentLabel = new TextBlock
+            {
+                Text = "Current Name:",
+                FontSize = 12,
+                Foreground = Brushes.LightGray,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            Grid.SetRow(currentLabel, 0);
+            grid.Children.Add(currentLabel);
+
+            var currentName = new TextBlock
+            {
+                Text = template.Name,
+                FontSize = 14,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 15)
+            };
+            Grid.SetRow(currentName, 1);
+            grid.Children.Add(currentName);
+
+            // New name input
+            var newNameLabel = new TextBlock
+            {
+                Text = "New Name:",
+                FontSize = 12,
+                Foreground = Brushes.LightGray,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            Grid.SetRow(newNameLabel, 2);
+            grid.Children.Add(newNameLabel);
+
+            var nameTextBox = new TextBox
+            {
+                Text = template.Name,
+                Height = 35,
+                Padding = new Thickness(8),
+                Background = new SolidColorBrush(Color.FromRgb(50, 50, 50)),
+                Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(70, 70, 70)),
+                FontSize = 14
+            };
+            Grid.SetRow(nameTextBox, 3);
+            grid.Children.Add(nameTextBox);
+
+            // Button panel
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 15, 0, 0)
+            };
+
+            var cancelButton = new Button
+            {
+                Content = "Cancel",
+                Width = 100,
+                Height = 35,
+                Margin = new Thickness(0, 0, 10, 0),
+                Background = new SolidColorBrush(Color.FromRgb(80, 80, 80)),
+                Foreground = Brushes.White,
+                Cursor = Cursors.Hand
+            };
+            cancelButton.Click += (s, args) => dialog.Close();
+
+            var saveButton = new Button
+            {
+                Content = "Rename",
+                Width = 100,
+                Height = 35,
+                Background = new SolidColorBrush(Color.FromRgb(92, 191, 96)),
+                Foreground = Brushes.White,
+                FontWeight = FontWeights.Bold,
+                Cursor = Cursors.Hand
+            };
+
+            saveButton.Click += (s, args) =>
+            {
+                var newName = nameTextBox.Text?.Trim();
+                if (string.IsNullOrWhiteSpace(newName))
+                {
+                    MessageBox.Show("Please enter a valid name.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (newName == template.Name)
+                {
+                    dialog.Close();
+                    return;
+                }
+
+                try
+                {
+                    template.Name = newName;
+                    template.LastModified = DateTime.Now;
+
+                    var templateService = AITemplateService.Instance;
+                    templateService.UpdateTemplate(template);
+
+                    ShowSaveStatus($"Template renamed to '{newName}'");
+                    LoadAllTemplates(); // Refresh the grid
+
+                    dialog.Close();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error renaming template: {ex.Message}",
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            };
+
+            buttonPanel.Children.Add(cancelButton);
+            buttonPanel.Children.Add(saveButton);
+            Grid.SetRow(buttonPanel, 4);
+            grid.Children.Add(buttonPanel);
+
+            dialog.Content = grid;
+
+            // Select all text in the textbox when dialog opens
+            nameTextBox.Loaded += (s, e) =>
+            {
+                nameTextBox.Focus();
+                nameTextBox.SelectAll();
+            };
+
+            // Allow Enter to save
+            nameTextBox.KeyDown += (s, e) =>
+            {
+                if (e.Key == Key.Enter)
+                {
+                    saveButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                }
+            };
+
+            dialog.ShowDialog();
         }
 
         private void TemplateCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -1831,7 +1999,8 @@ namespace Photobooth.Controls
             if (combo?.SelectedValue != null && combo.Tag is int templateId)
             {
                 var modelId = combo.SelectedValue.ToString();
-                // TODO: Save template-model preference to database
+                var modelManager = AIModelManager.Instance;
+                modelManager.SetTemplateModelPreference(templateId, modelId);
                 ShowSaveStatus($"Model updated for template");
                 Debug.WriteLine($"[AITransformationOverlay] Template {templateId} assigned model: {modelId}");
             }
@@ -2346,10 +2515,6 @@ namespace Photobooth.Controls
                         progressText.Text = "Converting image to base64...";
                     });
 
-                    // Convert image to base64
-                    byte[] imageBytes = File.ReadAllBytes(imagePath);
-                    string base64Image = Convert.ToBase64String(imageBytes);
-
                     await window.Dispatcher.InvokeAsync(() =>
                     {
                         statusText.Text = "Sending to AI service...";
@@ -2371,7 +2536,7 @@ namespace Photobooth.Controls
                     var transformationService = AITransformationService.Instance;
                     var apiToken = Properties.Settings.Default.ReplicateAPIToken;
 
-                    string resultPath = await transformationService.ApplyTransformationAsync(base64Image, template, modelId);
+                    string resultPath = await transformationService.ApplyTransformationAsync(imagePath, template, null);
 
                     if (!string.IsNullOrEmpty(resultPath))
                     {

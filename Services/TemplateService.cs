@@ -294,6 +294,12 @@ namespace Photobooth.Services
                     data.StrokeThickness = shapeItem.StrokeThickness;
                     data.HasNoFill = shapeItem.HasNoFill;
                     data.HasNoStroke = shapeItem.HasNoStroke;
+                    // Shadow for shapes
+                    data.HasShadow = shapeItem.HasShadow;
+                    data.ShadowOffsetX = shapeItem.ShadowOffsetX;
+                    data.ShadowOffsetY = shapeItem.ShadowOffsetY;
+                    data.ShadowBlurRadius = shapeItem.ShadowBlurRadius;
+                    data.ShadowColor = ColorToColorString(shapeItem.ShadowColor);
                     break;
                     
                 default:
@@ -436,11 +442,15 @@ namespace Photobooth.Services
                     break;
                     
                 case "Shape":
-                    // Parse shape type first
+                    // Parse shape type first (accept Ellipse synonym)
                     ShapeType shapeType = ShapeType.Rectangle; // Default
                     if (!string.IsNullOrEmpty(data.ShapeType))
                     {
-                        Enum.TryParse<ShapeType>(data.ShapeType, out shapeType);
+                        var st = data.ShapeType.Trim();
+                        if (string.Equals(st, "Ellipse", StringComparison.OrdinalIgnoreCase))
+                            shapeType = ShapeType.Circle;
+                        else
+                            Enum.TryParse<ShapeType>(st, true, out shapeType);
                     }
                     
                     // Create shape with initial position (will be set later from common properties)
@@ -460,6 +470,15 @@ namespace Photobooth.Services
                     shapeItem.HasNoStroke = data.HasNoStroke;
                     
                     shapeItem.StrokeThickness = data.StrokeThickness;
+                    // Apply shadow if present
+                    if (data.HasShadow)
+                    {
+                        shapeItem.HasShadow = true;
+                        shapeItem.ShadowColor = ColorStringToColor(data.ShadowColor);
+                        shapeItem.ShadowOffsetX = data.ShadowOffsetX;
+                        shapeItem.ShadowOffsetY = data.ShadowOffsetY;
+                        shapeItem.ShadowBlurRadius = data.ShadowBlurRadius;
+                    }
                     item = shapeItem;
                     break;
             }
@@ -596,8 +615,8 @@ namespace Photobooth.Services
                 int thumbnailWidth;
                 int thumbnailHeight;
                 
-                // Set maximum thumbnail dimensions
-                const int maxDimension = 280;
+                // Set maximum thumbnail dimensions - increased for better quality
+                const int maxDimension = 800;
                 
                 if (aspectRatio > 1)
                 {
@@ -626,29 +645,26 @@ namespace Photobooth.Services
                 }
                 
                 var renderTarget = new RenderTargetBitmap(thumbnailWidth, thumbnailHeight, 96, 96, PixelFormats.Pbgra32);
-                
+
                 var drawingVisual = new DrawingVisual();
                 using (var context = drawingVisual.RenderOpen())
                 {
-                    // Draw white background first
-                    context.DrawRectangle(new SolidColorBrush(Colors.White), 
-                        null, new Rect(0, 0, thumbnailWidth, thumbnailHeight));
-                    
-                    // Calculate scale to fit template in thumbnail
+                    // Scale to exactly fill the thumbnail dimensions (aspect ratios match)
                     double scaleX = thumbnailWidth / actualCanvasWidth;
                     double scaleY = thumbnailHeight / actualCanvasHeight;
-                    double scale = Math.Min(scaleX, scaleY); // Fill the entire thumbnail area
-                    
-                    // Calculate centered position
-                    double scaledWidth = actualCanvasWidth * scale;
-                    double scaledHeight = actualCanvasHeight * scale;
-                    double offsetX = (thumbnailWidth - scaledWidth) / 2;
-                    double offsetY = (thumbnailHeight - scaledHeight) / 2;
-                    
-                    // Draw template background
-                    context.DrawRectangle(background ?? new SolidColorBrush(Colors.LightGray), 
-                        new Pen(new SolidColorBrush(Colors.Gray), 1), 
-                        new Rect(offsetX, offsetY, scaledWidth, scaledHeight));
+                    // Since thumbnailWidth/Height are calculated to match aspect ratio, scaleX should equal scaleY
+                    double scale = scaleX; // Could use either scaleX or scaleY - they should be equal
+
+                    // Fill entire thumbnail - no offsetting needed
+                    double scaledWidth = thumbnailWidth;
+                    double scaledHeight = thumbnailHeight;
+                    double offsetX = 0;
+                    double offsetY = 0;
+
+                    // Draw template background filling entire thumbnail
+                    context.DrawRectangle(background ?? new SolidColorBrush(Colors.LightGray),
+                        null,
+                        new Rect(0, 0, thumbnailWidth, thumbnailHeight));
                     
                     // Draw actual content of items
                     foreach (var item in items)
@@ -700,7 +716,7 @@ namespace Photobooth.Services
                                 
                                 // Draw placeholder text
                                 var formattedText = new FormattedText(
-                                    $"Picture {placeholder.PlaceholderNo}",
+                                    $"Photo {placeholder.PlaceholderNo}",
                                     CultureInfo.InvariantCulture,
                                     FlowDirection.LeftToRight,
                                     new Typeface("Arial"),

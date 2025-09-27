@@ -84,14 +84,26 @@ namespace DesignerCanvas.Controls
             var previousPoint = _activeTouches[touchId].Position;
             _activeTouches[touchId] = touchPoint;
             
-            // Handle single touch movement
+            // Handle single touch movement (we only translate on TouchMove for single-finger)
             if (_activeTouches.Count == 1 && _touchTargets.ContainsKey(touchId))
             {
                 var item = _touchTargets[touchId];
                 var deltaX = touchPoint.Position.X - previousPoint.X;
                 var deltaY = touchPoint.Position.Y - previousPoint.Y;
-                
-                MoveItem(item, deltaX, deltaY);
+                // Ignore sub-pixel jitters to reduce event churn
+                if (Math.Abs(deltaX) < 0.25 && Math.Abs(deltaY) < 0.25)
+                {
+                    e.Handled = true;
+                    return;
+                }
+
+                // Convert to virtual units (account for canvas zoom and external layout scale)
+                var z = Zoom / 100.0;
+                var s = CurrentScale;
+                var scale = z * s;
+                if (scale <= 0) scale = 1.0;
+
+                MoveItem(item, deltaX / scale, deltaY / scale);
             }
             // Handle canvas panning for single touch on empty area
             else if (_activeTouches.Count == 1 && !_touchTargets.ContainsKey(touchId))
@@ -138,11 +150,18 @@ namespace DesignerCanvas.Controls
 
         private void TouchEnabledCanvas_ManipulationDelta(object sender, ManipulationDeltaEventArgs e)
         {
-            // Handle translation (panning)
-            if (e.DeltaManipulation.Translation.Length > 0)
+            // Handle translation (panning) — only when multi-touch is active to avoid duplicate single-finger handling
+            if (_activeTouches.Count >= 2 && e.DeltaManipulation.Translation.Length > 0)
             {
                 var deltaX = e.DeltaManipulation.Translation.X;
                 var deltaY = e.DeltaManipulation.Translation.Y;
+                // Convert to virtual units
+                var z = Zoom / 100.0;
+                var s = CurrentScale;
+                var scale = z * s;
+                if (scale <= 0) scale = 1.0;
+                var vx = deltaX / scale;
+                var vy = deltaY / scale;
                 
                 if (SelectedItems.Any())
                 {
@@ -151,7 +170,7 @@ namespace DesignerCanvas.Controls
                     {
                         if (item is IBoxCanvasItem boxItem)
                         {
-                            MoveItem(boxItem, deltaX, deltaY);
+                            MoveItem(boxItem, vx, vy);
                         }
                     }
                 }
@@ -251,24 +270,49 @@ namespace DesignerCanvas.Controls
             
             // Apply movement constraints to keep item visible
             var minOverlap = 50; // Minimum pixels that must remain visible
-            var maxLeft = ActualWidth - minOverlap;
-            var maxTop = ActualHeight - minOverlap;
+            var maxLeft = ViewPortRect.Width - minOverlap;
+            var maxTop = ViewPortRect.Height - minOverlap;
             
             newLeft = Math.Max(-item.Width + minOverlap, Math.Min(maxLeft, newLeft));
             newTop = Math.Max(-item.Height + minOverlap, Math.Min(maxTop, newTop));
             
-            item.Left = newLeft;
-            item.Top = newTop;
+            if (item is CanvasItem ci)
+            {
+                ci.Location = new Point(newLeft, newTop);
+            }
+            else
+            {
+                item.Left = newLeft;
+                item.Top = newTop;
+            }
         }
 
         private void PanCanvas(double deltaX, double deltaY)
         {
-            // Implement canvas panning - move all items
-            foreach (var item in Items.ToList())
-            {
-                item.Left += deltaX;
-                item.Top += deltaY;
-            }
+            // Prefer viewport panning instead of moving all items (far cheaper)
+            // Convert to virtual units (account for canvas zoom and external layout scale)
+            var z = Zoom / 100.0;
+            var s = CurrentScale;
+            var scale = z * s;
+            if (scale <= 0) scale = 1.0;
+            var deltaVirtualX = deltaX / scale;
+            var deltaVirtualY = deltaY / scale;
+
+            // Compute max offsets in virtual units
+            var totalWidthVirtual = (Zoom > 0) ? (ExtentWidth / (Zoom / 100.0)) : ExtentWidth;
+            var totalHeightVirtual = (Zoom > 0) ? (ExtentHeight / (Zoom / 100.0)) : ExtentHeight;
+            var viewportVirtualW = ViewPortRect.Width; // virtual
+            var viewportVirtualH = ViewPortRect.Height; // virtual
+
+            var maxHVirtual = Math.Max(0.0, totalWidthVirtual - viewportVirtualW);
+            var maxVVirtual = Math.Max(0.0, totalHeightVirtual - viewportVirtualH);
+
+            // Negative delta means drag right, scroll left
+            var newH = HorizontalScrollOffset - deltaVirtualX;
+            var newV = VerticalScrollOffset - deltaVirtualY;
+
+            HorizontalScrollOffset = Math.Max(0.0, Math.Min(maxHVirtual, newH));
+            VerticalScrollOffset = Math.Max(0.0, Math.Min(maxVVirtual, newV));
         }
 
         private void ZoomCanvas(double scaleFactor, Point center)

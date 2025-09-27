@@ -183,8 +183,8 @@ namespace Photobooth.Controls
             Items = new ObservableCollection<SimpleCanvasItem>();
             Items.CollectionChanged += Items_CollectionChanged;
 
-            // Set default size
-            Width = 600;
+            // Set default size to 4x6 (1200x1800 at 300 DPI) - most common print size
+            Width = 1200;
             Height = 1800;
 
             // Enable multi-touch if available
@@ -238,10 +238,19 @@ namespace Photobooth.Controls
             }
 
             // Wire up events
-            item.MouseLeftButtonDown += Item_MouseLeftButtonDown;
-            item.TouchDown += Item_TouchDown;
+            // Don't subscribe to MouseLeftButtonDown or TouchDown - we'll use hit testing at canvas level
+            // item.MouseLeftButtonDown += Item_MouseLeftButtonDown;
+            // item.TouchDown += Item_TouchDown;
             item.SelectionChanged += Item_SelectionChanged;
             item.PropertyChanged += Item_PropertyChanged;
+
+            // Subscribe to action events for image items
+            if (item is SimpleImageItem imageItem)
+            {
+                imageItem.DuplicateRequested += Item_DuplicateRequested;
+                imageItem.BringToFrontRequested += Item_BringToFrontRequested;
+                imageItem.SendToBackRequested += Item_SendToBackRequested;
+            }
 
             ItemAdded?.Invoke(this, item);
         }
@@ -264,10 +273,18 @@ namespace Photobooth.Controls
             }
 
             // Unwire events
-            item.MouseLeftButtonDown -= Item_MouseLeftButtonDown;
-            item.TouchDown -= Item_TouchDown;
+            // item.MouseLeftButtonDown -= Item_MouseLeftButtonDown;
+            // item.TouchDown -= Item_TouchDown;
             item.SelectionChanged -= Item_SelectionChanged;
             item.PropertyChanged -= Item_PropertyChanged;
+
+            // Unsubscribe from action events for image items
+            if (item is SimpleImageItem imageItem)
+            {
+                imageItem.DuplicateRequested -= Item_DuplicateRequested;
+                imageItem.BringToFrontRequested -= Item_BringToFrontRequested;
+                imageItem.SendToBackRequested -= Item_SendToBackRequested;
+            }
 
             // Clear selection if this item was selected
             if (SelectedItem == item)
@@ -286,6 +303,9 @@ namespace Photobooth.Controls
         }
 
         // Item event handlers
+        // NOTE: This method is no longer used - we handle clicks via hit testing in MainCanvas_MouseLeftButtonDown
+        // Kept for reference but commented out
+        /*
         private void Item_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (sender is SimpleCanvasItem item)
@@ -332,6 +352,7 @@ namespace Photobooth.Controls
                 e.Handled = true;
             }
         }
+        */
 
         private void SimpleDesignerCanvas_PreviewKeyDown(object sender, KeyEventArgs e)
         {
@@ -397,23 +418,131 @@ namespace Photobooth.Controls
             catch { }
         }
 
-        private void Item_TouchDown(object sender, TouchEventArgs e)
+        // Touch event handler at canvas level
+        private void MainCanvas_TouchDown(object sender, TouchEventArgs e)
         {
-            if (sender is SimpleCanvasItem item)
+            // Get touch point relative to canvas
+            var touchPoint = e.GetTouchPoint(MainCanvas).Position;
+            SimpleCanvasItem hitItem = null;
+
+            // Get all canvas items sorted by Z-index (highest first)
+            var sortedItems = MainCanvas.Children.OfType<SimpleCanvasItem>()
+                .OrderByDescending(item => item.ZIndex)
+                .ThenByDescending(item => MainCanvas.Children.IndexOf(item))
+                .ToList();
+
+            // Test each item from top to bottom
+            foreach (var item in sortedItems)
+            {
+                // Transform the touch point to the item's coordinate system
+                var itemPoint = MainCanvas.TransformToDescendant(item).Transform(touchPoint);
+
+                // Check if the point is within the item's bounds
+                if (itemPoint.X >= 0 && itemPoint.X <= item.ActualWidth &&
+                    itemPoint.Y >= 0 && itemPoint.Y <= item.ActualHeight)
+                {
+                    // Always accept hits on placeholders and non-image items
+                    // For images with content, check transparency
+                    if (item is SimpleImageItem imageItem)
+                    {
+                        // Placeholders are always selectable
+                        if (imageItem.IsPlaceholder)
+                        {
+                            hitItem = item;
+                            break;
+                        }
+
+                        // For actual images, we need to check transparency
+                        // Call the HitTestCore method directly
+                        var hitTestParams = new PointHitTestParameters(itemPoint);
+                        var hitResult = imageItem.HitTestCore(hitTestParams);
+                        if (hitResult != null)
+                        {
+                            hitItem = item;
+                            break;
+                        }
+                        // If HitTestCore returned null (transparent pixel), continue to next item
+                    }
+                    else
+                    {
+                        // For text, shapes, and other non-image items, just check bounds
+                        hitItem = item;
+                        break;
+                    }
+                }
+            }
+
+            if (hitItem != null)
             {
                 // Single touch - select the item (clear other selections)
                 _isMultiSelecting = false;
-                SelectedItem = item;
+                SelectedItem = hitItem;
 
                 // Update last mouse position for manipulation
-                _lastMousePosition = e.GetTouchPoint(MainCanvas).Position;
+                _lastMousePosition = touchPoint;
                 _isManipulating = true;
+                // Don't mark as handled - let the event bubble to the item for dragging
+                // e.Handled = true;
+            }
+            else
+            {
+                // Touched empty canvas - clear selection
+                SelectedItem = null;
+                Focus();
             }
         }
 
         private void Item_SelectionChanged(object sender, EventArgs e)
         {
             UpdateHandles();
+        }
+
+        private void Item_DuplicateRequested(object sender, EventArgs e)
+        {
+            if (sender is SimpleImageItem sourceItem)
+            {
+                // Create a duplicate with a slight offset
+                var duplicate = new SimpleImageItem
+                {
+                    Left = sourceItem.Left + 20,
+                    Top = sourceItem.Top + 20,
+                    Width = sourceItem.Width,
+                    Height = sourceItem.Height,
+                    ImageSource = sourceItem.ImageSource,
+                    ImagePath = sourceItem.ImagePath,
+                    IsPlaceholder = sourceItem.IsPlaceholder,
+                    PlaceholderNumber = sourceItem.PlaceholderNumber,
+                    PlaceholderName = sourceItem.PlaceholderName,
+                    PlaceholderBackground = sourceItem.PlaceholderBackground,
+                    StrokeBrush = sourceItem.StrokeBrush,
+                    StrokeThickness = sourceItem.StrokeThickness,
+                    Stretch = sourceItem.Stretch,
+                    RotationAngle = sourceItem.RotationAngle,
+                    IsAspectRatioLocked = sourceItem.IsAspectRatioLocked
+                };
+
+                // Add the duplicate to the canvas
+                AddItem(duplicate);
+
+                // Select the duplicate
+                SelectedItem = duplicate;
+            }
+        }
+
+        private void Item_BringToFrontRequested(object sender, EventArgs e)
+        {
+            if (sender is SimpleCanvasItem item)
+            {
+                BringToFront(item);
+            }
+        }
+
+        private void Item_SendToBackRequested(object sender, EventArgs e)
+        {
+            if (sender is SimpleCanvasItem item)
+            {
+                SendToBack(item);
+            }
         }
 
         private void Item_PropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -438,9 +567,136 @@ namespace Photobooth.Controls
         // Canvas mouse events
         private void MainCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            // Clicked on empty canvas - clear selection
-            SelectedItem = null;
-            Focus(); // Take focus for keyboard events
+            // Get click point relative to canvas
+            var clickPoint = e.GetPosition(MainCanvas);
+            SimpleCanvasItem hitItem = null;
+
+            // Get all canvas items sorted by Z-index (highest first)
+            var sortedItems = MainCanvas.Children.OfType<SimpleCanvasItem>()
+                .OrderByDescending(item => item.ZIndex)
+                .ThenByDescending(item => MainCanvas.Children.IndexOf(item))
+                .ToList();
+
+            // Test each item from top to bottom
+            foreach (var item in sortedItems)
+            {
+                // Transform the click point to the item's coordinate system
+                var itemPoint = MainCanvas.TransformToDescendant(item).Transform(clickPoint);
+
+                // Check if the point is within the item's bounds
+                if (itemPoint.X >= 0 && itemPoint.X <= item.ActualWidth &&
+                    itemPoint.Y >= 0 && itemPoint.Y <= item.ActualHeight)
+                {
+                    // Always accept hits on placeholders and non-image items
+                    // For images with content, check transparency
+                    if (item is SimpleImageItem imageItem)
+                    {
+                        // Placeholders are always selectable
+                        if (imageItem.IsPlaceholder)
+                        {
+                            hitItem = item;
+                            break;
+                        }
+
+                        // For actual images, we need to check transparency
+                        // Call the HitTestCore method directly
+                        var hitTestParams = new PointHitTestParameters(itemPoint);
+                        var hitResult = imageItem.HitTestCore(hitTestParams);
+                        if (hitResult != null)
+                        {
+                            hitItem = item;
+                            break;
+                        }
+                        // If HitTestCore returned null (transparent pixel), continue to next item
+                    }
+                    else
+                    {
+                        // For text, shapes, and other non-image items, just check bounds
+                        hitItem = item;
+                        break;
+                    }
+                }
+            }
+
+            if (hitItem != null)
+            {
+                // Found an item - handle selection
+                bool ctrlPressed = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+                bool shiftPressed = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+
+                if (ctrlPressed)
+                {
+                    // Toggle selection for this item
+                    _isMultiSelecting = true;
+
+                    if (_selectedItems.Contains(hitItem))
+                    {
+                        // Deselect item
+                        hitItem.IsSelected = false;
+                        _selectedItems.Remove(hitItem);
+
+                        // If this was the primary selection, select another item
+                        if (SelectedItem == hitItem)
+                        {
+                            SelectedItem = _selectedItems.Count > 0 ? _selectedItems[0] : null;
+                        }
+                    }
+                    else
+                    {
+                        // Add to selection
+                        hitItem.IsSelected = true;
+                        _selectedItems.Add(hitItem);
+
+                        // Make it the primary selection
+                        SelectedItem = hitItem;
+                    }
+                }
+                else if (shiftPressed && _selectedItems.Count > 0)
+                {
+                    // Range selection (simplified - just add to selection)
+                    _isMultiSelecting = true;
+
+                    if (!_selectedItems.Contains(hitItem))
+                    {
+                        hitItem.IsSelected = true;
+                        _selectedItems.Add(hitItem);
+                    }
+                }
+                else
+                {
+                    // Single selection - clear others
+                    _isMultiSelecting = false;
+                    SelectedItem = hitItem;
+                }
+
+                // Update last mouse position for manipulation
+                _lastMousePosition = clickPoint;
+                _isManipulating = true;
+
+                // Don't automatically bring items to front when selecting
+                // This preserves the original Z-order
+                // Users can still manually use Bring to Front if needed
+
+                // Start dragging on the selected item
+                if (hitItem != null && !ctrlPressed && !shiftPressed)
+                {
+                    // Trigger the item's drag start by calling its mouse down handler
+                    var itemArgs = new MouseButtonEventArgs(e.MouseDevice, e.Timestamp, MouseButton.Left)
+                    {
+                        RoutedEvent = UIElement.MouseLeftButtonDownEvent,
+                        Source = hitItem
+                    };
+                    hitItem.RaiseEvent(itemArgs);
+                }
+
+                e.Handled = true;
+            }
+            else
+            {
+                // Clicked on empty canvas - clear selection
+                SelectedItem = null;
+                Focus(); // Take focus for keyboard events
+            }
         }
 
         private void MainCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -537,6 +793,17 @@ namespace Photobooth.Controls
         {
             if (item != null)
             {
+                // Assign the highest Z-index to new items so they appear on top
+                if (Items.Count > 0)
+                {
+                    var maxZ = Items.Max(i => i.ZIndex);
+                    item.ZIndex = maxZ + 1;
+                }
+                else
+                {
+                    item.ZIndex = 0;
+                }
+
                 Items.Add(item);
             }
         }
@@ -813,10 +1080,13 @@ namespace Photobooth.Controls
 
         private void UpdateHandles()
         {
-            // Update all item handles
+            // Only update handles for selected items for performance
             foreach (var item in Items)
             {
-                item.UpdateSelectionHandles();
+                if (item.IsSelected)
+                {
+                    item.UpdateSelectionHandles();
+                }
             }
         }
 
