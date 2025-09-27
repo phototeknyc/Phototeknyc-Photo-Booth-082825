@@ -26,13 +26,24 @@ namespace Photobooth.Services
         {
             databaseOperations = dbOps;
             CapturedPhotoPaths = new List<string>();
-            
-            // Set up photo folder
-            photoFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), 
-                "Photobooth"
-            );
-            
+
+            // Set up photo folder - use custom location from settings if set
+            string customLocation = Properties.Settings.Default.PhotoLocation;
+            if (!string.IsNullOrEmpty(customLocation))
+            {
+                photoFolder = customLocation;
+                Log.Debug($"PhotoCaptureService: Using custom photo location: {photoFolder}");
+            }
+            else
+            {
+                // Use default location if no custom path is set
+                photoFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                    "Photobooth"
+                );
+                Log.Debug($"PhotoCaptureService: Using default photo location: {photoFolder}");
+            }
+
             if (!Directory.Exists(photoFolder))
             {
                 Directory.CreateDirectory(photoFolder);
