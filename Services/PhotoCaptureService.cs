@@ -138,26 +138,31 @@ namespace Photobooth.Services
         /// </summary>
         private string GeneratePhotoPath(string originalFileName)
         {
-            string fileName = Path.Combine(photoFolder, Path.GetFileName(originalFileName));
-            
+            // Add date to filename
+            string baseFileName = Path.GetFileNameWithoutExtension(originalFileName);
+            string extension = Path.GetExtension(originalFileName);
+            string dateStamp = DateTime.Now.ToString("yyyyMMdd");
+            string fileNameWithDate = $"{baseFileName}_{dateStamp}{extension}";
+            string fileName = Path.Combine(photoFolder, fileNameWithDate);
+
             // Generate unique filename if exists
             if (File.Exists(fileName))
             {
                 fileName = StaticHelper.GetUniqueFilename(
-                    Path.GetDirectoryName(fileName) + "\\" + 
-                    Path.GetFileNameWithoutExtension(fileName) + "_", 
+                    Path.GetDirectoryName(fileName) + "\\" +
+                    Path.GetFileNameWithoutExtension(fileName) + "_",
                     0,
                     Path.GetExtension(fileName)
                 );
             }
-            
+
             // Ensure directory exists
             string directory = Path.GetDirectoryName(fileName);
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
             }
-            
+
             Log.Debug($"PhotoCaptureService: Generated path {fileName}");
             return fileName;
         }
@@ -186,15 +191,19 @@ namespace Photobooth.Services
             Directory.CreateDirectory(printFolder);
             Directory.CreateDirectory(composedFolder);
             
-            // Place original photos in the "originals" subfolder
-            string fileName = Path.Combine(originalsFolder, Path.GetFileName(originalFileName));
-            
+            // Place original photos in the "originals" subfolder with date in filename
+            string baseFileName = Path.GetFileNameWithoutExtension(originalFileName);
+            string extension = Path.GetExtension(originalFileName);
+            string dateStamp = DateTime.Now.ToString("yyyyMMdd");
+            string fileNameWithDate = $"{baseFileName}_{dateStamp}{extension}";
+            string fileName = Path.Combine(originalsFolder, fileNameWithDate);
+
             // Generate unique filename if exists
             if (File.Exists(fileName))
             {
                 fileName = StaticHelper.GetUniqueFilename(
-                    Path.GetDirectoryName(fileName) + "\\" + 
-                    Path.GetFileNameWithoutExtension(fileName) + "_", 
+                    Path.GetDirectoryName(fileName) + "\\" +
+                    Path.GetFileNameWithoutExtension(fileName) + "_",
                     0,
                     Path.GetExtension(fileName)
                 );
