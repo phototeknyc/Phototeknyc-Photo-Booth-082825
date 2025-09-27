@@ -5422,6 +5422,86 @@ namespace Photobooth.Controls
             }
         }
 
+        private void DuplicateTemplate_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_currentTemplateId <= 0)
+                {
+                    MessageBox.Show("Please save the current template first before duplicating.",
+                        "Template Not Saved", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                var database = new TemplateDatabase();
+                var sourceTemplate = database.GetTemplate(_currentTemplateId);
+
+                if (sourceTemplate == null)
+                {
+                    MessageBox.Show("Failed to load the current template for duplication.",
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                string newName = GenerateUniqueCopyName(sourceTemplate.Name);
+
+                var duplicateTemplate = new TemplateData
+                {
+                    Name = newName,
+                    Description = sourceTemplate.Description,
+                    CanvasWidth = sourceTemplate.CanvasWidth,
+                    CanvasHeight = sourceTemplate.CanvasHeight,
+                    BackgroundColor = sourceTemplate.BackgroundColor,
+                    BackgroundImagePath = sourceTemplate.BackgroundImagePath,
+                    ThumbnailImagePath = sourceTemplate.ThumbnailImagePath,
+                    CreatedDate = DateTime.Now,
+                    ModifiedDate = DateTime.Now,
+                    IsDefault = false
+                };
+
+                int newTemplateId = database.SaveTemplate(duplicateTemplate);
+
+                var canvasItems = database.GetCanvasItems(_currentTemplateId);
+                foreach (var item in canvasItems)
+                {
+                    item.TemplateId = newTemplateId;
+                    item.Id = 0;
+                    database.SaveCanvasItem(item);
+                }
+
+                Log.Debug($"TouchTemplateDesigner: Duplicated template '{sourceTemplate.Name}' to '{newName}' with ID {newTemplateId}");
+
+                var newTemplate = database.GetTemplate(newTemplateId);
+                OnTemplateSelected(this, newTemplate);
+
+                ShowAutoSaveNotification($"Template duplicated as '{newName}'");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"TouchTemplateDesigner: Failed to duplicate template: {ex.Message}");
+                MessageBox.Show($"Failed to duplicate template: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private string GenerateUniqueCopyName(string originalName)
+        {
+            var database = new TemplateDatabase();
+            var allTemplates = database.GetAllTemplates();
+            var existingNames = new HashSet<string>(allTemplates.Select(t => t.Name), StringComparer.OrdinalIgnoreCase);
+
+            string newName = $"{originalName} Copy";
+            int counter = 2;
+
+            while (existingNames.Contains(newName))
+            {
+                newName = $"{originalName} Copy {counter}";
+                counter++;
+            }
+
+            return newName;
+        }
+
         private void ChangeCanvasSize_Click(object sender, RoutedEventArgs e)
         {
             try

@@ -259,36 +259,6 @@
                     <!-- File Operations - Wrappable -->
                     <WrapPanel Grid.Column="0" Orientation="Horizontal" Margin="10" VerticalAlignment="Center">
                         <Button Style="{StaticResource TouchToolButton}"
-                                Click="NewTemplate_Click"
-                                ToolTip="New" Content="&#xE7C3;"/>
-                        <Button Style="{StaticResource TouchToolButton}"
-                                Click="LoadTemplate_Click"
-                                ToolTip="Load" Content="&#xE8E5;"/>
-                        <Border Width="8" Margin="10,5" CornerRadius="3">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                    <GradientStop Color="#404040" Offset="0"/>
-                                    <GradientStop Color="#808080" Offset="0.5"/>
-                                    <GradientStop Color="#404040" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
-                        </Border>
-                        <Button Style="{StaticResource TouchToolButton}" 
-                                Click="ImportTemplate_Click" 
-                                ToolTip="Import" Content="&#xE8B5;"/>
-                        <Button Style="{StaticResource TouchToolButton}"
-                                Click="ExportTemplate_Click"
-                                ToolTip="Export" Content="&#xEDE1;"/>
-                        <Border Width="8" Margin="10,5" CornerRadius="3">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                    <GradientStop Color="#404040" Offset="0"/>
-                                    <GradientStop Color="#808080" Offset="0.5"/>
-                                    <GradientStop Color="#404040" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
-                        </Border>
-                        <Button Style="{StaticResource TouchToolButton}"
                                 Background="#F44336"
                                 Click="Close_Click"
                                 ToolTip="Close Designer"
@@ -359,6 +329,14 @@
                                        FontFamily="Segoe MDL2 Assets"
                                        FontSize="16"
                                        Content="&#xE70F;"/>
+                                <Button Style="{StaticResource TouchToolButton}"
+                                       Width="36" Height="36"
+                                       Margin="3,0,0,0"
+                                       Click="DuplicateTemplate_Click"
+                                       ToolTip="Duplicate Template"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="16"
+                                       Content="&#xE8C8;"/>
                             </StackPanel>
                         </Border>
 
@@ -368,8 +346,8 @@
                                      Height="46"
                                      MinWidth="140"
                                      Background="#3E3E3E"
-                                     BorderBrush="#4CAF50"
-                                     BorderThickness="1"
+                                     BorderBrush="#3E3E3E"
+                                     BorderThickness="0"
                                      Margin="0,0,15,0"
                                      Checked="AssignToEventCheckBox_Changed"
                                      Unchecked="AssignToEventCheckBox_Changed">
@@ -381,8 +359,8 @@
                                                 <Border x:Name="border"
                                                         Background="{TemplateBinding Background}"
                                                         BorderBrush="{TemplateBinding BorderBrush}"
-                                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                                        CornerRadius="5">
+                                                        BorderThickness="0"
+                                                        CornerRadius="8">
                                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                         <TextBlock x:Name="icon" Text="&#xE71B;" FontFamily="Segoe MDL2 Assets" FontSize="14" Margin="8,0,6,0" Foreground="White"/>
                                                         <TextBlock x:Name="text" Text="Assign to Event" FontSize="14" FontWeight="SemiBold" Margin="0,0,8,0" Foreground="White"/>
@@ -429,23 +407,6 @@
                                 </StackPanel>
                             </Button.Content>
                         </Button>
-                    </StackPanel>
-
-                    <!-- Canvas Size Display - Responsive -->
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="5" VerticalAlignment="Center" x:Name="CanvasSizePanel">
-                        <TextBlock Text="Size: " Foreground="Gray" FontSize="14"/>
-                        <TextBlock x:Name="CanvasSizeText" Text="600 x 1800"
-                                  Foreground="White" FontSize="14" Margin="5,0"/>
-                        <Button Style="{StaticResource TouchToolButton}"
-                                Click="ChangeCanvasSize_Click"
-                                ToolTip="Resize" Content="&#xE740;" Margin="5,0"/>
-                        <Button Style="{StaticResource TouchToolButton}"
-                                x:Name="OrientationButton"
-                                Click="ChangeOrientation_Click"
-                                ToolTip="Change Orientation"
-                                Content="&#xE739;"
-                                Margin="5,0"
-                                FontFamily="Segoe MDL2 Assets"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -1133,11 +1094,11 @@
 
                     <!-- Quick Actions - Wrappable -->
                     <WrapPanel Grid.Column="0" Orientation="Horizontal" Margin="10">
-                        <Button Style="{StaticResource TouchToolButton}" 
-                                Click="Undo_Click" 
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="Undo_Click"
                                 ToolTip="Undo" Content="&#xE7A7;"/>
-                        <Button Style="{StaticResource TouchToolButton}" 
-                                Click="Redo_Click" 
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="Redo_Click"
                                 ToolTip="Redo" Content="&#xE7A6;"/>
                         <Border Width="8" Margin="10,12" CornerRadius="3">
                             <Border.Background>
@@ -1148,33 +1109,122 @@
                                 </LinearGradientBrush>
                             </Border.Background>
                         </Border>
-                        <Button Style="{StaticResource TouchToolButton}" 
-                                Click="Copy_Click" 
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="Copy_Click"
                                 ToolTip="Copy" Content="&#xE8C8;"/>
-                        <Button Style="{StaticResource TouchToolButton}" 
-                                Click="Paste_Click" 
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="Paste_Click"
                                 ToolTip="Paste" Content="&#xE77F;"/>
-                    </WrapPanel>
-
-                    <!-- Properties Panel Toggle -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" 
-                               HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <ToggleButton x:Name="PropertiesToggle" 
-                                     Width="150" Height="50"
-                                     Background="{StaticResource MediumBgBrush}"
+                        <Border Width="8" Margin="10,12" CornerRadius="3">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#404040" Offset="0"/>
+                                    <GradientStop Color="#808080" Offset="0.5"/>
+                                    <GradientStop Color="#404040" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="NewTemplate_Click"
+                                ToolTip="New" Content="&#xE7C3;"/>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="LoadTemplate_Click"
+                                ToolTip="Load" Content="&#xE8E5;"/>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="ImportTemplate_Click"
+                                ToolTip="Import" Content="&#xE8B5;"/>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="ExportTemplate_Click"
+                                ToolTip="Export" Content="&#xEDE1;"/>
+                        <Border Width="8" Margin="10,12" CornerRadius="3">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#404040" Offset="0"/>
+                                    <GradientStop Color="#808080" Offset="0.5"/>
+                                    <GradientStop Color="#404040" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                Click="ChangeCanvasSize_Click"
+                                ToolTip="Resize Canvas" Content="&#xE740;"/>
+                        <Button Style="{StaticResource TouchToolButton}"
+                                x:Name="OrientationButton"
+                                Click="ChangeOrientation_Click"
+                                ToolTip="Change Orientation"
+                                Content="&#xE739;"
+                                FontFamily="Segoe MDL2 Assets"/>
+                        <Border Width="8" Margin="10,12" CornerRadius="3">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#404040" Offset="0"/>
+                                    <GradientStop Color="#808080" Offset="0.5"/>
+                                    <GradientStop Color="#404040" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <ToggleButton x:Name="PropertiesToggle"
+                                     MinWidth="44" MinHeight="44"
+                                     Width="Auto" Height="Auto"
+                                     Margin="3"
+                                     Background="#3E3E3E"
                                      Foreground="White"
                                      BorderThickness="0"
-                                     FontSize="16"
+                                     FontSize="18"
+                                     FontFamily="Segoe MDL2 Assets"
+                                     Content="&#xE90F;"
+                                     ToolTip="Properties"
+                                     Cursor="Hand"
                                      Click="PropertiesToggle_Click">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets" 
-                                          VerticalAlignment="Center" Margin="5,0"/>
-                                <TextBlock Text="Properties" VerticalAlignment="Center" Margin="5,0"/>
-                            </StackPanel>
+                            <ToggleButton.Style>
+                                <Style TargetType="ToggleButton">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border x:Name="border"
+                                                        Background="{TemplateBinding Background}"
+                                                        CornerRadius="15"
+                                                        Padding="10,6">
+                                                    <Border.Effect>
+                                                        <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="2" Opacity="0.3"/>
+                                                    </Border.Effect>
+                                                    <ContentPresenter HorizontalAlignment="Center"
+                                                                    VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#4CAF50"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#4E4E4E"/>
+                                                    </Trigger>
+                                                    <MultiTrigger>
+                                                        <MultiTrigger.Conditions>
+                                                            <Condition Property="IsChecked" Value="True"/>
+                                                            <Condition Property="IsMouseOver" Value="True"/>
+                                                        </MultiTrigger.Conditions>
+                                                        <Setter TargetName="border" Property="Background" Value="#66BB6A"/>
+                                                    </MultiTrigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ToggleButton.Style>
                         </ToggleButton>
+                    </WrapPanel>
+
+                    <!-- Empty Center Column -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal"
+                               HorizontalAlignment="Center" VerticalAlignment="Center">
                     </StackPanel>
 
-                    <!-- Empty space for layout balance -->
+                    <!-- Canvas Size Display -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10" VerticalAlignment="Center" HorizontalAlignment="Right" x:Name="CanvasSizePanel">
+                        <TextBlock Text="Size: " Foreground="Gray" FontSize="14" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="CanvasSizeText" Text="600 x 1800"
+                                  Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="5,0" VerticalAlignment="Center"/>
+                    </StackPanel>
                 </Grid>
             </Border>
         </Grid>
