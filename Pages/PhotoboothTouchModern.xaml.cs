@@ -624,7 +624,9 @@ namespace Photobooth.Pages
         private string SanitizeFileName(string fileName)
         {
             var invalidChars = Path.GetInvalidFileNameChars();
-            return new string(fileName.Where(c => !invalidChars.Contains(c)).ToArray());
+            var sanitized = new string(fileName.Where(c => !invalidChars.Contains(c)).ToArray());
+            // Replace spaces with underscores to match GetSafeEventName() behavior
+            return sanitized.Replace(' ', '_');
         }
 
         private void RefreshDisplay()

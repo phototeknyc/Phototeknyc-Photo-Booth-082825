@@ -991,7 +991,7 @@ namespace Photobooth.Services
             categories["Storage"] = new List<SettingItem>
             {
                 new SettingItem { Name = "PhotoLocation", DisplayName = "Photo Location", Value = Storage.PhotoLocation, Type = SettingType.Text },
-                new SettingItem { Name = "SessionFolder", DisplayName = "Session Folder", Value = Storage.SessionFolder, Type = SettingType.Text },
+                new SettingItem { Name = "OpenCurrentEvent", DisplayName = "Current Event Folder", Value = "Open Folder", Type = SettingType.Button, Description = "Open the current event folder in Windows Explorer" },
                 new SettingItem { Name = "OrganizeByDate", DisplayName = "Organize by Date", Value = Storage.OrganizeByDate, Type = SettingType.Toggle },
                 new SettingItem { Name = "OrganizeByEvent", DisplayName = "Organize by Event", Value = Storage.OrganizeByEvent, Type = SettingType.Toggle },
                 new SettingItem { Name = "AutoBackup", DisplayName = "Auto Backup", Value = Storage.AutoBackup, Type = SettingType.Toggle }
@@ -1096,7 +1096,8 @@ namespace Photobooth.Services
         Number,
         Color,
         File,
-        Folder
+        Folder,
+        Button
     }
     #endregion
 }

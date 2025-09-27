@@ -62,6 +62,9 @@ namespace Photobooth.Controls
         // Flag to prevent checkbox event during programmatic updates
         private bool _suppressCheckboxEvents = false;
 
+        // Flag to suppress change tracking during programmatic operations (template loading, etc.)
+        private bool _suppressChangeTracking = false;
+
         public TouchTemplateDesigner()
         {
             InitializeComponent();
@@ -70,6 +73,18 @@ namespace Photobooth.Controls
             // Initialize event service
             _eventService = new EventService();
             LoadEvents();
+
+            // Subscribe to EventTemplatesOverlay events
+            if (EventTemplatesOverlay != null)
+            {
+                EventTemplatesOverlay.TemplatesChanged += OnEventTemplatesChanged;
+                EventTemplatesOverlay.CloseRequested += (s, e) => EventTemplatesOverlay.Visibility = Visibility.Collapsed;
+                Log.Debug("★★★ TouchTemplateDesigner: Subscribed to EventTemplatesOverlay.TemplatesChanged event");
+            }
+            else
+            {
+                Log.Error("★★★ TouchTemplateDesigner: EventTemplatesOverlay is NULL - cannot subscribe to events!");
+            }
 
             // Handle responsive layout
             SizeChanged += OnSizeChanged;
@@ -913,8 +928,16 @@ namespace Photobooth.Controls
 
         private void MarkAsChanged()
         {
+            // Don't mark as changed during programmatic operations like template loading
+            if (_suppressChangeTracking)
+            {
+                Log.Debug("TouchTemplateDesigner: Change tracking suppressed");
+                return;
+            }
+
             _hasUnsavedChanges = true;
             UpdateAutoSaveIndicator();
+            Log.Debug("TouchTemplateDesigner: Template marked as changed");
         }
 
         private void AutoSaveTimer_Tick(object sender, EventArgs e)
@@ -1032,33 +1055,47 @@ namespace Photobooth.Controls
                     return;
                 }
 
-                if (canvas.Items.Count == 0) return;
-
                 var database = new TemplateDatabase();
                 var template = database.GetTemplate(_currentTemplateId);
                 if (template == null) return;
 
-                // Clear existing canvas items in database
-                database.DeleteCanvasItems(_currentTemplateId);
-
-                // Save all current canvas items
-                foreach (var item in canvas.Items.OrderBy(i => i.ZIndex))
+                // Always update canvas dimensions to ensure they stay in sync
+                bool dimensionsChanged = template.CanvasWidth != canvas.Width || template.CanvasHeight != canvas.Height;
+                if (dimensionsChanged)
                 {
-                    var canvasItem = ConvertToCanvasItemData(item, _currentTemplateId);
-                    database.SaveCanvasItem(canvasItem);
+                    Log.Debug($"TouchTemplateDesigner: Auto-save updating dimensions from {template.CanvasWidth}x{template.CanvasHeight} to {canvas.Width}x{canvas.Height}");
+                    template.CanvasWidth = canvas.Width;
+                    template.CanvasHeight = canvas.Height;
                 }
 
-                // Regenerate thumbnail periodically (every 5 saves) or if significant changes
-                if (_autoSaveCount % 5 == 0 || canvas.Items.Count != _lastItemCount)
+                // Skip item saving if canvas is empty, but still save dimension changes
+                if (canvas.Items.Count > 0)
+                {
+                    // Clear existing canvas items in database
+                    database.DeleteCanvasItems(_currentTemplateId);
+
+                    // Save all current canvas items
+                    foreach (var item in canvas.Items.OrderBy(i => i.ZIndex))
+                    {
+                        var canvasItem = ConvertToCanvasItemData(item, _currentTemplateId);
+                        database.SaveCanvasItem(canvasItem);
+                    }
+                }
+
+                // Regenerate thumbnail periodically (every 5 saves) or if significant changes or dimensions changed
+                if (_autoSaveCount % 5 == 0 || canvas.Items.Count != _lastItemCount || dimensionsChanged)
                 {
                     string newThumbnailPath = GenerateTemplateThumbnail(canvas, template.Name);
                     if (!string.IsNullOrEmpty(newThumbnailPath))
                     {
                         template.ThumbnailImagePath = newThumbnailPath;
-                        database.UpdateTemplate(_currentTemplateId, template);
                     }
                     _lastItemCount = canvas.Items.Count;
                 }
+
+                // Update template with all changes (dimensions, thumbnail, modified date)
+                template.ModifiedDate = DateTime.Now;
+                database.UpdateTemplate(_currentTemplateId, template);
                 _autoSaveCount++;
 
                 _hasUnsavedChanges = false;
@@ -1258,6 +1295,18 @@ namespace Photobooth.Controls
                     if (canvas == null) return;
 
                     var database = new TemplateDatabase();
+                    var template = database.GetTemplate(_currentTemplateId);
+                    if (template == null) return;
+
+                    // Update canvas dimensions if changed
+                    if (template.CanvasWidth != canvas.Width || template.CanvasHeight != canvas.Height)
+                    {
+                        Log.Debug($"TouchTemplateDesigner: SaveOnExit updating dimensions from {template.CanvasWidth}x{template.CanvasHeight} to {canvas.Width}x{canvas.Height}");
+                        template.CanvasWidth = canvas.Width;
+                        template.CanvasHeight = canvas.Height;
+                        template.ModifiedDate = DateTime.Now;
+                        database.UpdateTemplate(_currentTemplateId, template);
+                    }
 
                     // Clear existing canvas items for this template
                     database.DeleteCanvasItems(_currentTemplateId);
@@ -1611,6 +1660,9 @@ namespace Photobooth.Controls
             {
                 Log.Debug($"TouchTemplateDesigner: Loading template {template.Name}");
 
+                // SUPPRESS change tracking during template load to prevent false "unsaved changes"
+                _suppressChangeTracking = true;
+
                 // Update template name display
                 TemplateNameText.Text = template.Name ?? "Untitled";
 
@@ -1671,10 +1723,16 @@ namespace Photobooth.Controls
                 // Update orientation from loaded canvas dimensions
                 UpdateOrientationFromCanvas();
 
-                Log.Debug($"TouchTemplateDesigner: Template {template.Name} loaded successfully");
+                // RE-ENABLE change tracking after template load is complete
+                _suppressChangeTracking = false;
+
+                Log.Debug($"TouchTemplateDesigner: Template {template.Name} loaded successfully - change tracking re-enabled");
             }
             catch (Exception ex)
             {
+                // RE-ENABLE change tracking even if load fails
+                _suppressChangeTracking = false;
+
                 Log.Error($"TouchTemplateDesigner: Failed to load template: {ex.Message}");
                 MessageBox.Show($"Failed to load template: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
@@ -1684,6 +1742,112 @@ namespace Photobooth.Controls
         private void OnTemplateSelectionCancelled(object sender, EventArgs e)
         {
             Log.Debug("TouchTemplateDesigner: Template selection cancelled");
+        }
+
+        private void OnEventTemplatesChanged(object sender, EventArgs e)
+        {
+            // Ensure we're on the UI thread
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(() => OnEventTemplatesChanged(sender, e));
+                return;
+            }
+
+            try
+            {
+                Log.Debug($"★★★ TouchTemplateDesigner: OnEventTemplatesChanged fired! Current template ID: {_currentTemplateId}");
+
+                // Reload event templates to get updated count
+                if (_selectedEvent != null)
+                {
+                    var database = new TemplateDatabase();
+                    _eventTemplates = database.GetEventTemplates(_selectedEvent.Id);
+                    Log.Debug($"★★★ Event now has {_eventTemplates.Count} template(s)");
+
+                    // Update the template count badge in real-time
+                    if (TemplateCountText != null)
+                    {
+                        TemplateCountText.Text = _eventTemplates.Count.ToString();
+                        Log.Debug($"★★★ Updated template count badge to: {_eventTemplates.Count}");
+                    }
+
+                    // Check if current template was deleted or removed from event
+                    if (_currentTemplateId > 0)
+                    {
+                        Log.Debug($"★★★ Checking if current template ID {_currentTemplateId} still exists...");
+                        var currentTemplate = database.GetTemplate(_currentTemplateId);
+
+                        if (currentTemplate == null)
+                        {
+                            // Template was completely deleted
+                            Log.Debug($"★★★ TEMPLATE DELETED! Clearing designer...");
+                            Log.Debug($"★★★ Before clear - TemplateNameText.Text = '{TemplateNameText.Text}'");
+
+                            // Clear the designer on UI thread
+                            TemplateNameText.Text = "No Template";
+                            _currentTemplateId = 0;
+                            Log.Debug($"★★★ After clear - TemplateNameText.Text = '{TemplateNameText.Text}'");
+
+                            var canvas = DesignerCanvas as SimpleDesignerCanvas;
+                            if (canvas != null)
+                            {
+                                _suppressChangeTracking = true;
+                                canvas.Items.Clear();
+                                _suppressChangeTracking = false;
+                                Log.Debug($"★★★ Canvas cleared, {canvas.Items.Count} items remaining");
+                            }
+                        }
+                        else
+                        {
+                            Log.Debug($"★★★ Template still exists: '{currentTemplate.Name}'");
+
+                            // Template still exists, check if it's in the event
+                            bool currentTemplateStillInEvent = _eventTemplates.Any(t => t.Id == _currentTemplateId);
+
+                            if (!currentTemplateStillInEvent)
+                            {
+                                // Template was unlinked from event but still exists
+                                Log.Debug($"★★★ Template '{currentTemplate.Name}' was UNLINKED from event (but not deleted)");
+
+                                // Update the "Assign to Event" checkbox to show it's no longer assigned
+                                _suppressCheckboxEvents = true;
+                                if (AssignToEventCheckBox != null)
+                                {
+                                    (AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton).IsChecked = false;
+                                    Log.Debug($"★★★ Updated AssignToEventCheckBox to unchecked (template unlinked)");
+                                }
+                                _suppressCheckboxEvents = false;
+                            }
+                            else
+                            {
+                                Log.Debug($"★★★ Template '{currentTemplate.Name}' is still in the event");
+
+                                // Ensure checkbox is checked (in case it was out of sync)
+                                _suppressCheckboxEvents = true;
+                                if (AssignToEventCheckBox != null)
+                                {
+                                    (AssignToEventCheckBox as System.Windows.Controls.Primitives.ToggleButton).IsChecked = true;
+                                    Log.Debug($"★★★ Updated AssignToEventCheckBox to checked (template still assigned)");
+                                }
+                                _suppressCheckboxEvents = false;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Log.Debug($"★★★ No current template loaded (_currentTemplateId = 0)");
+                    }
+                }
+                else
+                {
+                    Log.Debug($"★★★ No event selected");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"★★★ TouchTemplateDesigner: EXCEPTION in OnEventTemplatesChanged: {ex.Message}");
+                Log.Error($"★★★ Stack trace: {ex.StackTrace}");
+            }
         }
 
         private void UpdateCanvasSizeDisplay()
@@ -1824,6 +1988,9 @@ namespace Photobooth.Controls
                     await ImportAssets(assetsSourceDir, templateData);
                 }
 
+                // SUPPRESS change tracking during template import
+                _suppressChangeTracking = true;
+
                 // Clear canvas and apply template
                 var canvas = this.DesignerCanvas as SimpleDesignerCanvas;
                 if (canvas == null) return;
@@ -1861,9 +2028,15 @@ namespace Photobooth.Controls
 
                 ShowAutoSaveNotification($"Template '{templateData.Name}' imported successfully!");
                 Log.Debug($"TouchTemplateDesigner: Imported template package from {zipFilePath}");
+
+                // RE-ENABLE change tracking after import is complete
+                _suppressChangeTracking = false;
             }
             finally
             {
+                // RE-ENABLE change tracking even if import fails
+                _suppressChangeTracking = false;
+
                 // Clean up temporary directory
                 if (Directory.Exists(tempDir))
                 {
@@ -5279,6 +5452,9 @@ namespace Photobooth.Controls
 
                 Log.Debug($"TouchTemplateDesigner: After setting, DesignerCanvas size: {DesignerCanvas.Width}x{DesignerCanvas.Height}");
 
+                // Mark as changed since canvas dimensions changed
+                MarkAsChanged();
+
                 // Keep the dark gray background (#FF3A3A3C) as set in XAML - don't reset to white
                 // The dark background provides better contrast and matches the overall design theme
                 Log.Debug($"TouchTemplateDesigner: Canvas background maintained as dark gray (#FF3A3A3C)");
@@ -6399,6 +6575,15 @@ namespace Photobooth.Controls
                     // Show confirmation
                     var templateName = TemplateNameText.Text;
                     ShowAutoSaveNotification($"Template '{templateName}' unassigned from event '{_selectedEvent.Name}'");
+                }
+
+                // Update template count badge
+                var database = new TemplateDatabase();
+                _eventTemplates = database.GetEventTemplates(_selectedEvent.Id);
+                if (TemplateCountText != null)
+                {
+                    TemplateCountText.Text = _eventTemplates.Count.ToString();
+                    Log.Debug($"★★★ Updated template count badge to: {_eventTemplates.Count} after assign/unassign");
                 }
             }
             catch (Exception ex)

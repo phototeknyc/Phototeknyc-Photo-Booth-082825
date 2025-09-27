@@ -180,24 +180,24 @@ namespace Photobooth.Services
         
         /// <summary>
         /// Generate photo path with proper event-based folder structure
-        /// Creates: EventName/originals/, EventName/thumbs/, EventName/animation/, EventName/print/, EventName/composed/
+        /// Creates: EventName/originals/, EventName/animation/, EventName/print/, EventName/composed/
+        /// Thumbnails are stored in type-specific thumbs subfolders (e.g., originals/thumbs/, composed/thumbs/)
         /// </summary>
         private string GeneratePhotoPathWithEvent(string originalFileName, EventData eventData)
         {
             // Create event-based folder structure
             string eventName = GetSafeEventName(eventData);
             string eventFolder = Path.Combine(photoFolder, eventName);
-            
-            // Create subfolders: originals, thumbs, animation, print, composed
+
+            // Create subfolders: originals, animation, print, composed
+            // Note: thumbs folders are created automatically per type by DatabaseOperations
             string originalsFolder = Path.Combine(eventFolder, "originals");
-            string thumbsFolder = Path.Combine(eventFolder, "thumbs");
             string animationFolder = Path.Combine(eventFolder, "animation");
             string printFolder = Path.Combine(eventFolder, "print");
             string composedFolder = Path.Combine(eventFolder, "composed");
-            
+
             // Create all directories
             Directory.CreateDirectory(originalsFolder);
-            Directory.CreateDirectory(thumbsFolder);
             Directory.CreateDirectory(animationFolder);
             Directory.CreateDirectory(printFolder);
             Directory.CreateDirectory(composedFolder);

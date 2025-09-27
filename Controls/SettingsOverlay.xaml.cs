@@ -787,7 +787,7 @@ namespace Photobooth.Controls
                 case SettingType.Text:
                     Log.Debug($"Creating Text control for setting: {setting.Name}, Value: {setting.Value}");
                     // Special handling for file/folder paths
-                    if (setting.Name == "IdleBackgroundImage" || setting.Name == "PhotoLocation" || setting.Name == "SessionFolder")
+                    if (setting.Name == "IdleBackgroundImage" || setting.Name == "PhotoLocation")
                     {
                         var filePanel = new StackPanel
                         {
@@ -893,9 +893,45 @@ namespace Photobooth.Controls
                             OnSettingValueChanged(category, setting.Name, "");
                         };
 
+                        var openButton = new Button
+                        {
+                            Content = "Open",
+                            Margin = new Thickness(5, 0, 0, 0),
+                            Padding = new Thickness(10, 4, 10, 4),
+                            FontSize = 11,
+                            Background = new SolidColorBrush(Color.FromRgb(0x45, 0x45, 0x45)),
+                            Foreground = Brushes.White,
+                            BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                            BorderThickness = new Thickness(1),
+                            Cursor = Cursors.Hand,
+                            MinWidth = 50,
+                            Height = 30
+                        };
+
+                        openButton.Click += (s, e) =>
+                        {
+                            try
+                            {
+                                string path = textBox.Text;
+                                if (!string.IsNullOrEmpty(path) && System.IO.Directory.Exists(path))
+                                {
+                                    System.Diagnostics.Process.Start("explorer.exe", path);
+                                }
+                                else if (!string.IsNullOrEmpty(path))
+                                {
+                                    Log.Debug($"SettingsOverlay: Cannot open folder - path does not exist: {path}");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Error($"SettingsOverlay: Failed to open folder: {ex.Message}");
+                            }
+                        };
+
                         inputRow.Children.Add(textBox);
                         inputRow.Children.Add(browseButton);
                         inputRow.Children.Add(clearButton);
+                        inputRow.Children.Add(openButton);
 
                         filePanel.Children.Add(inputRow);
                         control = filePanel;
@@ -925,8 +961,90 @@ namespace Photobooth.Controls
                         control = textBox;
                     }
                     break;
+
+                case SettingType.Button:
+                    Log.Debug($"Creating Button control for setting: {setting.Name}");
+
+                    var actionButton = new Button
+                    {
+                        Content = setting.Value?.ToString() ?? "Action",
+                        Height = 35,
+                        MinWidth = 120,
+                        Padding = new Thickness(15, 5, 15, 5),
+                        FontSize = 12,
+                        Background = new SolidColorBrush(Color.FromRgb(0x45, 0x45, 0x45)),
+                        Foreground = Brushes.White,
+                        BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                        BorderThickness = new Thickness(1),
+                        Cursor = Cursors.Hand,
+                        HorizontalAlignment = HorizontalAlignment.Left
+                    };
+
+                    if (setting.Name == "OpenCurrentEvent")
+                    {
+                        actionButton.Click += (s, e) =>
+                        {
+                            try
+                            {
+                                var eventService = EventSelectionService.Instance;
+                                var currentEvent = eventService?.SelectedEvent;
+
+                                if (currentEvent == null)
+                                {
+                                    Log.Debug("SettingsOverlay: No current event selected");
+                                    System.Windows.MessageBox.Show("No event is currently selected.", "No Event",
+                                        System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                                    return;
+                                }
+
+                                string photoLocation = Properties.Settings.Default.PhotoLocation;
+                                if (string.IsNullOrEmpty(photoLocation))
+                                {
+                                    photoLocation = System.IO.Path.Combine(
+                                        Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                                        "Photobooth"
+                                    );
+                                }
+
+                                string safeName = currentEvent.Name.Trim();
+                                char[] invalidChars = System.IO.Path.GetInvalidFileNameChars();
+                                foreach (char c in invalidChars)
+                                {
+                                    safeName = safeName.Replace(c, '_');
+                                }
+                                safeName = safeName.Replace(' ', '_');
+                                if (safeName.Length > 50)
+                                {
+                                    safeName = safeName.Substring(0, 50);
+                                }
+
+                                string eventFolderPath = System.IO.Path.Combine(photoLocation, safeName);
+
+                                if (System.IO.Directory.Exists(eventFolderPath))
+                                {
+                                    System.Diagnostics.Process.Start("explorer.exe", eventFolderPath);
+                                    Log.Debug($"SettingsOverlay: Opened current event folder: {eventFolderPath}");
+                                }
+                                else
+                                {
+                                    Log.Debug($"SettingsOverlay: Event folder does not exist: {eventFolderPath}");
+                                    System.Windows.MessageBox.Show($"Event folder does not exist yet:\n{eventFolderPath}\n\nThe folder will be created when the first photo is taken.",
+                                        "Folder Not Found", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Error($"SettingsOverlay: Failed to open current event folder: {ex.Message}");
+                                System.Windows.MessageBox.Show($"Failed to open folder: {ex.Message}", "Error",
+                                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                            }
+                        };
+                    }
+
+                    control = actionButton;
+                    break;
             }
-            
+
             if (control != null)
             {
                 Grid.SetRow(control, 1);

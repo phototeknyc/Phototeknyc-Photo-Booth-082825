@@ -274,7 +274,13 @@ namespace Photobooth.Services
             string directory = Path.GetDirectoryName(originalPath);
             string fileName = Path.GetFileNameWithoutExtension(originalPath);
             string extension = Path.GetExtension(originalPath);
-            return Path.Combine(directory, $"{fileName}_thumb{extension}");
+
+            // Create thumbs subfolder within the same directory type
+            // e.g., originals/thumbs/, composed/thumbs/, print/thumbs/
+            string thumbsFolder = Path.Combine(directory, "thumbs");
+            Directory.CreateDirectory(thumbsFolder);
+
+            return Path.Combine(thumbsFolder, $"{fileName}_thumb{extension}");
         }
 
         private string GenerateThumbnailForRegularPhoto(string photoPath)

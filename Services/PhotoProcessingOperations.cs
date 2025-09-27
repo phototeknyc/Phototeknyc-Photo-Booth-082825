@@ -1386,13 +1386,16 @@ namespace Photobooth.Services
         {
             if (string.IsNullOrEmpty(fileName))
                 return "Unknown";
-            
+
             // Remove invalid path characters
             foreach (char c in Path.GetInvalidFileNameChars())
             {
                 fileName = fileName.Replace(c, '_');
             }
-            
+
+            // Replace spaces with underscores to match GetSafeEventName() behavior
+            fileName = fileName.Replace(' ', '_');
+
             return fileName;
         }
         

@@ -392,6 +392,7 @@
                                                     <Trigger Property="IsChecked" Value="True">
                                                         <Setter TargetName="border" Property="Background" Value="#4CAF50"/>
                                                         <Setter TargetName="icon" Property="Text" Value="&#xE73E;"/>
+                                                        <Setter TargetName="text" Property="Text" Value="Assigned"/>
                                                     </Trigger>
                                                     <Trigger Property="IsMouseOver" Value="True">
                                                         <Setter TargetName="border" Property="Background" Value="#45A049"/>

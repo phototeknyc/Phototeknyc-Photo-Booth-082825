@@ -496,8 +496,11 @@ namespace Photobooth.Services
                             Debug.WriteLine($"[BackgroundRemoval] Mask application completed in {maskSw.ElapsedMilliseconds}ms");
                             DeviceLog.Info($"[BackgroundRemoval] Mask applied successfully in {maskSw.ElapsedMilliseconds}ms");
 
-                            // Save results
-                            var resultFolder = Path.Combine(Path.GetDirectoryName(imagePath), "BackgroundRemoved");
+                            // Save results in event folder structure
+                            // If imagePath is EventName/originals/IMG_001.jpg, use EventName/background_removed/
+                            var imageDir = Path.GetDirectoryName(imagePath);
+                            var eventFolder = Path.GetDirectoryName(imageDir); // Go up from originals to event root
+                            var resultFolder = Path.Combine(eventFolder, "background_removed");
                             Directory.CreateDirectory(resultFolder);
 
                             var fileName = Path.GetFileNameWithoutExtension(imagePath);
@@ -2642,7 +2645,10 @@ namespace Photobooth.Services
             {
                 try
                 {
-                    var resultFolder = Path.Combine(Path.GetDirectoryName(imagePath), "BackgroundRemoved");
+                    // Save results in event folder structure
+                    var imageDir = Path.GetDirectoryName(imagePath);
+                    var eventFolder = Path.GetDirectoryName(imageDir); // Go up from originals to event root
+                    var resultFolder = Path.Combine(eventFolder, "background_removed");
                     Directory.CreateDirectory(resultFolder);
 
                     var fileName = Path.GetFileNameWithoutExtension(imagePath);

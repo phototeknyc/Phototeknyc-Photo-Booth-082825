@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using CameraControl.Devices;
 using Photobooth.Database;
 using Photobooth.Services;
 
@@ -23,6 +24,7 @@ namespace Photobooth.Controls
         private int? _defaultTemplateId;
 
         public event EventHandler CloseRequested;
+        public event EventHandler TemplatesChanged;
 
         public EventTemplatesOverlay()
         {
@@ -173,8 +175,8 @@ namespace Photobooth.Controls
                 Margin = new Thickness(0, 0, 10, 0)
             };
 
-            // Unlink button
-            var unlinkButton = CreateActionButton("\uE10A", "#FF9800", "Unlink from Event");
+            // Unlink button (broken link icon)
+            var unlinkButton = CreateActionButton("\uE8FB", "#FF9800", "Unlink from Event");
             unlinkButton.Click += (s, e) =>
             {
                 e.Handled = true;
@@ -678,6 +680,9 @@ namespace Photobooth.Controls
                         PreviewBorder.Visibility = Visibility.Collapsed;
                         TemplateInfoPanel.Visibility = Visibility.Collapsed;
                     }
+
+                    // Notify that templates have changed
+                    TemplatesChanged?.Invoke(this, EventArgs.Empty);
                 }
                 catch (Exception ex)
                 {
@@ -699,9 +704,14 @@ namespace Photobooth.Controls
             {
                 try
                 {
+                    Log.Debug($"★★★ EventTemplatesOverlay: Deleting template '{template.Name}' (ID: {template.Id})");
+
                     var database = new TemplateDatabase();
                     database.DeleteTemplate(template.Id);
+                    Log.Debug($"★★★ EventTemplatesOverlay: Template deleted from database");
+
                     LoadEventTemplates();
+                    Log.Debug($"★★★ EventTemplatesOverlay: Event templates reloaded, count: {_eventTemplates?.Count ?? 0}");
 
                     // Clear preview if this was selected
                     if (_selectedTemplate?.Id == template.Id)
@@ -710,10 +720,17 @@ namespace Photobooth.Controls
                         NoPreviewText.Visibility = Visibility.Visible;
                         PreviewBorder.Visibility = Visibility.Collapsed;
                         TemplateInfoPanel.Visibility = Visibility.Collapsed;
+                        Log.Debug($"★★★ EventTemplatesOverlay: Cleared preview for deleted template");
                     }
+
+                    // Notify that templates have changed
+                    Log.Debug($"★★★ EventTemplatesOverlay: Firing TemplatesChanged event, subscribers: {TemplatesChanged?.GetInvocationList()?.Length ?? 0}");
+                    TemplatesChanged?.Invoke(this, EventArgs.Empty);
+                    Log.Debug($"★★★ EventTemplatesOverlay: TemplatesChanged event fired");
                 }
                 catch (Exception ex)
                 {
+                    Log.Error($"★★★ EventTemplatesOverlay: Exception during template deletion: {ex.Message}");
                     MessageBox.Show($"Failed to delete template: {ex.Message}", "Error",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
@@ -741,6 +758,9 @@ namespace Photobooth.Controls
 
                 LoadEventTemplates();
                 ShowTemplatePreview(_selectedTemplate);
+
+                // Notify that templates have changed (default status changed)
+                TemplatesChanged?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
             {
@@ -819,6 +839,9 @@ namespace Photobooth.Controls
                         _database.AssignTemplateToEvent(_currentEvent.Id, template.Id);
                         dialog.Close();
                         LoadEventTemplates();
+
+                        // Notify that templates have changed
+                        TemplatesChanged?.Invoke(this, EventArgs.Empty);
                     }
                 };
 

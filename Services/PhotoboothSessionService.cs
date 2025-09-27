@@ -305,7 +305,10 @@ namespace Photobooth.Services
                             // Apply virtual background if one is selected
                             if (!string.IsNullOrEmpty(selectedBackground) && File.Exists(selectedBackground))
                             {
-                                string outputFolder = Path.GetDirectoryName(processedPhotoPath);
+                                // Save to composed subfolder in event root
+                                var imageDir = Path.GetDirectoryName(processedPhotoPath);
+                                var eventFolder = Path.GetDirectoryName(imageDir); // Go up from originals to event root
+                                string outputFolder = Path.Combine(eventFolder, "composed");
 
                                 // Get photo placement data for this background
                                 var placementData = EventBackgroundService.Instance.GetPhotoPlacementForBackground(selectedBackground);
@@ -487,10 +490,15 @@ namespace Photobooth.Services
                             {
                                 Log.Debug($"[PhotoboothSessionService] AI service initialized successfully, applying transformation");
 
+                                // Save AI results to ai_transformations subfolder in event root
+                                var imageDir = Path.GetDirectoryName(processedPhotoPath);
+                                var eventFolder = Path.GetDirectoryName(imageDir); // Go up from originals to event root
+                                string aiOutputFolder = Path.Combine(eventFolder, "ai_transformations");
+
                                 var result = await transformationService.ApplyTransformationAsync(
                                     processedPhotoPath,
                                     templateToApply,
-                                    Path.GetDirectoryName(processedPhotoPath)
+                                    aiOutputFolder
                                 );
 
                                 if (!string.IsNullOrEmpty(result) && File.Exists(result))

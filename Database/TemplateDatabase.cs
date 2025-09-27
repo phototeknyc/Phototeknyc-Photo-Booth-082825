@@ -11,9 +11,21 @@ namespace Photobooth.Database
     public class TemplateDatabase
     {
         private string connectionString;
-        
-        public TemplateDatabase(string databasePath = "templates.db")
+
+        public TemplateDatabase(string databasePath = null)
         {
+            if (string.IsNullOrEmpty(databasePath))
+            {
+                string appDataPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Photobooth");
+
+                if (!Directory.Exists(appDataPath))
+                    Directory.CreateDirectory(appDataPath);
+
+                databasePath = Path.Combine(appDataPath, "templates.db");
+            }
+
             connectionString = $"Data Source={databasePath};Version=3;";
             try
             {
@@ -25,9 +37,9 @@ namespace Photobooth.Database
                 MessageBox.Show(
                     "SQLite database is not available. Template saving/loading will not work.\n\n" +
                     "To fix this, please install the SQLite runtime or restart the application.\n\n" +
-                    $"Technical details: {ex.Message}", 
-                    "Database Unavailable", 
-                    MessageBoxButton.OK, 
+                    $"Technical details: {ex.Message}",
+                    "Database Unavailable",
+                    MessageBoxButton.OK,
                     MessageBoxImage.Warning);
             }
             catch (Exception ex)
@@ -35,9 +47,10 @@ namespace Photobooth.Database
                 // Other database initialization errors
                 MessageBox.Show(
                     $"Failed to initialize database: {ex.Message}\n\n" +
-                    "Template saving/loading may not work properly.", 
-                    "Database Error", 
-                    MessageBoxButton.OK, 
+                    "Template saving/loading may not work properly.\n\n" +
+                    $"Database path: {databasePath}",
+                    "Database Error",
+                    MessageBoxButton.OK,
                     MessageBoxImage.Warning);
             }
         }
